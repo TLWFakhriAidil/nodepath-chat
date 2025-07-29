@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Send, Bot, User, Play, Square } from 'lucide-react'
+import { Send, Bot, User, Play, Square, Paperclip, X } from 'lucide-react'
 import { ChatMessage, FlowExecution } from '@/types/chatbot'
 import { FlowEngine } from '@/lib/flowEngine'
 import { getFlows } from '@/lib/localStorage'
@@ -18,7 +18,10 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
   const [isRunning, setIsRunning] = useState(false)
   const [isWaitingForInput, setIsWaitingForInput] = useState(false)
   const [flowEngine, setFlowEngine] = useState<FlowEngine | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
   const flows = getFlows()
@@ -90,12 +93,29 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
   }
 
   const sendMessage = async () => {
-    if (!currentInput.trim() || !flowEngine || !isWaitingForInput) {
+    if ((!currentInput.trim() && !selectedFile) || !flowEngine || !isWaitingForInput) {
       return
     }
 
     const input = currentInput.trim()
     setCurrentInput('')
+    
+    // Handle file upload if there's a selected file
+    if (selectedFile) {
+      // Add user message with media
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        type: 'user',
+        content: input || '',
+        timestamp: new Date().toISOString(),
+        mediaType: selectedFile.type.startsWith('image/') ? 'image' : 
+                  selectedFile.type.startsWith('video/') ? 'video' : 'audio',
+        mediaUrl: previewUrl || undefined
+      }
+      
+      setMessages(prev => [...prev, userMessage])
+      clearFileSelection()
+    }
 
     try {
       await flowEngine.processUserInput(input)
@@ -108,6 +128,58 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
       })
     }
   }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/', 'video/', 'audio/']
+      const isValidType = validTypes.some(type => file.type.startsWith(type))
+      
+      if (!isValidType) {
+        toast({
+          title: "Invalid file type",
+          description: "Please select an image, video, or audio file",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Validate file size (25MB max)
+      const maxSize = 25 * 1024 * 1024
+      if (file.size > maxSize) {
+        toast({
+          title: "File too large",
+          description: "Please select a file smaller than 25MB",
+          variant: "destructive"
+        })
+        return
+      }
+
+      setSelectedFile(file)
+      const objectUrl = URL.createObjectURL(file)
+      setPreviewUrl(objectUrl)
+    }
+  }
+
+  const clearFileSelection = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+    }
+    setSelectedFile(null)
+    setPreviewUrl(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -250,7 +322,49 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
           {/* Input Area */}
           {isRunning && (
             <div className="border-t p-4">
+              {/* File Preview */}
+              {selectedFile && (
+                <div className="mb-4 p-3 border rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {selectedFile.type.startsWith('image/') && previewUrl && (
+                        <img src={previewUrl} alt="Preview" className="w-12 h-12 object-cover rounded" />
+                      )}
+                      {selectedFile.type.startsWith('video/') && previewUrl && (
+                        <video src={previewUrl} className="w-12 h-12 object-cover rounded" />
+                      )}
+                      {selectedFile.type.startsWith('audio/') && (
+                        <div className="w-12 h-12 bg-primary/10 rounded flex items-center justify-center">
+                          🎵
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{selectedFile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFileSelection}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!isWaitingForInput}
+                >
+                  <Paperclip className="w-4 h-4" />
+                </Button>
                 <Input
                   value={currentInput}
                   onChange={(e) => setCurrentInput(e.target.value)}
@@ -261,12 +375,20 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
                 />
                 <Button 
                   onClick={sendMessage} 
-                  disabled={!isWaitingForInput || !currentInput.trim()}
+                  disabled={!isWaitingForInput || (!currentInput.trim() && !selectedFile)}
                   size="icon"
                 >
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*,audio/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
               
               {!isWaitingForInput && (
                 <p className="text-xs text-muted-foreground mt-2">
