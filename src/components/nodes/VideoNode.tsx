@@ -29,7 +29,8 @@ export default function VideoNode({ data, id }: NodeProps) {
         const base64 = e.target?.result as string;
         // Update the node data immediately with base64
         (data?.onUpdate as Function)?.(id, {
-          videoUrl: file.name,
+          videoUrl: base64,
+          mediaUrl: base64,
           caption,
           duration,
           uploadedFile: {

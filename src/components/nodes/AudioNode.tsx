@@ -28,7 +28,8 @@ export default function AudioNode({ data, id }: NodeProps) {
         const base64 = e.target?.result as string;
         // Update the node data immediately with base64
         (data?.onUpdate as Function)?.(id, {
-          audioUrl: file.name,
+          audioUrl: base64,
+          mediaUrl: base64,
           duration,
           uploadedFile: {
             name: file.name,

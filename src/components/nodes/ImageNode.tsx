@@ -28,7 +28,8 @@ export default function ImageNode({ data, id }: NodeProps) {
         const base64 = e.target?.result as string;
         // Update the node data immediately with base64
         (data?.onUpdate as Function)?.(id, {
-          imageUrl: file.name,
+          imageUrl: base64,
+          mediaUrl: base64,
           caption,
           uploadedFile: {
             name: file.name,
