@@ -175,19 +175,24 @@ export class FlowEngine {
   }
 
   private async handleImageNode(node: FlowNode): Promise<void> {
+    console.log('Image node data:', node.data)
     let mediaUrl = node.data.mediaUrl || node.data.imageUrl
 
     // Try previewUrl if uploaded file exists
     if (node.data.previewUrl) {
       mediaUrl = node.data.previewUrl
+      console.log('Using previewUrl:', mediaUrl)
     }
 
     if (node.data.mediaId) {
       const mediaFile = getMediaFile(node.data.mediaId)
       if (mediaFile) {
         mediaUrl = mediaFile.dataUrl
+        console.log('Using mediaFile.dataUrl:', mediaUrl)
       }
     }
+
+    console.log('Final mediaUrl for image:', mediaUrl)
 
     if (mediaUrl) {
       const botMessage: ChatMessage = {
@@ -199,27 +204,35 @@ export class FlowEngine {
         timestamp: new Date().toISOString()
       }
 
+      console.log('Sending image message:', botMessage)
       this.execution.messages.push(botMessage)
       this.onMessage(botMessage)
+    } else {
+      console.log('No mediaUrl found for image node')
     }
 
     await this.moveToNextNode()
   }
 
   private async handleAudioNode(node: FlowNode): Promise<void> {
+    console.log('Audio node data:', node.data)
     let mediaUrl = node.data.mediaUrl || node.data.audioUrl
 
     // Try previewUrl if uploaded file exists
     if (node.data.previewUrl) {
       mediaUrl = node.data.previewUrl
+      console.log('Using previewUrl:', mediaUrl)
     }
 
     if (node.data.mediaId) {
       const mediaFile = getMediaFile(node.data.mediaId)
       if (mediaFile) {
         mediaUrl = mediaFile.dataUrl
+        console.log('Using mediaFile.dataUrl:', mediaUrl)
       }
     }
+
+    console.log('Final mediaUrl for audio:', mediaUrl)
 
     if (mediaUrl) {
       const botMessage: ChatMessage = {
@@ -231,27 +244,35 @@ export class FlowEngine {
         timestamp: new Date().toISOString()
       }
 
+      console.log('Sending audio message:', botMessage)
       this.execution.messages.push(botMessage)
       this.onMessage(botMessage)
+    } else {
+      console.log('No mediaUrl found for audio node')
     }
 
     await this.moveToNextNode()
   }
 
   private async handleVideoNode(node: FlowNode): Promise<void> {
+    console.log('Video node data:', node.data)
     let mediaUrl = node.data.mediaUrl || node.data.videoUrl
 
     // Try previewUrl if uploaded file exists
     if (node.data.previewUrl) {
       mediaUrl = node.data.previewUrl
+      console.log('Using previewUrl:', mediaUrl)
     }
 
     if (node.data.mediaId) {
       const mediaFile = getMediaFile(node.data.mediaId)
       if (mediaFile) {
         mediaUrl = mediaFile.dataUrl
+        console.log('Using mediaFile.dataUrl:', mediaUrl)
       }
     }
+
+    console.log('Final mediaUrl for video:', mediaUrl)
 
     if (mediaUrl) {
       const botMessage: ChatMessage = {
@@ -263,8 +284,11 @@ export class FlowEngine {
         timestamp: new Date().toISOString()
       }
 
+      console.log('Sending video message:', botMessage)
       this.execution.messages.push(botMessage)
       this.onMessage(botMessage)
+    } else {
+      console.log('No mediaUrl found for video node')
     }
 
     await this.moveToNextNode()
