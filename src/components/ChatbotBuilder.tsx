@@ -32,19 +32,19 @@ import AudioNode from './nodes/AudioNode';
 import VideoNode from './nodes/VideoNode';
 
 const nodeTypes: NodeTypes = {
-  messageNode: MessageNode,
-  conditionNode: ConditionNode,
-  delayNode: DelayNode,
-  startNode: StartNode,
-  imageNode: ImageNode,
-  audioNode: AudioNode,
-  videoNode: VideoNode,
+  message: MessageNode,
+  condition: ConditionNode,
+  delay: DelayNode,
+  start: StartNode,
+  image: ImageNode,
+  audio: AudioNode,
+  video: VideoNode,
 };
 
 const initialNodes: Node[] = [
   {
     id: 'start-1',
-    type: 'startNode',
+    type: 'start',
     position: { x: 250, y: 100 },
     data: { label: 'Start' },
   },
@@ -80,20 +80,20 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
         type,
         position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 200 },
         data: {
-          label: type === 'messageNode' ? 'New Message' : 
-                 type === 'conditionNode' ? 'New Condition' : 
-                 type === 'delayNode' ? 'New Delay' :
-                 type === 'imageNode' ? 'New Image' :
-                 type === 'audioNode' ? 'New Audio' :
+          label: type === 'message' ? 'New Message' : 
+                 type === 'condition' ? 'New Condition' : 
+                 type === 'delay' ? 'New Delay' :
+                 type === 'image' ? 'New Image' :
+                 type === 'audio' ? 'New Audio' :
                  'New Video',
-          message: type === 'messageNode' ? 'Enter your message here...' : undefined,
-          condition: type === 'conditionNode' ? 'user_input contains "yes"' : undefined,
-          delay: type === 'delayNode' ? 5 : undefined,
-          imageUrl: type === 'imageNode' ? '' : undefined,
-          caption: type === 'imageNode' || type === 'videoNode' ? 'Caption...' : undefined,
-          audioUrl: type === 'audioNode' ? '' : undefined,
-          videoUrl: type === 'videoNode' ? '' : undefined,
-          duration: type === 'audioNode' || type === 'videoNode' ? (type === 'audioNode' ? 30 : 60) : undefined,
+          message: type === 'message' ? 'Enter your message here...' : undefined,
+          condition: type === 'condition' ? 'user_input contains "yes"' : undefined,
+          delay: type === 'delay' ? 5 : undefined,
+          imageUrl: type === 'image' ? '' : undefined,
+          caption: type === 'image' || type === 'video' ? 'Caption...' : undefined,
+          audioUrl: type === 'audio' ? '' : undefined,
+          videoUrl: type === 'video' ? '' : undefined,
+          duration: type === 'audio' || type === 'video' ? (type === 'audio' ? 30 : 60) : undefined,
           onDelete: deleteNode,
         },
       };
@@ -168,12 +168,12 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   }, [currentFlowId, saveFlowToStorage, onTestFlow]);
 
   const nodeTypeButtons = [
-    { type: 'messageNode', label: 'Send Message', icon: MessageSquare, color: 'bg-node-message' },
-    { type: 'imageNode', label: 'Send Image', icon: Image, color: 'bg-blue-500' },
-    { type: 'audioNode', label: 'Send Audio', icon: Mic, color: 'bg-green-500' },
-    { type: 'videoNode', label: 'Send Video', icon: Video, color: 'bg-purple-500' },
-    { type: 'delayNode', label: 'Delay', icon: Clock, color: 'bg-node-delay' },
-    { type: 'conditionNode', label: 'Conditions', icon: GitBranch, color: 'bg-node-condition' },
+    { type: 'message', label: 'Send Message', icon: MessageSquare, color: 'bg-node-message' },
+    { type: 'image', label: 'Send Image', icon: Image, color: 'bg-blue-500' },
+    { type: 'audio', label: 'Send Audio', icon: Mic, color: 'bg-green-500' },
+    { type: 'video', label: 'Send Video', icon: Video, color: 'bg-purple-500' },
+    { type: 'delay', label: 'Delay', icon: Clock, color: 'bg-node-delay' },
+    { type: 'condition', label: 'Conditions', icon: GitBranch, color: 'bg-node-condition' },
   ];
 
   return (
