@@ -12,21 +12,40 @@ export default function AudioNode({ data, id }: NodeProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('audio/')) {
       setUploadedFile(file);
       setAudioUrl(file.name);
+      
       // Create object URL for preview
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+      
+      // Convert to base64 for storage
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const base64 = e.target?.result as string;
+        // Update the node data immediately with base64
+        (data?.onUpdate as Function)?.(id, {
+          audioUrl: file.name,
+          duration,
+          uploadedFile: {
+            name: file.name,
+            type: file.type,
+            size: file.size
+          },
+          previewUrl: base64 // Store base64 instead of blob URL
+        });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   // Cleanup object URL on unmount
   React.useEffect(() => {
     return () => {
-      if (previewUrl) {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl);
       }
     };
