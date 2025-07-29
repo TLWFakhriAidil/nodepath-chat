@@ -1,72 +1,68 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bot, Workflow, MessageSquare, Upload } from 'lucide-react';
-import { Link } from 'react-router-dom';
-
+import { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from '@/components/AppSidebar';
 import ChatbotBuilder from '@/components/ChatbotBuilder';
 import ChatSimulation from '@/components/ChatSimulation';
+import FlowManager from '@/components/FlowManager';
+import MediaManager from './MediaManager';
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState('builder');
   const [testFlowId, setTestFlowId] = useState<string | null>(null);
 
   const handleTestFlow = (flowId: string) => {
     setTestFlowId(flowId);
-    setActiveTab('simulation');
+    // Navigate to test page
+    window.location.hash = '#/test';
+  };
+
+  const handleCreateNewFlow = () => {
+    // Navigate to builder
+    window.location.hash = '#/';
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-screen flex flex-col">
-        {/* Header */}
-        <div className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-gradient-primary p-2 rounded-lg">
-                <Bot className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">ChatBot Builder</h1>
-                <p className="text-sm text-muted-foreground">Build intelligent conversational flows</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <TabsList className="grid w-[400px] grid-cols-2">
-                <TabsTrigger value="builder" className="flex items-center space-x-2">
-                  <Workflow className="w-4 h-4" />
-                  <span>Flow Builder</span>
-                </TabsTrigger>
-                <TabsTrigger value="simulation" className="flex items-center space-x-2">
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Test Chat</span>
-                </TabsTrigger>
-              </TabsList>
-              
-              <Button asChild variant="outline">
-                <Link to="/media" className="flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  Media Manager
-                </Link>
-              </Button>
-            </div>
+    <Router>
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full bg-background">
+          <AppSidebar />
+          
+          <div className="flex-1 flex flex-col">
+            {/* Header with sidebar trigger */}
+            <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <SidebarTrigger className="ml-4" />
+            </header>
+
+            {/* Main content */}
+            <main className="flex-1 overflow-hidden">
+              <Routes>
+                <Route 
+                  path="/" 
+                  element={<ChatbotBuilder onTestFlow={handleTestFlow} />} 
+                />
+                <Route 
+                  path="/flows" 
+                  element={
+                    <FlowManager 
+                      onCreateNew={handleCreateNewFlow}
+                      onTestFlow={handleTestFlow}
+                    />
+                  } 
+                />
+                <Route 
+                  path="/test" 
+                  element={<ChatSimulation key={testFlowId} preselectedFlowId={testFlowId} />} 
+                />
+                <Route 
+                  path="/media" 
+                  element={<MediaManager />} 
+                />
+              </Routes>
+            </main>
           </div>
         </div>
-
-        {/* Content */}
-        <div className="flex-1">
-          <TabsContent value="builder" className="h-full m-0">
-            <ChatbotBuilder onTestFlow={handleTestFlow} />
-          </TabsContent>
-          
-          <TabsContent value="simulation" className="h-full m-0">
-            <ChatSimulation key={testFlowId} preselectedFlowId={testFlowId} />
-          </TabsContent>
-        </div>
-      </Tabs>
-    </div>
+      </SidebarProvider>
+    </Router>
   );
 };
 
