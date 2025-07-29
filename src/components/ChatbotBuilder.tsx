@@ -21,7 +21,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
-import { saveFlow } from '@/lib/localStorage';
+import { saveFlow, getFlows } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
 
 import MessageNode from './nodes/MessageNode';
@@ -114,6 +114,9 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       return;
     }
 
+    console.log('Saving flow with nodes:', nodes);
+    console.log('Saving flow with edges:', edges);
+
     const flowData: ChatbotFlow = {
       id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       name: flowName,
@@ -135,8 +138,11 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       updatedAt: new Date().toISOString()
     };
 
+    console.log('Flow data to save:', flowData);
     saveFlow(flowData);
     setCurrentFlowId(flowData.id);
+    
+    console.log('Flow saved. Checking stored flows:', getFlows());
     
     toast({
       title: "Flow saved",

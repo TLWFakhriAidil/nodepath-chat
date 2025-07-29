@@ -22,6 +22,7 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
   const { toast } = useToast()
 
   const flows = getFlows()
+  console.log('Available flows in simulation:', flows)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
