@@ -42,6 +42,13 @@ export default function ImageNode({ data, id }: NodeProps) {
     }
   };
 
+  // Initialize previewUrl from existing data
+  React.useEffect(() => {
+    if (data?.previewUrl && !previewUrl) {
+      setPreviewUrl(data.previewUrl as string);
+    }
+  }, [data?.previewUrl]);
+
   // Cleanup object URL on unmount
   React.useEffect(() => {
     return () => {
