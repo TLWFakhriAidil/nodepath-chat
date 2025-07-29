@@ -175,7 +175,12 @@ export class FlowEngine {
   }
 
   private async handleImageNode(node: FlowNode): Promise<void> {
-    let mediaUrl = node.data.mediaUrl
+    let mediaUrl = node.data.mediaUrl || node.data.imageUrl
+
+    // Try previewUrl if uploaded file exists
+    if (node.data.previewUrl) {
+      mediaUrl = node.data.previewUrl
+    }
 
     if (node.data.mediaId) {
       const mediaFile = getMediaFile(node.data.mediaId)
@@ -188,7 +193,7 @@ export class FlowEngine {
       const botMessage: ChatMessage = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substring(2)}`,
         type: 'bot',
-        content: node.data.message || '',
+        content: node.data.caption || node.data.message || '',
         mediaType: 'image',
         mediaUrl,
         timestamp: new Date().toISOString()
@@ -202,7 +207,12 @@ export class FlowEngine {
   }
 
   private async handleAudioNode(node: FlowNode): Promise<void> {
-    let mediaUrl = node.data.mediaUrl
+    let mediaUrl = node.data.mediaUrl || node.data.audioUrl
+
+    // Try previewUrl if uploaded file exists
+    if (node.data.previewUrl) {
+      mediaUrl = node.data.previewUrl
+    }
 
     if (node.data.mediaId) {
       const mediaFile = getMediaFile(node.data.mediaId)
@@ -229,7 +239,12 @@ export class FlowEngine {
   }
 
   private async handleVideoNode(node: FlowNode): Promise<void> {
-    let mediaUrl = node.data.mediaUrl
+    let mediaUrl = node.data.mediaUrl || node.data.videoUrl
+
+    // Try previewUrl if uploaded file exists
+    if (node.data.previewUrl) {
+      mediaUrl = node.data.previewUrl
+    }
 
     if (node.data.mediaId) {
       const mediaFile = getMediaFile(node.data.mediaId)
@@ -242,7 +257,7 @@ export class FlowEngine {
       const botMessage: ChatMessage = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substring(2)}`,
         type: 'bot',
-        content: node.data.message || '',
+        content: node.data.caption || node.data.message || '',
         mediaType: 'video',
         mediaUrl,
         timestamp: new Date().toISOString()

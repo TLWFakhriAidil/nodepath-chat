@@ -16,6 +16,17 @@ export interface FlowNode {
     message?: string
     mediaId?: string
     mediaUrl?: string
+    imageUrl?: string
+    audioUrl?: string
+    videoUrl?: string
+    caption?: string
+    duration?: number
+    previewUrl?: string
+    uploadedFile?: {
+      name: string
+      type: string
+      size: number
+    } | null
     delaySeconds?: number
     conditions?: ConditionRule[]
     variables?: Record<string, string>
