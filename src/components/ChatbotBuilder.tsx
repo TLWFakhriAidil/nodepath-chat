@@ -17,18 +17,24 @@ import '@xyflow/react/dist/style.css';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { MessageSquare, GitBranch, Clock, Play, Download } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video } from 'lucide-react';
 
 import MessageNode from './nodes/MessageNode';
 import ConditionNode from './nodes/ConditionNode';
 import DelayNode from './nodes/DelayNode';
 import StartNode from './nodes/StartNode';
+import ImageNode from './nodes/ImageNode';
+import AudioNode from './nodes/AudioNode';
+import VideoNode from './nodes/VideoNode';
 
 const nodeTypes: NodeTypes = {
   messageNode: MessageNode,
   conditionNode: ConditionNode,
   delayNode: DelayNode,
   startNode: StartNode,
+  imageNode: ImageNode,
+  audioNode: AudioNode,
+  videoNode: VideoNode,
 };
 
 const initialNodes: Node[] = [
@@ -61,10 +67,18 @@ export default function ChatbotBuilder() {
         data: {
           label: type === 'messageNode' ? 'New Message' : 
                  type === 'conditionNode' ? 'New Condition' : 
-                 'New Delay',
+                 type === 'delayNode' ? 'New Delay' :
+                 type === 'imageNode' ? 'New Image' :
+                 type === 'audioNode' ? 'New Audio' :
+                 'New Video',
           message: type === 'messageNode' ? 'Enter your message here...' : undefined,
           condition: type === 'conditionNode' ? 'user_input contains "yes"' : undefined,
           delay: type === 'delayNode' ? 5 : undefined,
+          imageUrl: type === 'imageNode' ? '' : undefined,
+          caption: type === 'imageNode' || type === 'videoNode' ? 'Caption...' : undefined,
+          audioUrl: type === 'audioNode' ? '' : undefined,
+          videoUrl: type === 'videoNode' ? '' : undefined,
+          duration: type === 'audioNode' || type === 'videoNode' ? (type === 'audioNode' ? 30 : 60) : undefined,
         },
       };
       setNodes((nds) => nds.concat(newNode));
@@ -92,9 +106,12 @@ export default function ChatbotBuilder() {
   }, [nodes, edges]);
 
   const nodeTypeButtons = [
-    { type: 'messageNode', label: 'Message', icon: MessageSquare, color: 'bg-node-message' },
-    { type: 'conditionNode', label: 'Condition', icon: GitBranch, color: 'bg-node-condition' },
+    { type: 'messageNode', label: 'Send Message', icon: MessageSquare, color: 'bg-node-message' },
+    { type: 'imageNode', label: 'Send Image', icon: Image, color: 'bg-blue-500' },
+    { type: 'audioNode', label: 'Send Audio', icon: Mic, color: 'bg-green-500' },
+    { type: 'videoNode', label: 'Send Video', icon: Video, color: 'bg-purple-500' },
     { type: 'delayNode', label: 'Delay', icon: Clock, color: 'bg-node-delay' },
+    { type: 'conditionNode', label: 'Conditions', icon: GitBranch, color: 'bg-node-condition' },
   ];
 
   return (
