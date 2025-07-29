@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { GitBranch, Edit3 } from 'lucide-react';
+import { GitBranch, Edit3, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -28,14 +28,24 @@ export default function ConditionNode({ data, id }: NodeProps) {
             <GitBranch className="w-4 h-4 text-node-condition mr-2" />
             <span className="text-sm font-medium text-foreground">Condition</span>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setIsEditing(!isEditing)}
-            className="h-6 w-6 p-0"
-          >
-            <Edit3 className="w-3 h-3" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsEditing(!isEditing)}
+              className="h-6 w-6 p-0"
+            >
+              <Edit3 className="w-3 h-3" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => (data?.onDelete as Function)?.(id)}
+              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          </div>
         </div>
         
         {isEditing ? (
