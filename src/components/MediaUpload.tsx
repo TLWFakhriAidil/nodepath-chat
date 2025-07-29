@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Upload, File, Image, Video, Music, X, Check } from 'lucide-react'
-import { supabase, isSupabaseConfigured, type MediaFile } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured, getSupabaseClient, type MediaFile } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
 
 const ACCEPTED_FILE_TYPES = {
@@ -49,8 +49,9 @@ const MediaUpload: React.FC<MediaUploadProps> = ({ onUploadSuccess }) => {
   }
 
   const uploadFile = async (file: File): Promise<MediaFile> => {
-    if (!supabase) {
-      throw new Error('Supabase client not initialized')
+    const supabaseClient = getSupabaseClient()
+    if (!supabaseClient) {
+      throw new Error('Supabase client not available. Please connect to Supabase first.')
     }
     
     const fileExt = file.name.split('.').pop()
@@ -58,7 +59,7 @@ const MediaUpload: React.FC<MediaUploadProps> = ({ onUploadSuccess }) => {
     const filePath = `uploads/${fileName}`
 
     // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabaseClient.storage
       .from('media')
       .upload(filePath, file)
 
@@ -67,12 +68,12 @@ const MediaUpload: React.FC<MediaUploadProps> = ({ onUploadSuccess }) => {
     }
 
     // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+    const { data: { publicUrl } } = supabaseClient.storage
       .from('media')
       .getPublicUrl(filePath)
 
     // Save metadata to database
-    const { data: mediaFile, error: dbError } = await supabase
+    const { data: mediaFile, error: dbError } = await supabaseClient
       .from('media_files')
       .insert({
         filename: fileName,
@@ -87,7 +88,7 @@ const MediaUpload: React.FC<MediaUploadProps> = ({ onUploadSuccess }) => {
 
     if (dbError) {
       // Clean up uploaded file if database insert fails
-      await supabase.storage.from('media').remove([filePath])
+      await supabaseClient.storage.from('media').remove([filePath])
       throw new Error(`Database error: ${dbError.message}`)
     }
 

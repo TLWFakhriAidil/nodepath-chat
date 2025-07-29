@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Image, Video, Music, File, Trash2, Search, Download, Copy, Check } from 'lucide-react'
-import { supabase, isSupabaseConfigured, type MediaFile } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured, getSupabaseClient, type MediaFile } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -21,13 +21,14 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ refreshTrigger }) => {
   const { toast } = useToast()
 
   const fetchMediaFiles = async () => {
-    if (!supabase) {
+    const supabaseClient = getSupabaseClient()
+    if (!supabaseClient) {
       setLoading(false)
       return
     }
     
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('media_files')
         .select('*')
         .order('uploaded_at', { ascending: false })
@@ -67,11 +68,12 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ refreshTrigger }) => {
   }
 
   const handleDelete = async (file: MediaFile) => {
-    if (!supabase) return
+    const supabaseClient = getSupabaseClient()
+    if (!supabaseClient) return
     
     try {
       // Delete from storage
-      const { error: storageError } = await supabase.storage
+      const { error: storageError } = await supabaseClient.storage
         .from('media')
         .remove([file.storage_path])
 
@@ -80,7 +82,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ refreshTrigger }) => {
       }
 
       // Delete from database
-      const { error: dbError } = await supabase
+      const { error: dbError } = await supabaseClient
         .from('media_files')
         .delete()
         .eq('id', file.id)

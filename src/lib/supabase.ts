@@ -1,17 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-// Create client only if environment variables are available
-export const supabase = supabaseUrl && supabaseAnonKey 
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null
-
-// Helper function to check if Supabase is configured
-export const isSupabaseConfigured = () => {
-  return !!(supabaseUrl && supabaseAnonKey)
-}
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 export type MediaFile = {
   id: string
@@ -23,3 +10,34 @@ export type MediaFile = {
   public_url: string
   uploaded_at: string
 }
+
+// Helper function to check if Supabase is configured
+export const isSupabaseConfigured = (): boolean => {
+  try {
+    const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL
+    const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY
+    return !!(supabaseUrl && supabaseAnonKey)
+  } catch (error) {
+    return false
+  }
+}
+
+// Function to get Supabase client (lazy initialization)
+export const getSupabaseClient = (): SupabaseClient | null => {
+  try {
+    const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL
+    const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return null
+    }
+    
+    return createClient(supabaseUrl, supabaseAnonKey)
+  } catch (error) {
+    console.warn('Failed to initialize Supabase client:', error)
+    return null
+  }
+}
+
+// Export a getter for the supabase client
+export const supabase = getSupabaseClient()
