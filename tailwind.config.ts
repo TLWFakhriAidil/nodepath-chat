@@ -61,7 +61,22 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
-				}
+				},
+				'flow-bg': 'hsl(var(--flow-background))',
+				'node-message': 'hsl(var(--node-message))',
+				'node-condition': 'hsl(var(--node-condition))',
+				'node-delay': 'hsl(var(--node-delay))',
+				'node-start': 'hsl(var(--node-start))'
+			},
+			backgroundImage: {
+				'gradient-primary': 'var(--gradient-primary)',
+				'gradient-success': 'var(--gradient-success)',
+				'gradient-warning': 'var(--gradient-warning)',
+				'gradient-info': 'var(--gradient-info)'
+			},
+			boxShadow: {
+				'node': 'var(--shadow-node)',
+				'elevated': 'var(--shadow-elevated)'
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
