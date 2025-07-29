@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Image, Video, Music, File, Trash2, Search, Download, Copy, Check } from 'lucide-react'
-import { supabase, type MediaFile } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured, type MediaFile } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -21,6 +21,11 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ refreshTrigger }) => {
   const { toast } = useToast()
 
   const fetchMediaFiles = async () => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    
     try {
       const { data, error } = await supabase
         .from('media_files')
@@ -62,6 +67,8 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ refreshTrigger }) => {
   }
 
   const handleDelete = async (file: MediaFile) => {
+    if (!supabase) return
+    
     try {
       // Delete from storage
       const { error: storageError } = await supabase.storage

@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Upload, File, Image, Video, Music, X, Check } from 'lucide-react'
-import { supabase, type MediaFile } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured, type MediaFile } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
 
 const ACCEPTED_FILE_TYPES = {
@@ -49,6 +49,10 @@ const MediaUpload: React.FC<MediaUploadProps> = ({ onUploadSuccess }) => {
   }
 
   const uploadFile = async (file: File): Promise<MediaFile> => {
+    if (!supabase) {
+      throw new Error('Supabase client not initialized')
+    }
+    
     const fileExt = file.name.split('.').pop()
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
     const filePath = `uploads/${fileName}`
