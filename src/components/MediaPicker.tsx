@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -6,9 +6,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Upload, Link as LinkIcon, Image, Music, Video, Trash2 } from 'lucide-react'
-import { MediaFile } from '@/types/chatbot'
-import { getMediaFiles, createMediaFileFromFile, saveMediaFile, deleteMediaFile } from '@/lib/localStorage'
+import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+
+type MediaFile = {
+  id: string;
+  filename: string;
+  original_name: string;
+  file_type: string;
+  file_size: number;
+  storage_path: string;
+  public_url: string;
+  uploaded_at: string;
+};
 
 interface MediaPickerProps {
   mediaType: 'image' | 'audio' | 'video'
@@ -26,11 +36,29 @@ const MediaPicker: React.FC<MediaPickerProps> = ({
   const [isOpen, setIsOpen] = useState(false)
   const [mediaUrl, setMediaUrl] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([])
   const { toast } = useToast()
 
-  const mediaFiles = getMediaFiles().filter(file => 
-    file.type.startsWith(mediaType + '/')
-  )
+  useEffect(() => {
+    if (isOpen) {
+      loadMediaFiles()
+    }
+  }, [isOpen])
+
+  const loadMediaFiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('media_files')
+        .select('*')
+        .eq('file_type', mediaType)
+        .order('uploaded_at', { ascending: false })
+
+      if (error) throw error
+      setMediaFiles(data || [])
+    } catch (error) {
+      console.error('Error loading media files:', error)
+    }
+  }
 
   const getAcceptedTypes = () => {
     switch (mediaType) {
@@ -61,7 +89,8 @@ const MediaPicker: React.FC<MediaPickerProps> = ({
     if (!file) return
 
     // Validate file type
-    if (!file.type.startsWith(mediaType + '/')) {
+    const fileType = file.type.split('/')[0]
+    if (fileType !== mediaType) {
       toast({
         title: "Invalid file type",
         description: `Please select a ${mediaType} file`,
@@ -82,9 +111,40 @@ const MediaPicker: React.FC<MediaPickerProps> = ({
 
     setUploading(true)
     try {
-      const mediaFile = await createMediaFileFromFile(file)
-      saveMediaFile(mediaFile)
-      onSelect(mediaFile.id)
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+      const filePath = `${fileName}`
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('media')
+        .upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('media')
+        .getPublicUrl(filePath)
+
+      // Save metadata to database
+      const { data, error: dbError } = await supabase
+        .from('media_files')
+        .insert({
+          filename: fileName,
+          original_name: file.name,
+          file_type: fileType,
+          file_size: file.size,
+          storage_path: filePath,
+          public_url: publicUrl
+        })
+        .select()
+        .single()
+
+      if (dbError) throw dbError
+
+      onSelect(data.id)
       setIsOpen(false)
       
       toast({
@@ -122,12 +182,46 @@ const MediaPicker: React.FC<MediaPickerProps> = ({
     setIsOpen(false)
   }
 
-  const handleDeleteMedia = (mediaId: string) => {
-    deleteMediaFile(mediaId)
-    toast({
-      title: "Media deleted",
-      description: "Media file has been removed"
-    })
+  const handleDeleteMedia = async (mediaId: string) => {
+    try {
+      // Get the media file to find storage path
+      const { data: mediaFile, error: fetchError } = await supabase
+        .from('media_files')
+        .select('storage_path')
+        .eq('id', mediaId)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from('media')
+        .remove([mediaFile.storage_path])
+
+      if (storageError) throw storageError
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('media_files')
+        .delete()
+        .eq('id', mediaId)
+
+      if (dbError) throw dbError
+
+      // Refresh media files
+      loadMediaFiles()
+      toast({
+        title: "Media deleted",
+        description: "Media file has been removed"
+      })
+    } catch (error) {
+      console.error('Error deleting media file:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete media file",
+        variant: "destructive"
+      })
+    }
   }
 
   const renderMediaPreview = (file: MediaFile) => {
@@ -135,8 +229,8 @@ const MediaPicker: React.FC<MediaPickerProps> = ({
       case 'image':
         return (
           <img
-            src={file.dataUrl}
-            alt={file.filename}
+            src={file.public_url}
+            alt={file.original_name}
             className="w-full h-24 object-cover rounded-md"
           />
         )
@@ -149,7 +243,7 @@ const MediaPicker: React.FC<MediaPickerProps> = ({
       case 'video':
         return (
           <video
-            src={file.dataUrl}
+            src={file.public_url}
             className="w-full h-24 object-cover rounded-md"
             muted
           />
@@ -249,11 +343,11 @@ const MediaPicker: React.FC<MediaPickerProps> = ({
                         </Button>
                       </div>
                       <div className="mt-2">
-                        <p className="text-xs font-medium truncate" title={file.filename}>
-                          {file.filename}
+                        <p className="text-xs font-medium truncate" title={file.original_name}>
+                          {file.original_name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                          {(file.file_size / 1024 / 1024).toFixed(2)} MB
                         </p>
                         <Button
                           variant="outline"
