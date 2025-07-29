@@ -71,6 +71,19 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     [setNodes, setEdges]
   );
 
+  const updateNodeData = useCallback(
+    (nodeId: string, newData: any) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === nodeId
+            ? { ...node, data: { ...node.data, ...newData } }
+            : node
+        )
+      );
+    },
+    [setNodes]
+  );
+
   // Load flow for editing if edit parameter is present
   useEffect(() => {
     const editFlowId = searchParams.get('edit');
@@ -81,7 +94,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
         setCurrentFlowId(flowToEdit.id);
         setNodes(flowToEdit.nodes.map(node => ({
           ...node,
-          data: { ...node.data, onDelete: deleteNode }
+          data: { ...node.data, onDelete: deleteNode, onUpdate: updateNodeData }
         })));
         setEdges(flowToEdit.edges);
         toast({
@@ -120,11 +133,12 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
           videoUrl: type === 'video' ? '' : undefined,
           duration: type === 'audio' || type === 'video' ? (type === 'audio' ? 30 : 60) : undefined,
           onDelete: deleteNode,
+          onUpdate: updateNodeData,
         },
       };
       setNodes((nds) => nds.concat(newNode));
     },
-    [setNodes, deleteNode]
+    [setNodes, deleteNode, updateNodeData]
   );
 
   const saveFlowToStorage = useCallback(() => {

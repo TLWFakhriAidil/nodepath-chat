@@ -14,6 +14,7 @@ export default function StartNode({ data }: NodeProps) {
       <Handle 
         type="source" 
         position={Position.Bottom} 
+        id="start-output"
         className="w-3 h-3 bg-white border-2 border-node-start"
       />
     </div>

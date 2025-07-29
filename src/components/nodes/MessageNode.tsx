@@ -10,7 +10,10 @@ export default function MessageNode({ data, id }: NodeProps) {
 
   const handleSave = () => {
     setIsEditing(false);
-    // In a real app, you'd update the node data here
+    // Update the node data through the parent
+    if (data?.onUpdate) {
+      (data.onUpdate as Function)(id, { message });
+    }
   };
 
   return (
@@ -18,6 +21,7 @@ export default function MessageNode({ data, id }: NodeProps) {
       <Handle 
         type="target" 
         position={Position.Top} 
+        id="message-input"
         className="w-3 h-3 bg-primary border-2 border-white"
       />
       
@@ -70,6 +74,7 @@ export default function MessageNode({ data, id }: NodeProps) {
       <Handle 
         type="source" 
         position={Position.Bottom} 
+        id="message-output"
         className="w-3 h-3 bg-primary border-2 border-white"
       />
     </div>
