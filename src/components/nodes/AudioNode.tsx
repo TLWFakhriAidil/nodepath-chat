@@ -34,7 +34,17 @@ export default function AudioNode({ data, id }: NodeProps) {
 
   const handleSave = () => {
     setIsEditing(false);
-    // In a real app, you'd update the node data here
+    // Update the node data with current values
+    (data?.onUpdate as Function)?.(id, {
+      audioUrl,
+      duration,
+      uploadedFile: uploadedFile ? {
+        name: uploadedFile.name,
+        type: uploadedFile.type,
+        size: uploadedFile.size
+      } : null,
+      previewUrl
+    });
   };
 
   return (
