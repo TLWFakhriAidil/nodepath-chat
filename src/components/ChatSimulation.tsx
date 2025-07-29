@@ -11,8 +11,8 @@ import { FlowEngine } from '@/lib/flowEngine'
 import { getFlows } from '@/lib/localStorage'
 import { useToast } from '@/hooks/use-toast'
 
-const ChatSimulation = () => {
-  const [selectedFlowId, setSelectedFlowId] = useState<string>('')
+const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | null }) => {
+  const [selectedFlowId, setSelectedFlowId] = useState<string>(preselectedFlowId || '')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [currentInput, setCurrentInput] = useState('')
   const [isRunning, setIsRunning] = useState(false)
@@ -30,6 +30,12 @@ const ChatSimulation = () => {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    if (preselectedFlowId) {
+      setSelectedFlowId(preselectedFlowId)
+    }
+  }, [preselectedFlowId])
 
   const startFlow = async () => {
     if (!selectedFlowId) {

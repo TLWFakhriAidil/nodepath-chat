@@ -9,9 +9,17 @@ import ChatbotBuilder from '@/components/ChatbotBuilder';
 import ChatSimulation from '@/components/ChatSimulation';
 
 const Index = () => {
+  const [activeTab, setActiveTab] = useState('builder');
+  const [testFlowId, setTestFlowId] = useState<string | null>(null);
+
+  const handleTestFlow = (flowId: string) => {
+    setTestFlowId(flowId);
+    setActiveTab('simulation');
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      <Tabs defaultValue="builder" className="h-screen flex flex-col">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-screen flex flex-col">
         {/* Header */}
         <div className="bg-card border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
@@ -50,20 +58,11 @@ const Index = () => {
         {/* Content */}
         <div className="flex-1">
           <TabsContent value="builder" className="h-full m-0">
-            <ChatbotBuilder />
+            <ChatbotBuilder onTestFlow={handleTestFlow} />
           </TabsContent>
           
-          <TabsContent value="simulation" className="h-full m-0 p-6">
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center space-y-6">
-                <h2 className="text-2xl font-bold text-foreground">Test Your Chatbot</h2>
-                <p className="text-muted-foreground max-w-md">
-                  This is a simulation of how your chatbot will interact with users. 
-                  In a real implementation, responses would be generated from your flow logic.
-                </p>
-                <ChatSimulation />
-              </div>
-            </div>
+          <TabsContent value="simulation" className="h-full m-0">
+            <ChatSimulation key={testFlowId} preselectedFlowId={testFlowId} />
           </TabsContent>
         </div>
       </Tabs>

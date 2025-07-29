@@ -17,7 +17,11 @@ import '@xyflow/react/dist/style.css';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save } from 'lucide-react';
+import { ChatbotFlow } from '@/types/chatbot';
+import { saveFlow } from '@/lib/localStorage';
+import { useToast } from '@/hooks/use-toast';
 
 import MessageNode from './nodes/MessageNode';
 import ConditionNode from './nodes/ConditionNode';
@@ -48,10 +52,13 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [];
 
-export default function ChatbotBuilder() {
+export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: string) => void }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
+  const [flowName, setFlowName] = useState('');
+  const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -95,6 +102,44 @@ export default function ChatbotBuilder() {
     [setNodes, deleteNode]
   );
 
+  const saveFlowToStorage = useCallback(() => {
+    if (!flowName.trim()) {
+      toast({
+        title: "Flow name required",
+        description: "Please enter a name for your flow",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const flowData: ChatbotFlow = {
+      id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+      name: flowName,
+      description: `Chatbot flow: ${flowName}`,
+      nodes: nodes.map(node => ({
+        id: node.id,
+        type: node.type as any,
+        position: node.position,
+        data: node.data
+      })),
+      edges: edges.map(edge => ({
+        id: edge.id || `${edge.source}-${edge.target}`,
+        source: edge.source,
+        target: edge.target
+      })),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    saveFlow(flowData);
+    setCurrentFlowId(flowData.id);
+    
+    toast({
+      title: "Flow saved",
+      description: `"${flowName}" has been saved successfully`
+    });
+  }, [flowName, currentFlowId, nodes, edges, toast]);
+
   const exportFlow = useCallback(() => {
     const flowData = {
       nodes,
@@ -113,6 +158,14 @@ export default function ChatbotBuilder() {
     
     URL.revokeObjectURL(url);
   }, [nodes, edges]);
+
+  const testFlow = useCallback(() => {
+    if (!currentFlowId) {
+      saveFlowToStorage();
+      return;
+    }
+    onTestFlow?.(currentFlowId);
+  }, [currentFlowId, saveFlowToStorage, onTestFlow]);
 
   const nodeTypeButtons = [
     { type: 'messageNode', label: 'Send Message', icon: MessageSquare, color: 'bg-node-message' },
@@ -149,16 +202,33 @@ export default function ChatbotBuilder() {
           </div>
 
           <div className="space-y-3">
+            <Input
+              placeholder="Enter flow name..."
+              value={flowName}
+              onChange={(e) => setFlowName(e.target.value)}
+              className="w-full"
+            />
+            
+            <Button 
+              onClick={saveFlowToStorage}
+              variant="default"
+              className="w-full"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save Flow
+            </Button>
+            
             <Button 
               onClick={exportFlow}
               variant="secondary" 
               className="w-full"
             >
               <Download className="w-4 h-4 mr-2" />
-              Export Flow
+              Export JSON
             </Button>
             
             <Button 
+              onClick={testFlow}
               variant="default" 
               className="w-full bg-gradient-primary"
             >
