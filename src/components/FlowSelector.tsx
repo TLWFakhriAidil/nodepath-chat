@@ -22,9 +22,9 @@ export default function FlowSelector({ flows, selectedFlowId, onFlowSelect }: Fl
       </SelectTrigger>
       <SelectContent>
         {flows.length === 0 ? (
-          <SelectItem value="" disabled>
+          <div className="px-2 py-1.5 text-sm text-muted-foreground">
             No flows available
-          </SelectItem>
+          </div>
         ) : (
           flows.map((flow) => (
             <SelectItem key={flow.id} value={flow.id}>
