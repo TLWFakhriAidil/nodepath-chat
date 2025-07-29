@@ -46,6 +46,17 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
     loadFlows();
   }, []);
 
+  // Reload flows when component becomes visible (when navigating back)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('Window focused, reloading flows...');
+      loadFlows();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
   useEffect(() => {
     if (selectedFlowId) {
       const flow = flows.find(f => f.id === selectedFlowId);
@@ -56,7 +67,9 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
   }, [selectedFlowId, flows]);
 
   const loadFlows = () => {
+    console.log('Loading flows in FlowManager...')
     const savedFlows = getFlows();
+    console.log('Loaded flows:', savedFlows)
     setFlows(savedFlows);
     
     // If we had a selected flow and it still exists, keep it selected
@@ -104,10 +117,20 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-foreground">My Flows</h2>
-            <Button onClick={() => navigate('/')} size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              New Flow
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={loadFlows} 
+                size="sm" 
+                variant="outline"
+                className="text-xs"
+              >
+                Refresh
+              </Button>
+              <Button onClick={() => navigate('/')} size="sm">
+                <Plus className="w-4 h-4 mr-2" />
+                New Flow
+              </Button>
+            </div>
           </div>
 
           {/* Flow Selector */}
