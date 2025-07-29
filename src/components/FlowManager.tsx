@@ -22,7 +22,8 @@ import {
   Plus, 
   MessageSquare,
   FileText,
-  Clock
+  Clock,
+  Edit
 } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { getFlows, deleteFlow } from '@/lib/localStorage';
@@ -191,6 +192,18 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
                       </span>
                       
                       <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/?edit=${flow.id}`);
+                          }}
+                          className="h-6 px-2"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                        
                         <Button
                           size="sm"
                           variant="ghost"

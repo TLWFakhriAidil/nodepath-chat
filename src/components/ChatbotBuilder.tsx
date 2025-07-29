@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ReactFlow,
   addEdge,
@@ -21,7 +21,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
-import { saveFlow, getFlows } from '@/lib/localStorage';
+import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
 
 import MessageNode from './nodes/MessageNode';
@@ -55,17 +55,13 @@ const initialEdges: Edge[] = [];
 
 export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: string) => void }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
   const [flowName, setFlowName] = useState('');
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
   const { toast } = useToast();
-
-  const onConnect = useCallback(
-    (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
 
   const deleteNode = useCallback(
     (nodeId: string) => {
@@ -74,6 +70,33 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     },
     [setNodes, setEdges]
   );
+
+  // Load flow for editing if edit parameter is present
+  useEffect(() => {
+    const editFlowId = searchParams.get('edit');
+    if (editFlowId) {
+      const flowToEdit = getFlow(editFlowId);
+      if (flowToEdit) {
+        setFlowName(flowToEdit.name);
+        setCurrentFlowId(flowToEdit.id);
+        setNodes(flowToEdit.nodes.map(node => ({
+          ...node,
+          data: { ...node.data, onDelete: deleteNode }
+        })));
+        setEdges(flowToEdit.edges);
+        toast({
+          title: "Flow loaded for editing",
+          description: `"${flowToEdit.name}" is now loaded in the editor`
+        });
+      }
+    }
+  }, [searchParams, setNodes, setEdges, toast, deleteNode]);
+
+  const onConnect = useCallback(
+    (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges]
+  );
+
 
   const addNode = useCallback(
     (type: string) => {
