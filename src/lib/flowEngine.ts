@@ -80,10 +80,20 @@ export class FlowEngine {
 
   private getNextNode(fromNodeId?: string): FlowNode | undefined {
     const sourceId = fromNodeId || this.execution.currentNodeId
-    const edge = this.flow.edges.find(edge => edge.source === sourceId)
-    if (!edge) return undefined
+    console.log('Looking for next node from:', sourceId)
+    console.log('Available edges:', this.flow.edges)
     
-    return this.flow.nodes.find(node => node.id === edge.target)
+    const edge = this.flow.edges.find(edge => edge.source === sourceId)
+    console.log('Found edge:', edge)
+    
+    if (!edge) {
+      console.log('No edge found from node:', sourceId)
+      return undefined
+    }
+    
+    const nextNode = this.flow.nodes.find(node => node.id === edge.target)
+    console.log('Next node:', nextNode)
+    return nextNode
   }
 
   private async processCurrentNode(): Promise<void> {

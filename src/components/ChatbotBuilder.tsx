@@ -127,7 +127,9 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       edges: edges.map(edge => ({
         id: edge.id || `${edge.source}-${edge.target}`,
         source: edge.source,
-        target: edge.target
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle
       })),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
