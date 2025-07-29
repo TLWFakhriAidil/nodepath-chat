@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Mic, Edit3, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,16 @@ export default function AudioNode({ data, id }: NodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [audioUrl, setAudioUrl] = useState((data?.audioUrl as string) || '');
   const [duration, setDuration] = useState((data?.duration as number) || 30);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('audio/')) {
+      setUploadedFile(file);
+      setAudioUrl(file.name);
+    }
+  };
 
   const handleSave = () => {
     setIsEditing(false);
@@ -51,6 +61,26 @@ export default function AudioNode({ data, id }: NodeProps) {
         
         {isEditing ? (
           <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Upload Audio</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Choose Audio
+              </Button>
+            </div>
+            <div className="text-center text-xs text-muted-foreground">or</div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Audio URL</label>
               <Input

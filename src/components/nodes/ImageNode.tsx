@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Image, Edit3, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,16 @@ export default function ImageNode({ data, id }: NodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [imageUrl, setImageUrl] = useState((data?.imageUrl as string) || '');
   const [caption, setCaption] = useState((data?.caption as string) || 'Image caption...');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setUploadedFile(file);
+      setImageUrl(file.name);
+    }
+  };
 
   const handleSave = () => {
     setIsEditing(false);
@@ -51,6 +61,26 @@ export default function ImageNode({ data, id }: NodeProps) {
         
         {isEditing ? (
           <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Upload Image</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Choose Image
+              </Button>
+            </div>
+            <div className="text-center text-xs text-muted-foreground">or</div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Image URL</label>
               <Input

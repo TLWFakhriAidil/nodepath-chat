@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Video, Edit3, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,16 @@ export default function VideoNode({ data, id }: NodeProps) {
   const [videoUrl, setVideoUrl] = useState((data?.videoUrl as string) || '');
   const [caption, setCaption] = useState((data?.caption as string) || 'Video caption...');
   const [duration, setDuration] = useState((data?.duration as number) || 60);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      setUploadedFile(file);
+      setVideoUrl(file.name);
+    }
+  };
 
   const handleSave = () => {
     setIsEditing(false);
@@ -52,6 +62,26 @@ export default function VideoNode({ data, id }: NodeProps) {
         
         {isEditing ? (
           <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Upload Video</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Choose Video
+              </Button>
+            </div>
+            <div className="text-center text-xs text-muted-foreground">or</div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Video URL</label>
               <Input
