@@ -26,6 +26,10 @@ export class FlowEngine {
 
     // Initialize execution
     const startNode = flow.nodes.find(node => node.type === 'start')
+    console.log('FlowEngine constructor - Start node found:', startNode)
+    console.log('FlowEngine constructor - All nodes:', flow.nodes)
+    console.log('FlowEngine constructor - All edges:', flow.edges)
+    
     if (!startNode) {
       throw new Error('Flow must have a start node')
     }
@@ -38,9 +42,13 @@ export class FlowEngine {
       isWaitingForInput: false,
       isCompleted: false
     }
+
+    console.log('FlowEngine constructor - Initial execution state:', this.execution)
   }
 
   async start(): Promise<void> {
+    console.log('FlowEngine.start() called')
+    console.log('Current execution state:', this.execution)
     await this.processCurrentNode()
   }
 
@@ -98,17 +106,24 @@ export class FlowEngine {
 
   private async processCurrentNode(): Promise<void> {
     const currentNode = this.getCurrentNode()
+    console.log('Processing current node:', currentNode)
+    
     if (!currentNode) {
+      console.log('No current node found, completing execution')
       this.completeExecution()
       return
     }
 
+    console.log('Node type:', currentNode.type)
+    
     switch (currentNode.type) {
       case 'start':
+        console.log('Processing start node - moving to next')
         await this.moveToNextNode()
         break
       
       case 'message':
+        console.log('Processing message node')
         await this.handleMessageNode(currentNode)
         break
       
@@ -141,7 +156,9 @@ export class FlowEngine {
   }
 
   private async handleMessageNode(node: FlowNode): Promise<void> {
+    console.log('handleMessageNode called with:', node)
     const message = replaceVariables(node.data.message || '', this.execution.variables)
+    console.log('Message to send:', message)
     
     const botMessage: ChatMessage = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substring(2)}`,
@@ -150,6 +167,7 @@ export class FlowEngine {
       timestamp: new Date().toISOString()
     }
 
+    console.log('Bot message created:', botMessage)
     this.execution.messages.push(botMessage)
     this.onMessage(botMessage)
 
