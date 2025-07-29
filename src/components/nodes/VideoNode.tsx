@@ -10,6 +10,7 @@ export default function VideoNode({ data, id }: NodeProps) {
   const [caption, setCaption] = useState((data?.caption as string) || 'Video caption...');
   const [duration, setDuration] = useState((data?.duration as number) || 60);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -17,8 +18,20 @@ export default function VideoNode({ data, id }: NodeProps) {
     if (file && file.type.startsWith('video/')) {
       setUploadedFile(file);
       setVideoUrl(file.name);
+      // Create object URL for preview
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
     }
   };
+
+  // Cleanup object URL on unmount
+  React.useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleSave = () => {
     setIsEditing(false);
@@ -117,10 +130,26 @@ export default function VideoNode({ data, id }: NodeProps) {
           </div>
         ) : (
           <div className="space-y-2">
-            {videoUrl && (
-              <div className="bg-muted/50 rounded p-2 text-center">
-                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
-                <div className="text-xs text-muted-foreground truncate">{videoUrl}</div>
+            {(previewUrl || videoUrl) && (
+              <div className="bg-muted/50 rounded p-2">
+                {previewUrl ? (
+                  <video 
+                    src={previewUrl} 
+                    controls 
+                    className="w-full h-32 object-cover rounded"
+                  />
+                ) : videoUrl.startsWith('http') ? (
+                  <video 
+                    src={videoUrl} 
+                    controls 
+                    className="w-full h-32 object-cover rounded"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
+                    <div className="text-xs text-muted-foreground truncate">{videoUrl}</div>
+                  </div>
+                )}
               </div>
             )}
             <div className="bg-muted/50 rounded p-3">

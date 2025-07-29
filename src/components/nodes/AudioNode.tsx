@@ -9,6 +9,7 @@ export default function AudioNode({ data, id }: NodeProps) {
   const [audioUrl, setAudioUrl] = useState((data?.audioUrl as string) || '');
   const [duration, setDuration] = useState((data?.duration as number) || 30);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -16,8 +17,20 @@ export default function AudioNode({ data, id }: NodeProps) {
     if (file && file.type.startsWith('audio/')) {
       setUploadedFile(file);
       setAudioUrl(file.name);
+      // Create object URL for preview
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
     }
   };
+
+  // Cleanup object URL on unmount
+  React.useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleSave = () => {
     setIsEditing(false);
@@ -107,10 +120,26 @@ export default function AudioNode({ data, id }: NodeProps) {
           </div>
         ) : (
           <div className="space-y-2">
-            {audioUrl && (
-              <div className="bg-muted/50 rounded p-2 text-center">
-                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
-                <div className="text-xs text-muted-foreground truncate">{audioUrl}</div>
+            {(previewUrl || audioUrl) && (
+              <div className="bg-muted/50 rounded p-2">
+                {previewUrl ? (
+                  <audio 
+                    src={previewUrl} 
+                    controls 
+                    className="w-full"
+                  />
+                ) : audioUrl.startsWith('http') ? (
+                  <audio 
+                    src={audioUrl} 
+                    controls 
+                    className="w-full"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
+                    <div className="text-xs text-muted-foreground truncate">{audioUrl}</div>
+                  </div>
+                )}
               </div>
             )}
             <div className="bg-muted/50 rounded p-3 text-center">

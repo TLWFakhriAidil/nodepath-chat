@@ -9,6 +9,7 @@ export default function ImageNode({ data, id }: NodeProps) {
   const [imageUrl, setImageUrl] = useState((data?.imageUrl as string) || '');
   const [caption, setCaption] = useState((data?.caption as string) || 'Image caption...');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -16,8 +17,20 @@ export default function ImageNode({ data, id }: NodeProps) {
     if (file && file.type.startsWith('image/')) {
       setUploadedFile(file);
       setImageUrl(file.name);
+      // Create object URL for preview
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
     }
   };
+
+  // Cleanup object URL on unmount
+  React.useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleSave = () => {
     setIsEditing(false);
@@ -105,10 +118,29 @@ export default function ImageNode({ data, id }: NodeProps) {
           </div>
         ) : (
           <div className="space-y-2">
-            {imageUrl && (
-              <div className="bg-muted/50 rounded p-2 text-center">
-                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
-                <div className="text-xs text-muted-foreground truncate">{imageUrl}</div>
+            {(previewUrl || imageUrl) && (
+              <div className="bg-muted/50 rounded p-2">
+                {previewUrl ? (
+                  <img 
+                    src={previewUrl} 
+                    alt="Preview" 
+                    className="w-full h-32 object-cover rounded"
+                  />
+                ) : imageUrl.startsWith('http') ? (
+                  <img 
+                    src={imageUrl} 
+                    alt="Preview" 
+                    className="w-full h-32 object-cover rounded"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div className="text-center">
+                    <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
+                    <div className="text-xs text-muted-foreground truncate">{imageUrl}</div>
+                  </div>
+                )}
               </div>
             )}
             <div className="bg-muted/50 rounded p-3 text-sm text-foreground">
