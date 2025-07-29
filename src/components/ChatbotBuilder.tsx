@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
   addEdge,
@@ -53,6 +54,7 @@ const initialNodes: Node[] = [
 const initialEdges: Edge[] = [];
 
 export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: string) => void }) {
+  const navigate = useNavigate();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
@@ -165,7 +167,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       return;
     }
     onTestFlow?.(currentFlowId);
-  }, [currentFlowId, saveFlowToStorage, onTestFlow]);
+    navigate('/test');
+  }, [currentFlowId, saveFlowToStorage, onTestFlow, navigate]);
 
   const nodeTypeButtons = [
     { type: 'message', label: 'Send Message', icon: MessageSquare, color: 'bg-node-message' },

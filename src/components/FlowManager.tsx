@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,7 @@ interface FlowManagerProps {
 }
 
 export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProps) {
+  const navigate = useNavigate();
   const [flows, setFlows] = useState<ChatbotFlow[]>([]);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<ChatbotFlow | null>(null);
@@ -102,7 +104,7 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-foreground">My Flows</h2>
-            <Button onClick={onCreateNew} size="sm">
+            <Button onClick={() => navigate('/')} size="sm">
               <Plus className="w-4 h-4 mr-2" />
               New Flow
             </Button>
@@ -172,6 +174,7 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
                           onClick={(e) => {
                             e.stopPropagation();
                             onTestFlow(flow.id);
+                            navigate('/test');
                           }}
                           className="h-6 px-2"
                         >
