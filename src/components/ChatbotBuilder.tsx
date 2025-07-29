@@ -105,10 +105,27 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   );
 
   const saveFlowToStorage = useCallback(() => {
+    console.log('=== SAVE FLOW DEBUG ===');
+    console.log('Flow name:', flowName);
+    console.log('Current nodes state:', nodes);
+    console.log('Current edges state:', edges);
+    console.log('Nodes length:', nodes.length);
+    console.log('Edges length:', edges.length);
+    
     if (!flowName.trim()) {
       toast({
         title: "Flow name required",
         description: "Please enter a name for your flow",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if we have any nodes besides the default start node
+    if (nodes.length <= 1) {
+      toast({
+        title: "No flow to save",
+        description: "Please add some nodes and connections to your flow before saving",
         variant: "destructive"
       });
       return;
