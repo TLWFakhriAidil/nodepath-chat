@@ -110,6 +110,13 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     [setEdges]
   );
 
+  const onEdgesDelete = useCallback(
+    (edgesToDelete: Edge[]) => {
+      setEdges((eds) => eds.filter((edge) => !edgesToDelete.find((e) => e.id === edge.id)));
+    },
+    [setEdges]
+  );
+
 
   const addNode = useCallback(
     (type: string) => {
@@ -320,8 +327,10 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onEdgesDelete={onEdgesDelete}
           nodeTypes={nodeTypes}
           fitView
+          deleteKeyCode="Delete"
           style={{ backgroundColor: 'hsl(var(--flow-background))' }}
           defaultEdgeOptions={{
             style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
