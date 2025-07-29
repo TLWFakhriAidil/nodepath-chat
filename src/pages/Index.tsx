@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bot, Workflow, MessageSquare } from 'lucide-react';
+import { Bot, Workflow, MessageSquare, Upload } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import ChatbotBuilder from '@/components/ChatbotBuilder';
 import ChatSimulation from '@/components/ChatSimulation';
@@ -24,16 +25,25 @@ const Index = () => {
               </div>
             </div>
             
-            <TabsList className="grid w-[400px] grid-cols-2">
-              <TabsTrigger value="builder" className="flex items-center space-x-2">
-                <Workflow className="w-4 h-4" />
-                <span>Flow Builder</span>
-              </TabsTrigger>
-              <TabsTrigger value="simulation" className="flex items-center space-x-2">
-                <MessageSquare className="w-4 h-4" />
-                <span>Test Chat</span>
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex items-center gap-4">
+              <TabsList className="grid w-[400px] grid-cols-2">
+                <TabsTrigger value="builder" className="flex items-center space-x-2">
+                  <Workflow className="w-4 h-4" />
+                  <span>Flow Builder</span>
+                </TabsTrigger>
+                <TabsTrigger value="simulation" className="flex items-center space-x-2">
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Test Chat</span>
+                </TabsTrigger>
+              </TabsList>
+              
+              <Button asChild variant="outline">
+                <Link to="/media" className="flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Media Manager
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
 
