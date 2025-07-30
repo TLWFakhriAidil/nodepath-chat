@@ -56,7 +56,7 @@ export default function ConditionNode({ data, id }: NodeProps) {
           <div className="flex items-center">
             <div className="w-3 h-3 rounded-full bg-node-condition mr-2" />
             <GitBranch className="w-4 h-4 text-node-condition mr-2" />
-            <span className="text-sm font-medium text-foreground">Condition</span>
+            <span className="text-sm font-medium text-black">Condition</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -132,11 +132,11 @@ export default function ConditionNode({ data, id }: NodeProps) {
             </Button>
           </div>
         ) : (
-          <div className="bg-muted/50 rounded p-3 text-sm text-foreground space-y-1">
+          <div className="bg-muted/50 rounded p-3 text-sm text-black space-y-1">
             {conditions.map((condition) => (
               <div key={condition.id} className="flex justify-between">
-                <span className="font-medium">{condition.label}:</span>
-                <span className="text-muted-foreground">
+                <span className="font-medium text-black">{condition.label}:</span>
+                <span className="text-gray-600">
                   {condition.type === 'default' ? 'Default' : `${condition.type} "${condition.value}"`}
                 </span>
               </div>

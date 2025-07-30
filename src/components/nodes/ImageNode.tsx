@@ -87,7 +87,7 @@ export default function ImageNode({ data, id }: NodeProps) {
           <div className="flex items-center">
             <div className="w-3 h-3 rounded-full bg-blue-500 mr-2" />
             <Image className="w-4 h-4 text-blue-500 mr-2" />
-            <span className="text-sm font-medium text-foreground">Send Image</span>
+            <span className="text-sm font-medium text-black">Send Image</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -180,7 +180,7 @@ export default function ImageNode({ data, id }: NodeProps) {
                 )}
               </div>
             )}
-            <div className="bg-muted/50 rounded p-3 text-sm text-foreground">
+            <div className="bg-muted/50 rounded p-3 text-sm text-black">
               {caption}
             </div>
           </div>

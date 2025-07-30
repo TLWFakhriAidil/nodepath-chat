@@ -30,7 +30,7 @@ export default function MessageNode({ data, id }: NodeProps) {
           <div className="flex items-center">
             <div className="w-3 h-3 rounded-full bg-node-message mr-2" />
             <MessageSquare className="w-4 h-4 text-primary mr-2" />
-            <span className="text-sm font-medium text-foreground">Message</span>
+            <span className="text-sm font-medium text-black">Message</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -65,7 +65,7 @@ export default function MessageNode({ data, id }: NodeProps) {
             </Button>
           </div>
         ) : (
-          <div className="bg-muted/50 rounded p-3 text-sm text-foreground">
+          <div className="bg-muted/50 rounded p-3 text-sm text-black">
             {message}
           </div>
         )}

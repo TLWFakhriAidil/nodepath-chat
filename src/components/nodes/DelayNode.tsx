@@ -28,7 +28,7 @@ export default function DelayNode({ data, id }: NodeProps) {
           <div className="flex items-center">
             <div className="w-3 h-3 rounded-full bg-node-delay mr-2" />
             <Clock className="w-4 h-4 text-node-delay mr-2" />
-            <span className="text-sm font-medium text-foreground">Delay</span>
+            <span className="text-sm font-medium text-black">Delay</span>
           </div>
           <div className="flex items-center gap-1">
             <Button

@@ -87,7 +87,7 @@ export default function AudioNode({ data, id }: NodeProps) {
           <div className="flex items-center">
             <div className="w-3 h-3 rounded-full bg-green-500 mr-2" />
             <Mic className="w-4 h-4 text-green-500 mr-2" />
-            <span className="text-sm font-medium text-foreground">Send Audio</span>
+            <span className="text-sm font-medium text-black">Send Audio</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -181,7 +181,7 @@ export default function AudioNode({ data, id }: NodeProps) {
             )}
             <div className="bg-muted/50 rounded p-3 text-center">
               <div className="text-2xl font-bold text-green-500">{duration}s</div>
-              <div className="text-xs text-muted-foreground">audio duration</div>
+              <div className="text-xs text-gray-600">audio duration</div>
             </div>
           </div>
         )}
