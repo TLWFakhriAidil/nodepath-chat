@@ -295,7 +295,7 @@ export class FlowEngine {
   }
 
   private async handleDelayNode(node: FlowNode): Promise<void> {
-    const delaySeconds = node.data.delaySeconds || 1
+    const delaySeconds = node.data.delaySeconds || node.data.delay || 1
     
     setTimeout(async () => {
       await this.moveToNextNode()
@@ -331,9 +331,19 @@ export class FlowEngine {
       matchedCondition = conditions.find(c => c.type === 'default')
     }
 
-    if (matchedCondition?.nextNodeId) {
-      this.execution.currentNodeId = matchedCondition.nextNodeId
-      await this.processCurrentNode()
+    if (matchedCondition) {
+      // For condition nodes, find the next node based on the outgoing edge with the matching handle
+      const conditionEdge = this.flow.edges.find(edge => 
+        edge.source === node.id && edge.sourceHandle === matchedCondition!.id
+      )
+      
+      if (conditionEdge) {
+        this.execution.currentNodeId = conditionEdge.target
+        await this.processCurrentNode()
+      } else {
+        console.log('No edge found for condition:', matchedCondition)
+        await this.moveToNextNode()
+      }
     } else {
       await this.moveToNextNode()
     }

@@ -10,7 +10,9 @@ export default function DelayNode({ data, id }: NodeProps) {
 
   const handleSave = () => {
     setIsEditing(false);
-    // In a real app, you'd update the node data here
+    if (data?.onUpdate) {
+      (data.onUpdate as Function)(id, { delay, delaySeconds: delay });
+    }
   };
 
   return (

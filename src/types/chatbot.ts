@@ -27,6 +27,7 @@ export interface FlowNode {
       type: string
       size: number
     } | null
+    delay?: number
     delaySeconds?: number
     conditions?: ConditionRule[]
     variables?: Record<string, string>
