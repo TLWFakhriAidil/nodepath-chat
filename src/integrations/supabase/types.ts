@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      leads: {
+        Row: {
+          campaign_name: string | null
+          conversation_data: Json | null
+          created_at: string | null
+          email: string | null
+          flow_id: string | null
+          id: string
+          interest: string | null
+          name: string | null
+          notes: string | null
+          phone: string | null
+          source: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          campaign_name?: string | null
+          conversation_data?: Json | null
+          created_at?: string | null
+          email?: string | null
+          flow_id?: string | null
+          id?: string
+          interest?: string | null
+          name?: string | null
+          notes?: string | null
+          phone?: string | null
+          source?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          campaign_name?: string | null
+          conversation_data?: Json | null
+          created_at?: string | null
+          email?: string | null
+          flow_id?: string | null
+          id?: string
+          interest?: string | null
+          name?: string | null
+          notes?: string | null
+          phone?: string | null
+          source?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       media_files: {
         Row: {
           created_at: string | null
@@ -58,7 +106,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_lead_stats: {
+        Args: {
+          start_date?: string
+          end_date?: string
+          source_filter?: string
+          campaign_filter?: string
+        }
+        Returns: {
+          period_date: string
+          total_leads: number
+          source: string
+          campaign_name: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
