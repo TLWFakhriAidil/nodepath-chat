@@ -97,14 +97,14 @@ export const LeadDashboard = () => {
             <div>
               <label className="text-sm font-medium mb-2 block">Source</label>
               <Select
-                value={filters.source || ''}
-                onValueChange={(value) => handleFilterChange('source', value || undefined)}
+                value={filters.source || 'all'}
+                onValueChange={(value) => handleFilterChange('source', value === 'all' ? undefined : value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="All Sources" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Sources</SelectItem>
+                  <SelectItem value="all">All Sources</SelectItem>
                   <SelectItem value="web">Web</SelectItem>
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
                   <SelectItem value="instagram">Instagram</SelectItem>
@@ -115,14 +115,14 @@ export const LeadDashboard = () => {
             <div>
               <label className="text-sm font-medium mb-2 block">Status</label>
               <Select
-                value={filters.status || ''}
-                onValueChange={(value) => handleFilterChange('status', value || undefined)}
+                value={filters.status || 'all'}
+                onValueChange={(value) => handleFilterChange('status', value === 'all' ? undefined : value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="new">New</SelectItem>
                   <SelectItem value="contacted">Contacted</SelectItem>
                   <SelectItem value="qualified">Qualified</SelectItem>
