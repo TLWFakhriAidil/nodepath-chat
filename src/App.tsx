@@ -12,8 +12,9 @@ import ChatbotBuilder from '@/components/ChatbotBuilder';
 import ChatSimulation from '@/components/ChatSimulation';
 import FlowManager from '@/components/FlowManager';
 
-// Lazy load MediaManager to avoid importing supabase on initial load
+// Lazy load pages to avoid importing supabase on initial load
 const MediaManager = lazy(() => import("./pages/MediaManager"));
+const LeadAnalytics = lazy(() => import("./pages/LeadAnalytics"));
 
 const queryClient = new QueryClient();
 
@@ -67,6 +68,11 @@ const App = () => {
                     <Route path="/media" element={
                       <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
                         <MediaManager />
+                      </Suspense>
+                    } />
+                    <Route path="/analytics" element={
+                      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                        <LeadAnalytics />
                       </Suspense>
                     } />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

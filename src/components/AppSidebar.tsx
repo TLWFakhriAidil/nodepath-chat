@@ -6,6 +6,7 @@ import {
   MessageCircle, 
   FolderOpen, 
   Image,
+  BarChart3,
   Settings
 } from 'lucide-react';
 import {
@@ -45,6 +46,12 @@ const mainItems = [
     url: '/media', 
     icon: Image,
     description: 'Manage images, audio, and video files'
+  },
+  { 
+    title: 'Lead Analytics', 
+    url: '/analytics', 
+    icon: BarChart3,
+    description: 'Track and analyze leads from chatbot conversations'
   }
 ];
 
