@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { Client } from "https://deno.land/x/mysql@v2.12.1/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,14 +34,25 @@ serve(async (req) => {
     const username = url.username;
     const password = url.password;
     const hostname = url.hostname;
-    const port = url.port || '3306';
+    const port = parseInt(url.port || '3306');
     const database = url.pathname.substring(1); // Remove leading slash
 
     console.log(`Connecting to MySQL: ${hostname}:${port}/${database}`);
 
+    // Create MySQL client
+    const client = await new Client().connect({
+      hostname,
+      username,
+      password,
+      port,
+      db: database,
+    });
+
+    console.log('MySQL connection established');
+
     // Handle different operations
     if (method === 'POST' && data?.operation) {
-      return await handleDatabaseOperation(data);
+      return await handleDatabaseOperation(client, data);
     }
 
     // Handle raw SQL execution
@@ -48,22 +60,33 @@ serve(async (req) => {
       const sql = data.sql;
       console.log(`Executing SQL: ${sql}`);
       
-      // Log the SQL for debugging
-      console.log(`SQL Command: ${sql}`);
-      
-      // Create initial tables - simulate successful execution
-      if (sql.toLowerCase().includes('create table')) {
-        console.log('Table creation command received');
+      try {
+        const result = await client.execute(sql);
+        console.log('SQL executed successfully:', result);
+        
+        await client.close();
+        
         return new Response(JSON.stringify({
           success: true,
           data: {
-            message: 'Table created successfully',
-            affectedRows: 0,
-            sql: sql,
-            note: 'This is a simulated response. To actually create tables in MySQL, you need to execute this SQL in your MySQL database.'
+            message: 'SQL executed successfully',
+            result: result,
+            sql: sql
           },
           status: 200
         }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (error: any) {
+        console.error('SQL execution error:', error);
+        await client.close();
+        
+        return new Response(JSON.stringify({
+          success: false,
+          error: error.message,
+          sql: sql
+        }), {
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -72,6 +95,8 @@ serve(async (req) => {
     // For GET requests, return connection status
     if (method === 'GET') {
       console.log('Connection test successful');
+      await client.close();
+      
       return new Response(JSON.stringify({
         success: true,
         data: {
@@ -103,67 +128,139 @@ serve(async (req) => {
   }
 });
 
-async function handleDatabaseOperation(data: any) {
-  const { operation, table, payload, id, filters } = data;
+async function handleDatabaseOperation(client: Client, data: any) {
+  const { operation, table, payload, filters } = data;
   
   console.log(`Handling ${operation} operation on table ${table}`);
 
-  // Simulate database operations with more realistic responses
-  switch (operation) {
-    case 'insert':
-      console.log(`Inserting into ${table}:`, payload);
-      return new Response(JSON.stringify({
-        success: true,
-        data: {
-          ...payload,
-          id: id || generateId(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          note: `Data would be inserted into ${table} table`
+  try {
+    switch (operation) {
+      case 'insert':
+        console.log(`Inserting into ${table}:`, payload);
+        
+        // Build INSERT query
+        const columns = Object.keys(payload).join(', ');
+        const values = Object.values(payload).map(v => 
+          typeof v === 'string' ? `'${v.replace(/'/g, "\\'")}'` : v
+        ).join(', ');
+        const insertSQL = `INSERT INTO ${table} (${columns}) VALUES (${values})`;
+        
+        console.log('Insert SQL:', insertSQL);
+        const insertResult = await client.execute(insertSQL);
+        
+        await client.close();
+        
+        return new Response(JSON.stringify({
+          success: true,
+          data: {
+            ...payload,
+            insertId: insertResult.lastInsertId,
+            affectedRows: insertResult.affectedRows
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
+      case 'select':
+        console.log(`Selecting from ${table} with filters:`, filters);
+        
+        let selectSQL = `SELECT * FROM ${table}`;
+        if (filters) {
+          const conditions = Object.entries(filters)
+            .filter(([key]) => key !== 'order_by')
+            .map(([key, value]) => `${key} = '${value}'`)
+            .join(' AND ');
+          
+          if (conditions) {
+            selectSQL += ` WHERE ${conditions}`;
+          }
+          
+          if (filters.order_by) {
+            selectSQL += ` ORDER BY ${filters.order_by}`;
+          }
         }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+        
+        console.log('Select SQL:', selectSQL);
+        const selectResult = await client.execute(selectSQL);
+        
+        await client.close();
+        
+        return new Response(JSON.stringify({
+          success: true,
+          data: selectResult.rows || []
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
 
-    case 'update':
-      console.log(`Updating ${table} with:`, payload);
-      return new Response(JSON.stringify({
-        success: true,
-        data: {
-          ...payload,
-          updated_at: new Date().toISOString(),
-          note: `Data would be updated in ${table} table`
+      case 'update':
+        console.log(`Updating ${table} with:`, payload);
+        
+        const updateFields = Object.entries(payload)
+          .map(([key, value]) => `${key} = '${value}'`)
+          .join(', ');
+        
+        let updateSQL = `UPDATE ${table} SET ${updateFields}`;
+        if (filters) {
+          const conditions = Object.entries(filters)
+            .map(([key, value]) => `${key} = '${value}'`)
+            .join(' AND ');
+          updateSQL += ` WHERE ${conditions}`;
         }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+        
+        console.log('Update SQL:', updateSQL);
+        const updateResult = await client.execute(updateSQL);
+        
+        await client.close();
+        
+        return new Response(JSON.stringify({
+          success: true,
+          data: {
+            affectedRows: updateResult.affectedRows
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
 
-    case 'select':
-      // Return mock data based on table
-      console.log(`Selecting from ${table} with filters:`, filters);
-      const mockData = getMockData(table, filters);
-      return new Response(JSON.stringify({
-        success: true,
-        data: mockData,
-        note: `Data would be selected from ${table} table`
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-
-    case 'delete':
-      console.log(`Deleting from ${table} with filters:`, filters);
-      return new Response(JSON.stringify({
-        success: true,
-        data: { 
-          message: 'Record deleted successfully',
-          note: `Data would be deleted from ${table} table`
+      case 'delete':
+        console.log(`Deleting from ${table} with filters:`, filters);
+        
+        let deleteSQL = `DELETE FROM ${table}`;
+        if (filters) {
+          const conditions = Object.entries(filters)
+            .map(([key, value]) => `${key} = '${value}'`)
+            .join(' AND ');
+          deleteSQL += ` WHERE ${conditions}`;
         }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+        
+        console.log('Delete SQL:', deleteSQL);
+        const deleteResult = await client.execute(deleteSQL);
+        
+        await client.close();
+        
+        return new Response(JSON.stringify({
+          success: true,
+          data: {
+            affectedRows: deleteResult.affectedRows
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
 
-    default:
-      throw new Error(`Unsupported operation: ${operation}`);
+      default:
+        await client.close();
+        throw new Error(`Unsupported operation: ${operation}`);
+    }
+  } catch (error: any) {
+    console.error(`Database operation error:`, error);
+    await client.close();
+    
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 }
 
