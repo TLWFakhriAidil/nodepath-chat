@@ -22,7 +22,7 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
   try {
     const result = await callMySQLAPI({
       operation: 'insert',
-      table: 'chatbot_flows',
+      table: 'chatbot_flows_nodepath',
       payload: {
         id: flow.id,
         name: flow.name,
@@ -44,7 +44,7 @@ export const getFlows = async (): Promise<ChatbotFlow[]> => {
   try {
     const result = await callMySQLAPI({
       operation: 'select',
-      table: 'chatbot_flows',
+      table: 'chatbot_flows_nodepath',
       filters: { order_by: 'updated_at DESC' }
     })
     
@@ -69,7 +69,7 @@ export const getFlow = async (id: string): Promise<ChatbotFlow | null> => {
   try {
     const result = await callMySQLAPI({
       operation: 'select',
-      table: 'chatbot_flows',
+      table: 'chatbot_flows_nodepath',
       filters: { id }
     })
     
@@ -96,7 +96,7 @@ export const deleteFlow = async (id: string): Promise<void> => {
   try {
     const result = await callMySQLAPI({
       operation: 'delete',
-      table: 'chatbot_flows',
+      table: 'chatbot_flows_nodepath',
       filters: { id }
     })
     
@@ -112,7 +112,7 @@ export const saveExecution = async (execution: FlowExecution): Promise<void> => 
   try {
     const result = await callMySQLAPI({
       operation: 'insert',
-      table: 'chatbot_executions',
+      table: 'chatbot_executions_nodepath',
       payload: {
         flow_id: execution.flowId,
         current_node_id: execution.currentNodeId,
@@ -134,7 +134,7 @@ export const getExecution = async (flowId: string): Promise<FlowExecution | null
   try {
     const result = await callMySQLAPI({
       operation: 'select',
-      table: 'chatbot_executions',
+      table: 'chatbot_executions_nodepath',
       filters: { flow_id: flowId }
     })
     
@@ -160,7 +160,7 @@ export const getExecutions = async (): Promise<FlowExecution[]> => {
   try {
     const result = await callMySQLAPI({
       operation: 'select',
-      table: 'chatbot_executions',
+      table: 'chatbot_executions_nodepath',
       filters: { order_by: 'updated_at DESC' }
     })
     
@@ -184,7 +184,7 @@ export const deleteExecution = async (flowId: string): Promise<void> => {
   try {
     const result = await callMySQLAPI({
       operation: 'delete',
-      table: 'chatbot_executions',
+      table: 'chatbot_executions_nodepath',
       filters: { flow_id: flowId }
     })
     
@@ -199,23 +199,23 @@ export const deleteExecution = async (flowId: string): Promise<void> => {
 export const initializeMySQLTables = async (): Promise<void> => {
   const tables = [
     // Chatbot flows table
-    `CREATE TABLE IF NOT EXISTS chatbot_flows (
+    `CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
       id VARCHAR(255) PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
       description TEXT,
-      nodes JSON NOT NULL DEFAULT '[]',
-      edges JSON NOT NULL DEFAULT '[]',
+      nodes JSON NOT NULL,
+      edges JSON NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`,
     
     // Chatbot executions table
-    `CREATE TABLE IF NOT EXISTS chatbot_executions (
+    `CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
       id VARCHAR(255) PRIMARY KEY,
       flow_id VARCHAR(255) NOT NULL,
       current_node_id VARCHAR(255) NOT NULL,
-      variables JSON NOT NULL DEFAULT '{}',
-      messages JSON NOT NULL DEFAULT '[]',
+      variables JSON NOT NULL,
+      messages JSON NOT NULL,
       is_waiting_for_input BOOLEAN NOT NULL DEFAULT FALSE,
       is_completed BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -223,7 +223,7 @@ export const initializeMySQLTables = async (): Promise<void> => {
     )`,
     
     // Leads table
-    `CREATE TABLE IF NOT EXISTS leads (
+    `CREATE TABLE IF NOT EXISTS leads_nodepath (
       id VARCHAR(255) PRIMARY KEY,
       name VARCHAR(255),
       email VARCHAR(255),
@@ -240,7 +240,7 @@ export const initializeMySQLTables = async (): Promise<void> => {
     )`,
     
     // Media files table
-    `CREATE TABLE IF NOT EXISTS media_files (
+    `CREATE TABLE IF NOT EXISTS media_files_nodepath (
       id VARCHAR(255) PRIMARY KEY,
       filename VARCHAR(255) NOT NULL,
       original_name VARCHAR(255) NOT NULL,

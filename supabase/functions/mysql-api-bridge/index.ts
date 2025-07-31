@@ -48,14 +48,19 @@ serve(async (req) => {
       const sql = data.sql;
       console.log(`Executing SQL: ${sql}`);
       
-      // Create initial tables
+      // Log the SQL for debugging
+      console.log(`SQL Command: ${sql}`);
+      
+      // Create initial tables - simulate successful execution
       if (sql.toLowerCase().includes('create table')) {
+        console.log('Table creation command received');
         return new Response(JSON.stringify({
           success: true,
           data: {
             message: 'Table created successfully',
             affectedRows: 0,
-            sql: sql
+            sql: sql,
+            note: 'This is a simulated response. To actually create tables in MySQL, you need to execute this SQL in your MySQL database.'
           },
           status: 200
         }), {
@@ -103,27 +108,31 @@ async function handleDatabaseOperation(data: any) {
   
   console.log(`Handling ${operation} operation on table ${table}`);
 
-  // Simulate database operations
+  // Simulate database operations with more realistic responses
   switch (operation) {
     case 'insert':
+      console.log(`Inserting into ${table}:`, payload);
       return new Response(JSON.stringify({
         success: true,
         data: {
           ...payload,
           id: id || generateId(),
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          note: `Data would be inserted into ${table} table`
         }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
     case 'update':
+      console.log(`Updating ${table} with:`, payload);
       return new Response(JSON.stringify({
         success: true,
         data: {
           ...payload,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          note: `Data would be updated in ${table} table`
         }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -131,18 +140,24 @@ async function handleDatabaseOperation(data: any) {
 
     case 'select':
       // Return mock data based on table
+      console.log(`Selecting from ${table} with filters:`, filters);
       const mockData = getMockData(table, filters);
       return new Response(JSON.stringify({
         success: true,
-        data: mockData
+        data: mockData,
+        note: `Data would be selected from ${table} table`
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
     case 'delete':
+      console.log(`Deleting from ${table} with filters:`, filters);
       return new Response(JSON.stringify({
         success: true,
-        data: { message: 'Record deleted successfully' }
+        data: { 
+          message: 'Record deleted successfully',
+          note: `Data would be deleted from ${table} table`
+        }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
