@@ -164,7 +164,9 @@ async function handleDatabaseOperation(client: Client, data: any) {
                   const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
                   return `${key} = '${mysqlDateTime}'`;
                 }
-                return `${key} = '${value.replace(/'/g, "\\'")}'`;
+                // Truncate very long strings to prevent memory issues
+                const truncatedValue = value.length > 50000 ? value.substring(0, 50000) + '...' : value;
+                return `${key} = '${truncatedValue.replace(/'/g, "\\'")}'`;
               }
               return `${key} = ${value}`;
             })
