@@ -9,14 +9,14 @@ import { Loader2, Database, Send } from 'lucide-react';
 
 export default function MySQLAPIExample() {
   const { get, post, loading } = useMySQLAPI();
-  const [endpoint, setEndpoint] = useState('https://myapi.example.com/users');
+  const [endpoint, setEndpoint] = useState('mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway');
   const [postData, setPostData] = useState('{"name": "John Doe", "email": "john@example.com"}');
   const [response, setResponse] = useState<any>(null);
 
   // Example: Fetch data on component mount
   useEffect(() => {
     const fetchInitialData = async () => {
-      const result = await get('https://myapi.example.com/users');
+      const result = await get('mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway');
       if (result.success) {
         console.log('Initial data loaded:', result.data);
       }
@@ -57,7 +57,7 @@ export default function MySQLAPIExample() {
               id="endpoint"
               value={endpoint}
               onChange={(e) => setEndpoint(e.target.value)}
-              placeholder="https://myapi.example.com/users"
+              placeholder="mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
               className="mt-1"
             />
           </div>
