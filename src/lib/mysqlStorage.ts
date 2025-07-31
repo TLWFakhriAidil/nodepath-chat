@@ -107,19 +107,45 @@ export const deleteFlow = async (id: string): Promise<void> => {
   }
 }
 
+// Helper function to clean and escape JSON strings for MySQL
+const cleanJsonForMySQL = (obj: any): string => {
+  // First stringify the object
+  let jsonString = JSON.stringify(obj);
+  
+  // Clean up any problematic characters that might cause encoding issues
+  jsonString = jsonString
+    .replace(/\\t/g, ' ')      // Replace tab characters with spaces
+    .replace(/\\n/g, ' ')      // Replace newlines with spaces
+    .replace(/\\r/g, ' ')      // Replace carriage returns with spaces
+    .replace(/\t/g, ' ')       // Replace actual tab characters
+    .replace(/\n/g, ' ')       // Replace actual newlines
+    .replace(/\r/g, ' ')       // Replace actual carriage returns
+    .replace(/[\x00-\x1F\x7F]/g, ' '); // Replace control characters with spaces
+  
+  return jsonString;
+}
+
 // Execution management
 export const saveExecution = async (execution: FlowExecution): Promise<void> => {
   try {
+    // Clean the messages and variables for MySQL storage
+    const cleanedMessages = execution.messages.map(msg => ({
+      ...msg,
+      content: msg.content?.replace(/[\x00-\x1F\x7F]/g, ' ') || '',
+      mediaUrl: msg.mediaUrl?.replace(/[\x00-\x1F\x7F]/g, ' ') || undefined
+    }));
+
     const executionData = {
       flow_id: execution.flowId,
       current_node_id: execution.currentNodeId,
-      variables: JSON.stringify(execution.variables),
-      messages: JSON.stringify(execution.messages),
+      variables: cleanJsonForMySQL(execution.variables),
+      messages: cleanJsonForMySQL(cleanedMessages),
       is_waiting_for_input: execution.isWaitingForInput,
       is_completed: execution.isCompleted
     }
 
     console.log('Saving/updating execution to MySQL for flow:', execution.flowId)
+    console.log('Messages to save:', cleanedMessages.length, 'messages')
     
     // First check if execution exists for this flow_id
     const existingResult = await callMySQLAPI({
