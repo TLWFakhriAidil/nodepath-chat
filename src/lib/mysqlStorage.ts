@@ -107,22 +107,41 @@ export const deleteFlow = async (id: string): Promise<void> => {
   }
 }
 
-// Helper function to clean and escape JSON strings for MySQL
-const cleanJsonForMySQL = (obj: any): string => {
-  // First stringify the object
-  let jsonString = JSON.stringify(obj);
-  
-  // Clean up any problematic characters that might cause encoding issues
-  jsonString = jsonString
-    .replace(/\\t/g, ' ')      // Replace tab characters with spaces
-    .replace(/\\n/g, ' ')      // Replace newlines with spaces
-    .replace(/\\r/g, ' ')      // Replace carriage returns with spaces
-    .replace(/\t/g, ' ')       // Replace actual tab characters
-    .replace(/\n/g, ' ')       // Replace actual newlines
-    .replace(/\r/g, ' ')       // Replace actual carriage returns
-    .replace(/[\x00-\x1F\x7F]/g, ' '); // Replace control characters with spaces
-  
-  return jsonString;
+// Helper function to safely prepare data for MySQL JSON storage
+const safeMySQLJson = (obj: any): string => {
+  try {
+    // Clean the object data before stringifying
+    const cleanObject = (item: any): any => {
+      if (typeof item === 'string') {
+        // Only clean actual problematic characters, not JSON escape sequences
+        return item
+          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')  // Remove control chars but keep \t (\x09) and \n (\x0A)
+          .replace(/\t+/g, ' ')  // Replace actual tabs with spaces
+          .trim();
+      } else if (Array.isArray(item)) {
+        return item.map(cleanObject);
+      } else if (item && typeof item === 'object') {
+        const cleaned: any = {};
+        for (const [key, value] of Object.entries(item)) {
+          cleaned[key] = cleanObject(value);
+        }
+        return cleaned;
+      }
+      return item;
+    };
+
+    const cleanedObj = cleanObject(obj);
+    const jsonString = JSON.stringify(cleanedObj);
+    
+    // Validate the JSON is parseable
+    JSON.parse(jsonString);
+    
+    return jsonString;
+  } catch (error) {
+    console.error('Error creating safe MySQL JSON:', error);
+    // Fallback to empty object/array if JSON creation fails
+    return Array.isArray(obj) ? '[]' : '{}';
+  }
 }
 
 // Execution management
@@ -138,8 +157,8 @@ export const saveExecution = async (execution: FlowExecution): Promise<void> => 
     const executionData = {
       flow_id: execution.flowId,
       current_node_id: execution.currentNodeId,
-      variables: cleanJsonForMySQL(execution.variables),
-      messages: cleanJsonForMySQL(cleanedMessages),
+      variables: safeMySQLJson(execution.variables),
+      messages: safeMySQLJson(cleanedMessages),
       is_waiting_for_input: execution.isWaitingForInput,
       is_completed: execution.isCompleted
     }
