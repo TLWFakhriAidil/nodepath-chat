@@ -169,9 +169,13 @@ async function handleDatabaseOperation(client: Client, data: any) {
                   const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
                   return `${key} = '${mysqlDateTime}'`;
                 }
-                // Handle large strings by storing them in LONGTEXT columns
-                const escapedValue = value.replace(/'/g, "\\'");
+                // Properly escape JSON strings and quotes
+                const escapedValue = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
                 return `${key} = '${escapedValue}'`;
+              } else if (typeof value === 'object') {
+                // Handle JSON objects by stringifying and escaping
+                const jsonString = JSON.stringify(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                return `${key} = '${jsonString}'`;
               }
               return `${key} = ${value}`;
             })
@@ -203,7 +207,13 @@ async function handleDatabaseOperation(client: Client, data: any) {
                 const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
                 return `'${mysqlDateTime}'`;
               }
-              return `'${v.replace(/'/g, "\\'")}'`;
+              // Properly escape JSON strings and quotes
+              const escapedValue = v.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+              return `'${escapedValue}'`;
+            } else if (typeof v === 'object') {
+              // Handle JSON objects by stringifying and escaping
+              const jsonString = JSON.stringify(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+              return `'${jsonString}'`;
             }
             return v;
           }).join(', ');
