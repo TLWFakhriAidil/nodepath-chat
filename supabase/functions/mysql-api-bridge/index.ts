@@ -132,6 +132,9 @@ async function handleDatabaseOperation(client: Client, data: any) {
   const { operation, table, payload, filters } = data;
   
   console.log(`Handling ${operation} operation on table ${table}`);
+  
+  // Check if table exists and create it if it doesn't
+  await ensureTableExists(client, table);
 
   try {
     switch (operation) {
@@ -266,6 +269,95 @@ async function handleDatabaseOperation(client: Client, data: any) {
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2)}`;
+}
+
+async function ensureTableExists(client: Client, tableName: string) {
+  console.log(`Checking if table ${tableName} exists`);
+  
+  try {
+    // Check if table exists
+    const checkResult = await client.execute(`SHOW TABLES LIKE '${tableName}'`);
+    
+    if (checkResult.rows && checkResult.rows.length > 0) {
+      console.log(`Table ${tableName} already exists`);
+      return;
+    }
+    
+    console.log(`Table ${tableName} does not exist, creating it...`);
+    
+    // Create table based on table name
+    const createTableSQL = getCreateTableSQL(tableName);
+    if (createTableSQL) {
+      await client.execute(createTableSQL);
+      console.log(`Successfully created table ${tableName}`);
+    } else {
+      console.log(`No table schema defined for ${tableName}`);
+    }
+  } catch (error: any) {
+    console.error(`Error checking/creating table ${tableName}:`, error);
+    // Don't throw here, let the main operation handle the error
+  }
+}
+
+function getCreateTableSQL(tableName: string): string | null {
+  const tableSchemas: Record<string, string> = {
+    'chatbot_flows_nodepath': `
+      CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        nodes JSON NOT NULL,
+        edges JSON NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `,
+    'chatbot_executions_nodepath': `
+      CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
+        id VARCHAR(255) PRIMARY KEY DEFAULT (UUID()),
+        flow_id VARCHAR(255) NOT NULL,
+        current_node_id VARCHAR(255) NOT NULL,
+        variables JSON NOT NULL,
+        messages JSON NOT NULL,
+        is_waiting_for_input BOOLEAN NOT NULL DEFAULT FALSE,
+        is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `,
+    'leads_nodepath': `
+      CREATE TABLE IF NOT EXISTS leads_nodepath (
+        id VARCHAR(255) PRIMARY KEY DEFAULT (UUID()),
+        name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(255),
+        interest VARCHAR(255),
+        status VARCHAR(255) DEFAULT 'new',
+        source VARCHAR(255) NOT NULL DEFAULT 'web',
+        campaign_name VARCHAR(255),
+        flow_id VARCHAR(255),
+        conversation_data JSON,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `,
+    'media_files_nodepath': `
+      CREATE TABLE IF NOT EXISTS media_files_nodepath (
+        id VARCHAR(255) PRIMARY KEY DEFAULT (UUID()),
+        filename VARCHAR(255) NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        file_type VARCHAR(255) NOT NULL,
+        file_size BIGINT NOT NULL,
+        storage_path VARCHAR(255) NOT NULL,
+        public_url VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `
+  };
+  
+  return tableSchemas[tableName] || null;
 }
 
 function getMockData(table: string, filters?: any) {
