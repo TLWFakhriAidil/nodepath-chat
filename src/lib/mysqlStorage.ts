@@ -113,11 +113,8 @@ const safeMySQLJson = (obj: any): string => {
     // Clean the object data before stringifying
     const cleanObject = (item: any): any => {
       if (typeof item === 'string') {
-        // Only clean actual problematic characters, not JSON escape sequences
-        return item
-          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')  // Remove control chars but keep \t (\x09) and \n (\x0A)
-          .replace(/\t+/g, ' ')  // Replace actual tabs with spaces
-          .trim();
+        // Only remove actual problematic control characters, preserve normal content
+        return item.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
       } else if (Array.isArray(item)) {
         return item.map(cleanObject);
       } else if (item && typeof item === 'object') {
@@ -138,7 +135,7 @@ const safeMySQLJson = (obj: any): string => {
     
     return jsonString;
   } catch (error) {
-    console.error('Error creating safe MySQL JSON:', error);
+    console.error('Error creating safe MySQL JSON:', error, obj);
     // Fallback to empty object/array if JSON creation fails
     return Array.isArray(obj) ? '[]' : '{}';
   }
@@ -147,24 +144,17 @@ const safeMySQLJson = (obj: any): string => {
 // Execution management
 export const saveExecution = async (execution: FlowExecution): Promise<void> => {
   try {
-    // Clean the messages and variables for MySQL storage
-    const cleanedMessages = execution.messages.map(msg => ({
-      ...msg,
-      content: msg.content?.replace(/[\x00-\x1F\x7F]/g, ' ') || '',
-      mediaUrl: msg.mediaUrl?.replace(/[\x00-\x1F\x7F]/g, ' ') || undefined
-    }));
-
     const executionData = {
       flow_id: execution.flowId,
       current_node_id: execution.currentNodeId,
       variables: safeMySQLJson(execution.variables),
-      messages: safeMySQLJson(cleanedMessages),
-      is_waiting_for_input: execution.isWaitingForInput,
-      is_completed: execution.isCompleted
+      messages: safeMySQLJson(execution.messages),
+      is_waiting_for_input: execution.isWaitingForInput ? 1 : 0, // Convert boolean to integer for MySQL
+      is_completed: execution.isCompleted ? 1 : 0 // Convert boolean to integer for MySQL
     }
 
     console.log('Saving/updating execution to MySQL for flow:', execution.flowId)
-    console.log('Messages to save:', cleanedMessages.length, 'messages')
+    console.log('Messages to save:', execution.messages.length, 'messages')
     
     // First check if execution exists for this flow_id
     const existingResult = await callMySQLAPI({
@@ -221,8 +211,8 @@ export const getExecution = async (flowId: string): Promise<FlowExecution | null
       currentNodeId: row.current_node_id,
       variables: JSON.parse(row.variables || '{}'),
       messages: JSON.parse(row.messages || '[]'),
-      isWaitingForInput: row.is_waiting_for_input,
-      isCompleted: row.is_completed
+      isWaitingForInput: Boolean(row.is_waiting_for_input), // Convert MySQL integer back to boolean
+      isCompleted: Boolean(row.is_completed) // Convert MySQL integer back to boolean
     }
   } catch (error) {
     console.error('Error fetching execution from MySQL:', error)
@@ -245,8 +235,8 @@ export const getExecutions = async (): Promise<FlowExecution[]> => {
       currentNodeId: row.current_node_id,
       variables: JSON.parse(row.variables || '{}'),
       messages: JSON.parse(row.messages || '[]'),
-      isWaitingForInput: row.is_waiting_for_input,
-      isCompleted: row.is_completed
+      isWaitingForInput: Boolean(row.is_waiting_for_input), // Convert MySQL integer back to boolean
+      isCompleted: Boolean(row.is_completed) // Convert MySQL integer back to boolean
     }))
   } catch (error) {
     console.error('Error fetching executions from MySQL:', error)
