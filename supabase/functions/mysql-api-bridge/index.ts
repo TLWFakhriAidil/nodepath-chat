@@ -55,6 +55,11 @@ serve(async (req) => {
       return await handleDatabaseOperation(client, data);
     }
 
+    // Handle chunked data operations for large payloads
+    if (method === 'POST' && data?.chunked_operation) {
+      return await handleChunkedDatabaseOperation(client, data);
+    }
+
     // Handle raw SQL execution
     if (method === 'POST' && data?.sql) {
       const sql = data.sql;
@@ -164,9 +169,9 @@ async function handleDatabaseOperation(client: Client, data: any) {
                   const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
                   return `${key} = '${mysqlDateTime}'`;
                 }
-                // Truncate very long strings to prevent memory issues
-                const truncatedValue = value.length > 50000 ? value.substring(0, 50000) + '...' : value;
-                return `${key} = '${truncatedValue.replace(/'/g, "\\'")}'`;
+                // Handle large strings by storing them in LONGTEXT columns
+                const escapedValue = value.replace(/'/g, "\\'");
+                return `${key} = '${escapedValue}'`;
               }
               return `${key} = ${value}`;
             })
@@ -324,6 +329,106 @@ async function handleDatabaseOperation(client: Client, data: any) {
   }
 }
 
+async function handleChunkedDatabaseOperation(client: Client, data: any) {
+  const { operation, table, payload, chunk_size = 1000000 } = data; // 1MB chunks by default
+  
+  console.log(`Handling chunked ${operation} operation on table ${table}`);
+  
+  // Check if table exists and create it if it doesn't
+  await ensureTableExists(client, table);
+
+  try {
+    if (operation === 'insert' || operation === 'update') {
+      // Generate ID if not provided
+      if (!payload.id) {
+        payload.id = generateId();
+      }
+
+      // Process large fields in chunks
+      const processedPayload = { ...payload };
+      
+      for (const [key, value] of Object.entries(payload)) {
+        if (typeof value === 'string' && value.length > chunk_size) {
+          console.log(`Processing large field ${key} with ${value.length} characters`);
+          
+          // Store large data in separate table with chunks
+          const chunkTableName = `${table}_chunks`;
+          await ensureChunkTableExists(client, chunkTableName);
+          
+          // Clear existing chunks for this record and field
+          await client.execute(`DELETE FROM ${chunkTableName} WHERE record_id = '${payload.id}' AND field_name = '${key}'`);
+          
+          // Split data into chunks
+          const chunks = [];
+          for (let i = 0; i < value.length; i += chunk_size) {
+            chunks.push(value.substring(i, i + chunk_size));
+          }
+          
+          // Insert chunks
+          for (let i = 0; i < chunks.length; i++) {
+            const chunkId = `${payload.id}_${key}_${i}`;
+            const chunkSQL = `INSERT INTO ${chunkTableName} (id, record_id, field_name, chunk_index, chunk_data) VALUES ('${chunkId}', '${payload.id}', '${key}', ${i}, '${chunks[i].replace(/'/g, "\\'")}')`;
+            await client.execute(chunkSQL);
+          }
+          
+          // Replace the large field with a reference
+          processedPayload[key] = `CHUNKED:${chunks.length}`;
+        }
+      }
+
+      // Proceed with normal operation using processed payload
+      const modifiedData = { ...data, payload: processedPayload };
+      return await handleDatabaseOperation(client, modifiedData);
+    }
+
+    throw new Error(`Chunked operation ${operation} not supported`);
+
+  } catch (error: any) {
+    console.error(`Chunked database operation error:`, error);
+    await client.close();
+    
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+async function ensureChunkTableExists(client: Client, tableName: string) {
+  console.log(`Checking if chunk table ${tableName} exists`);
+  
+  try {
+    const checkResult = await client.execute(`SHOW TABLES LIKE '${tableName}'`);
+    
+    if (checkResult.rows && checkResult.rows.length > 0) {
+      console.log(`Chunk table ${tableName} already exists`);
+      return;
+    }
+    
+    console.log(`Creating chunk table ${tableName}...`);
+    
+    const createChunkTableSQL = `
+      CREATE TABLE IF NOT EXISTS ${tableName} (
+        id VARCHAR(255) PRIMARY KEY,
+        record_id VARCHAR(255) NOT NULL,
+        field_name VARCHAR(255) NOT NULL,
+        chunk_index INT NOT NULL,
+        chunk_data LONGTEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_record_field (record_id, field_name)
+      )
+    `;
+    
+    await client.execute(createChunkTableSQL);
+    console.log(`Successfully created chunk table ${tableName}`);
+  } catch (error: any) {
+    console.error(`Error checking/creating chunk table ${tableName}:`, error);
+  }
+}
+
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2)}`;
 }
@@ -418,9 +523,9 @@ function getCreateTableSQL(tableName: string): string | null {
       CREATE TABLE IF NOT EXISTS chatbot_flows (
         id VARCHAR(255) PRIMARY KEY,
         name TEXT NOT NULL,
-        description TEXT DEFAULT '',
-        nodes JSON NOT NULL DEFAULT ('[]'),
-        edges JSON NOT NULL DEFAULT ('[]'),
+        description LONGTEXT DEFAULT '',
+        nodes LONGTEXT NOT NULL DEFAULT ('[]'),
+        edges LONGTEXT NOT NULL DEFAULT ('[]'),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )

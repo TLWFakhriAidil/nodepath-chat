@@ -26,6 +26,16 @@ export const useMySQLAPI = () => {
     try {
       console.log('Calling MySQL API via Edge Function:', options);
       
+      // Check if the data is large and needs chunked processing
+      const dataString = JSON.stringify(options.data);
+      const isLargeData = dataString.length > 5000000; // 5MB threshold
+      
+      if (isLargeData && options.data?.operation) {
+        console.log('Large data detected, using chunked operation');
+        options.data.chunked_operation = options.data.operation;
+        delete options.data.operation;
+      }
+      
       const { data, error } = await supabase.functions.invoke('mysql-api-bridge', {
         body: {
           endpoint: options.endpoint,
