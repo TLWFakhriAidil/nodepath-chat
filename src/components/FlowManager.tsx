@@ -67,9 +67,9 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
     }
   }, [selectedFlowId, flows]);
 
-  const loadFlows = () => {
+  const loadFlows = async () => {
     console.log('Loading flows in FlowManager...')
-    const savedFlows = getFlows();
+    const savedFlows = await getFlows();
     console.log('Loaded flows:', savedFlows)
     setFlows(savedFlows);
     
@@ -79,8 +79,8 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
     }
   };
 
-  const handleDeleteFlow = (flowId: string) => {
-    deleteFlow(flowId);
+  const handleDeleteFlow = async (flowId: string) => {
+    await deleteFlow(flowId);
     loadFlows();
     
     if (selectedFlowId === flowId) {

@@ -86,23 +86,26 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
 
   // Load flow for editing if edit parameter is present
   useEffect(() => {
-    const editFlowId = searchParams.get('edit');
-    if (editFlowId) {
-      const flowToEdit = getFlow(editFlowId);
-      if (flowToEdit) {
-        setFlowName(flowToEdit.name);
-        setCurrentFlowId(flowToEdit.id);
-        setNodes(flowToEdit.nodes.map(node => ({
-          ...node,
-          data: { ...node.data, onDelete: deleteNode, onUpdate: updateNodeData }
-        })));
-        setEdges(flowToEdit.edges);
-        toast({
-          title: "Flow loaded for editing",
-          description: `"${flowToEdit.name}" is now loaded in the editor`
-        });
+    const loadFlowForEdit = async () => {
+      const editFlowId = searchParams.get('edit');
+      if (editFlowId) {
+        const flowToEdit = await getFlow(editFlowId);
+        if (flowToEdit) {
+          setFlowName(flowToEdit.name);
+          setCurrentFlowId(flowToEdit.id);
+          setNodes(flowToEdit.nodes.map(node => ({
+            ...node,
+            data: { ...node.data, onDelete: deleteNode, onUpdate: updateNodeData }
+          })));
+          setEdges(flowToEdit.edges);
+          toast({
+            title: "Flow loaded for editing",
+            description: `"${flowToEdit.name}" is now loaded in the editor`
+          });
+        }
       }
-    }
+    };
+    loadFlowForEdit();
   }, [searchParams, setNodes, setEdges, toast, deleteNode]);
 
   const onConnect = useCallback(
@@ -148,7 +151,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     [setNodes, deleteNode, updateNodeData]
   );
 
-  const saveFlowToStorage = useCallback(() => {
+  const saveFlowToStorage = useCallback(async () => {
     console.log('=== SAVE FLOW DEBUG ===');
     console.log('Flow name:', flowName);
     console.log('Current nodes state:', nodes);
@@ -200,10 +203,10 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     };
 
     console.log('Flow data to save:', flowData);
-    saveFlow(flowData);
+    await saveFlow(flowData);
     setCurrentFlowId(flowData.id);
     
-    console.log('Flow saved. Checking stored flows:', getFlows());
+    console.log('Flow saved.');
     
     toast({
       title: "Flow saved",

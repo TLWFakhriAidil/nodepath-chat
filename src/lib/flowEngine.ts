@@ -4,25 +4,30 @@ import { getFlow, getMediaFile, saveExecution, replaceVariables } from '@/lib/lo
 export class FlowEngine {
   private execution: FlowExecution
   private flow: ChatbotFlow
+  private flowId: string
   private onMessage: (message: ChatMessage) => void
   private onComplete: () => void
   private onWaitingForInput: () => void
 
   constructor(
-    flowId: string,
+    flowId: string, 
     onMessage: (message: ChatMessage) => void,
     onComplete: () => void,
     onWaitingForInput: () => void
   ) {
-    const flow = getFlow(flowId)
-    if (!flow) {
-      throw new Error(`Flow with id ${flowId} not found`)
-    }
-
-    this.flow = flow
+    this.flowId = flowId
     this.onMessage = onMessage
     this.onComplete = onComplete
     this.onWaitingForInput = onWaitingForInput
+  }
+
+  async initialize() {
+    const flow = await getFlow(this.flowId)
+    if (!flow) {
+      throw new Error(`Flow with id ${this.flowId} not found`)
+    }
+
+    this.flow = flow
 
     // Initialize execution
     const startNode = flow.nodes.find(node => node.type === 'start')
@@ -35,7 +40,7 @@ export class FlowEngine {
     }
 
     this.execution = {
-      flowId,
+      flowId: this.flowId,
       currentNodeId: startNode.id,
       variables: { username: 'User' }, // Default variables
       messages: [],
@@ -110,7 +115,7 @@ export class FlowEngine {
     
     if (!currentNode) {
       console.log('No current node found, completing execution')
-      this.completeExecution()
+      await this.completeExecution()
       return
     }
 
@@ -152,7 +157,7 @@ export class FlowEngine {
         await this.moveToNextNode()
     }
 
-    this.saveState()
+    await this.saveState()
   }
 
   private async handleMessageNode(node: FlowNode): Promise<void> {
@@ -356,19 +361,19 @@ export class FlowEngine {
       this.execution.currentNodeId = nextNode.id
       await this.processCurrentNode()
     } else {
-      this.completeExecution()
+      await this.completeExecution()
     }
   }
 
-  private completeExecution(): void {
+  private async completeExecution(): Promise<void> {
     this.execution.isCompleted = true
     this.execution.isWaitingForInput = false
-    this.saveState()
+    await this.saveState()
     this.onComplete()
   }
 
-  private saveState(): void {
-    saveExecution(this.execution)
+  private async saveState(): Promise<void> {
+    await saveExecution(this.execution)
   }
 
   getMessages(): ChatMessage[] {

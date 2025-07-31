@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      chatbot_executions: {
+        Row: {
+          created_at: string
+          current_node_id: string
+          flow_id: string
+          id: string
+          is_completed: boolean
+          is_waiting_for_input: boolean
+          messages: Json
+          updated_at: string
+          variables: Json
+        }
+        Insert: {
+          created_at?: string
+          current_node_id: string
+          flow_id: string
+          id?: string
+          is_completed?: boolean
+          is_waiting_for_input?: boolean
+          messages?: Json
+          updated_at?: string
+          variables?: Json
+        }
+        Update: {
+          created_at?: string
+          current_node_id?: string
+          flow_id?: string
+          id?: string
+          is_completed?: boolean
+          is_waiting_for_input?: boolean
+          messages?: Json
+          updated_at?: string
+          variables?: Json
+        }
+        Relationships: []
+      }
+      chatbot_flows: {
+        Row: {
+          created_at: string
+          description: string | null
+          edges: Json
+          id: string
+          name: string
+          nodes: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          edges?: Json
+          id: string
+          name: string
+          nodes?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          name?: string
+          nodes?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           campaign_name: string | null

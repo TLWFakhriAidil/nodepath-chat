@@ -1,36 +1,91 @@
 import { ChatbotFlow, MediaFile, FlowExecution } from '@/types/chatbot'
+import { supabase } from '@/integrations/supabase/client'
 
-const FLOWS_KEY = 'chatbot_flows'
 const MEDIA_KEY = 'chatbot_media'
-const EXECUTIONS_KEY = 'chatbot_executions'
 
 // Flow management
-export const saveFlow = (flow: ChatbotFlow): void => {
-  const flows = getFlows()
-  const existingIndex = flows.findIndex(f => f.id === flow.id)
-  
-  if (existingIndex >= 0) {
-    flows[existingIndex] = { ...flow, updatedAt: new Date().toISOString() }
-  } else {
-    flows.push(flow)
+export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('chatbot_flows')
+      .upsert({
+        id: flow.id,
+        name: flow.name,
+        description: flow.description,
+        nodes: flow.nodes as any,
+        edges: flow.edges as any,
+        updated_at: new Date().toISOString()
+      })
+    
+    if (error) throw error
+  } catch (error) {
+    console.error('Error saving flow:', error)
+    throw error
   }
-  
-  localStorage.setItem(FLOWS_KEY, JSON.stringify(flows))
 }
 
-export const getFlows = (): ChatbotFlow[] => {
-  const stored = localStorage.getItem(FLOWS_KEY)
-  return stored ? JSON.parse(stored) : []
+export const getFlows = async (): Promise<ChatbotFlow[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('chatbot_flows')
+      .select('*')
+      .order('updated_at', { ascending: false })
+    
+    if (error) throw error
+    
+    return (data || []).map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      nodes: row.nodes as any,
+      edges: row.edges as any,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }))
+  } catch (error) {
+    console.error('Error fetching flows:', error)
+    return []
+  }
 }
 
-export const getFlow = (id: string): ChatbotFlow | null => {
-  const flows = getFlows()
-  return flows.find(f => f.id === id) || null
+export const getFlow = async (id: string): Promise<ChatbotFlow | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('chatbot_flows')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    
+    if (error) throw error
+    if (!data) return null
+    
+    return {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      nodes: data.nodes as any,
+      edges: data.edges as any,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    }
+  } catch (error) {
+    console.error('Error fetching flow:', error)
+    return null
+  }
 }
 
-export const deleteFlow = (id: string): void => {
-  const flows = getFlows().filter(f => f.id !== id)
-  localStorage.setItem(FLOWS_KEY, JSON.stringify(flows))
+export const deleteFlow = async (id: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('chatbot_flows')
+      .delete()
+      .eq('id', id)
+    
+    if (error) throw error
+  } catch (error) {
+    console.error('Error deleting flow:', error)
+    throw error
+  }
 }
 
 // Media management
@@ -56,32 +111,86 @@ export const deleteMediaFile = (id: string): void => {
 }
 
 // Execution management
-export const saveExecution = (execution: FlowExecution): void => {
-  const executions = getExecutions()
-  const existingIndex = executions.findIndex(e => e.flowId === execution.flowId)
-  
-  if (existingIndex >= 0) {
-    executions[existingIndex] = execution
-  } else {
-    executions.push(execution)
+export const saveExecution = async (execution: FlowExecution): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('chatbot_executions')
+      .upsert({
+        flow_id: execution.flowId,
+        current_node_id: execution.currentNodeId,
+        variables: execution.variables as any,
+        messages: execution.messages as any,
+        is_waiting_for_input: execution.isWaitingForInput,
+        is_completed: execution.isCompleted
+      })
+    
+    if (error) throw error
+  } catch (error) {
+    console.error('Error saving execution:', error)
+    throw error
   }
-  
-  localStorage.setItem(EXECUTIONS_KEY, JSON.stringify(executions))
 }
 
-export const getExecution = (flowId: string): FlowExecution | null => {
-  const executions = getExecutions()
-  return executions.find(e => e.flowId === flowId) || null
+export const getExecution = async (flowId: string): Promise<FlowExecution | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('chatbot_executions')
+      .select('*')
+      .eq('flow_id', flowId)
+      .maybeSingle()
+    
+    if (error) throw error
+    if (!data) return null
+    
+    return {
+      flowId: data.flow_id,
+      currentNodeId: data.current_node_id,
+      variables: data.variables as any,
+      messages: data.messages as any,
+      isWaitingForInput: data.is_waiting_for_input,
+      isCompleted: data.is_completed
+    }
+  } catch (error) {
+    console.error('Error fetching execution:', error)
+    return null
+  }
 }
 
-export const getExecutions = (): FlowExecution[] => {
-  const stored = localStorage.getItem(EXECUTIONS_KEY)
-  return stored ? JSON.parse(stored) : []
+export const getExecutions = async (): Promise<FlowExecution[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('chatbot_executions')
+      .select('*')
+      .order('updated_at', { ascending: false })
+    
+    if (error) throw error
+    
+    return (data || []).map(row => ({
+      flowId: row.flow_id,
+      currentNodeId: row.current_node_id,
+      variables: row.variables as any,
+      messages: row.messages as any,
+      isWaitingForInput: row.is_waiting_for_input,
+      isCompleted: row.is_completed
+    }))
+  } catch (error) {
+    console.error('Error fetching executions:', error)
+    return []
+  }
 }
 
-export const deleteExecution = (flowId: string): void => {
-  const executions = getExecutions().filter(e => e.flowId !== flowId)
-  localStorage.setItem(EXECUTIONS_KEY, JSON.stringify(executions))
+export const deleteExecution = async (flowId: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('chatbot_executions')
+      .delete()
+      .eq('flow_id', flowId)
+    
+    if (error) throw error
+  } catch (error) {
+    console.error('Error deleting execution:', error)
+    throw error
+  }
 }
 
 // Utility functions

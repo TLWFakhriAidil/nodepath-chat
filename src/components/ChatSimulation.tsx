@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Send, Bot, User, Play, Square, Paperclip, X } from 'lucide-react'
-import { ChatMessage, FlowExecution } from '@/types/chatbot'
+import { ChatMessage, FlowExecution, ChatbotFlow } from '@/types/chatbot'
 import { FlowEngine } from '@/lib/flowEngine'
 import { getFlows } from '@/lib/localStorage'
 import { useToast } from '@/hooks/use-toast'
@@ -24,8 +24,16 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
-  const flows = getFlows()
-  console.log('Available flows in simulation:', flows)
+  const [flows, setFlows] = useState<ChatbotFlow[]>([])
+  
+  useEffect(() => {
+    const loadFlows = async () => {
+      const loadedFlows = await getFlows()
+      console.log('Available flows in simulation:', loadedFlows)
+      setFlows(loadedFlows)
+    }
+    loadFlows()
+  }, [])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -70,6 +78,8 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
         }
       )
 
+      await engine.initialize()
+      
       setFlowEngine(engine)
       setMessages([])
       setIsRunning(true)
