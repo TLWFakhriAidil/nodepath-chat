@@ -324,7 +324,7 @@ function getCreateTableSQL(tableName: string): string | null {
     `,
     'chatbot_executions_nodepath': `
       CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
-        id VARCHAR(255) PRIMARY KEY DEFAULT (UUID()),
+        id VARCHAR(255) PRIMARY KEY,
         flow_id VARCHAR(255) NOT NULL,
         current_node_id VARCHAR(255) NOT NULL,
         variables JSON NOT NULL,
@@ -337,7 +337,7 @@ function getCreateTableSQL(tableName: string): string | null {
     `,
     'leads_nodepath': `
       CREATE TABLE IF NOT EXISTS leads_nodepath (
-        id VARCHAR(255) PRIMARY KEY DEFAULT (UUID()),
+        id VARCHAR(255) PRIMARY KEY,
         name VARCHAR(255),
         email VARCHAR(255),
         phone VARCHAR(255),
@@ -354,7 +354,7 @@ function getCreateTableSQL(tableName: string): string | null {
     `,
     'media_files_nodepath': `
       CREATE TABLE IF NOT EXISTS media_files_nodepath (
-        id VARCHAR(255) PRIMARY KEY DEFAULT (UUID()),
+        id VARCHAR(255) PRIMARY KEY,
         filename VARCHAR(255) NOT NULL,
         original_name VARCHAR(255) NOT NULL,
         file_type VARCHAR(255) NOT NULL,
