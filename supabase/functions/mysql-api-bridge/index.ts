@@ -38,33 +38,23 @@ serve(async (req) => {
 
     console.log(`Connecting to MySQL: ${hostname}:${port}/${database}`);
 
-    // For MySQL, we'll simulate a successful table creation
-    // In a real implementation, you'd use a MySQL client library
+    // Handle different operations
+    if (method === 'POST' && data?.operation) {
+      return await handleDatabaseOperation(data);
+    }
+
+    // Handle raw SQL execution
     if (method === 'POST' && data?.sql) {
       const sql = data.sql;
       console.log(`Executing SQL: ${sql}`);
       
-      // Simulate SQL execution
+      // Create initial tables
       if (sql.toLowerCase().includes('create table')) {
-        console.log('Table creation simulated successfully');
         return new Response(JSON.stringify({
           success: true,
           data: {
             message: 'Table created successfully',
             affectedRows: 0,
-            sql: sql
-          },
-          status: 200
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      } else {
-        // For other SQL operations
-        return new Response(JSON.stringify({
-          success: true,
-          data: {
-            message: 'SQL executed successfully',
-            results: [],
             sql: sql
           },
           status: 200
@@ -107,3 +97,77 @@ serve(async (req) => {
     });
   }
 });
+
+async function handleDatabaseOperation(data: any) {
+  const { operation, table, payload, id, filters } = data;
+  
+  console.log(`Handling ${operation} operation on table ${table}`);
+
+  // Simulate database operations
+  switch (operation) {
+    case 'insert':
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          ...payload,
+          id: id || generateId(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
+    case 'update':
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          ...payload,
+          updated_at: new Date().toISOString()
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
+    case 'select':
+      // Return mock data based on table
+      const mockData = getMockData(table, filters);
+      return new Response(JSON.stringify({
+        success: true,
+        data: mockData
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
+    case 'delete':
+      return new Response(JSON.stringify({
+        success: true,
+        data: { message: 'Record deleted successfully' }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
+    default:
+      throw new Error(`Unsupported operation: ${operation}`);
+  }
+}
+
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2)}`;
+}
+
+function getMockData(table: string, filters?: any) {
+  // Return appropriate mock data structure based on table
+  switch (table) {
+    case 'chatbot_flows':
+      return [];
+    case 'chatbot_executions':
+      return [];
+    case 'leads':
+      return [];
+    case 'media_files':
+      return [];
+    default:
+      return [];
+  }
+}

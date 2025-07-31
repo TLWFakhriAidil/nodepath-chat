@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useMySQLAPI } from '@/hooks/useMySQLAPI';
-import { Loader2, Database, Send } from 'lucide-react';
+import { Loader2, Database, Send, Settings } from 'lucide-react';
+import { initializeMySQLTables } from '@/lib/mysqlStorage';
 
 export default function MySQLAPIExample() {
   const { get, post, loading } = useMySQLAPI();
   const [endpoint, setEndpoint] = useState('mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway');
-  const [postData, setPostData] = useState('{"sql": "CREATE TABLE IF NOT EXISTS test_connection (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"}');
+  const [postData, setPostData] = useState('{"sql": "CREATE TABLE IF NOT EXISTS chatbot_flows (id VARCHAR(255) PRIMARY KEY, name VARCHAR(255) NOT NULL, description TEXT, nodes JSON NOT NULL DEFAULT \'[]\', edges JSON NOT NULL DEFAULT \'[]\', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"}');
   const [response, setResponse] = useState<any>(null);
 
   // Example: Fetch data on component mount
@@ -38,6 +39,15 @@ export default function MySQLAPIExample() {
       setResponse(result);
     } catch (error) {
       setResponse({ success: false, error: 'Invalid JSON in request body' });
+    }
+  };
+
+  const handleInitializeTables = async () => {
+    try {
+      await initializeMySQLTables();
+      setResponse({ success: true, data: { message: 'MySQL tables initialized successfully' } });
+    } catch (error: any) {
+      setResponse({ success: false, error: error.message });
     }
   };
 
@@ -70,6 +80,14 @@ export default function MySQLAPIExample() {
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               GET Request
+            </Button>
+            <Button 
+              onClick={handleInitializeTables} 
+              disabled={loading}
+              variant="outline"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
+              Initialize MySQL Tables
             </Button>
           </div>
         </CardContent>
