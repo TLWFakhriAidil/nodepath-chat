@@ -143,9 +143,18 @@ async function handleDatabaseOperation(client: Client, data: any) {
         
         // Build INSERT query
         const columns = Object.keys(payload).join(', ');
-        const values = Object.values(payload).map(v => 
-          typeof v === 'string' ? `'${v.replace(/'/g, "\\'")}'` : v
-        ).join(', ');
+        const values = Object.values(payload).map(v => {
+          if (typeof v === 'string') {
+            // Convert ISO datetime to MySQL format
+            if (v.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)) {
+              const date = new Date(v);
+              const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
+              return `'${mysqlDateTime}'`;
+            }
+            return `'${v.replace(/'/g, "\\'")}'`;
+          }
+          return v;
+        }).join(', ');
         const insertSQL = `INSERT INTO ${table} (${columns}) VALUES (${values})`;
         
         console.log('Insert SQL:', insertSQL);
