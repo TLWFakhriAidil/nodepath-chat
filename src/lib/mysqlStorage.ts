@@ -110,20 +110,49 @@ export const deleteFlow = async (id: string): Promise<void> => {
 // Execution management
 export const saveExecution = async (execution: FlowExecution): Promise<void> => {
   try {
-    const result = await callMySQLAPI({
-      operation: 'insert',
-      table: 'chatbot_executions_nodepath',
-      payload: {
-        flow_id: execution.flowId,
-        current_node_id: execution.currentNodeId,
-        variables: JSON.stringify(execution.variables),
-        messages: JSON.stringify(execution.messages),
-        is_waiting_for_input: execution.isWaitingForInput,
-        is_completed: execution.isCompleted
-      }
-    })
+    const executionData = {
+      flow_id: execution.flowId,
+      current_node_id: execution.currentNodeId,
+      variables: JSON.stringify(execution.variables),
+      messages: JSON.stringify(execution.messages),
+      is_waiting_for_input: execution.isWaitingForInput,
+      is_completed: execution.isCompleted
+    }
+
+    console.log('Saving/updating execution to MySQL for flow:', execution.flowId)
     
-    if (!result.success) throw new Error(result.error)
+    // First check if execution exists for this flow_id
+    const existingResult = await callMySQLAPI({
+      operation: 'select',
+      table: 'chatbot_executions_nodepath',
+      filters: { flow_id: execution.flowId }
+    })
+
+    if (existingResult.success && existingResult.data && existingResult.data.length > 0) {
+      // Update existing record
+      const result = await callMySQLAPI({
+        operation: 'update',
+        table: 'chatbot_executions_nodepath',
+        filters: { flow_id: execution.flowId },
+        payload: executionData
+      })
+
+      if (!result.success) throw new Error(result.error)
+      console.log('Execution updated successfully for flow:', execution.flowId)
+    } else {
+      // Insert new record with flow_id as unique identifier
+      const result = await callMySQLAPI({
+        operation: 'insert',
+        table: 'chatbot_executions_nodepath',
+        payload: {
+          id: execution.flowId, // Use flow_id as the primary key
+          ...executionData
+        }
+      })
+
+      if (!result.success) throw new Error(result.error)
+      console.log('Execution saved successfully for flow:', execution.flowId)
+    }
   } catch (error) {
     console.error('Error saving execution to MySQL:', error)
     throw error
@@ -209,17 +238,18 @@ export const initializeMySQLTables = async (): Promise<void> => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`,
     
-    // Chatbot executions table
+    // Chatbot executions table - one row per flow_id
     `CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
       id VARCHAR(255) PRIMARY KEY,
-      flow_id VARCHAR(255) NOT NULL,
+      flow_id VARCHAR(255) NOT NULL UNIQUE,
       current_node_id VARCHAR(255) NOT NULL,
       variables JSON NOT NULL,
       messages JSON NOT NULL,
       is_waiting_for_input BOOLEAN NOT NULL DEFAULT FALSE,
       is_completed BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_flow_id (flow_id)
     )`,
     
     // Leads table
