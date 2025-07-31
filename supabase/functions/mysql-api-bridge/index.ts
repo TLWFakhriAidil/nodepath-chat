@@ -141,37 +141,83 @@ async function handleDatabaseOperation(client: Client, data: any) {
       case 'insert':
         console.log(`Inserting into ${table}:`, payload);
         
-        // Build INSERT query
-        const columns = Object.keys(payload).join(', ');
-        const values = Object.values(payload).map(v => {
-          if (typeof v === 'string') {
-            // Convert ISO datetime to MySQL format
-            if (v.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)) {
-              const date = new Date(v);
-              const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
-              return `'${mysqlDateTime}'`;
+        // Generate ID if not provided
+        if (!payload.id) {
+          payload.id = generateId();
+        }
+        
+        // Check if record with this ID already exists
+        const checkSQL = `SELECT id FROM ${table} WHERE id = '${payload.id}'`;
+        console.log('Check SQL:', checkSQL);
+        const checkResult = await client.execute(checkSQL);
+        
+        if (checkResult.rows && checkResult.rows.length > 0) {
+          console.log('Record exists, performing update instead');
+          // Record exists, perform update
+          const updateFields = Object.entries(payload)
+            .filter(([key]) => key !== 'id')
+            .map(([key, value]) => {
+              if (typeof value === 'string') {
+                // Convert ISO datetime to MySQL format
+                if (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)) {
+                  const date = new Date(value);
+                  const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
+                  return `${key} = '${mysqlDateTime}'`;
+                }
+                return `${key} = '${value.replace(/'/g, "\\'")}'`;
+              }
+              return `${key} = ${value}`;
+            })
+            .join(', ');
+          
+          const updateSQL = `UPDATE ${table} SET ${updateFields} WHERE id = '${payload.id}'`;
+          console.log('Update SQL:', updateSQL);
+          const updateResult = await client.execute(updateSQL);
+          
+          await client.close();
+          
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              ...payload,
+              affectedRows: updateResult.affectedRows
             }
-            return `'${v.replace(/'/g, "\\'")}'`;
-          }
-          return v;
-        }).join(', ');
-        const insertSQL = `INSERT INTO ${table} (${columns}) VALUES (${values})`;
-        
-        console.log('Insert SQL:', insertSQL);
-        const insertResult = await client.execute(insertSQL);
-        
-        await client.close();
-        
-        return new Response(JSON.stringify({
-          success: true,
-          data: {
-            ...payload,
-            insertId: insertResult.lastInsertId,
-            affectedRows: insertResult.affectedRows
-          }
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } else {
+          // Record doesn't exist, perform insert
+          const columns = Object.keys(payload).join(', ');
+          const values = Object.values(payload).map(v => {
+            if (typeof v === 'string') {
+              // Convert ISO datetime to MySQL format
+              if (v.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)) {
+                const date = new Date(v);
+                const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
+                return `'${mysqlDateTime}'`;
+              }
+              return `'${v.replace(/'/g, "\\'")}'`;
+            }
+            return v;
+          }).join(', ');
+          const insertSQL = `INSERT INTO ${table} (${columns}) VALUES (${values})`;
+          
+          console.log('Insert SQL:', insertSQL);
+          const insertResult = await client.execute(insertSQL);
+          
+          await client.close();
+          
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              ...payload,
+              insertId: insertResult.lastInsertId,
+              affectedRows: insertResult.affectedRows
+            }
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
       case 'select':
         console.log(`Selecting from ${table} with filters:`, filters);
