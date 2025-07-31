@@ -197,7 +197,8 @@ export class FlowEngine {
       }
     }
 
-    console.log('Final mediaUrl for image:', mediaUrl)
+    console.log('Final mediaUrl for image:', mediaUrl ? `${mediaUrl.substring(0, 50)}...` : 'null')
+    console.log('MediaUrl is valid base64?', mediaUrl ? mediaUrl.startsWith('data:image/') : false)
 
     if (mediaUrl) {
       const botMessage: ChatMessage = {
@@ -209,7 +210,7 @@ export class FlowEngine {
         timestamp: new Date().toISOString()
       }
 
-      console.log('Sending image message:', botMessage)
+      console.log('Sending image message with mediaUrl length:', mediaUrl.length)
       this.execution.messages.push(botMessage)
       this.onMessage(botMessage)
     } else {
