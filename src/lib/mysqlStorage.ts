@@ -113,14 +113,28 @@ const safeMySQLJson = (obj: any): string => {
     // Clean the object data before stringifying
     const cleanObject = (item: any): any => {
       if (typeof item === 'string') {
-        // Only remove actual problematic control characters, preserve normal content
-        return item.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+        // Remove all problematic characters that can break MySQL JSON parsing
+        return item
+          // Remove control characters except tab and newline
+          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+          // Remove any remaining problematic escape sequences
+          .replace(/\\(?!["\\/bfnrt])/g, '')
+          // Normalize quotes and backslashes
+          .replace(/\\/g, '\\\\')
+          .replace(/"/g, '\\"')
+          // Remove any non-printable Unicode characters
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+          // Clean up multiple spaces
+          .replace(/\s+/g, ' ')
+          .trim();
       } else if (Array.isArray(item)) {
         return item.map(cleanObject);
       } else if (item && typeof item === 'object') {
         const cleaned: any = {};
         for (const [key, value] of Object.entries(item)) {
-          cleaned[key] = cleanObject(value);
+          // Also clean object keys
+          const cleanKey = typeof key === 'string' ? key.replace(/[\x00-\x1F\x7F]/g, '') : key;
+          cleaned[cleanKey] = cleanObject(value);
         }
         return cleaned;
       }
@@ -128,14 +142,22 @@ const safeMySQLJson = (obj: any): string => {
     };
 
     const cleanedObj = cleanObject(obj);
-    const jsonString = JSON.stringify(cleanedObj);
+    
+    // Use a more robust JSON stringification
+    const jsonString = JSON.stringify(cleanedObj, (key, value) => {
+      // Additional cleaning during stringification
+      if (typeof value === 'string') {
+        return value.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+      }
+      return value;
+    });
     
     // Validate the JSON is parseable
     JSON.parse(jsonString);
     
     return jsonString;
   } catch (error) {
-    console.error('Error creating safe MySQL JSON:', error, obj);
+    console.error('Error creating safe MySQL JSON:', error, 'Original object:', obj);
     // Fallback to empty object/array if JSON creation fails
     return Array.isArray(obj) ? '[]' : '{}';
   }
