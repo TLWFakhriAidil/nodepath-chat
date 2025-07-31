@@ -57,11 +57,11 @@ export default function DelayNode({ data, id }: NodeProps) {
                 type="number"
                 value={delay}
                 onChange={(e) => setDelay(parseInt(e.target.value) || 0)}
-                className="text-sm"
+                className="text-sm text-black bg-white border-gray-300"
                 min="1"
                 max="3600"
               />
-              <span className="text-sm text-muted-foreground">seconds</span>
+              <span className="text-sm text-black">seconds</span>
             </div>
             <Button size="sm" onClick={handleSave} className="w-full">
               Save

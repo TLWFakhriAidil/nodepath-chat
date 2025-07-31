@@ -136,7 +136,7 @@ export default function ImageNode({ data, id }: NodeProps) {
               <Input
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                className="text-sm"
+                className="text-sm text-black bg-white border-gray-300"
                 placeholder="https://example.com/image.jpg"
               />
             </div>
@@ -145,7 +145,7 @@ export default function ImageNode({ data, id }: NodeProps) {
               <Input
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                className="text-sm"
+                className="text-sm text-black bg-white border-gray-300"
                 placeholder="Image caption..."
               />
             </div>

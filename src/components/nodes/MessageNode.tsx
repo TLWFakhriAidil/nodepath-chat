@@ -57,7 +57,7 @@ export default function MessageNode({ data, id }: NodeProps) {
             <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="min-h-[80px] text-sm"
+              className="min-h-[80px] text-sm text-black bg-white border-gray-300"
               placeholder="Enter your message..."
             />
             <Button size="sm" onClick={handleSave} className="w-full">

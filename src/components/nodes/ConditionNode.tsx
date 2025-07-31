@@ -87,7 +87,7 @@ export default function ConditionNode({ data, id }: NodeProps) {
                     value={condition.label}
                     onChange={(e) => updateCondition(condition.id, { label: e.target.value })}
                     placeholder="Condition label"
-                    className="text-sm"
+                    className="text-sm text-black bg-white border-gray-300"
                   />
                   {conditions.length > 1 && (
                     <Button
@@ -118,7 +118,7 @@ export default function ConditionNode({ data, id }: NodeProps) {
                     value={condition.value || ''}
                     onChange={(e) => updateCondition(condition.id, { value: e.target.value })}
                     placeholder="Value to match"
-                    className="text-sm"
+                    className="text-sm text-black bg-white border-gray-300"
                   />
                 )}
               </div>

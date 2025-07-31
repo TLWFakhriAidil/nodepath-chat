@@ -136,7 +136,7 @@ export default function AudioNode({ data, id }: NodeProps) {
               <Input
                 value={audioUrl}
                 onChange={(e) => setAudioUrl(e.target.value)}
-                className="text-sm"
+                className="text-sm text-black bg-white border-gray-300"
                 placeholder="https://example.com/audio.mp3"
               />
             </div>
@@ -146,7 +146,7 @@ export default function AudioNode({ data, id }: NodeProps) {
                 type="number"
                 value={duration}
                 onChange={(e) => setDuration(parseInt(e.target.value) || 0)}
-                className="text-sm"
+                className="text-sm text-black bg-white border-gray-300"
                 min="1"
                 max="600"
               />

@@ -139,7 +139,7 @@ export default function VideoNode({ data, id }: NodeProps) {
               <Input
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
-                className="text-sm"
+                className="text-sm text-black bg-white border-gray-300"
                 placeholder="https://example.com/video.mp4"
               />
             </div>
@@ -148,7 +148,7 @@ export default function VideoNode({ data, id }: NodeProps) {
               <Input
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                className="text-sm"
+                className="text-sm text-black bg-white border-gray-300"
                 placeholder="Video caption..."
               />
             </div>
@@ -158,7 +158,7 @@ export default function VideoNode({ data, id }: NodeProps) {
                 type="number"
                 value={duration}
                 onChange={(e) => setDuration(parseInt(e.target.value) || 0)}
-                className="text-sm"
+                className="text-sm text-black bg-white border-gray-300"
                 min="1"
                 max="3600"
               />
