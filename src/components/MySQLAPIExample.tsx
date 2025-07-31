@@ -10,7 +10,7 @@ import { Loader2, Database, Send } from 'lucide-react';
 export default function MySQLAPIExample() {
   const { get, post, loading } = useMySQLAPI();
   const [endpoint, setEndpoint] = useState('mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway');
-  const [postData, setPostData] = useState('{"name": "John Doe", "email": "john@example.com"}');
+  const [postData, setPostData] = useState('{"sql": "CREATE TABLE IF NOT EXISTS test_connection (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"}');
   const [response, setResponse] = useState<any>(null);
 
   // Example: Fetch data on component mount
