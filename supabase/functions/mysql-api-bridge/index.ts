@@ -310,6 +310,7 @@ async function ensureTableExists(client: Client, tableName: string) {
 
 function getCreateTableSQL(tableName: string): string | null {
   const tableSchemas: Record<string, string> = {
+    // Original tables with _nodepath suffix
     'chatbot_flows_nodepath': `
       CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
         id VARCHAR(255) PRIMARY KEY,
@@ -362,6 +363,62 @@ function getCreateTableSQL(tableName: string): string | null {
         public_url VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `,
+    // Exact Supabase table replicas
+    'chatbot_flows': `
+      CREATE TABLE IF NOT EXISTS chatbot_flows (
+        id VARCHAR(255) PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        nodes JSON NOT NULL DEFAULT ('[]'),
+        edges JSON NOT NULL DEFAULT ('[]'),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `,
+    'chatbot_executions': `
+      CREATE TABLE IF NOT EXISTS chatbot_executions (
+        id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+        flow_id TEXT NOT NULL,
+        current_node_id TEXT NOT NULL,
+        variables JSON NOT NULL DEFAULT ('{}'),
+        messages JSON NOT NULL DEFAULT ('[]'),
+        is_waiting_for_input BOOLEAN NOT NULL DEFAULT FALSE,
+        is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `,
+    'leads': `
+      CREATE TABLE IF NOT EXISTS leads (
+        id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+        name TEXT,
+        phone TEXT,
+        email TEXT,
+        interest TEXT,
+        source TEXT NOT NULL DEFAULT 'web',
+        campaign_name TEXT,
+        flow_id TEXT,
+        conversation_data JSON,
+        status TEXT DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        notes TEXT
+      )
+    `,
+    'media_files': `
+      CREATE TABLE IF NOT EXISTS media_files (
+        id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        file_type TEXT NOT NULL,
+        file_size BIGINT NOT NULL,
+        storage_path TEXT NOT NULL,
+        public_url TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `
   };
