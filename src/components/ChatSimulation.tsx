@@ -233,7 +233,7 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
             
             {message.mediaType === 'audio' && message.mediaUrl && (
               <div className="mt-2">
-                <audio controls className="w-full">
+                <audio controls className="w-full max-w-sm rounded-md" controlsList="nodownload">
                   <source src={message.mediaUrl} />
                   Your browser does not support the audio element.
                 </audio>
