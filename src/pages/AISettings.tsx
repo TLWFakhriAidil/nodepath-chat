@@ -80,10 +80,10 @@ export default function AISettings() {
         }
       });
 
-      // Then add new columns if they don't exist
+      // Then add new columns if they don't exist (MySQL compatible approach)
       const addColumnsSQL = [
-        `ALTER TABLE ai_settings_nodepath ADD COLUMN IF NOT EXISTS open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1'`,
-        `ALTER TABLE ai_settings_nodepath ADD COLUMN IF NOT EXISTS open_router_key TEXT`
+        `ALTER TABLE ai_settings_nodepath ADD COLUMN open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1'`,
+        `ALTER TABLE ai_settings_nodepath ADD COLUMN open_router_key TEXT`
       ];
 
       for (const sql of addColumnsSQL) {
@@ -94,7 +94,7 @@ export default function AISettings() {
             data: { sql }
           });
         } catch (error) {
-          // Column might already exist, continue
+          // Column might already exist, ignore duplicate column error
           console.log('Column might already exist:', error);
         }
       }
