@@ -15,6 +15,7 @@ import FlowManager from '@/components/FlowManager';
 // Lazy load pages to avoid importing supabase on initial load
 const MediaManager = lazy(() => import("./pages/MediaManager"));
 const LeadAnalytics = lazy(() => import("./pages/LeadAnalytics"));
+const AISettings = lazy(() => import("./pages/AISettings"));
 
 const queryClient = new QueryClient();
 
@@ -70,12 +71,17 @@ const App = () => {
                         <MediaManager />
                       </Suspense>
                     } />
-                    <Route path="/analytics" element={
-                      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
-                        <LeadAnalytics />
-                      </Suspense>
-                    } />
-                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                     <Route path="/analytics" element={
+                       <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                         <LeadAnalytics />
+                       </Suspense>
+                     } />
+                     <Route path="/ai-settings" element={
+                       <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                         <AISettings />
+                       </Suspense>
+                     } />
+                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </main>

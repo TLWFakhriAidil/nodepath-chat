@@ -30,6 +30,12 @@ const mainItems = [
     description: 'Create and edit chatbot flows'
   },
   { 
+    title: 'AI Settings', 
+    url: '/ai-settings', 
+    icon: Settings,
+    description: 'Configure AI behavior and prompts'
+  },
+  { 
     title: 'Flow Manager', 
     url: '/flows', 
     icon: FolderOpen,
