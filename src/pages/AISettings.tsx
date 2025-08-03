@@ -61,16 +61,16 @@ export default function AISettings() {
     try {
       console.log('Creating/checking ai_settings_nodepath table...');
       
-      // First create table if it doesn't exist
+      // First create table if it doesn't exist with proper UTF-8 support
       const createTableSQL = `
         CREATE TABLE IF NOT EXISTS ai_settings_nodepath (
           id INT AUTO_INCREMENT PRIMARY KEY,
-          system_prompt TEXT,
-          closing_prompt TEXT,
-          instance_prompt TEXT,
+          system_prompt TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+          closing_prompt TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+          instance_prompt TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
       `;
 
       await callAPI({
@@ -157,10 +157,21 @@ export default function AISettings() {
       console.log('Saving settings with raw SQL approach...');
       console.log('Settings data:', settingsData);
 
+      // Use proper escaping for UTF-8 content including emojis
+      const escapeForMySQL = (str: string) => {
+        return str
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'")
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
+          .replace(/\x00/g, '\\0');
+      };
+
       // Use REPLACE INTO to handle insert/update in one operation
       const insertSQL = `
         REPLACE INTO ai_settings_nodepath (id, system_prompt, closing_prompt, instance_prompt, open_model, open_router_key, updated_at) 
-        VALUES (1, '${settingsData.system_prompt.replace(/'/g, "''")}', '${settingsData.closing_prompt.replace(/'/g, "''")}', '${settingsData.instance_prompt.replace(/'/g, "''")}', '${settingsData.open_model.replace(/'/g, "''")}', '${settingsData.open_router_key.replace(/'/g, "''")}', NOW())
+        VALUES (1, '${escapeForMySQL(settingsData.system_prompt)}', '${escapeForMySQL(settingsData.closing_prompt)}', '${escapeForMySQL(settingsData.instance_prompt)}', '${escapeForMySQL(settingsData.open_model)}', '${escapeForMySQL(settingsData.open_router_key)}', NOW())
       `;
 
       const response = await callAPI({
