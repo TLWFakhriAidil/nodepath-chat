@@ -81,29 +81,34 @@ export default function AISettings() {
     try {
       // Ensure table exists before saving
       await ensureTableExists();
+      
       const settingsData = {
         system_prompt: settings.system_prompt || '',
         closing_prompt: settings.closing_prompt || '',
-        instance_prompt: settings.instance_prompt || '',
-        updated_at: new Date().toISOString()
+        instance_prompt: settings.instance_prompt || ''
       };
 
-      if (settings.id) {
+      console.log('Current settings ID:', settings.id);
+      console.log('Settings data to save:', settingsData);
+
+      if (settings.id && Number.isInteger(Number(settings.id))) {
         // Update existing settings
+        console.log('Updating existing settings with ID:', settings.id);
         const response = await callAPI({
           endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
           method: 'POST',
           data: {
             table: 'ai_settings_nodepath',
             operation: 'update',
-            filters: { id: settings.id },
+            filters: { id: Number(settings.id) },
             payload: settingsData
           }
         });
 
         if (!response.success) throw new Error(response.error || 'Update failed');
       } else {
-        // Create new settings
+        // Create new settings (don't include id in payload for AUTO_INCREMENT)
+        console.log('Creating new settings');
         const response = await callAPI({
           endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
           method: 'POST',
@@ -116,6 +121,7 @@ export default function AISettings() {
 
         if (!response.success) throw new Error(response.error || 'Insert failed');
         
+        console.log('Insert response:', response);
         if (response.data && response.data.insertId) {
           setSettings(prev => ({ ...prev, id: response.data.insertId }));
         }
