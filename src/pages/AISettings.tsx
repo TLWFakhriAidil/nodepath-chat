@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Settings, Save } from 'lucide-react';
 import { useMySQLAPI } from '@/hooks/useMySQLAPI';
@@ -12,13 +13,17 @@ interface AISettingsData {
   system_prompt?: string;
   closing_prompt?: string;
   instance_prompt?: string;
+  open_model?: string;
+  open_router_key?: string;
 }
 
 export default function AISettings() {
   const [settings, setSettings] = useState<AISettingsData>({
     system_prompt: '',
     closing_prompt: '',
-    instance_prompt: ''
+    instance_prompt: '',
+    open_model: 'openai/gpt-4.1',
+    open_router_key: ''
   });
   const [loading, setLoading] = useState(false);
   const { callAPI } = useMySQLAPI();
@@ -60,6 +65,8 @@ export default function AISettings() {
           system_prompt TEXT,
           closing_prompt TEXT,
           instance_prompt TEXT,
+          open_model TEXT DEFAULT 'openai/gpt-4.1',
+          open_router_key TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
@@ -93,7 +100,9 @@ export default function AISettings() {
       const settingsData = {
         system_prompt: settings.system_prompt || '',
         closing_prompt: settings.closing_prompt || '',
-        instance_prompt: settings.instance_prompt || ''
+        instance_prompt: settings.instance_prompt || '',
+        open_model: settings.open_model || 'openai/gpt-4.1',
+        open_router_key: settings.open_router_key || ''
       };
 
       console.log('Saving settings with raw SQL approach...');
@@ -101,8 +110,8 @@ export default function AISettings() {
 
       // Use REPLACE INTO to handle insert/update in one operation
       const insertSQL = `
-        REPLACE INTO ai_settings_nodepath (id, system_prompt, closing_prompt, instance_prompt, updated_at) 
-        VALUES (1, '${settingsData.system_prompt.replace(/'/g, "''")}', '${settingsData.closing_prompt.replace(/'/g, "''")}', '${settingsData.instance_prompt.replace(/'/g, "''")}', NOW())
+        REPLACE INTO ai_settings_nodepath (id, system_prompt, closing_prompt, instance_prompt, open_model, open_router_key, updated_at) 
+        VALUES (1, '${settingsData.system_prompt.replace(/'/g, "''")}', '${settingsData.closing_prompt.replace(/'/g, "''")}', '${settingsData.instance_prompt.replace(/'/g, "''")}', '${settingsData.open_model.replace(/'/g, "''")}', '${settingsData.open_router_key.replace(/'/g, "''")}', NOW())
       `;
 
       const response = await callAPI({
@@ -200,6 +209,41 @@ export default function AISettings() {
                   value={settings.instance_prompt || ''}
                   onChange={(e) => handleInputChange('instance_prompt', e.target.value)}
                   className="min-h-[120px] resize-none"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="open-model" className="text-base font-semibold text-foreground mb-3 block">
+                  Open Model
+                </Label>
+                <p className="text-sm text-muted-foreground mb-4">
+                  AI model to use for processing (hardcoded to Chat GPT 4.1)
+                </p>
+                <Input
+                  id="open-model"
+                  value="Chat GPT 4.1 (NEW)"
+                  readOnly
+                  disabled
+                  className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Model value: openai/gpt-4.1
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="open-router-key" className="text-base font-semibold text-foreground mb-3 block">
+                  OpenRouter API Key
+                </Label>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Your OpenRouter API key for AI model access
+                </p>
+                <Input
+                  id="open-router-key"
+                  type="password"
+                  placeholder="Enter your OpenRouter API key..."
+                  value={settings.open_router_key || ''}
+                  onChange={(e) => handleInputChange('open_router_key', e.target.value)}
                 />
               </div>
 

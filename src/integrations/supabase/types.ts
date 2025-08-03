@@ -21,6 +21,8 @@ export type Database = {
           id: string
           id_staff: string | null
           instance_prompt: string | null
+          open_model: string | null
+          open_router_key: string | null
           system_prompt: string | null
           updated_at: string
         }
@@ -30,6 +32,8 @@ export type Database = {
           id?: string
           id_staff?: string | null
           instance_prompt?: string | null
+          open_model?: string | null
+          open_router_key?: string | null
           system_prompt?: string | null
           updated_at?: string
         }
@@ -39,6 +43,8 @@ export type Database = {
           id?: string
           id_staff?: string | null
           instance_prompt?: string | null
+          open_model?: string | null
+          open_router_key?: string | null
           system_prompt?: string | null
           updated_at?: string
         }
