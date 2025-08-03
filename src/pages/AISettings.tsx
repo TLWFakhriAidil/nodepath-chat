@@ -65,7 +65,7 @@ export default function AISettings() {
           system_prompt TEXT,
           closing_prompt TEXT,
           instance_prompt TEXT,
-          open_model TEXT DEFAULT 'openai/gpt-4.1',
+          open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1',
           open_router_key TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
