@@ -53,6 +53,7 @@ export default function AISettings() {
 
   const ensureTableExists = async () => {
     try {
+      console.log('Creating/checking ai_settings_nodepath table...');
       const createTableSQL = `
         CREATE TABLE IF NOT EXISTS ai_settings_nodepath (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -64,15 +65,19 @@ export default function AISettings() {
         )
       `;
 
-      await callAPI({
+      const response = await callAPI({
         endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
         method: 'POST',
         data: {
           sql: createTableSQL
         }
       });
+
+      console.log('Table creation response:', response);
+      return response.success;
     } catch (error) {
       console.error('Error ensuring table exists:', error);
+      return false;
     }
   };
 
@@ -80,7 +85,10 @@ export default function AISettings() {
     setLoading(true);
     try {
       // Ensure table exists before saving
-      await ensureTableExists();
+      const tableCreated = await ensureTableExists();
+      if (!tableCreated) {
+        throw new Error('Failed to create/verify table');
+      }
       
       const settingsData = {
         system_prompt: settings.system_prompt || '',
@@ -88,43 +96,44 @@ export default function AISettings() {
         instance_prompt: settings.instance_prompt || ''
       };
 
-      console.log('Current settings ID:', settings.id);
-      console.log('Settings data to save:', settingsData);
+      console.log('Saving settings with simple insert approach...');
+      console.log('Settings data:', settingsData);
 
-      if (settings.id && Number.isInteger(Number(settings.id))) {
-        // Update existing settings
-        console.log('Updating existing settings with ID:', settings.id);
-        const response = await callAPI({
+      // Try to insert or update using a simple approach
+      // First, delete any existing row (since we only want one settings record)
+      try {
+        await callAPI({
           endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
           method: 'POST',
           data: {
             table: 'ai_settings_nodepath',
-            operation: 'update',
-            filters: { id: Number(settings.id) },
-            payload: settingsData
+            operation: 'delete',
+            filters: {} // Delete all rows
           }
         });
+      } catch (deleteError) {
+        console.log('No existing rows to delete or delete failed:', deleteError);
+      }
 
-        if (!response.success) throw new Error(response.error || 'Update failed');
-      } else {
-        // Create new settings (don't include id in payload for AUTO_INCREMENT)
-        console.log('Creating new settings');
-        const response = await callAPI({
-          endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-          method: 'POST',
-          data: {
-            table: 'ai_settings_nodepath',
-            operation: 'insert',
-            payload: settingsData
-          }
-        });
-
-        if (!response.success) throw new Error(response.error || 'Insert failed');
-        
-        console.log('Insert response:', response);
-        if (response.data && response.data.insertId) {
-          setSettings(prev => ({ ...prev, id: response.data.insertId }));
+      // Now insert the new data
+      const response = await callAPI({
+        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+        method: 'POST',
+        data: {
+          table: 'ai_settings_nodepath',
+          operation: 'insert',
+          payload: settingsData
         }
+      });
+
+      console.log('Insert response:', response);
+      if (!response.success) {
+        throw new Error(response.error || 'Insert failed');
+      }
+
+      // Update local state
+      if (response.data && response.data.insertId) {
+        setSettings(prev => ({ ...prev, id: String(response.data.insertId) }));
       }
 
       toast({
@@ -135,7 +144,7 @@ export default function AISettings() {
       console.error('Error saving AI settings:', error);
       toast({
         title: "Error saving settings",
-        description: "Failed to save AI configuration",
+        description: `Failed to save AI configuration: ${error.message || error}`,
         variant: "destructive"
       });
     } finally {
