@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Settings, Save } from 'lucide-react';
+import { Settings, Save, Eye, EyeOff } from 'lucide-react';
 import { useMySQLAPI } from '@/hooks/useMySQLAPI';
 import { useToast } from '@/hooks/use-toast';
 
@@ -26,6 +26,7 @@ export default function AISettings() {
     open_router_key: ''
   });
   const [loading, setLoading] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const { callAPI } = useMySQLAPI();
   const { toast } = useToast();
 
@@ -80,36 +81,53 @@ export default function AISettings() {
         }
       });
 
-      // Check if new columns exist by querying table structure
+      // Check if new columns exist and add them only if they don't exist
       try {
-        const checkColumnsSQL = `SHOW COLUMNS FROM ai_settings_nodepath LIKE 'open_model'`;
-        const columnCheck = await callAPI({
+        // Check for open_model column
+        const checkOpenModelSQL = `SHOW COLUMNS FROM ai_settings_nodepath WHERE Field = 'open_model'`;
+        const openModelCheck = await callAPI({
           endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
           method: 'POST',
-          data: { sql: checkColumnsSQL }
+          data: { sql: checkOpenModelSQL }
         });
 
-        // If open_model column doesn't exist, add both columns
-        if (!columnCheck.success || !columnCheck.data?.result?.length) {
-          const addColumnsSQL = [
-            `ALTER TABLE ai_settings_nodepath ADD COLUMN open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1'`,
-            `ALTER TABLE ai_settings_nodepath ADD COLUMN open_router_key TEXT`
-          ];
+        // Check for open_router_key column
+        const checkOpenRouterSQL = `SHOW COLUMNS FROM ai_settings_nodepath WHERE Field = 'open_router_key'`;
+        const openRouterCheck = await callAPI({
+          endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+          method: 'POST',
+          data: { sql: checkOpenRouterSQL }
+        });
 
-          for (const sql of addColumnsSQL) {
-            try {
-              await callAPI({
-                endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-                method: 'POST',
-                data: { sql }
-              });
-            } catch (error) {
-              console.log('Column might already exist:', error);
-            }
+        // Add open_model column if it doesn't exist
+        if (openModelCheck.success && (!openModelCheck.data?.result || openModelCheck.data.result.length === 0)) {
+          try {
+            await callAPI({
+              endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+              method: 'POST',
+              data: { sql: `ALTER TABLE ai_settings_nodepath ADD COLUMN open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1'` }
+            });
+            console.log('Added open_model column');
+          } catch (error) {
+            console.log('Error adding open_model column:', error);
+          }
+        }
+
+        // Add open_router_key column if it doesn't exist
+        if (openRouterCheck.success && (!openRouterCheck.data?.result || openRouterCheck.data.result.length === 0)) {
+          try {
+            await callAPI({
+              endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+              method: 'POST',
+              data: { sql: `ALTER TABLE ai_settings_nodepath ADD COLUMN open_router_key TEXT` }
+            });
+            console.log('Added open_router_key column');
+          } catch (error) {
+            console.log('Error adding open_router_key column:', error);
           }
         }
       } catch (error) {
-        console.log('Error checking columns, they might already exist:', error);
+        console.log('Error checking/adding columns:', error);
       }
 
       return true;
@@ -269,13 +287,29 @@ export default function AISettings() {
                 <p className="text-sm text-muted-foreground mb-4">
                   Your OpenRouter API key for AI model access
                 </p>
-                <Input
-                  id="open-router-key"
-                  type="password"
-                  placeholder="Enter your OpenRouter API key..."
-                  value={settings.open_router_key || ''}
-                  onChange={(e) => handleInputChange('open_router_key', e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="open-router-key"
+                    type={showApiKey ? "text" : "password"}
+                    placeholder="Enter your OpenRouter API key..."
+                    value={settings.open_router_key || ''}
+                    onChange={(e) => handleInputChange('open_router_key', e.target.value)}
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                  >
+                    {showApiKey ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
               </div>
 
               <div className="pt-6">
