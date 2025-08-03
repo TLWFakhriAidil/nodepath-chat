@@ -33,18 +33,18 @@ export default function AISettings() {
       // First ensure table exists
       await ensureTableExists();
       
+      // Use raw SQL to select settings
       const response = await callAPI({
         endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
         method: 'POST',
         data: {
-          table: 'ai_settings_nodepath',
-          operation: 'select',
-          filters: { limit: 1 }
+          sql: 'SELECT * FROM ai_settings_nodepath ORDER BY created_at DESC LIMIT 1'
         }
       });
 
-      if (response.success && response.data && response.data.length > 0) {
-        setSettings(response.data[0]);
+      console.log('Load settings response:', response);
+      if (response.success && response.data && response.data.result && response.data.result.length > 0) {
+        setSettings(response.data.result[0]);
       }
     } catch (error) {
       console.error('Error loading AI settings:', error);
@@ -96,45 +96,30 @@ export default function AISettings() {
         instance_prompt: settings.instance_prompt || ''
       };
 
-      console.log('Saving settings with simple insert approach...');
+      console.log('Saving settings with raw SQL approach...');
       console.log('Settings data:', settingsData);
 
-      // Try to insert or update using a simple approach
-      // First, delete any existing row (since we only want one settings record)
-      try {
-        await callAPI({
-          endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-          method: 'POST',
-          data: {
-            table: 'ai_settings_nodepath',
-            operation: 'delete',
-            filters: {} // Delete all rows
-          }
-        });
-      } catch (deleteError) {
-        console.log('No existing rows to delete or delete failed:', deleteError);
-      }
+      // Use REPLACE INTO to handle insert/update in one operation
+      const insertSQL = `
+        REPLACE INTO ai_settings_nodepath (id, system_prompt, closing_prompt, instance_prompt, updated_at) 
+        VALUES (1, '${settingsData.system_prompt.replace(/'/g, "''")}', '${settingsData.closing_prompt.replace(/'/g, "''")}', '${settingsData.instance_prompt.replace(/'/g, "''")}', NOW())
+      `;
 
-      // Now insert the new data
       const response = await callAPI({
         endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
         method: 'POST',
         data: {
-          table: 'ai_settings_nodepath',
-          operation: 'insert',
-          payload: settingsData
+          sql: insertSQL
         }
       });
 
-      console.log('Insert response:', response);
+      console.log('Save response:', response);
       if (!response.success) {
-        throw new Error(response.error || 'Insert failed');
+        throw new Error(response.error || 'Save failed');
       }
 
       // Update local state
-      if (response.data && response.data.insertId) {
-        setSettings(prev => ({ ...prev, id: String(response.data.insertId) }));
-      }
+      setSettings(prev => ({ ...prev, id: '1' }));
 
       toast({
         title: "AI Settings saved",
