@@ -33,6 +33,7 @@ import AudioNode from './nodes/AudioNode';
 import VideoNode from './nodes/VideoNode';
 import ManualNode from './nodes/ManualNode';
 import PromptNode from './nodes/PromptNode';
+import AISettings from './AISettings';
 
 const nodeTypes: NodeTypes = {
   message: MessageNode,
@@ -333,6 +334,11 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
           </div>
         </div>
       </Card>
+
+      {/* AI Settings Sidebar */}
+      <div className="w-80 border-l border-border">
+        <AISettings />
+      </div>
 
       {/* Flow Canvas */}
       <div className="flex-1 relative">
