@@ -80,23 +80,36 @@ export default function AISettings() {
         }
       });
 
-      // Then add new columns if they don't exist (MySQL compatible approach)
-      const addColumnsSQL = [
-        `ALTER TABLE ai_settings_nodepath ADD COLUMN open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1'`,
-        `ALTER TABLE ai_settings_nodepath ADD COLUMN open_router_key TEXT`
-      ];
+      // Check if new columns exist by querying table structure
+      try {
+        const checkColumnsSQL = `SHOW COLUMNS FROM ai_settings_nodepath LIKE 'open_model'`;
+        const columnCheck = await callAPI({
+          endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+          method: 'POST',
+          data: { sql: checkColumnsSQL }
+        });
 
-      for (const sql of addColumnsSQL) {
-        try {
-          await callAPI({
-            endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-            method: 'POST',
-            data: { sql }
-          });
-        } catch (error) {
-          // Column might already exist, ignore duplicate column error
-          console.log('Column might already exist:', error);
+        // If open_model column doesn't exist, add both columns
+        if (!columnCheck.success || !columnCheck.data?.result?.length) {
+          const addColumnsSQL = [
+            `ALTER TABLE ai_settings_nodepath ADD COLUMN open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1'`,
+            `ALTER TABLE ai_settings_nodepath ADD COLUMN open_router_key TEXT`
+          ];
+
+          for (const sql of addColumnsSQL) {
+            try {
+              await callAPI({
+                endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+                method: 'POST',
+                data: { sql }
+              });
+            } catch (error) {
+              console.log('Column might already exist:', error);
+            }
+          }
         }
+      } catch (error) {
+        console.log('Error checking columns, they might already exist:', error);
       }
 
       return true;
