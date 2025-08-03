@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Settings, Sparkles } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +31,8 @@ import StartNode from './nodes/StartNode';
 import ImageNode from './nodes/ImageNode';
 import AudioNode from './nodes/AudioNode';
 import VideoNode from './nodes/VideoNode';
+import ManualNode from './nodes/ManualNode';
+import PromptNode from './nodes/PromptNode';
 
 const nodeTypes: NodeTypes = {
   message: MessageNode,
@@ -40,6 +42,8 @@ const nodeTypes: NodeTypes = {
   image: ImageNode,
   audio: AudioNode,
   video: VideoNode,
+  manual: ManualNode,
+  prompt: PromptNode,
 };
 
 const initialNodes: Node[] = [
@@ -133,7 +137,10 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                  type === 'delay' ? 'New Delay' :
                  type === 'image' ? 'New Image' :
                  type === 'audio' ? 'New Audio' :
-                 'New Video',
+                 type === 'video' ? 'New Video' :
+                 type === 'manual' ? 'Manual Response' :
+                 type === 'prompt' ? 'AI Prompt' :
+                 'New Node',
           message: type === 'message' ? 'Enter your message here...' : undefined,
           condition: type === 'condition' ? 'user_input contains "yes"' : undefined,
           delay: type === 'delay' ? 5 : undefined,
@@ -142,6 +149,9 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
           audioUrl: type === 'audio' ? '' : undefined,
           videoUrl: type === 'video' ? '' : undefined,
           duration: type === 'audio' || type === 'video' ? (type === 'audio' ? 30 : 60) : undefined,
+          expectedInput: type === 'manual' ? '' : undefined,
+          responseOutput: type === 'manual' ? '' : undefined,
+          nodePrompt: type === 'prompt' ? '' : undefined,
           onDelete: deleteNode,
           onUpdate: updateNodeData,
         },
@@ -244,6 +254,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
 
   const nodeTypeButtons = [
     { type: 'message', label: 'Send Message', icon: MessageSquare, color: 'bg-node-message' },
+    { type: 'manual', label: 'Manual Response', icon: Settings, color: 'bg-blue-500' },
+    { type: 'prompt', label: 'AI Prompt', icon: Sparkles, color: 'bg-purple-500' },
     { type: 'image', label: 'Send Image', icon: Image, color: 'bg-blue-500' },
     { type: 'audio', label: 'Send Audio', icon: Mic, color: 'bg-green-500' },
     { type: 'video', label: 'Send Video', icon: Video, color: 'bg-purple-500' },

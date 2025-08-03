@@ -9,7 +9,7 @@ export interface MediaFile {
 
 export interface FlowNode {
   id: string
-  type: 'start' | 'message' | 'image' | 'audio' | 'video' | 'delay' | 'condition'
+  type: 'start' | 'message' | 'image' | 'audio' | 'video' | 'delay' | 'condition' | 'manual' | 'prompt'
   position: { x: number; y: number }
   data: {
     label?: string
@@ -31,11 +31,11 @@ export interface FlowNode {
     delaySeconds?: number
     conditions?: ConditionRule[]
     variables?: Record<string, string>
-    // Node-level toolkit mode
-    toolkitMode?: 'manual' | 'prompt'
-    nodePrompt?: string
+    // Manual node fields
     expectedInput?: string
     responseOutput?: string
+    // Prompt node fields
+    nodePrompt?: string
   }
 }
 
