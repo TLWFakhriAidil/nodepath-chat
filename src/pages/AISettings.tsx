@@ -59,20 +59,20 @@ export default function AISettings() {
   const ensureTableExists = async () => {
     try {
       console.log('Creating/checking ai_settings_nodepath table...');
+      
+      // First create table if it doesn't exist
       const createTableSQL = `
         CREATE TABLE IF NOT EXISTS ai_settings_nodepath (
           id INT AUTO_INCREMENT PRIMARY KEY,
           system_prompt TEXT,
           closing_prompt TEXT,
           instance_prompt TEXT,
-          open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1',
-          open_router_key TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
       `;
 
-      const response = await callAPI({
+      await callAPI({
         endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
         method: 'POST',
         data: {
@@ -80,8 +80,26 @@ export default function AISettings() {
         }
       });
 
-      console.log('Table creation response:', response);
-      return response.success;
+      // Then add new columns if they don't exist
+      const addColumnsSQL = [
+        `ALTER TABLE ai_settings_nodepath ADD COLUMN IF NOT EXISTS open_model VARCHAR(255) DEFAULT 'openai/gpt-4.1'`,
+        `ALTER TABLE ai_settings_nodepath ADD COLUMN IF NOT EXISTS open_router_key TEXT`
+      ];
+
+      for (const sql of addColumnsSQL) {
+        try {
+          await callAPI({
+            endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+            method: 'POST',
+            data: { sql }
+          });
+        } catch (error) {
+          // Column might already exist, continue
+          console.log('Column might already exist:', error);
+        }
+      }
+
+      return true;
     } catch (error) {
       console.error('Error ensuring table exists:', error);
       return false;
