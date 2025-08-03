@@ -31,7 +31,9 @@ export interface FlowNode {
     delaySeconds?: number
     conditions?: ConditionRule[]
     variables?: Record<string, string>
-    // Toolkit Mode fields
+    // Node-level toolkit mode
+    toolkitMode?: 'manual' | 'prompt'
+    nodePrompt?: string
     expectedInput?: string
     responseOutput?: string
   }
@@ -61,8 +63,6 @@ export interface ChatbotFlow {
   edges: FlowEdge[]
   createdAt: string
   updatedAt: string
-  toolkitMode: 'manual' | 'prompt'
-  flowPrompt?: string
 }
 
 export interface ChatMessage {
