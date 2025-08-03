@@ -55,27 +55,33 @@ export type Database = {
           created_at: string
           description: string | null
           edges: Json
+          flow_prompt: string | null
           id: string
           name: string
           nodes: Json
+          toolkit_mode: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           description?: string | null
           edges?: Json
+          flow_prompt?: string | null
           id: string
           name: string
           nodes?: Json
+          toolkit_mode?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           description?: string | null
           edges?: Json
+          flow_prompt?: string | null
           id?: string
           name?: string
           nodes?: Json
+          toolkit_mode?: string
           updated_at?: string
         }
         Relationships: []

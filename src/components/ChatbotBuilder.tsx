@@ -61,6 +61,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
   const [flowName, setFlowName] = useState('');
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
+  const [toolkitMode, setToolkitMode] = useState<'manual' | 'prompt'>('manual');
+  const [flowPrompt, setFlowPrompt] = useState('');
   const { toast } = useToast();
 
   const deleteNode = useCallback(
@@ -93,6 +95,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
         if (flowToEdit) {
           setFlowName(flowToEdit.name);
           setCurrentFlowId(flowToEdit.id);
+          setToolkitMode(flowToEdit.toolkitMode || 'manual');
+          setFlowPrompt(flowToEdit.flowPrompt || '');
           setNodes(flowToEdit.nodes.map(node => ({
             ...node,
             data: { ...node.data, onDelete: deleteNode, onUpdate: updateNodeData }
@@ -199,7 +203,9 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
         targetHandle: edge.targetHandle
       })),
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      toolkitMode: toolkitMode,
+      flowPrompt: toolkitMode === 'prompt' ? flowPrompt : undefined
     };
 
     console.log('Flow data to save:', flowData);
@@ -283,6 +289,52 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
               onChange={(e) => setFlowName(e.target.value)}
               className="w-full"
             />
+            
+            {/* Toolkit Mode Section */}
+            <div className="space-y-3 p-4 bg-muted/30 rounded-lg border">
+              <h3 className="text-sm font-medium text-foreground">Toolkit Mode</h3>
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="toolkitMode"
+                    value="manual"
+                    checked={toolkitMode === 'manual'}
+                    onChange={(e) => setToolkitMode(e.target.value as 'manual' | 'prompt')}
+                    className="form-radio"
+                  />
+                  <span className="text-sm">Manual Mode</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="toolkitMode"
+                    value="prompt"
+                    checked={toolkitMode === 'prompt'}
+                    onChange={(e) => setToolkitMode(e.target.value as 'manual' | 'prompt')}
+                    className="form-radio"
+                  />
+                  <span className="text-sm">Prompt Mode</span>
+                </label>
+              </div>
+              
+              {toolkitMode === 'prompt' && (
+                <textarea
+                  placeholder="Enter AI prompt for this flow..."
+                  value={flowPrompt}
+                  onChange={(e) => setFlowPrompt(e.target.value)}
+                  className="w-full p-2 text-sm border rounded-md bg-background"
+                  rows={3}
+                />
+              )}
+              
+              <div className="text-xs text-muted-foreground">
+                {toolkitMode === 'manual' 
+                  ? 'Use predefined responses step-by-step'
+                  : 'AI generates dynamic responses using your prompt'
+                }
+              </div>
+            </div>
             
             <Button 
               onClick={saveFlowToStorage}

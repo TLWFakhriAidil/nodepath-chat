@@ -29,6 +29,8 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
         description: flow.description,
         nodes: JSON.stringify(flow.nodes),
         edges: JSON.stringify(flow.edges),
+        toolkit_mode: flow.toolkitMode,
+        flow_prompt: flow.flowPrompt || null,
         updated_at: new Date().toISOString()
       }
     })
@@ -57,7 +59,9 @@ export const getFlows = async (): Promise<ChatbotFlow[]> => {
       nodes: JSON.parse(row.nodes || '[]'),
       edges: JSON.parse(row.edges || '[]'),
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
+      toolkitMode: row.toolkit_mode || 'manual',
+      flowPrompt: row.flow_prompt || undefined
     }))
   } catch (error) {
     console.error('Error fetching flows from MySQL:', error)
@@ -84,7 +88,9 @@ export const getFlow = async (id: string): Promise<ChatbotFlow | null> => {
       nodes: JSON.parse(row.nodes || '[]'),
       edges: JSON.parse(row.edges || '[]'),
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
+      toolkitMode: row.toolkit_mode || 'manual',
+      flowPrompt: row.flow_prompt || undefined
     }
   } catch (error) {
     console.error('Error fetching flow from MySQL:', error)
