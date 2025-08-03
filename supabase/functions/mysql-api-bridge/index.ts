@@ -39,13 +39,14 @@ serve(async (req) => {
 
     console.log(`Connecting to MySQL: ${hostname}:${port}/${database}`);
 
-    // Create MySQL client
+    // Create MySQL client with UTF-8 support
     const client = await new Client().connect({
       hostname,
       username,
       password,
       port,
       db: database,
+      charset: 'utf8mb4',
     });
 
     console.log('MySQL connection established');
