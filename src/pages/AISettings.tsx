@@ -30,6 +30,9 @@ export default function AISettings() {
 
   const loadSettings = async () => {
     try {
+      // First ensure table exists
+      await ensureTableExists();
+      
       const response = await callAPI({
         endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
         method: 'POST',
@@ -48,9 +51,36 @@ export default function AISettings() {
     }
   };
 
+  const ensureTableExists = async () => {
+    try {
+      const createTableSQL = `
+        CREATE TABLE IF NOT EXISTS ai_settings_nodepath (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          system_prompt TEXT,
+          closing_prompt TEXT,
+          instance_prompt TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `;
+
+      await callAPI({
+        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+        method: 'POST',
+        data: {
+          sql: createTableSQL
+        }
+      });
+    } catch (error) {
+      console.error('Error ensuring table exists:', error);
+    }
+  };
+
   const saveSettings = async () => {
     setLoading(true);
     try {
+      // Ensure table exists before saving
+      await ensureTableExists();
       const settingsData = {
         system_prompt: settings.system_prompt || '',
         closing_prompt: settings.closing_prompt || '',
