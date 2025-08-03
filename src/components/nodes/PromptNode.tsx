@@ -1,20 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { Sparkles, Edit3, Trash2 } from 'lucide-react';
+import { Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { useMySQLAPI } from '@/hooks/useMySQLAPI';
 
 export default function PromptNode({ data, id }: NodeProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [nodePrompt, setNodePrompt] = useState((data?.nodePrompt as string) || '');
+  const [aiSettings, setAiSettings] = useState<any>(null);
+  const { callAPI } = useMySQLAPI();
 
-  const handleSave = () => {
-    setIsEditing(false);
-    // Update the node data through the parent
-    if (data?.onUpdate) {
-      (data.onUpdate as Function)(id, { 
-        nodePrompt
+  useEffect(() => {
+    loadAISettings();
+  }, []);
+
+  const loadAISettings = async () => {
+    try {
+      const response = await callAPI({
+        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+        method: 'POST',
+        data: {
+          sql: 'SELECT * FROM ai_settings_nodepath ORDER BY created_at DESC LIMIT 1'
+        }
       });
+
+      if (response.success && response.data && response.data.result && response.data.result.length > 0) {
+        setAiSettings(response.data.result[0]);
+      }
+    } catch (error) {
+      console.error('Error loading AI settings:', error);
     }
   };
 
@@ -38,14 +50,6 @@ export default function PromptNode({ data, id }: NodeProps) {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setIsEditing(!isEditing)}
-              className="h-6 w-6 p-0"
-            >
-              <Edit3 className="w-3 h-3" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
               onClick={() => (data?.onDelete as Function)?.(id)}
               className="h-6 w-6 p-0 text-destructive hover:text-destructive"
             >
@@ -54,44 +58,35 @@ export default function PromptNode({ data, id }: NodeProps) {
           </div>
         </div>
         
-        {isEditing ? (
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">AI Prompt:</label>
-              <Textarea
-                value={nodePrompt}
-                onChange={(e) => setNodePrompt(e.target.value)}
-                placeholder="Enter the AI prompt for generating responses at this step..."
-                className="text-sm min-h-[100px]"
-              />
-              <div className="text-xs text-muted-foreground">
-                The AI will use this prompt along with the user's input to generate a dynamic response.
-              </div>
-            </div>
-            
-            <Button size="sm" onClick={handleSave} className="w-full">
-              Save
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="bg-purple-50 rounded p-3 text-sm">
-              <div className="text-xs text-muted-foreground mb-1">AI Prompt:</div>
-              <div className="text-black">
-                {nodePrompt ? (
-                  nodePrompt.length > 100 ? 
-                    `${nodePrompt.substring(0, 100)}...` : 
-                    nodePrompt
-                ) : (
-                  'No prompt set'
-                )}
-              </div>
-            </div>
-            <div className="text-xs text-muted-foreground italic">
-              🤖 AI will generate responses dynamically
+        <div className="space-y-2">
+          <div className="bg-purple-50 rounded p-3 text-sm">
+            <div className="text-xs text-muted-foreground mb-1">System Prompt:</div>
+            <div className="text-black">
+              {aiSettings?.system_prompt ? (
+                aiSettings.system_prompt.length > 100 ? 
+                  `${aiSettings.system_prompt.substring(0, 100)}...` : 
+                  aiSettings.system_prompt
+              ) : (
+                'No system prompt configured'
+              )}
             </div>
           </div>
-        )}
+          <div className="bg-purple-50 rounded p-3 text-sm">
+            <div className="text-xs text-muted-foreground mb-1">Instance Prompt:</div>
+            <div className="text-black">
+              {aiSettings?.instance_prompt ? (
+                aiSettings.instance_prompt.length > 100 ? 
+                  `${aiSettings.instance_prompt.substring(0, 100)}...` : 
+                  aiSettings.instance_prompt
+              ) : (
+                'No instance prompt configured'
+              )}
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground italic">
+            🤖 AI will use these prompts from AI Settings
+          </div>
+        </div>
       </div>
       
       <Handle 
