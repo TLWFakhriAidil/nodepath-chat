@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Settings, Save } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { useMySQLAPI } from '@/hooks/useMySQLAPI';
 import { useToast } from '@/hooks/use-toast';
 
 interface AISettingsData {
@@ -21,6 +21,7 @@ export default function AISettings() {
     instance_prompt: ''
   });
   const [loading, setLoading] = useState(false);
+  const { callAPI } = useMySQLAPI();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -29,19 +30,18 @@ export default function AISettings() {
 
   const loadSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('ai_settings_nodepath')
-        .select('*')
-        .limit(1)
-        .single();
+      const response = await callAPI({
+        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+        method: 'POST',
+        data: {
+          table: 'ai_settings_nodepath',
+          operation: 'select',
+          filters: { limit: 1 }
+        }
+      });
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-        console.error('Error loading AI settings:', error);
-        return;
-      }
-
-      if (data) {
-        setSettings(data);
+      if (response.success && response.data && response.data.length > 0) {
+        setSettings(response.data[0]);
       }
     } catch (error) {
       console.error('Error loading AI settings:', error);
@@ -60,23 +60,34 @@ export default function AISettings() {
 
       if (settings.id) {
         // Update existing settings
-        const { error } = await supabase
-          .from('ai_settings_nodepath')
-          .update(settingsData)
-          .eq('id', settings.id);
+        const response = await callAPI({
+          endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+          method: 'POST',
+          data: {
+            table: 'ai_settings_nodepath',
+            operation: 'update',
+            filters: { id: settings.id },
+            payload: settingsData
+          }
+        });
 
-        if (error) throw error;
+        if (!response.success) throw new Error(response.error || 'Update failed');
       } else {
         // Create new settings
-        const { data, error } = await supabase
-          .from('ai_settings_nodepath')
-          .insert([settingsData])
-          .select()
-          .single();
+        const response = await callAPI({
+          endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+          method: 'POST',
+          data: {
+            table: 'ai_settings_nodepath',
+            operation: 'insert',
+            payload: settingsData
+          }
+        });
 
-        if (error) throw error;
-        if (data) {
-          setSettings(prev => ({ ...prev, id: data.id }));
+        if (!response.success) throw new Error(response.error || 'Insert failed');
+        
+        if (response.data && response.data.insertId) {
+          setSettings(prev => ({ ...prev, id: response.data.insertId }));
         }
       }
 
