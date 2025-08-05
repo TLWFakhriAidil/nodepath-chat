@@ -211,6 +211,12 @@ async function handleDatabaseOperation(client: Client, data: any) {
                 const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
                 return `'${mysqlDateTime}'`;
               }
+              // For text fields with emojis, use hex encoding as fallback
+              if (/[\u{1F600}-\u{1F6FF}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(v)) {
+                console.log('Detected emojis in string, using hex encoding');
+                const hexValue = Buffer.from(v, 'utf8').toString('hex');
+                return `UNHEX('${hexValue}')`;
+              }
               // Properly escape JSON strings and quotes
               const escapedValue = v.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
               return `'${escapedValue}'`;
@@ -478,9 +484,17 @@ async function ensureTableExists(client: Client, tableName: string) {
       if (tableName === 'chatbot_executions_nodepath') {
         console.log('Checking for AI prompt columns...');
         try {
+          // First check table charset
+          const tableCharsetCheck = await client.execute(`SELECT CCSA.character_set_name FROM information_schema.TABLES T, information_schema.COLLATION_CHARACTER_SET_APPLICABILITY CCSA WHERE CCSA.collation_name = T.table_collation AND T.table_schema = DATABASE() AND T.table_name = '${tableName}'`);
+          console.log('Current table charset:', tableCharsetCheck.rows);
+          
           const columnCheck = await client.execute(`DESCRIBE ${tableName}`);
           const columns = columnCheck.rows?.map((row: any) => row.Field || row.field || row[0]) || [];
           console.log('Existing columns:', columns);
+          
+          // Check column charsets
+          const columnCharsetCheck = await client.execute(`SELECT COLUMN_NAME, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tableName}' AND COLUMN_NAME IN ('system_prompt', 'conv_current')`);
+          console.log('Column charsets:', columnCharsetCheck.rows);
           
           const requiredColumns = ['system_prompt', 'instance', 'open_router_key', 'conv_last', 'conv_current'];
           const missingColumns = requiredColumns.filter(col => !columns.includes(col));
