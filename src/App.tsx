@@ -16,6 +16,7 @@ import FlowManager from '@/components/FlowManager';
 const MediaManager = lazy(() => import("./pages/MediaManager"));
 const LeadAnalytics = lazy(() => import("./pages/LeadAnalytics"));
 const AISettings = lazy(() => import("./pages/AISettings"));
+const TestChat = lazy(() => import("./pages/TestChat"));
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,11 @@ const App = () => {
                       path="/test" 
                       element={<ChatSimulation key={testFlowId} preselectedFlowId={testFlowId} />} 
                     />
+                    <Route path="/test-chat" element={
+                      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                        <TestChat />
+                      </Suspense>
+                    } />
                     <Route path="/media" element={
                       <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
                         <MediaManager />
