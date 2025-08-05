@@ -555,14 +555,14 @@ function getCreateTableSQL(tableName: string): string | null {
         messages JSON,
         is_waiting_for_input BOOLEAN DEFAULT FALSE,
         is_completed BOOLEAN DEFAULT FALSE,
-        system_prompt TEXT,
+        system_prompt TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
         instance VARCHAR(255),
         open_router_key VARCHAR(255),
         conv_last JSON,
-        conv_current TEXT,
+        conv_current TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
+      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     `,
     'leads_nodepath': `
       CREATE TABLE IF NOT EXISTS leads_nodepath (
