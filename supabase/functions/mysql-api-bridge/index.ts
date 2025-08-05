@@ -495,10 +495,10 @@ async function ensureTableExists(client: Client, tableName: string) {
           console.log('Existing columns:', columns);
           
           // Check column charsets
-          const columnCharsetCheck = await client.execute(`SELECT COLUMN_NAME, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tableName}' AND COLUMN_NAME IN ('system_prompt', 'conv_current')`);
+          const columnCharsetCheck = await client.execute(`SELECT COLUMN_NAME, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tableName}' AND COLUMN_NAME IN ('conv_current')`);
           console.log('Column charsets:', columnCharsetCheck.rows);
           
-          const requiredColumns = ['system_prompt', 'instance', 'open_router_key', 'conv_last', 'conv_current'];
+          const requiredColumns = ['instance', 'conv_last', 'conv_current'];
           const missingColumns = requiredColumns.filter(col => !columns.includes(col));
           
           if (missingColumns.length > 0) {
@@ -507,12 +507,8 @@ async function ensureTableExists(client: Client, tableName: string) {
             for (const column of missingColumns) {
               let columnDef = '';
               switch (column) {
-                case 'system_prompt':
-                  columnDef = 'TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
-                  break;
                 case 'instance':
-                case 'open_router_key':
-                  columnDef = 'VARCHAR(255)';
+                  columnDef = 'VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
                   break;
                 case 'conv_last':
                   columnDef = 'JSON';
@@ -535,7 +531,7 @@ async function ensureTableExists(client: Client, tableName: string) {
               console.log('Table converted to utf8mb4');
               
               // Then explicitly modify each text column to ensure utf8mb4
-              const textColumns = ['system_prompt', 'conv_current'];
+              const textColumns = ['conv_current'];
               for (const colName of textColumns) {
                 if (columns.includes(colName)) {
                   await client.execute(`ALTER TABLE ${tableName} MODIFY COLUMN ${colName} TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
@@ -658,9 +654,7 @@ function getCreateTableSQL(tableName: string): string | null {
         messages JSON,
         is_waiting_for_input BOOLEAN DEFAULT FALSE,
         is_completed BOOLEAN DEFAULT FALSE,
-        system_prompt TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-        instance VARCHAR(255),
-        open_router_key VARCHAR(255),
+        instance VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
         conv_last JSON,
         conv_current TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
