@@ -129,7 +129,7 @@ export default function PromptNode({ data, id }: NodeProps) {
                   value={String(systemPrompt || '')}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   placeholder="You are a helpful assistant that responds clearly and concisely."
-                  className="min-h-[80px] text-xs resize-none"
+                  className="min-h-[80px] text-xs resize-none text-black bg-white border border-gray-300"
                 />
               </div>
               <div>
@@ -138,7 +138,7 @@ export default function PromptNode({ data, id }: NodeProps) {
                   value={String(instance || '')}
                   onChange={(e) => setInstance(e.target.value)}
                   placeholder="default_support_v1"
-                  className="text-xs"
+                  className="text-xs text-black bg-white border border-gray-300"
                 />
               </div>
               <div>
@@ -147,7 +147,7 @@ export default function PromptNode({ data, id }: NodeProps) {
                   value={String(openRouterKey || '')}
                   onChange={(e) => setOpenRouterKey(e.target.value)}
                   placeholder="go_to_shipping_node"
-                  className="text-xs"
+                  className="text-xs text-black bg-white border border-gray-300"
                 />
               </div>
             </>
