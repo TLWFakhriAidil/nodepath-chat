@@ -267,9 +267,9 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   ];
 
   return (
-    <div className="h-screen bg-background flex">
+    <div className="h-screen bg-background flex overflow-hidden">
       {/* Sidebar */}
-      <Card className="w-80 bg-card border-border rounded-none border-r">
+      <Card className="w-80 bg-card border-border rounded-none border-r overflow-y-auto">
         <div className="p-6">
           <h2 className="text-xl font-semibold mb-6 text-foreground">Chatbot Builder</h2>
           
@@ -338,7 +338,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       </Card>
 
       {/* Flow Canvas */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative overflow-hidden">
         <ReactFlow
           nodes={nodes}
           edges={edges}
