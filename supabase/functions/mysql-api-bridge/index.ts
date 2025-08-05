@@ -470,6 +470,49 @@ async function ensureTableExists(client: Client, tableName: string) {
     
     if (checkResult.rows && checkResult.rows.length > 0) {
       console.log(`Table ${tableName} already exists`);
+      
+      // For chatbot_executions_nodepath, check if AI prompt columns exist
+      if (tableName === 'chatbot_executions_nodepath') {
+        console.log('Checking for AI prompt columns...');
+        try {
+          const columnCheck = await client.execute(`DESCRIBE ${tableName}`);
+          const columns = columnCheck.rows?.map((row: any) => row.Field || row.field || row[0]) || [];
+          console.log('Existing columns:', columns);
+          
+          const requiredColumns = ['system_prompt', 'instance', 'open_router_key', 'conv_last', 'conv_current'];
+          const missingColumns = requiredColumns.filter(col => !columns.includes(col));
+          
+          if (missingColumns.length > 0) {
+            console.log('Missing AI prompt columns:', missingColumns);
+            // Add missing columns
+            for (const column of missingColumns) {
+              let columnDef = '';
+              switch (column) {
+                case 'system_prompt':
+                  columnDef = 'TEXT';
+                  break;
+                case 'instance':
+                case 'open_router_key':
+                  columnDef = 'VARCHAR(255)';
+                  break;
+                case 'conv_last':
+                  columnDef = 'JSON';
+                  break;
+                case 'conv_current':
+                  columnDef = 'TEXT';
+                  break;
+              }
+              const alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${column} ${columnDef}`;
+              console.log(`Adding column: ${alterSQL}`);
+              await client.execute(alterSQL);
+            }
+            console.log('Successfully added missing AI prompt columns');
+          }
+        } catch (columnError: any) {
+          console.error('Error checking/adding columns:', columnError);
+        }
+      }
+      
       return;
     }
     
