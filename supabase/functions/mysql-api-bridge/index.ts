@@ -575,6 +575,43 @@ async function ensureTableExists(client: Client, tableName: string) {
           console.error('Error checking/adding columns:', columnError);
         }
       }
+
+      // For chatbot_flows_nodepath, check if AI prompt columns exist
+      if (tableName === 'chatbot_flows_nodepath') {
+        console.log('Checking for AI prompt columns in flows table...');
+        try {
+          const columnCheck = await client.execute(`DESCRIBE ${tableName}`);
+          const columns = columnCheck.rows?.map((row: any) => row.Field || row.field || row[0]) || [];
+          console.log('Existing flow columns:', columns);
+          
+          const requiredColumns = ['system_prompt', 'instance', 'open_router_key'];
+          const missingColumns = requiredColumns.filter(col => !columns.includes(col));
+          
+          if (missingColumns.length > 0) {
+            console.log('Missing AI prompt columns in flows table:', missingColumns);
+            // Add missing columns
+            for (const column of missingColumns) {
+              let columnDef = '';
+              switch (column) {
+                case 'system_prompt':
+                  columnDef = 'TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+                  break;
+                case 'instance':
+                case 'open_router_key':
+                  columnDef = 'VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+                  break;
+              }
+              const alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${column} ${columnDef}`;
+              console.log(`Adding column to flows table: ${alterSQL}`);
+              await client.execute(alterSQL);
+            }
+            
+            console.log('Successfully added missing AI prompt columns to flows table');
+          }
+        } catch (columnError: any) {
+          console.error('Error checking/adding columns to flows table:', columnError);
+        }
+      }
       
       return;
     }
@@ -605,9 +642,12 @@ function getCreateTableSQL(tableName: string): string | null {
         description TEXT,
         nodes JSON NOT NULL,
         edges JSON NOT NULL,
+        system_prompt TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+        instance VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+        open_router_key VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
+      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     `,
     'chatbot_executions_nodepath': `
       CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
