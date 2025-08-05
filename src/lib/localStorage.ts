@@ -1,99 +1,20 @@
 import { ChatbotFlow, MediaFile, FlowExecution } from '@/types/chatbot'
-import { supabase } from '@/integrations/supabase/client'
 import { saveFlow as saveMySQLFlow, getFlows as getMySQLFlows, getFlow as getMySQLFlow, deleteFlow as deleteMySQLFlow } from './mysqlStorage'
 import { saveExecution as saveMySQLExecution, getExecution as getMySQLExecution, getExecutions as getMySQLExecutions, deleteExecution as deleteMySQLExecution } from './mysqlStorage'
 
 const MEDIA_KEY = 'chatbot_media'
 
-// Flow management - now using Supabase
+// Flow management - using MySQL
 export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
-  try {
-    // Save main flow data to chatbot_flows table
-    const { error: flowError } = await supabase
-      .from('chatbot_flows')
-      .upsert({
-        id: flow.id,
-        name: flow.name,
-        description: flow.description,
-        nodes: flow.nodes as any,
-        edges: flow.edges as any,
-        updated_at: new Date().toISOString()
-      });
-
-    if (flowError) throw flowError;
-
-    // Extract and save AI prompt nodes separately
-    const aiNodes = flow.nodes.filter(node => node.type === 'prompt');
-    
-    for (const node of aiNodes) {
-      if (node.data.systemPrompt || node.data.instance || node.data.openRouterKey) {
-        await supabase
-          .from('chatbot_executions_nodepath')
-          .upsert({
-            id: node.id,
-            system_prompt: node.data.systemPrompt || '',
-            instance: node.data.instance || '',
-            open_router_key: node.data.openRouterKey || '',
-            conv_last: [],
-            conv_current: '',
-            updated_at: new Date().toISOString()
-          });
-      }
-    }
-  } catch (error) {
-    console.error('Error saving flow:', error);
-    throw error;
-  }
+  return saveMySQLFlow(flow)
 }
 
 export const getFlows = async (): Promise<ChatbotFlow[]> => {
-  try {
-    const { data, error } = await supabase
-      .from('chatbot_flows')
-      .select('*')
-      .order('updated_at', { ascending: false });
-
-    if (error) throw error;
-    
-    return (data || []).map(row => ({
-      id: row.id,
-      name: row.name,
-      description: row.description || '',
-      nodes: (Array.isArray(row.nodes) ? row.nodes : []) as any,
-      edges: (Array.isArray(row.edges) ? row.edges : []) as any,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    }));
-  } catch (error) {
-    console.error('Error fetching flows:', error);
-    return [];
-  }
+  return getMySQLFlows()
 }
 
 export const getFlow = async (id: string): Promise<ChatbotFlow | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('chatbot_flows')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) return null;
-    
-    return {
-      id: data.id,
-      name: data.name,
-      description: data.description || '',
-      nodes: (Array.isArray(data.nodes) ? data.nodes : []) as any,
-      edges: (Array.isArray(data.edges) ? data.edges : []) as any,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at
-    };
-  } catch (error) {
-    console.error('Error fetching flow:', error);
-    return null;
-  }
+  return getMySQLFlow(id)
 }
 
 export const deleteFlow = async (id: string): Promise<void> => {

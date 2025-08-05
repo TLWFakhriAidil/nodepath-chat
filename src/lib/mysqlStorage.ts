@@ -20,6 +20,7 @@ const callMySQLAPI = async (data: any) => {
 // Flow management
 export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
   try {
+    // Save main flow data to MySQL
     const result = await callMySQLAPI({
       operation: 'insert',
       table: 'chatbot_flows_nodepath',
@@ -34,6 +35,41 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
     })
     
     if (!result.success) throw new Error(result.error)
+
+    // Extract and save AI prompt nodes separately to chatbot_executions_nodepath
+    const aiNodes = flow.nodes.filter(node => node.type === 'prompt' && (node.data.systemPrompt || node.data.instance || node.data.openRouterKey))
+    
+    for (const node of aiNodes) {
+      try {
+        await callMySQLAPI({
+          operation: 'insert',
+          table: 'chatbot_executions_nodepath',
+          payload: {
+            id: node.id,
+            system_prompt: node.data.systemPrompt || '',
+            instance: node.data.instance || '',
+            open_router_key: node.data.openRouterKey || '',
+            conv_last: JSON.stringify([]),
+            conv_current: '',
+            updated_at: new Date().toISOString()
+          }
+        })
+      } catch (nodeError) {
+        // If node already exists, update it instead
+        console.log('Node exists, updating:', node.id)
+        await callMySQLAPI({
+          operation: 'update',
+          table: 'chatbot_executions_nodepath',
+          filters: { id: node.id },
+          payload: {
+            system_prompt: node.data.systemPrompt || '',
+            instance: node.data.instance || '',
+            open_router_key: node.data.openRouterKey || '',
+            updated_at: new Date().toISOString()
+          }
+        })
+      }
+    }
   } catch (error) {
     console.error('Error saving flow to MySQL:', error)
     throw error

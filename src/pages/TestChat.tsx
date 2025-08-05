@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageCircle, Send, Trash2, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useMySQLAPI } from '@/hooks/useMySQLAPI';
 import { supabase } from '@/integrations/supabase/client';
 
 interface FlowNode {
@@ -44,6 +45,7 @@ export default function TestChat() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { callAPI } = useMySQLAPI();
 
   useEffect(() => {
     loadFlows();
@@ -104,20 +106,25 @@ export default function TestChat() {
 
   const loadOrCreateConversation = async (node: FlowNode) => {
     try {
-      // Check if conversation already exists
-      const { data: existing } = await supabase
-        .from('chatbot_executions_nodepath')
-        .select('*')
-        .eq('id', node.id)
-        .maybeSingle();
+      // Check if conversation exists in MySQL
+      const response = await callAPI({
+        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+        method: 'POST',
+        data: {
+          operation: 'select',
+          table: 'chatbot_executions_nodepath',
+          filters: { id: node.id }
+        }
+      });
 
-      if (existing) {
+      if (response.success && response.data && response.data.length > 0) {
+        const existing = response.data[0];
         setConversation({
           id: existing.id,
           system_prompt: existing.system_prompt || node.data.systemPrompt || '',
           instance: existing.instance || node.data.instance || '',
           open_router_key: existing.open_router_key || node.data.openRouterKey || '',
-          conv_last: Array.isArray(existing.conv_last) ? existing.conv_last : [],
+          conv_last: existing.conv_last ? JSON.parse(existing.conv_last) : [],
           conv_current: existing.conv_current || ''
         });
       } else {
@@ -127,16 +134,26 @@ export default function TestChat() {
           system_prompt: node.data.systemPrompt || '',
           instance: node.data.instance || '',
           open_router_key: node.data.openRouterKey || '',
-          conv_last: [],
+          conv_last: JSON.stringify([]),
           conv_current: ''
         };
 
-        const { error } = await supabase
-          .from('chatbot_executions_nodepath')
-          .insert(newConversation);
+        const insertResponse = await callAPI({
+          endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+          method: 'POST',
+          data: {
+            operation: 'insert',
+            table: 'chatbot_executions_nodepath',
+            payload: newConversation
+          }
+        });
 
-        if (error) throw error;
-        setConversation(newConversation);
+        if (!insertResponse.success) throw new Error(insertResponse.error);
+        
+        setConversation({
+          ...newConversation,
+          conv_last: []
+        });
       }
     } catch (error) {
       console.error('Error loading conversation:', error);
@@ -200,19 +217,25 @@ export default function TestChat() {
         timestamp: new Date().toISOString()
       };
 
-      // Update conversation in database
+      // Update conversation in MySQL database
       const updatedConvLast = [...(conversation.conv_last || []), userMsg, botMsg];
       
-      const { error: updateError } = await supabase
-        .from('chatbot_executions_nodepath')
-        .update({
-          conv_last: updatedConvLast,
-          conv_current: botReply,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', conversation.id);
+      const updateResponse = await callAPI({
+        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+        method: 'POST',
+        data: {
+          operation: 'update',
+          table: 'chatbot_executions_nodepath',
+          filters: { id: conversation.id },
+          payload: {
+            conv_last: JSON.stringify(updatedConvLast),
+            conv_current: botReply,
+            updated_at: new Date().toISOString()
+          }
+        }
+      });
 
-      if (updateError) throw updateError;
+      if (!updateResponse.success) throw new Error(updateResponse.error);
 
       // Update local state
       setConversation({
@@ -244,16 +267,22 @@ export default function TestChat() {
     if (!conversation) return;
 
     try {
-      const { error } = await supabase
-        .from('chatbot_executions_nodepath')
-        .update({
-          conv_last: [],
-          conv_current: '',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', conversation.id);
+      const response = await callAPI({
+        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
+        method: 'POST',
+        data: {
+          operation: 'update',
+          table: 'chatbot_executions_nodepath',
+          filters: { id: conversation.id },
+          payload: {
+            conv_last: JSON.stringify([]),
+            conv_current: '',
+            updated_at: new Date().toISOString()
+          }
+        }
+      });
 
-      if (error) throw error;
+      if (!response.success) throw new Error(response.error);
 
       setConversation({
         ...conversation,
