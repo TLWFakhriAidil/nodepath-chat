@@ -49,6 +49,9 @@ serve(async (req) => {
       charset: 'utf8mb4',
     });
 
+    // Ensure session uses utf8mb4
+    await client.execute('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
+    
     console.log('MySQL connection established');
 
     // Handle different operations
