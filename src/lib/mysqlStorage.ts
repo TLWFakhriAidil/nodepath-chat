@@ -32,7 +32,19 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
     const flowExists = existingResult.success && existingResult.data && existingResult.data.length > 0
     console.log('Flow exists:', flowExists)
 
-    // Prepare flow data for MySQL storage (all data including AI prompt data is stored in the flow)
+    // Extract AI prompt data from nodes
+    const aiPromptNode = flow.nodes.find(node => node.type === 'prompt')
+    const aiPromptData = aiPromptNode ? {
+      system_prompt: aiPromptNode.data.systemPrompt || '',
+      instance: aiPromptNode.data.instance || '',
+      open_router_key: aiPromptNode.data.openRouterKey || ''
+    } : {
+      system_prompt: '',
+      instance: '',
+      open_router_key: ''
+    }
+
+    // Prepare flow data for MySQL storage (including AI prompt data as separate columns)
     const flowData = {
       id: flow.id,
       name: flow.name,
@@ -40,10 +52,11 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
       nodes: JSON.stringify(flow.nodes),
       edges: JSON.stringify(flow.edges),
       created_at: flow.createdAt,
-      updated_at: flow.updatedAt
+      updated_at: flow.updatedAt,
+      ...aiPromptData  // Add AI prompt data as separate columns
     }
 
-    // Save all flow data (including AI prompt data as part of nodes) to chatbot_flows_nodepath
+    // Save all flow data to chatbot_flows_nodepath
     const saveResult = await callMySQLAPI({
       operation: flowExists ? 'update' : 'insert',
       table: 'chatbot_flows_nodepath',
@@ -55,7 +68,7 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
       throw new Error(`Failed to save flow: ${saveResult.error}`)
     }
 
-    console.log('Flow saved to MySQL successfully (all data including AI prompts stored in flow nodes)')
+    console.log('Flow saved to MySQL successfully with AI prompt data in separate columns')
   } catch (error) {
     console.error('Error saving flow to MySQL:', error)
     throw error
