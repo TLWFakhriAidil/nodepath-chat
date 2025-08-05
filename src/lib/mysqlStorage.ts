@@ -246,23 +246,53 @@ export const deleteMediaFile = async (id: string): Promise<void> => {
 // Flow execution management
 export const saveFlowExecution = async (execution: any): Promise<void> => {
   try {
-    const result = await callMySQLAPI({
-      operation: 'insert',
-      table: 'chatbot_executions_nodepath',
-      payload: {
-        id: execution.id || `exec_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-        flow_id: execution.flowId,
-        current_node_id: execution.currentNodeId,
-        variables: JSON.stringify(execution.variables || {}),
-        messages: JSON.stringify(execution.messages || []),
-        is_waiting_for_input: execution.isWaitingForInput || false,
-        is_completed: execution.isCompleted || false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    })
+    // Create a unique simulation ID based on flow and start time if not provided
+    const simulationId = execution.id || `exec_${execution.flowId}_${Date.now()}_${Math.random().toString(36).substring(2)}`
     
-    if (!result.success) throw new Error(result.error)
+    // Check if execution already exists for this simulation
+    const existingExecution = await getFlowExecution(simulationId)
+    
+    // Get instance from flow data
+    const flowData = await getFlow(execution.flowId)
+    const aiPromptNode = flowData?.nodes?.find(node => node.type === 'prompt')
+    const instance = aiPromptNode?.data?.instance || ''
+
+    const payload: any = {
+      id: simulationId,
+      flow_id: execution.flowId,
+      current_node_id: execution.currentNodeId,
+      variables: JSON.stringify(execution.variables || {}),
+      messages: JSON.stringify(execution.messages || []),
+      is_waiting_for_input: execution.isWaitingForInput || false,
+      is_completed: execution.isCompleted || false,
+      instance: instance,
+      updated_at: new Date().toISOString()
+    }
+
+    if (existingExecution) {
+      // Update existing execution with complete conversation
+      const result = await callMySQLAPI({
+        operation: 'update',
+        table: 'chatbot_executions_nodepath',
+        filters: { id: simulationId },
+        payload
+      })
+      
+      if (!result.success) throw new Error(result.error)
+      console.log('Flow execution updated successfully for simulation:', simulationId)
+    } else {
+      // Create new execution for this simulation
+      payload.created_at = new Date().toISOString()
+      
+      const result = await callMySQLAPI({
+        operation: 'insert',
+        table: 'chatbot_executions_nodepath',
+        payload
+      })
+      
+      if (!result.success) throw new Error(result.error)
+      console.log('Flow execution created successfully for simulation:', simulationId)
+    }
   } catch (error) {
     console.error('Error saving flow execution to MySQL:', error)
     throw error
