@@ -165,12 +165,14 @@ export default function TestChat() {
         // Handle manual node - use predefined response
         botReply = selectedNode.data.label || 'Manual response configured in Flow Builder';
       } else {
-        // Handle AI prompt node - call OpenAI
+        // Handle AI prompt node - call AI with conversation history
         const { data, error } = await supabase.functions.invoke('test-ai-chat', {
           body: {
             systemPrompt: conversation.system_prompt,
             userMessage: userMessage.trim(),
-            instance: conversation.instance
+            instance: conversation.instance,
+            openRouterKey: conversation.open_router_key,
+            conversationHistory: conversation.conv_last || []
           }
         });
 

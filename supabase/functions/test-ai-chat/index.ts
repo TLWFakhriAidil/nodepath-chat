@@ -19,26 +19,55 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY is not configured');
     }
 
-    const { systemPrompt, userMessage, instance } = await req.json();
+    const { systemPrompt, userMessage, instance, openRouterKey, conversationHistory } = await req.json();
 
     console.log('AI Chat Request:', { 
       systemPrompt: systemPrompt?.substring(0, 100) + '...', 
       userMessage, 
-      instance 
+      instance,
+      openRouterKey: openRouterKey ? 'provided' : 'not provided',
+      historyLength: conversationHistory?.length || 0
     });
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Build conversation messages with history
+    const messages = [
+      { role: 'system', content: systemPrompt || 'You are a helpful assistant.' }
+    ];
+
+    // Add conversation history if available
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      conversationHistory.forEach((msg: any) => {
+        if (msg.role === 'USER') {
+          messages.push({ role: 'user', content: msg.content });
+        } else if (msg.role === 'BOT') {
+          messages.push({ role: 'assistant', content: msg.content });
+        }
+      });
+    }
+
+    // Add current user message
+    messages.push({ role: 'user', content: userMessage });
+
+    // Use OpenRouter if key is provided, otherwise use OpenAI
+    const apiUrl = openRouterKey ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    const apiKey = openRouterKey || OPENAI_API_KEY;
+    const headers: any = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    };
+
+    // Add OpenRouter specific headers
+    if (openRouterKey) {
+      headers['HTTP-Referer'] = 'https://lovableproject.com';
+      headers['X-Title'] = 'Chatbot Test Environment';
+    }
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
-        model: 'gpt-4.1-2025-04-14',
-        messages: [
-          { role: 'system', content: systemPrompt || 'You are a helpful assistant.' },
-          { role: 'user', content: userMessage }
-        ],
+        model: openRouterKey ? 'openai/gpt-4.1' : 'gpt-4.1-2025-04-14',
+        messages,
         temperature: 0.7,
         max_tokens: 1000
       }),
@@ -46,8 +75,8 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('OpenAI API Error:', errorData);
-      throw new Error(`OpenAI API error: ${response.status}`);
+      console.error('AI API Error:', errorData);
+      throw new Error(`AI API error: ${response.status}`);
     }
 
     const data = await response.json();
