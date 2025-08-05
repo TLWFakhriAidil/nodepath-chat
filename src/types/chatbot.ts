@@ -34,8 +34,14 @@ export interface FlowNode {
     // Manual node fields
     expectedInput?: string
     responseOutput?: string
-    // Prompt node fields
-    nodePrompt?: string
+    // AI Prompt node fields
+    systemPrompt?: string
+    instance?: string
+    openRouterKey?: string
+    node_type?: string
+    // Node update function
+    onUpdate?: (nodeId: string, data: any) => void
+    onDelete?: (nodeId: string) => void
   }
 }
 
