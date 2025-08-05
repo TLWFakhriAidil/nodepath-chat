@@ -5,6 +5,7 @@ export class FlowEngine {
   private execution: FlowExecution
   private flow: ChatbotFlow
   private flowId: string
+  private simulationId: string
   private onMessage: (message: ChatMessage) => void
   private onComplete: () => void
   private onWaitingForInput: () => void
@@ -16,6 +17,7 @@ export class FlowEngine {
     onWaitingForInput: () => void
   ) {
     this.flowId = flowId
+    this.simulationId = `exec_${flowId}_${Date.now()}_${Math.random().toString(36).substring(2)}`
     this.onMessage = onMessage
     this.onComplete = onComplete
     this.onWaitingForInput = onWaitingForInput
@@ -401,7 +403,8 @@ export class FlowEngine {
   }
 
   private async saveState(): Promise<void> {
-    await saveExecution(this.execution)
+    // Pass the simulationId to saveExecution to ensure consistent ID
+    await saveExecution({ ...this.execution, id: this.simulationId })
   }
 
   getMessages(): ChatMessage[] {

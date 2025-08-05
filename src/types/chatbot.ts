@@ -81,6 +81,7 @@ export interface ChatMessage {
 }
 
 export interface FlowExecution {
+  id?: string
   flowId: string
   currentNodeId: string
   variables: Record<string, string>
