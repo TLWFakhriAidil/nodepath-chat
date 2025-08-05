@@ -272,7 +272,24 @@ async function handleDatabaseOperation(client: Client, data: any) {
         console.log(`Updating ${table} with:`, payload);
         
         const updateFields = Object.entries(payload)
-          .map(([key, value]) => `${key} = '${value}'`)
+          .map(([key, value]) => {
+            if (typeof value === 'string') {
+              // Convert ISO datetime to MySQL format
+              if (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)) {
+                const date = new Date(value);
+                const mysqlDateTime = date.toISOString().slice(0, 19).replace('T', ' ');
+                return `${key} = '${mysqlDateTime}'`;
+              }
+              // Properly escape JSON strings and quotes
+              const escapedValue = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+              return `${key} = '${escapedValue}'`;
+            } else if (typeof value === 'object') {
+              // Handle JSON objects by stringifying and escaping
+              const jsonString = JSON.stringify(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+              return `${key} = '${jsonString}'`;
+            }
+            return `${key} = ${value}`;
+          })
           .join(', ');
         
         let updateSQL = `UPDATE ${table} SET ${updateFields}`;
