@@ -506,12 +506,17 @@ function getCreateTableSQL(tableName: string): string | null {
     'chatbot_executions_nodepath': `
       CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
         id VARCHAR(255) PRIMARY KEY,
-        flow_id VARCHAR(255) NOT NULL,
-        current_node_id VARCHAR(255) NOT NULL,
-        variables JSON NOT NULL,
-        messages JSON NOT NULL,
-        is_waiting_for_input BOOLEAN NOT NULL DEFAULT FALSE,
-        is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+        flow_id VARCHAR(255),
+        current_node_id VARCHAR(255),
+        variables JSON,
+        messages JSON,
+        is_waiting_for_input BOOLEAN DEFAULT FALSE,
+        is_completed BOOLEAN DEFAULT FALSE,
+        system_prompt TEXT,
+        instance VARCHAR(255),
+        open_router_key VARCHAR(255),
+        conv_last JSON,
+        conv_current TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
