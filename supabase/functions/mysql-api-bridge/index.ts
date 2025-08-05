@@ -510,21 +510,47 @@ async function ensureTableExists(client: Client, tableName: string) {
               await client.execute(alterSQL);
             }
             
-            // Also convert existing text columns to utf8mb4 if they exist
+            // Force complete table conversion to utf8mb4
             try {
-              if (columns.includes('system_prompt')) {
-                await client.execute(`ALTER TABLE ${tableName} MODIFY COLUMN system_prompt TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-                console.log('Updated system_prompt column to utf8mb4');
-              }
-              if (columns.includes('conv_current')) {
-                await client.execute(`ALTER TABLE ${tableName} MODIFY COLUMN conv_current TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-                console.log('Updated conv_current column to utf8mb4');
-              }
-              // Convert the entire table to utf8mb4
+              console.log('Converting entire table and all columns to utf8mb4...');
+              
+              // First, convert the table default charset
               await client.execute(`ALTER TABLE ${tableName} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-              console.log('Converted table to utf8mb4');
+              console.log('Table converted to utf8mb4');
+              
+              // Then explicitly modify each text column to ensure utf8mb4
+              const textColumns = ['system_prompt', 'conv_current'];
+              for (const colName of textColumns) {
+                if (columns.includes(colName)) {
+                  await client.execute(`ALTER TABLE ${tableName} MODIFY COLUMN ${colName} TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+                  console.log(`Updated ${colName} column to utf8mb4`);
+                }
+              }
+              
             } catch (convertError: any) {
               console.error('Error converting to utf8mb4:', convertError);
+              
+              // If conversion fails, recreate table with proper charset
+              console.log('Conversion failed, recreating table with utf8mb4...');
+              try {
+                // Backup existing data
+                const backupResult = await client.execute(`SELECT * FROM ${tableName}`);
+                const existingData = backupResult.rows || [];
+                
+                // Drop and recreate table
+                await client.execute(`DROP TABLE IF EXISTS ${tableName}_backup`);
+                await client.execute(`CREATE TABLE ${tableName}_backup AS SELECT * FROM ${tableName}`);
+                await client.execute(`DROP TABLE ${tableName}`);
+                
+                // Create new table with utf8mb4
+                const createSQL = getCreateTableSQL(tableName);
+                if (createSQL) {
+                  await client.execute(createSQL);
+                  console.log(`Recreated table ${tableName} with utf8mb4`);
+                }
+              } catch (recreateError: any) {
+                console.error('Error recreating table:', recreateError);
+              }
             }
             
             console.log('Successfully added missing AI prompt columns');
