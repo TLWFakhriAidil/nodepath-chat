@@ -1,5 +1,6 @@
 import { ChatbotFlow, FlowNode, FlowExecution, ChatMessage, ConditionRule } from '@/types/chatbot'
 import { getFlow, getMediaFile, saveExecution, replaceVariables } from '@/lib/localStorage'
+import { supabase } from '@/integrations/supabase/client'
 
 export class FlowEngine {
   private execution: FlowExecution
@@ -84,6 +85,9 @@ export class FlowEngine {
     const currentNode = this.getCurrentNode()
     if (currentNode?.type === 'condition') {
       await this.handleConditionNode(currentNode, input)
+    } else if (currentNode?.type === 'prompt') {
+      // Handle AI prompt node with user input
+      await this.handlePromptNode(currentNode)
     } else {
       await this.moveToNextNode()
     }
@@ -152,6 +156,10 @@ export class FlowEngine {
       
       case 'condition':
         await this.handleConditionNode(currentNode)
+        break
+
+      case 'prompt':
+        await this.handlePromptNode(currentNode)
         break
       
       default:
@@ -382,6 +390,152 @@ export class FlowEngine {
     } else {
       await this.moveToNextNode()
     }
+  }
+
+  private async handlePromptNode(node: FlowNode): Promise<void> {
+    console.log('Processing AI prompt node:', node.data)
+    
+    const systemPrompt = node.data.systemPrompt || ''
+    const openRouterKey = node.data.openRouterKey || ''
+    const instance = node.data.instance || 'default'
+
+    // Analyze flow mode based on available data
+    const flowMode = this.analyzeFlowMode(node)
+    console.log(`Flow mode detected: ${flowMode}`)
+
+    if (flowMode === 'AUTO') {
+      // Full AI response mode
+      await this.handleAIResponse(node, systemPrompt, openRouterKey, instance)
+    } else if (flowMode === 'MANUAL') {
+      // Manual mode - use instance only
+      await this.handleManualResponse(node, instance)
+    } else {
+      // SEMI-AUTO mode - fallback strategy
+      console.warn('SEMI-AUTO mode detected - missing some AI data, falling back to manual')
+      await this.handleManualResponse(node, instance)
+    }
+  }
+
+  private analyzeFlowMode(node: FlowNode): 'AUTO' | 'SEMI-AUTO' | 'MANUAL' {
+    const systemPrompt = node.data.systemPrompt
+    const openRouterKey = node.data.openRouterKey
+    const instance = node.data.instance
+
+    if (systemPrompt && openRouterKey && instance) {
+      return 'AUTO'
+    } else if (instance && (!systemPrompt || !openRouterKey)) {
+      return 'MANUAL'
+    } else {
+      return 'SEMI-AUTO'
+    }
+  }
+
+  private async handleAIResponse(node: FlowNode, systemPrompt: string, openRouterKey: string, instance: string): Promise<void> {
+    if (!this.execution.isWaitingForInput) {
+      // First time reaching AI prompt node, wait for user input
+      this.execution.isWaitingForInput = true
+      this.onWaitingForInput()
+      return
+    }
+
+    const userInput = this.execution.variables.lastInput || ''
+    
+    // Prepare conversation history for AI
+    const conversationHistory = this.execution.messages.map(msg => ({
+      role: msg.type === 'user' ? 'user' : 'assistant',
+      content: msg.content
+    }))
+
+    try {
+      console.log('Calling OpenRouter AI with:', {
+        systemPrompt: systemPrompt.substring(0, 100) + '...',
+        userInput,
+        historyLength: conversationHistory.length,
+        instance
+      })
+
+      // Call OpenRouter AI function
+      const { data: response, error } = await supabase.functions.invoke('openrouter-chat', {
+        body: {
+          systemPrompt,
+          userMessage: userInput,
+          conversationHistory,
+          openRouterKey,
+          instance
+        }
+      })
+
+      if (error) {
+        throw new Error(`AI service error: ${error.message}`)
+      }
+
+      if (!response.success) {
+        throw new Error(response.error || 'Unknown AI error')
+      }
+
+      // Create AI bot message
+      const aiMessage: ChatMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+        type: 'bot',
+        content: response.reply,
+        timestamp: new Date().toISOString()
+      }
+
+      this.execution.messages.push(aiMessage)
+      this.onMessage(aiMessage)
+
+      // Update execution variables with AI conversation data
+      this.execution.variables.conv_current = response.conversationData.conv_current
+      this.execution.variables.conv_last = JSON.stringify(response.conversationData.conv_last)
+      this.execution.variables.instance = instance
+
+      console.log('AI response processed successfully')
+      await this.moveToNextNode()
+
+    } catch (error) {
+      console.error('Error in AI response:', error)
+      
+      // Fallback to manual response on AI error
+      const fallbackMessage: ChatMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+        type: 'bot',
+        content: `Sorry, I encountered an error processing your request. Instance: ${instance}`,
+        timestamp: new Date().toISOString()
+      }
+
+      this.execution.messages.push(fallbackMessage)
+      this.onMessage(fallbackMessage)
+      await this.moveToNextNode()
+    }
+  }
+
+  private async handleManualResponse(node: FlowNode, instance: string): Promise<void> {
+    if (!this.execution.isWaitingForInput) {
+      // First time reaching manual prompt node, wait for user input
+      this.execution.isWaitingForInput = true
+      this.onWaitingForInput()
+      return
+    }
+
+    // Use instance as manual script or fallback message
+    const manualMessage = node.data.message || `Manual response for instance: ${instance}`
+    
+    const botMessage: ChatMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+      type: 'bot',
+      content: replaceVariables(manualMessage, this.execution.variables),
+      timestamp: new Date().toISOString()
+    }
+
+    this.execution.messages.push(botMessage)
+    this.onMessage(botMessage)
+
+    // Update execution variables
+    this.execution.variables.instance = instance
+    this.execution.variables.conv_current = botMessage.content
+
+    console.log(`Manual response sent for instance: ${instance}`)
+    await this.moveToNextNode()
   }
 
   private async moveToNextNode(): Promise<void> {

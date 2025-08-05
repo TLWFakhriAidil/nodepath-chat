@@ -54,3 +54,9 @@ timeout = 30
 
 [functions.mysql-api-bridge]
 verify_jwt = false
+
+[functions.test-ai-chat]
+verify_jwt = false
+
+[functions.openrouter-chat]
+verify_jwt = false
