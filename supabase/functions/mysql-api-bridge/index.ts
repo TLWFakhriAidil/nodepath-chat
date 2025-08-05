@@ -214,7 +214,9 @@ async function handleDatabaseOperation(client: Client, data: any) {
               // For text fields with emojis, use hex encoding as fallback
               if (/[\u{1F600}-\u{1F6FF}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(v)) {
                 console.log('Detected emojis in string, using hex encoding');
-                const hexValue = Buffer.from(v, 'utf8').toString('hex');
+                const encoder = new TextEncoder();
+                const uint8Array = encoder.encode(v);
+                const hexValue = Array.from(uint8Array).map(b => b.toString(16).padStart(2, '0')).join('');
                 return `UNHEX('${hexValue}')`;
               }
               // Properly escape JSON strings and quotes
