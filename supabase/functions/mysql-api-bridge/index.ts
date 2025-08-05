@@ -489,7 +489,7 @@ async function ensureTableExists(client: Client, tableName: string) {
               let columnDef = '';
               switch (column) {
                 case 'system_prompt':
-                  columnDef = 'TEXT';
+                  columnDef = 'TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
                   break;
                 case 'instance':
                 case 'open_router_key':
@@ -499,13 +499,31 @@ async function ensureTableExists(client: Client, tableName: string) {
                   columnDef = 'JSON';
                   break;
                 case 'conv_current':
-                  columnDef = 'TEXT';
+                  columnDef = 'TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
                   break;
               }
               const alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${column} ${columnDef}`;
               console.log(`Adding column: ${alterSQL}`);
               await client.execute(alterSQL);
             }
+            
+            // Also convert existing text columns to utf8mb4 if they exist
+            try {
+              if (columns.includes('system_prompt')) {
+                await client.execute(`ALTER TABLE ${tableName} MODIFY COLUMN system_prompt TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+                console.log('Updated system_prompt column to utf8mb4');
+              }
+              if (columns.includes('conv_current')) {
+                await client.execute(`ALTER TABLE ${tableName} MODIFY COLUMN conv_current TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+                console.log('Updated conv_current column to utf8mb4');
+              }
+              // Convert the entire table to utf8mb4
+              await client.execute(`ALTER TABLE ${tableName} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+              console.log('Converted table to utf8mb4');
+            } catch (convertError: any) {
+              console.error('Error converting to utf8mb4:', convertError);
+            }
+            
             console.log('Successfully added missing AI prompt columns');
           }
         } catch (columnError: any) {
