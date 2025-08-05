@@ -43,55 +43,75 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
       updated_at: flow.updatedAt
     }
 
-    // Save the main flow data to MySQL
-    await callMySQLAPI({
+    // Save the main flow data to MySQL first
+    const saveResult = await callMySQLAPI({
       operation: flowExists ? 'update' : 'insert',
       table: 'chatbot_flows_nodepath',
       ...(flowExists ? { filters: { id: flow.id } } : {}),
       payload: flowData
     })
 
+    if (!saveResult.success) {
+      throw new Error(`Failed to save flow: ${saveResult.error}`)
+    }
+
+    console.log('Main flow saved successfully')
+
     // Extract and save AI prompt nodes to separate table with individual columns
     const aiPromptNodes = flow.nodes.filter(node => node.type === 'prompt')
     
-    for (const node of aiPromptNodes) {
-      if (node.data.systemPrompt || node.data.instance || node.data.openRouterKey) {
-        console.log('Saving AI prompt node data:', node.id)
-        
-        // Check if AI prompt node data already exists
-        const existingNodeResult = await callMySQLAPI({
-          operation: 'select',
-          table: 'chatbot_executions_nodepath',
-          filters: { id: node.id }
-        })
-        
-        const nodeExists = existingNodeResult.success && existingNodeResult.data && existingNodeResult.data.length > 0
-        
-        const aiNodeData = {
-          id: node.id,
-          system_prompt: node.data.systemPrompt || '',
-          instance: node.data.instance || '',
-          open_router_key: node.data.openRouterKey || '',
-          conv_last: JSON.stringify([]),
-          conv_current: '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
+    if (aiPromptNodes.length > 0) {
+      console.log(`Found ${aiPromptNodes.length} AI prompt nodes to save`)
+      
+      for (const node of aiPromptNodes) {
+        if (node.data.systemPrompt || node.data.instance || node.data.openRouterKey) {
+          console.log('Saving AI prompt node data:', node.id)
+          
+          try {
+            // Check if AI prompt node data already exists
+            const existingNodeResult = await callMySQLAPI({
+              operation: 'select',
+              table: 'chatbot_executions_nodepath',
+              filters: { id: node.id }
+            })
+            
+            const nodeExists = existingNodeResult.success && existingNodeResult.data && existingNodeResult.data.length > 0
+            console.log('AI node exists:', nodeExists)
+            
+            const aiNodeData = {
+              id: node.id,
+              system_prompt: node.data.systemPrompt || '',
+              instance: node.data.instance || '',
+              open_router_key: node.data.openRouterKey || '',
+              conv_last: JSON.stringify([]),
+              conv_current: '',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }
 
-        // Save AI prompt data to separate table
-        await callMySQLAPI({
-          operation: nodeExists ? 'update' : 'insert',
-          table: 'chatbot_executions_nodepath',
-          ...(nodeExists ? { filters: { id: node.id } } : {}),
-          payload: nodeExists ? {
-            system_prompt: aiNodeData.system_prompt,
-            instance: aiNodeData.instance,
-            open_router_key: aiNodeData.open_router_key,
-            updated_at: aiNodeData.updated_at
-          } : aiNodeData
-        })
-        
-        console.log('AI prompt node data saved:', node.id)
+            // Save AI prompt data to separate table
+            const aiResult = await callMySQLAPI({
+              operation: nodeExists ? 'update' : 'insert',
+              table: 'chatbot_executions_nodepath',
+              ...(nodeExists ? { filters: { id: node.id } } : {}),
+              payload: nodeExists ? {
+                system_prompt: aiNodeData.system_prompt,
+                instance: aiNodeData.instance,
+                open_router_key: aiNodeData.open_router_key,
+                updated_at: aiNodeData.updated_at
+              } : aiNodeData
+            })
+            
+            if (!aiResult.success) {
+              console.error('Failed to save AI node data:', aiResult.error)
+            } else {
+              console.log('AI prompt node data saved successfully:', node.id)
+            }
+            
+          } catch (nodeError: any) {
+            console.error('Error saving AI node:', node.id, nodeError)
+          }
+        }
       }
     }
 
