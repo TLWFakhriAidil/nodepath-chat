@@ -20,56 +20,38 @@ const callMySQLAPI = async (data: any) => {
 // Flow management
 export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
   try {
-    // Save main flow data to MySQL
-    const result = await callMySQLAPI({
-      operation: 'insert',
+    console.log('Saving flow to MySQL:', flow.id)
+    
+    // Check if flow already exists
+    const existingResult = await callMySQLAPI({
+      operation: 'select',
       table: 'chatbot_flows_nodepath',
-      payload: {
-        id: flow.id,
-        name: flow.name,
-        description: flow.description,
-        nodes: JSON.stringify(flow.nodes),
-        edges: JSON.stringify(flow.edges),
-        updated_at: new Date().toISOString()
-      }
+      filters: { id: flow.id }
     })
     
-    if (!result.success) throw new Error(result.error)
+    const flowExists = existingResult.success && existingResult.data && existingResult.data.length > 0
+    console.log('Flow exists:', flowExists)
 
-    // Extract and save AI prompt nodes separately to chatbot_executions_nodepath
-    const aiNodes = flow.nodes.filter(node => node.type === 'prompt' && (node.data.systemPrompt || node.data.instance || node.data.openRouterKey))
-    
-    for (const node of aiNodes) {
-      try {
-        await callMySQLAPI({
-          operation: 'insert',
-          table: 'chatbot_executions_nodepath',
-          payload: {
-            id: node.id,
-            system_prompt: node.data.systemPrompt || '',
-            instance: node.data.instance || '',
-            open_router_key: node.data.openRouterKey || '',
-            conv_last: JSON.stringify([]),
-            conv_current: '',
-            updated_at: new Date().toISOString()
-          }
-        })
-      } catch (nodeError) {
-        // If node already exists, update it instead
-        console.log('Node exists, updating:', node.id)
-        await callMySQLAPI({
-          operation: 'update',
-          table: 'chatbot_executions_nodepath',
-          filters: { id: node.id },
-          payload: {
-            system_prompt: node.data.systemPrompt || '',
-            instance: node.data.instance || '',
-            open_router_key: node.data.openRouterKey || '',
-            updated_at: new Date().toISOString()
-          }
-        })
-      }
+    // Prepare flow data for MySQL storage
+    const flowData = {
+      id: flow.id,
+      name: flow.name,
+      description: flow.description,
+      nodes: JSON.stringify(flow.nodes),
+      edges: JSON.stringify(flow.edges),
+      created_at: flow.createdAt,
+      updated_at: flow.updatedAt
     }
+
+    // Save the flow data to MySQL (AI prompt data is stored within the nodes JSON)
+    await callMySQLAPI({
+      operation: flowExists ? 'update' : 'insert',
+      table: 'chatbot_flows_nodepath',
+      ...(flowExists ? { filters: { id: flow.id } } : {}),
+      payload: flowData
+    })
+
+    console.log('Flow saved to MySQL successfully')
   } catch (error) {
     console.error('Error saving flow to MySQL:', error)
     throw error
@@ -143,121 +125,68 @@ export const deleteFlow = async (id: string): Promise<void> => {
   }
 }
 
-// Helper function to safely prepare data for MySQL JSON storage
-const safeMySQLJson = (obj: any): string => {
+// Media management
+export const saveMediaFile = async (file: any): Promise<any> => {
   try {
-    // Clean the object data before stringifying
-    const cleanObject = (item: any): any => {
-      if (typeof item === 'string') {
-        // Remove all problematic characters that can break MySQL JSON parsing
-        return item
-          // Remove control characters except tab and newline
-          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-          // Remove any remaining problematic escape sequences
-          .replace(/\\(?!["\\/bfnrt])/g, '')
-          // Normalize quotes and backslashes
-          .replace(/\\/g, '\\\\')
-          .replace(/"/g, '\\"')
-          // Remove any non-printable Unicode characters
-          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-          // Clean up multiple spaces
-          .replace(/\s+/g, ' ')
-          .trim();
-      } else if (Array.isArray(item)) {
-        return item.map(cleanObject);
-      } else if (item && typeof item === 'object') {
-        const cleaned: any = {};
-        for (const [key, value] of Object.entries(item)) {
-          // Also clean object keys
-          const cleanKey = typeof key === 'string' ? key.replace(/[\x00-\x1F\x7F]/g, '') : key;
-          cleaned[cleanKey] = cleanObject(value);
-        }
-        return cleaned;
+    const result = await callMySQLAPI({
+      operation: 'insert',
+      table: 'media_files',
+      payload: {
+        id: file.id,
+        filename: file.filename,
+        original_name: file.original_name || file.originalName,
+        file_type: file.file_type || file.fileType,
+        file_size: file.file_size || file.fileSize,
+        storage_path: file.storage_path || file.storagePath,
+        public_url: file.public_url || file.publicUrl,
+        uploaded_at: file.uploaded_at || file.uploadedAt || new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }
-      return item;
-    };
-
-    const cleanedObj = cleanObject(obj);
-    
-    // Use a more robust JSON stringification
-    const jsonString = JSON.stringify(cleanedObj, (key, value) => {
-      // Additional cleaning during stringification
-      if (typeof value === 'string') {
-        return value.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-      }
-      return value;
-    });
-    
-    // Validate the JSON is parseable
-    JSON.parse(jsonString);
-    
-    return jsonString;
-  } catch (error) {
-    console.error('Error creating safe MySQL JSON:', error, 'Original object:', obj);
-    // Fallback to empty object/array if JSON creation fails
-    return Array.isArray(obj) ? '[]' : '{}';
-  }
-}
-
-// Execution management
-export const saveExecution = async (execution: FlowExecution): Promise<void> => {
-  try {
-    const executionData = {
-      flow_id: execution.flowId,
-      current_node_id: execution.currentNodeId,
-      variables: safeMySQLJson(execution.variables),
-      messages: safeMySQLJson(execution.messages),
-      is_waiting_for_input: execution.isWaitingForInput ? 1 : 0, // Convert boolean to integer for MySQL
-      is_completed: execution.isCompleted ? 1 : 0 // Convert boolean to integer for MySQL
-    }
-
-    console.log('Saving/updating execution to MySQL for flow:', execution.flowId)
-    console.log('Messages to save:', execution.messages.length, 'messages')
-    
-    // First check if execution exists for this flow_id
-    const existingResult = await callMySQLAPI({
-      operation: 'select',
-      table: 'chatbot_executions_nodepath',
-      filters: { flow_id: execution.flowId }
     })
-
-    if (existingResult.success && existingResult.data && existingResult.data.length > 0) {
-      // Update existing record
-      const result = await callMySQLAPI({
-        operation: 'update',
-        table: 'chatbot_executions_nodepath',
-        filters: { flow_id: execution.flowId },
-        payload: executionData
-      })
-
-      if (!result.success) throw new Error(result.error)
-      console.log('Execution updated successfully for flow:', execution.flowId)
-    } else {
-      // Insert new record with flow_id as unique identifier
-      const result = await callMySQLAPI({
-        operation: 'insert',
-        table: 'chatbot_executions_nodepath',
-        payload: {
-          id: execution.flowId, // Use flow_id as the primary key
-          ...executionData
-        }
-      })
-
-      if (!result.success) throw new Error(result.error)
-      console.log('Execution saved successfully for flow:', execution.flowId)
-    }
+    
+    if (!result.success) throw new Error(result.error)
+    return file
   } catch (error) {
-    console.error('Error saving execution to MySQL:', error)
+    console.error('Error saving media file to MySQL:', error)
     throw error
   }
 }
 
-export const getExecution = async (flowId: string): Promise<FlowExecution | null> => {
+export const getMediaFiles = async (): Promise<any[]> => {
   try {
     const result = await callMySQLAPI({
       operation: 'select',
-      table: 'chatbot_executions_nodepath',
-      filters: { flow_id: flowId }
+      table: 'media_files',
+      filters: { order_by: 'uploaded_at DESC' }
+    })
+    
+    if (!result.success) throw new Error(result.error)
+    
+    return (result.data || []).map((row: any) => ({
+      id: row.id,
+      filename: row.filename,
+      original_name: row.original_name,
+      file_type: row.file_type,
+      file_size: row.file_size,
+      storage_path: row.storage_path,
+      public_url: row.public_url,
+      uploaded_at: row.uploaded_at,
+      created_at: row.created_at,
+      updated_at: row.updated_at
+    }))
+  } catch (error) {
+    console.error('Error fetching media files from MySQL:', error)
+    return []
+  }
+}
+
+export const getMediaFile = async (id: string): Promise<any | null> => {
+  try {
+    const result = await callMySQLAPI({
+      operation: 'select',
+      table: 'media_files',
+      filters: { id }
     })
     
     if (!result.success) throw new Error(result.error)
@@ -265,137 +194,161 @@ export const getExecution = async (flowId: string): Promise<FlowExecution | null
     
     const row = result.data[0]
     return {
-      flowId: row.flow_id,
-      currentNodeId: row.current_node_id,
-      variables: JSON.parse(row.variables || '{}'),
-      messages: JSON.parse(row.messages || '[]'),
-      isWaitingForInput: Boolean(row.is_waiting_for_input), // Convert MySQL integer back to boolean
-      isCompleted: Boolean(row.is_completed) // Convert MySQL integer back to boolean
+      id: row.id,
+      filename: row.filename,
+      original_name: row.original_name,
+      file_type: row.file_type,
+      file_size: row.file_size,
+      storage_path: row.storage_path,
+      public_url: row.public_url,
+      uploaded_at: row.uploaded_at,
+      created_at: row.created_at,
+      updated_at: row.updated_at
     }
   } catch (error) {
-    console.error('Error fetching execution from MySQL:', error)
+    console.error('Error fetching media file from MySQL:', error)
     return null
   }
 }
 
-export const getExecutions = async (): Promise<FlowExecution[]> => {
+export const deleteMediaFile = async (id: string): Promise<void> => {
+  try {
+    const result = await callMySQLAPI({
+      operation: 'delete',
+      table: 'media_files',
+      filters: { id }
+    })
+    
+    if (!result.success) throw new Error(result.error)
+  } catch (error) {
+    console.error('Error deleting media file from MySQL:', error)
+    throw error
+  }
+}
+
+// Flow execution management
+export const saveFlowExecution = async (execution: any): Promise<void> => {
+  try {
+    const result = await callMySQLAPI({
+      operation: 'insert',
+      table: 'chatbot_executions_nodepath',
+      payload: {
+        id: execution.id || `exec_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+        flow_id: execution.flowId,
+        current_node_id: execution.currentNodeId,
+        variables: JSON.stringify(execution.variables || {}),
+        messages: JSON.stringify(execution.messages || []),
+        is_waiting_for_input: execution.isWaitingForInput || false,
+        is_completed: execution.isCompleted || false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    })
+    
+    if (!result.success) throw new Error(result.error)
+  } catch (error) {
+    console.error('Error saving flow execution to MySQL:', error)
+    throw error
+  }
+}
+
+export const getFlowExecution = async (id: string): Promise<any | null> => {
   try {
     const result = await callMySQLAPI({
       operation: 'select',
       table: 'chatbot_executions_nodepath',
-      filters: { order_by: 'updated_at DESC' }
+      filters: { id }
     })
     
     if (!result.success) throw new Error(result.error)
+    if (!result.data || result.data.length === 0) return null
     
-    return (result.data || []).map((row: any) => ({
+    const row = result.data[0]
+    return {
+      id: row.id,
       flowId: row.flow_id,
       currentNodeId: row.current_node_id,
       variables: JSON.parse(row.variables || '{}'),
       messages: JSON.parse(row.messages || '[]'),
-      isWaitingForInput: Boolean(row.is_waiting_for_input), // Convert MySQL integer back to boolean
-      isCompleted: Boolean(row.is_completed) // Convert MySQL integer back to boolean
-    }))
+      isWaitingForInput: row.is_waiting_for_input || false,
+      isCompleted: row.is_completed || false,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }
   } catch (error) {
-    console.error('Error fetching executions from MySQL:', error)
-    return []
+    console.error('Error fetching flow execution from MySQL:', error)
+    return null
   }
 }
 
-export const deleteExecution = async (flowId: string): Promise<void> => {
+export const updateFlowExecution = async (id: string, updates: any): Promise<void> => {
   try {
+    const payload: any = {}
+    
+    if (updates.currentNodeId !== undefined) payload.current_node_id = updates.currentNodeId
+    if (updates.variables !== undefined) payload.variables = JSON.stringify(updates.variables)
+    if (updates.messages !== undefined) payload.messages = JSON.stringify(updates.messages)
+    if (updates.isWaitingForInput !== undefined) payload.is_waiting_for_input = updates.isWaitingForInput
+    if (updates.isCompleted !== undefined) payload.is_completed = updates.isCompleted
+    
+    // Always update the timestamp
+    payload.updated_at = new Date().toISOString()
+    
     const result = await callMySQLAPI({
-      operation: 'delete',
+      operation: 'update',
       table: 'chatbot_executions_nodepath',
-      filters: { flow_id: flowId }
+      filters: { id },
+      payload
     })
     
     if (!result.success) throw new Error(result.error)
   } catch (error) {
-    console.error('Error deleting execution from MySQL:', error)
+    console.error('Error updating flow execution in MySQL:', error)
     throw error
   }
 }
 
-// Initialize MySQL tables
-export const initializeMySQLTables = async (): Promise<void> => {
-  const tables = [
-    // Chatbot flows table
-    `CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
-      id VARCHAR(255) PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      description TEXT,
-      nodes JSON NOT NULL,
-      edges JSON NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`,
-    
-    // Chatbot executions table - one row per flow_id
-    `CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
-      id VARCHAR(255) PRIMARY KEY,
-      flow_id VARCHAR(255) NOT NULL UNIQUE,
-      current_node_id VARCHAR(255) NOT NULL,
-      variables JSON NOT NULL,
-      messages JSON NOT NULL,
-      is_waiting_for_input BOOLEAN NOT NULL DEFAULT FALSE,
-      is_completed BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX idx_flow_id (flow_id)
-    )`,
-    
-    // Leads table
-    `CREATE TABLE IF NOT EXISTS leads_nodepath (
-      id VARCHAR(255) PRIMARY KEY,
-      name VARCHAR(255),
-      email VARCHAR(255),
-      phone VARCHAR(255),
-      interest VARCHAR(255),
-      status VARCHAR(255) DEFAULT 'new',
-      source VARCHAR(255) NOT NULL DEFAULT 'web',
-      campaign_name VARCHAR(255),
-      flow_id VARCHAR(255),
-      conversation_data JSON,
-      notes TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`,
-    
-    // Media files table
-    `CREATE TABLE IF NOT EXISTS media_files_nodepath (
-      id VARCHAR(255) PRIMARY KEY,
-      filename VARCHAR(255) NOT NULL,
-      original_name VARCHAR(255) NOT NULL,
-      file_type VARCHAR(255) NOT NULL,
-      file_size BIGINT NOT NULL,
-      storage_path VARCHAR(255) NOT NULL,
-      public_url VARCHAR(255) NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`
-  ]
-
+export const deleteFlowExecution = async (id: string): Promise<void> => {
   try {
-    for (const sql of tables) {
-      const { data: result, error } = await supabase.functions.invoke('mysql-api-bridge', {
-        body: {
-          endpoint: MYSQL_ENDPOINT,
-          method: 'POST',
-          data: { sql }
-        }
-      })
-      
-      if (error) throw error
-      
-      if (!result.success) {
-        console.error('Failed to create table:', result.error)
-      } else {
-        console.log('Table created successfully')
-      }
-    }
+    const result = await callMySQLAPI({
+      operation: 'delete',
+      table: 'chatbot_executions_nodepath',
+      filters: { id }
+    })
+    
+    if (!result.success) throw new Error(result.error)
   } catch (error) {
-    console.error('Error initializing MySQL tables:', error)
+    console.error('Error deleting flow execution from MySQL:', error)
     throw error
   }
+}
+
+// Get AI settings for chat execution
+export const getAISettings = async () => {
+  try {
+    const result = await callMySQLAPI({
+      sql: 'SELECT * FROM ai_settings_nodepath ORDER BY created_at DESC LIMIT 1'
+    })
+    
+    if (!result.success) throw new Error(result.error)
+    if (!result.data?.result?.rows || result.data.result.rows.length === 0) {
+      return null
+    }
+    
+    return result.data.result.rows[0]
+  } catch (error) {
+    console.error('Error fetching AI settings from MySQL:', error)
+    return null
+  }
+}
+
+// Helper function to extract AI prompt data from flow nodes
+export const extractAIPromptData = (flow: ChatbotFlow) => {
+  const aiNodes = flow.nodes.filter(node => node.type === 'prompt')
+  return aiNodes.map(node => ({
+    nodeId: node.id,
+    systemPrompt: node.data.systemPrompt || '',
+    instance: node.data.instance || '',
+    openRouterKey: node.data.openRouterKey || ''
+  }))
 }

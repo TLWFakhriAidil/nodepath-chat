@@ -1,6 +1,6 @@
 import { ChatbotFlow, MediaFile, FlowExecution } from '@/types/chatbot'
 import { saveFlow as saveMySQLFlow, getFlows as getMySQLFlows, getFlow as getMySQLFlow, deleteFlow as deleteMySQLFlow } from './mysqlStorage'
-import { saveExecution as saveMySQLExecution, getExecution as getMySQLExecution, getExecutions as getMySQLExecutions, deleteExecution as deleteMySQLExecution } from './mysqlStorage'
+import { saveFlowExecution as saveMySQLExecution, getFlowExecution as getMySQLExecution, deleteFlowExecution as deleteMySQLExecution, updateFlowExecution, getAISettings } from './mysqlStorage'
 
 const MEDIA_KEY = 'chatbot_media'
 
@@ -53,7 +53,9 @@ export const getExecution = async (flowId: string): Promise<FlowExecution | null
 }
 
 export const getExecutions = async (): Promise<FlowExecution[]> => {
-  return getMySQLExecutions()
+  // For now, return empty array since we don't have a "get all executions" function
+  // You can implement this if needed by creating a function in mysqlStorage.ts
+  return []
 }
 
 export const deleteExecution = async (flowId: string): Promise<void> => {

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useMySQLAPI } from '@/hooks/useMySQLAPI';
 import { Loader2, Database, Send, Settings } from 'lucide-react';
-import { initializeMySQLTables } from '@/lib/mysqlStorage';
+import { saveFlow, getFlows } from '@/lib/mysqlStorage'
 
 export default function MySQLAPIExample() {
   const { get, post, loading } = useMySQLAPI();
@@ -42,14 +42,14 @@ export default function MySQLAPIExample() {
     }
   };
 
-  const handleInitializeTables = async () => {
+  const testConnection = async () => {
     try {
-      await initializeMySQLTables();
-      setResponse({ success: true, data: { message: 'MySQL tables initialized successfully' } });
+      const flows = await getFlows()
+      setResponse({ success: true, data: { message: `Connected successfully! Found ${flows.length} flows.` } })
     } catch (error: any) {
-      setResponse({ success: false, error: error.message });
+      setResponse({ success: false, error: error.message })
     }
-  };
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -82,12 +82,12 @@ export default function MySQLAPIExample() {
               GET Request
             </Button>
             <Button 
-              onClick={handleInitializeTables} 
+              onClick={testConnection} 
               disabled={loading}
               variant="outline"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
-              Initialize MySQL Tables
+              Test Connection
             </Button>
           </div>
         </CardContent>
