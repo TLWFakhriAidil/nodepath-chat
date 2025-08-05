@@ -35,11 +35,9 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
     // Extract AI prompt data from nodes
     const aiPromptNode = flow.nodes.find(node => node.type === 'prompt')
     const aiPromptData = aiPromptNode ? {
-      system_prompt: aiPromptNode.data.systemPrompt || '',
       instance: aiPromptNode.data.instance || '',
       open_router_key: aiPromptNode.data.openRouterKey || ''
     } : {
-      system_prompt: '',
       instance: '',
       open_router_key: ''
     }
@@ -394,7 +392,6 @@ export const extractAIPromptData = (flow: ChatbotFlow) => {
   const aiNodes = flow.nodes.filter(node => node.type === 'prompt')
   return aiNodes.map(node => ({
     nodeId: node.id,
-    systemPrompt: node.data.systemPrompt || '',
     instance: node.data.instance || '',
     openRouterKey: node.data.openRouterKey || ''
   }))
