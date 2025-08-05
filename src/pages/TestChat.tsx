@@ -104,21 +104,24 @@ export default function TestChat() {
 
   const loadOrCreateConversation = async (node: FlowNode) => {
     try {
-      const { data, error } = await supabase
+      // Check if conversation already exists
+      const { data: existing } = await supabase
         .from('chatbot_executions_nodepath')
         .select('*')
         .eq('id', node.id)
         .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
-
-      if (data) {
+      if (existing) {
         setConversation({
-          ...data,
-          conv_last: Array.isArray(data.conv_last) ? data.conv_last : []
+          id: existing.id,
+          system_prompt: existing.system_prompt || node.data.systemPrompt || '',
+          instance: existing.instance || node.data.instance || '',
+          open_router_key: existing.open_router_key || node.data.openRouterKey || '',
+          conv_last: Array.isArray(existing.conv_last) ? existing.conv_last : [],
+          conv_current: existing.conv_current || ''
         });
       } else {
-        // Create new conversation record
+        // Create new conversation with data from the flow node
         const newConversation = {
           id: node.id,
           system_prompt: node.data.systemPrompt || '',
@@ -128,19 +131,18 @@ export default function TestChat() {
           conv_current: ''
         };
 
-        const { error: insertError } = await supabase
+        const { error } = await supabase
           .from('chatbot_executions_nodepath')
           .insert(newConversation);
 
-        if (insertError) throw insertError;
-
+        if (error) throw error;
         setConversation(newConversation);
       }
     } catch (error) {
       console.error('Error loading conversation:', error);
       toast({
         title: "Error",
-        description: "Failed to load conversation",
+        description: "Failed to load conversation data",
         variant: "destructive"
       });
     }
@@ -164,14 +166,21 @@ export default function TestChat() {
       if (selectedNode.type === 'manual') {
         // Handle manual node - use predefined response
         botReply = selectedNode.data.label || 'Manual response configured in Flow Builder';
-      } else {
+      } else if (selectedNode.type === 'prompt') {
         // Handle AI prompt node - call AI with conversation history
+        const systemPrompt = conversation.system_prompt || selectedNode.data.systemPrompt || '';
+        const openRouterKey = conversation.open_router_key || selectedNode.data.openRouterKey || '';
+        
+        if (!systemPrompt) {
+          throw new Error('System prompt is required for AI responses');
+        }
+
         const { data, error } = await supabase.functions.invoke('test-ai-chat', {
           body: {
-            systemPrompt: conversation.system_prompt,
+            systemPrompt,
             userMessage: userMessage.trim(),
-            instance: conversation.instance,
-            openRouterKey: conversation.open_router_key,
+            instance: conversation.instance || selectedNode.data.instance || '',
+            openRouterKey,
             conversationHistory: conversation.conv_last || []
           }
         });
@@ -180,6 +189,9 @@ export default function TestChat() {
         if (!data.success) throw new Error(data.error);
 
         botReply = data.aiReply;
+      } else {
+        // Default fallback for other node types
+        botReply = `Node type "${selectedNode.type}" response: ${selectedNode.data.label || 'Default response'}`;
       }
 
       const botMsg: ChatMessage = {
@@ -324,19 +336,19 @@ export default function TestChat() {
                 <div>
                   <span className="font-medium">System Prompt:</span>
                   <p className="text-muted-foreground mt-1">
-                    {selectedNode.data.systemPrompt || 'Default assistant prompt'}
+                    {conversation?.system_prompt || selectedNode.data.systemPrompt || 'Default assistant prompt'}
                   </p>
                 </div>
                 <div>
                   <span className="font-medium">Instance:</span>
                   <p className="text-muted-foreground mt-1">
-                    {selectedNode.data.instance || 'default'}
+                    {conversation?.instance || selectedNode.data.instance || 'default'}
                   </p>
                 </div>
                 <div>
                   <span className="font-medium">Router Key:</span>
                   <p className="text-muted-foreground mt-1">
-                    {selectedNode.data.openRouterKey || 'none'}
+                    {(conversation?.open_router_key || selectedNode.data.openRouterKey) ? 'Configured' : 'Not configured'}
                   </p>
                 </div>
               </div>
