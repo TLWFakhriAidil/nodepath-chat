@@ -7,7 +7,7 @@ import {
   FolderOpen, 
   Image,
   BarChart3,
-  Settings
+  
 } from 'lucide-react';
 import {
   Sidebar,
@@ -28,12 +28,6 @@ const mainItems = [
     url: '/', 
     icon: Workflow,
     description: 'Create and edit chatbot flows'
-  },
-  { 
-    title: 'AI Settings', 
-    url: '/ai-settings', 
-    icon: Settings,
-    description: 'Configure AI behavior and prompts'
   },
   { 
     title: 'Flow Manager', 

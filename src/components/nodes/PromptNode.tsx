@@ -2,49 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Sparkles, Trash2, Edit3, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useMySQLAPI } from '@/hooks/useMySQLAPI';
 
 export default function PromptNode({ data, id }: NodeProps) {
-  const [aiSettings, setAiSettings] = useState<any>(null);
+  
   const [isEditing, setIsEditing] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState(String(data.systemPrompt || ''));
-  const [instance, setInstance] = useState(String(data.instance || ''));
-  const [openRouterKey, setOpenRouterKey] = useState(String(data.openRouterKey || ''));
-  const { callAPI } = useMySQLAPI();
 
   useEffect(() => {
-    loadAISettings();
     // Initialize local state with node data
     setSystemPrompt(String(data.systemPrompt || ''));
-    setInstance(String(data.instance || ''));
-    setOpenRouterKey(String(data.openRouterKey || ''));
   }, [data]);
 
-  const loadAISettings = async () => {
-    try {
-      const response = await callAPI({
-        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-        method: 'POST',
-        data: {
-          sql: 'SELECT * FROM ai_settings_nodepath ORDER BY created_at DESC LIMIT 1'
-        }
-      });
-
-      if (response.success && response.data && response.data.result && response.data.result.length > 0) {
-        setAiSettings(response.data.result[0]);
-      }
-    } catch (error) {
-      console.error('Error loading AI settings:', error);
-    }
-  };
 
   const handleSave = () => {
     const updatedData = {
       systemPrompt,
-      instance,
-      openRouterKey,
       node_type: 'ai_prompt'
     };
     
@@ -58,8 +31,6 @@ export default function PromptNode({ data, id }: NodeProps) {
   const handleCancel = () => {
     // Reset to original values
     setSystemPrompt(String(data.systemPrompt || ''));
-    setInstance(String(data.instance || ''));
-    setOpenRouterKey(String(data.openRouterKey || ''));
     setIsEditing(false);
   };
 
@@ -132,24 +103,6 @@ export default function PromptNode({ data, id }: NodeProps) {
                   className="min-h-[80px] text-xs resize-none text-black bg-white border border-gray-300"
                 />
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Instance:</label>
-                <Input
-                  value={String(instance || '')}
-                  onChange={(e) => setInstance(e.target.value)}
-                  placeholder="default_support_v1"
-                  className="text-xs text-black bg-white border border-gray-300"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Open Router Key:</label>
-                <Input
-                  value={String(openRouterKey || '')}
-                  onChange={(e) => setOpenRouterKey(e.target.value)}
-                  placeholder="go_to_shipping_node"
-                  className="text-xs text-black bg-white border border-gray-300"
-                />
-              </div>
             </>
           ) : (
             <>
@@ -163,18 +116,6 @@ export default function PromptNode({ data, id }: NodeProps) {
                     }
                     return 'No system prompt configured';
                   })()}
-                </div>
-              </div>
-              <div className="bg-purple-50 rounded p-3 text-sm">
-                <div className="text-xs text-muted-foreground mb-1">Instance:</div>
-                <div className="text-black">
-                  {(instance || data.instance) as string || 'Not configured'}
-                </div>
-              </div>
-              <div className="bg-purple-50 rounded p-3 text-sm">
-                <div className="text-xs text-muted-foreground mb-1">Open Router Key:</div>
-                <div className="text-black">
-                  {(openRouterKey || data.openRouterKey) as string || 'Not configured'}
                 </div>
               </div>
               <div className="text-xs text-muted-foreground italic">

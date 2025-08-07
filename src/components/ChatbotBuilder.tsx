@@ -33,6 +33,7 @@ import AudioNode from './nodes/AudioNode';
 import VideoNode from './nodes/VideoNode';
 import ManualNode from './nodes/ManualNode';
 import PromptNode from './nodes/PromptNode';
+import StageNode from './nodes/StageNode';
 
 const nodeTypes: NodeTypes = {
   message: MessageNode,
@@ -44,6 +45,7 @@ const nodeTypes: NodeTypes = {
   video: VideoNode,
   manual: ManualNode,
   prompt: PromptNode,
+  stage: StageNode,
 };
 
 const initialNodes: Node[] = [
@@ -65,6 +67,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
   const [flowName, setFlowName] = useState('');
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
+  const [globalInstance, setGlobalInstance] = useState('');
+  const [globalOpenRouterKey, setGlobalOpenRouterKey] = useState('');
   const { toast } = useToast();
 
   const deleteNode = useCallback(
@@ -152,8 +156,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
           expectedInput: type === 'manual' ? '' : undefined,
           responseOutput: type === 'manual' ? '' : undefined,
           systemPrompt: type === 'prompt' ? 'You are a helpful assistant that responds clearly and concisely.' : undefined,
-          instance: type === 'prompt' ? 'default_support_v1' : undefined,
-          openRouterKey: type === 'prompt' ? 'go_to_shipping_node' : undefined,
+          stageName: type === 'stage' ? '' : undefined,
           node_type: type === 'prompt' ? 'ai_prompt' : undefined,
           onDelete: deleteNode,
           onUpdate: updateNodeData,
@@ -198,6 +201,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       name: flowName,
       description: `Chatbot flow: ${flowName}`,
+      globalInstance,
+      globalOpenRouterKey,
       nodes: nodes.map(node => ({
         id: node.id,
         type: node.type as any,
@@ -259,6 +264,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     { type: 'message', label: 'Send Message', icon: MessageSquare, color: 'bg-node-message' },
     { type: 'manual', label: 'Manual Response', icon: Settings, color: 'bg-blue-500' },
     { type: 'prompt', label: 'AI Prompt', icon: Sparkles, color: 'bg-purple-500' },
+    { type: 'stage', label: 'Stage', icon: Settings, color: 'bg-orange-500' },
     { type: 'image', label: 'Send Image', icon: Image, color: 'bg-blue-500' },
     { type: 'audio', label: 'Send Audio', icon: Mic, color: 'bg-green-500' },
     { type: 'video', label: 'Send Video', icon: Video, color: 'bg-purple-500' },
@@ -296,6 +302,20 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
               placeholder="Enter flow name..."
               value={flowName}
               onChange={(e) => setFlowName(e.target.value)}
+              className="w-full"
+            />
+            
+            <Input
+              placeholder="Global Instance..."
+              value={globalInstance}
+              onChange={(e) => setGlobalInstance(e.target.value)}
+              className="w-full"
+            />
+            
+            <Input
+              placeholder="Global OpenRouter Key..."
+              value={globalOpenRouterKey}
+              onChange={(e) => setGlobalOpenRouterKey(e.target.value)}
               className="w-full"
             />
             

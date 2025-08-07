@@ -9,7 +9,7 @@ export interface MediaFile {
 
 export interface FlowNode {
   id: string
-  type: 'start' | 'message' | 'image' | 'audio' | 'video' | 'delay' | 'condition' | 'manual' | 'prompt'
+  type: 'start' | 'message' | 'image' | 'audio' | 'video' | 'delay' | 'condition' | 'manual' | 'prompt' | 'stage'
   position: { x: number; y: number }
   data: {
     label?: string
@@ -39,6 +39,8 @@ export interface FlowNode {
     instance?: string
     openRouterKey?: string
     node_type?: string
+    // Stage node fields
+    stageName?: string
     // Node update function
     onUpdate?: (nodeId: string, data: any) => void
     onDelete?: (nodeId: string) => void
@@ -65,6 +67,8 @@ export interface ChatbotFlow {
   id: string
   name: string
   description: string
+  globalInstance?: string
+  globalOpenRouterKey?: string
   nodes: FlowNode[]
   edges: FlowEdge[]
   createdAt: string

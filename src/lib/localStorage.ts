@@ -1,6 +1,6 @@
 import { ChatbotFlow, MediaFile, FlowExecution } from '@/types/chatbot'
 import { saveFlow as saveMySQLFlow, getFlows as getMySQLFlows, getFlow as getMySQLFlow, deleteFlow as deleteMySQLFlow } from './mysqlStorage'
-import { saveFlowExecution as saveMySQLExecution, getFlowExecution as getMySQLExecution, deleteFlowExecution as deleteMySQLExecution, updateFlowExecution, getAISettings } from './mysqlStorage'
+import { saveFlowExecution as saveMySQLExecution, getFlowExecution as getMySQLExecution, deleteFlowExecution as deleteMySQLExecution, updateFlowExecution } from './mysqlStorage'
 
 const MEDIA_KEY = 'chatbot_media'
 
