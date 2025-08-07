@@ -5,15 +5,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageCircle, Send, Trash2, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useMySQLAPI } from '@/hooks/useMySQLAPI';
-import { supabase } from '@/integrations/supabase/client';
+import { getFlows } from '@/lib/mysqlStorage';
 
 interface FlowNode {
   id: string;
   type: string;
   data: {
     label?: string;
-    systemPrompt?: string;
     instance?: string;
     openRouterKey?: string;
     node_type?: string;
@@ -28,7 +26,6 @@ interface ChatMessage {
 
 interface ConversationData {
   id: string;
-  system_prompt: string;
   instance: string;
   open_router_key: string;
   conv_last: any[];
@@ -45,7 +42,6 @@ export default function TestChat() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { callAPI } = useMySQLAPI();
 
   useEffect(() => {
     loadFlows();
@@ -71,13 +67,7 @@ export default function TestChat() {
 
   const loadFlows = async () => {
     try {
-      const { data, error } = await supabase
-        .from('chatbot_flows')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-
+      const data = await getFlows();
       setFlows(data || []);
 
       // Extract AI prompt nodes from all flows
@@ -106,54 +96,24 @@ export default function TestChat() {
 
   const loadOrCreateConversation = async (node: FlowNode) => {
     try {
-      // Check if conversation exists in MySQL
-      const response = await callAPI({
-        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-        method: 'POST',
-        data: {
-          operation: 'select',
-          table: 'chatbot_executions_nodepath',
-          filters: { id: node.id }
-        }
-      });
-
-      if (response.success && response.data && response.data.length > 0) {
-        const existing = response.data[0];
-        setConversation({
-          id: existing.id,
-          system_prompt: existing.system_prompt || node.data.systemPrompt || '',
-          instance: existing.instance || node.data.instance || '',
-          open_router_key: existing.open_router_key || node.data.openRouterKey || '',
-          conv_last: existing.conv_last ? JSON.parse(existing.conv_last) : [],
-          conv_current: existing.conv_current || ''
-        });
+      // Since MySQL is disconnected, use localStorage
+      const conversations = JSON.parse(localStorage.getItem('test_conversations') || '{}');
+      
+      if (conversations[node.id]) {
+        setConversation(conversations[node.id]);
       } else {
         // Create new conversation with data from the flow node
         const newConversation = {
           id: node.id,
-          system_prompt: node.data.systemPrompt || '',
-          instance: node.data.instance || '',
+          instance: node.data.instance || 'default',
           open_router_key: node.data.openRouterKey || '',
-          conv_last: JSON.stringify([]),
+          conv_last: [],
           conv_current: ''
         };
 
-        const insertResponse = await callAPI({
-          endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-          method: 'POST',
-          data: {
-            operation: 'insert',
-            table: 'chatbot_executions_nodepath',
-            payload: newConversation
-          }
-        });
-
-        if (!insertResponse.success) throw new Error(insertResponse.error);
-        
-        setConversation({
-          ...newConversation,
-          conv_last: []
-        });
+        conversations[node.id] = newConversation;
+        localStorage.setItem('test_conversations', JSON.stringify(conversations));
+        setConversation(newConversation);
       }
     } catch (error) {
       console.error('Error loading conversation:', error);
@@ -184,28 +144,8 @@ export default function TestChat() {
         // Handle manual node - use predefined response
         botReply = selectedNode.data.label || 'Manual response configured in Flow Builder';
       } else if (selectedNode.type === 'prompt') {
-        // Handle AI prompt node - call AI with conversation history
-        const systemPrompt = conversation.system_prompt || selectedNode.data.systemPrompt || '';
-        const openRouterKey = conversation.open_router_key || selectedNode.data.openRouterKey || '';
-        
-        if (!systemPrompt) {
-          throw new Error('System prompt is required for AI responses');
-        }
-
-        const { data, error } = await supabase.functions.invoke('test-ai-chat', {
-          body: {
-            systemPrompt,
-            userMessage: userMessage.trim(),
-            instance: conversation.instance || selectedNode.data.instance || '',
-            openRouterKey,
-            conversationHistory: conversation.conv_last || []
-          }
-        });
-
-        if (error) throw error;
-        if (!data.success) throw new Error(data.error);
-
-        botReply = data.aiReply;
+        // AI functionality has been removed
+        botReply = `AI functionality has been removed. This was an AI prompt node with instance: ${conversation.instance}`;
       } else {
         // Default fallback for other node types
         botReply = `Node type "${selectedNode.type}" response: ${selectedNode.data.label || 'Default response'}`;
@@ -217,38 +157,25 @@ export default function TestChat() {
         timestamp: new Date().toISOString()
       };
 
-      // Update conversation in MySQL database
+      // Update conversation in localStorage
       const updatedConvLast = [...(conversation.conv_last || []), userMsg, botMsg];
-      
-      const updateResponse = await callAPI({
-        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-        method: 'POST',
-        data: {
-          operation: 'update',
-          table: 'chatbot_executions_nodepath',
-          filters: { id: conversation.id },
-          payload: {
-            conv_last: JSON.stringify(updatedConvLast),
-            conv_current: botReply,
-            updated_at: new Date().toISOString()
-          }
-        }
-      });
-
-      if (!updateResponse.success) throw new Error(updateResponse.error);
-
-      // Update local state
-      setConversation({
+      const updatedConversation = {
         ...conversation,
         conv_last: updatedConvLast,
         conv_current: botReply
-      });
+      };
+      
+      const conversations = JSON.parse(localStorage.getItem('test_conversations') || '{}');
+      conversations[conversation.id] = updatedConversation;
+      localStorage.setItem('test_conversations', JSON.stringify(conversations));
 
+      // Update local state
+      setConversation(updatedConversation);
       setUserMessage('');
 
       toast({
         title: "Message sent",
-        description: selectedNode.type === 'manual' ? "Manual response delivered" : "AI response generated"
+        description: selectedNode.type === 'manual' ? "Manual response delivered" : "Mock response generated"
       });
 
     } catch (error) {
@@ -267,22 +194,13 @@ export default function TestChat() {
     if (!conversation) return;
 
     try {
-      const response = await callAPI({
-        endpoint: 'mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway',
-        method: 'POST',
-        data: {
-          operation: 'update',
-          table: 'chatbot_executions_nodepath',
-          filters: { id: conversation.id },
-          payload: {
-            conv_last: JSON.stringify([]),
-            conv_current: '',
-            updated_at: new Date().toISOString()
-          }
-        }
-      });
-
-      if (!response.success) throw new Error(response.error);
+      const conversations = JSON.parse(localStorage.getItem('test_conversations') || '{}');
+      conversations[conversation.id] = {
+        ...conversation,
+        conv_last: [],
+        conv_current: ''
+      };
+      localStorage.setItem('test_conversations', JSON.stringify(conversations));
 
       setConversation({
         ...conversation,
@@ -320,7 +238,7 @@ export default function TestChat() {
           Test Chat
         </h1>
         <p className="text-muted-foreground">
-          Test AI prompt nodes with simulated conversations. No real WhatsApp messages are sent.
+          Test chatbot nodes with simulated conversations. AI functionality has been removed.
         </p>
       </div>
 
@@ -329,12 +247,12 @@ export default function TestChat() {
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5" />
-              AI Chat Simulation
+              Chat Simulation (No AI)
             </CardTitle>
             <div className="flex gap-2">
               <Select value={selectedNodeId} onValueChange={setSelectedNodeId}>
                 <SelectTrigger className="w-[300px]">
-                  <SelectValue placeholder="Select an AI prompt node to test" />
+                  <SelectValue placeholder="Select a prompt node to test" />
                 </SelectTrigger>
                 <SelectContent>
                   {aiNodes.map((node) => (
@@ -361,13 +279,7 @@ export default function TestChat() {
 
           {selectedNode && (
             <div className="mt-4 p-3 bg-muted rounded-lg text-sm">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <span className="font-medium">System Prompt:</span>
-                  <p className="text-muted-foreground mt-1">
-                    {conversation?.system_prompt || selectedNode.data.systemPrompt || 'Default assistant prompt'}
-                  </p>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <span className="font-medium">Instance:</span>
                   <p className="text-muted-foreground mt-1">
@@ -375,9 +287,9 @@ export default function TestChat() {
                   </p>
                 </div>
                 <div>
-                  <span className="font-medium">Router Key:</span>
+                  <span className="font-medium">Status:</span>
                   <p className="text-muted-foreground mt-1">
-                    {(conversation?.open_router_key || selectedNode.data.openRouterKey) ? 'Configured' : 'Not configured'}
+                    AI Disabled - Manual responses only
                   </p>
                 </div>
               </div>
@@ -390,7 +302,7 @@ export default function TestChat() {
           <div className="flex-1 overflow-y-auto mb-4 p-4 bg-muted/20 rounded-lg">
             {!selectedNode ? (
               <div className="text-center text-muted-foreground py-8">
-                Select an AI prompt node from the dropdown above to start testing
+                Select a prompt node from the dropdown above to start testing
               </div>
             ) : !conversation?.conv_last?.length ? (
               <div className="text-center text-muted-foreground py-8">

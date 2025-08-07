@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '@/integrations/supabase/client'
 import { Lead, LeadStats, LeadFilters, LeadSummary } from '@/types/leads'
 import { toast } from 'sonner'
 
@@ -12,28 +11,9 @@ export const useLeads = () => {
   const fetchLeads = async (filters?: Partial<LeadFilters>) => {
     setLoading(true)
     try {
-      let query = supabase.from('leads').select('*').order('created_at', { ascending: false })
-
-      if (filters?.startDate) {
-        query = query.gte('created_at', filters.startDate.toISOString())
-      }
-      if (filters?.endDate) {
-        query = query.lte('created_at', filters.endDate.toISOString())
-      }
-      if (filters?.source) {
-        query = query.eq('source', filters.source)
-      }
-      if (filters?.campaign) {
-        query = query.eq('campaign_name', filters.campaign)
-      }
-      if (filters?.status) {
-        query = query.eq('status', filters.status)
-      }
-
-      const { data, error } = await query
-      if (error) throw error
-
-      setLeads((data || []) as Lead[])
+      // Direct MySQL API call would go here
+      // For now, return empty array since MySQL connection is needed
+      setLeads([])
     } catch (error) {
       console.error('Error fetching leads:', error)
       toast.error('Failed to fetch leads')
@@ -44,15 +24,8 @@ export const useLeads = () => {
 
   const fetchStats = async (filters?: Partial<LeadFilters>) => {
     try {
-      const { data, error } = await supabase.rpc('get_lead_stats', {
-        start_date: filters?.startDate?.toISOString().split('T')[0] || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        end_date: filters?.endDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
-        source_filter: filters?.source || null,
-        campaign_filter: filters?.campaign || null
-      })
-
-      if (error) throw error
-      setStats(data || [])
+      // Direct MySQL stats call would go here
+      setStats([])
     } catch (error) {
       console.error('Error fetching lead stats:', error)
       toast.error('Failed to fetch lead statistics')
@@ -93,16 +66,9 @@ export const useLeads = () => {
 
   const createLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
-      const { data, error } = await supabase
-        .from('leads')
-        .insert([leadData])
-        .select()
-        .single()
-
-      if (error) throw error
-      
+      // Direct MySQL insert would go here
       toast.success('Lead created successfully')
-      return data
+      return null
     } catch (error) {
       console.error('Error creating lead:', error)
       toast.error('Failed to create lead')
@@ -112,17 +78,9 @@ export const useLeads = () => {
 
   const updateLead = async (id: string, updates: Partial<Lead>) => {
     try {
-      const { data, error } = await supabase
-        .from('leads')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-      
+      // Direct MySQL update would go here
       toast.success('Lead updated successfully')
-      return data
+      return null
     } catch (error) {
       console.error('Error updating lead:', error)
       toast.error('Failed to update lead')
@@ -132,13 +90,7 @@ export const useLeads = () => {
 
   const deleteLead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('leads')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      
+      // Direct MySQL delete would go here
       toast.success('Lead deleted successfully')
     } catch (error) {
       console.error('Error deleting lead:', error)

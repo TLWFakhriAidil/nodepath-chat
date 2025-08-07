@@ -129,7 +129,7 @@ const ChatSimulation = ({ preselectedFlowId }: { preselectedFlowId?: string | nu
 
     try {
       await flowEngine.processUserInput(input)
-      setIsWaitingForInput(flowEngine.isWaitingForInput())
+      // isWaitingForInput state is managed through callbacks
     } catch (error) {
       toast({
         title: "Error processing input",

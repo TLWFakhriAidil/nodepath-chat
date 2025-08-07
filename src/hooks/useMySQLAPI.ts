@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface APICallOptions {
@@ -24,59 +23,23 @@ export const useMySQLAPI = () => {
     setLoading(true);
     
     try {
-      console.log('Calling MySQL API via Edge Function:', options);
+      console.log('Direct MySQL API call:', options);
       
-      // Check if the data is large and needs chunked processing
-      const dataString = JSON.stringify(options.data);
-      const isLargeData = dataString.length > 5000000; // 5MB threshold
-      
-      if (isLargeData && options.data?.operation) {
-        console.log('Large data detected, using chunked operation');
-        options.data.chunked_operation = options.data.operation;
-        delete options.data.operation;
-      }
-      
-      const { data, error } = await supabase.functions.invoke('mysql-api-bridge', {
-        body: {
-          endpoint: options.endpoint,
-          method: options.method || 'GET',
-          data: options.data,
-          headers: options.headers
-        }
+      // This would be replaced with direct MySQL connection
+      // For now, return mock response
+      toast({
+        title: "MySQL Connection Required",
+        description: "Direct MySQL connection needs to be implemented",
+        variant: "destructive"
       });
-
-      if (error) {
-        console.error('Edge Function error:', error);
-        toast({
-          title: "API Error",
-          description: error.message || "Failed to call external API",
-          variant: "destructive"
-        });
-        return { success: false, error: error.message };
-      }
-
-      if (!data.success) {
-        console.error('External API error:', data.error);
-        toast({
-          title: "External API Error", 
-          description: data.error || "External API returned an error",
-          variant: "destructive"
-        });
-        return { success: false, error: data.error };
-      }
-
-      console.log('API call successful:', data);
-      return {
-        success: true,
-        data: data.data,
-        status: data.status
-      };
+      
+      return { success: false, error: "MySQL connection not implemented" };
 
     } catch (error: any) {
-      console.error('Unexpected error:', error);
+      console.error('MySQL API error:', error);
       toast({
-        title: "Unexpected Error",
-        description: "Something went wrong while calling the API",
+        title: "MySQL Error",
+        description: "Failed to connect to MySQL database",
         variant: "destructive"
       });
       return { success: false, error: error.message };
