@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .endpoint {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Test Page</h1>
+    
+    <div class="endpoint">
+        <h2>Test PHP</h2>
+        <p>Tests basic PHP functionality</p>
+        <button onclick="testEndpoint('/test-php.php')">Test</button>
+        <pre id="test-php-result">Results will appear here...</pre>
+    </div>
+    
+    <div class="endpoint">
+        <h2>Debug API</h2>
+        <p>Shows detailed debug information</p>
+        <button onclick="testEndpoint('/debug-api.php')">Test</button>
+        <pre id="debug-api-result">Results will appear here...</pre>
+    </div>
+    
+    <div class="endpoint">
+        <h2>Database Test</h2>
+        <p>Tests database connectivity</p>
+        <button onclick="testEndpoint('/db-test.php')">Test</button>
+        <pre id="db-test-result">Results will appear here...</pre>
+    </div>
+    
+    <div class="endpoint">
+        <h2>MySQL API</h2>
+        <p>Test the main MySQL API</p>
+        <textarea id="mysql-api-payload">{"query":"SELECT 1 as test", "params":[]}</textarea>
+        <button onclick="testMySQLAPI()">Test</button>
+        <pre id="mysql-api-result">Results will appear here...</pre>
+    </div>
+
+    <script>
+        async function testEndpoint(endpoint) {
+            const resultId = endpoint.replace(/\//g, '').replace(/\.php/g, '') + '-result';
+            const resultElement = document.getElementById(resultId);
+            resultElement.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                resultElement.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultElement.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        async function testMySQLAPI() {
+            const resultElement = document.getElementById('mysql-api-result');
+            resultElement.textContent = 'Loading...';
+            
+            try {
+                const payload = document.getElementById('mysql-api-payload').value;
+                let jsonPayload;
+                
+                try {
+                    jsonPayload = JSON.parse(payload);
+                } catch (e) {
+                    resultElement.textContent = `Invalid JSON: ${e.message}`;
+                    return;
+                }
+                
+                const response = await fetch('/mysql-api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: payload
+                });
+                
+                const data = await response.json();
+                resultElement.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultElement.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

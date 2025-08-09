@@ -29,6 +29,10 @@ WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
 COPY --from=build /app/mysql-api.php ./mysql-api.php
+COPY --from=build /app/test-php.php ./test-php.php
+COPY --from=build /app/debug-api.php ./debug-api.php
+COPY --from=build /app/db-test.php ./db-test.php
+COPY --from=build /app/request-logger.php ./request-logger.php
 COPY --from=build /app/php.ini ./php.ini
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/healthcheck.js ./healthcheck.js
