@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,17 +64,29 @@ export default function MySQLAPIExample() {
         })
       });
       
-      const result = await response.text();
-      console.log('Raw API response:', result);
+      // Get response as text first to handle potential JSON parsing issues
+      const responseText = await response.text();
+      console.log('Raw API response:', responseText);
       
+      // Check if response is empty
+      if (!responseText) {
+        setResponse({ 
+          success: false, 
+          error: 'Empty response from server'
+        });
+        return;
+      }
+      
+      // Try to parse the response as JSON
       try {
-        const jsonResult = JSON.parse(result);
+        const jsonResult = JSON.parse(responseText);
         setResponse(jsonResult);
       } catch (parseError) {
+        console.error('Failed to parse JSON response:', responseText);
         setResponse({ 
           success: false, 
           error: 'Failed to parse response: ' + parseError.message,
-          rawResponse: result
+          rawResponse: responseText
         });
       }
     } catch (error: any) {

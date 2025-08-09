@@ -55,7 +55,22 @@ export const useMySQLAPI = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
+      // Get response as text first to handle potential JSON parsing issues
+      const responseText = await response.text();
+      
+      // Check if response is empty
+      if (!responseText) {
+        throw new Error('Empty response from server');
+      }
+      
+      // Try to parse the response as JSON
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse JSON response:', responseText);
+        throw new Error(`JSON parse error: ${parseError.message}`);
+      }
       
       if (result.success) {
         toast({
