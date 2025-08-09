@@ -1,6 +1,7 @@
 [build]
-  builder = "nixpacks"
-  buildCommand = "npm run build"
+  builder = "DOCKERFILE"
+  # Fallback command if Dockerfile build fails
+  # buildCommand = "chmod +x ./railway-build.sh && ./railway-build.sh"
 
 [deploy]
   startCommand = "npm run preview"
@@ -11,6 +12,8 @@
 
 [phases.setup]
   aptPkgs = ["php", "php-mysql"]
+  nixPkgs = ["nodejs", "npm"]
+  nodeVersion = "18"
 
 [[services]]
   name = "web"
