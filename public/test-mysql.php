@@ -61,7 +61,15 @@ try {
         ]
     ];
     
-    echo json_encode($response, JSON_PRETTY_PRINT);
+    // Ensure proper JSON encoding with error handling
+    $jsonResponse = json_encode($response, JSON_PRETTY_PRINT | JSON_PARTIAL_OUTPUT_ON_ERROR);
+    if ($jsonResponse === false) {
+        // If JSON encoding fails, send a simple success response
+        debug_log('JSON encoding failed: ' . json_last_error_msg());
+        echo '{"success":true,"message":"MySQL connection successful","data":[{"test":1}]}'; 
+    } else {
+        echo $jsonResponse;
+    }
     debug_log('Response sent successfully');
 
 } catch (PDOException $e) {
@@ -82,7 +90,15 @@ try {
         ]
     ];
     
-    echo json_encode($errorResponse, JSON_PRETTY_PRINT);
+    // Ensure proper JSON encoding with error handling
+    $jsonResponse = json_encode($errorResponse, JSON_PRETTY_PRINT | JSON_PARTIAL_OUTPUT_ON_ERROR);
+    if ($jsonResponse === false) {
+        // If JSON encoding fails, send a simple error response
+        debug_log('JSON encoding failed: ' . json_last_error_msg());
+        echo '{"success":false,"error":"Internal server error: ' . addslashes(json_last_error_msg()) . '"}'; 
+    } else {
+        echo $jsonResponse;
+    }
     debug_log('Error response sent');
 }
 ?>

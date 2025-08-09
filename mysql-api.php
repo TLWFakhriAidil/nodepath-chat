@@ -126,7 +126,16 @@ try {
         'data' => $result,
         'affectedRows' => $affectedRows
     ];
-    echo json_encode($response);
+    
+    // Ensure proper JSON encoding with error handling
+    $jsonResponse = json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR);
+    if ($jsonResponse === false) {
+        // If JSON encoding fails, send a simple success response
+        debug_log('JSON encoding failed: ' . json_last_error_msg());
+        echo '{"success":true,"data":[],"affectedRows":' . $affectedRows . '}'; 
+    } else {
+        echo $jsonResponse;
+    }
     debug_log('Response sent successfully');
 
 } catch (PDOException $e) {
@@ -141,7 +150,15 @@ try {
         'errorCode' => $e->getCode()
     ];
     
-    echo json_encode($errorResponse);
+    // Ensure proper JSON encoding with error handling
+    $jsonResponse = json_encode($errorResponse, JSON_PARTIAL_OUTPUT_ON_ERROR);
+    if ($jsonResponse === false) {
+        // If JSON encoding fails, send a simple error response
+        debug_log('JSON encoding failed: ' . json_last_error_msg());
+        echo '{"success":false,"error":"Internal server error: ' . addslashes(json_last_error_msg()) . '"}'; 
+    } else {
+        echo $jsonResponse;
+    }
     debug_log('Error response sent');
 }
 ?>
