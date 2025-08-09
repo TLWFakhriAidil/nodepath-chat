@@ -25,23 +25,30 @@ export const useMySQLAPI = () => {
     try {
       console.log('MySQL API call via Supabase Edge Function:', options);
       
-      const response = await fetch('/functions/v1/mysql-api', {
+      // Prepare the request payload
+      const payload = {
+        query: options.endpoint, // Using endpoint as SQL query
+        params: options.data ? Object.values(options.data) : [],
+        config: {
+          host: '159.89.198.71',
+          port: 3306,
+          user: 'admin_aqil',
+          password: 'admin_aqil',
+          database: 'admin_railway'
+        }
+      };
+      
+      console.log('Sending payload:', JSON.stringify(payload));
+      
+      // Use direct API endpoint instead of Supabase Edge Function
+      const response = await fetch('https://nodepath-chat-production.up.railway.app/mysql-api.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           ...options.headers
         },
-        body: JSON.stringify({
-          query: options.endpoint, // Using endpoint as SQL query
-          params: options.data ? Object.values(options.data) : [],
-          config: {
-            host: '159.89.198.71',
-            port: 3306,
-            user: 'admin_aqil',
-            password: 'admin_aqil',
-            database: 'admin_railway'
-          }
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
