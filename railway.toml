@@ -4,9 +4,9 @@
   # buildCommand = "chmod +x ./railway-build.sh && ./railway-build.sh"
 
 [deploy]
-  startCommand = "npm run preview"
-  healthcheckPath = "/"
-  healthcheckTimeout = 100
+  startCommand = "/bin/sh ./start.sh"
+  healthcheckCommand = "node healthcheck.js"
+  healthcheckTimeout = 300
   restartPolicyType = "on_failure"
   restartPolicyMaxRetries = 10
 
