@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,8 +44,51 @@ export default function MySQLAPIExample() {
 
   const testConnection = async () => {
     try {
-      const flows = await getFlows()
-      setResponse({ success: true, data: { message: `Connected successfully! Found ${flows.length} flows.` } })
+      // Test direct connection to the MySQL API
+      const response = await fetch('https://nodepath-chat-production.up.railway.app/mysql-api.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          query: 'SELECT 1 as test',
+          params: [],
+          config: {
+            host: '159.89.198.71',
+            port: 3306,
+            user: 'admin_aqil',
+            password: 'admin_aqil',
+            database: 'admin_railway'
+          }
+        })
+      });
+      
+      // Get response as text first to handle potential JSON parsing issues
+      const responseText = await response.text();
+      console.log('Raw API response:', responseText);
+      
+      // Check if response is empty
+      if (!responseText) {
+        setResponse({ 
+          success: false, 
+          error: 'Empty response from server'
+        });
+        return;
+      }
+      
+      // Try to parse the response as JSON
+      try {
+        const jsonResult = JSON.parse(responseText);
+        setResponse(jsonResult);
+      } catch (parseError) {
+        console.error('Failed to parse JSON response:', responseText);
+        setResponse({ 
+          success: false, 
+          error: 'Failed to parse response: ' + parseError.message,
+          rawResponse: responseText
+        });
+      }
     } catch (error: any) {
       setResponse({ success: false, error: error.message })
     }

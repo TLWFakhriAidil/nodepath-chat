@@ -12,25 +12,45 @@ export const callDirectMySQLAPI = async (query: string, params: any[] = []) => {
   try {
     console.log('Direct MySQL Query:', query, 'Params:', params);
     
+    // Prepare the request payload
+    const payload = {
+      query,
+      params,
+      config: MYSQL_CONFIG
+    };
+    
+    console.log('Sending payload:', JSON.stringify(payload));
+    
     // Since we can't connect directly from browser to MySQL, we'll use a custom backend
-    // For now, we'll create a PHP backend endpoint that you can deploy
-    const response = await fetch('https://your-backend-domain.com/mysql-api.php', {
+    const response = await fetch('https://nodepath-chat-production.up.railway.app/mysql-api.php', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
-      body: JSON.stringify({
-        query,
-        params,
-        config: MYSQL_CONFIG
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const result = await response.json();
+    // Get response as text first to handle potential JSON parsing issues
+    const responseText = await response.text();
+    
+    // Check if response is empty
+    if (!responseText) {
+      throw new Error('Empty response from server');
+    }
+    
+    // Try to parse the response as JSON
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse JSON response:', responseText);
+      throw new Error(`JSON parse error: ${parseError.message}`);
+    }
     
     if (result.success) {
       console.log('Direct MySQL operation successful:', result);

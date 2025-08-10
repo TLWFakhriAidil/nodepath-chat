@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "src": "^/mysql-api.php",
+      "dest": "/mysql-api.php"
+    },
+    {
+      "src": "^/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "^/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

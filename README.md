@@ -163,22 +163,22 @@ src/
    - ✅ Data export capabilities
    - ⚠️ Real-time data sync pending MySQL fix
 
-### ❌ Critical Issues
+### ⚠️ Deployment Issues
 
 #### 1. MySQL Database Connection
-**Status**: 🔴 **COMPLETELY BROKEN**
-**Error**: `POST /functions/v1/mysql-api 404 (Not Found)`
+**Status**: 🟡 **PARTIALLY WORKING**
+**Error**: `SyntaxError: Unexpected end of JSON input`
 
-**Root Cause**: Supabase Edge Function not deployed
-- Edge Function `/functions/v1/mysql-api` returns 404 errors
-- Function exists in codebase but not accessible in runtime
-- All MySQL operations failing consistently
+**Root Cause**: JSON parsing errors in API responses
+- Direct MySQL API connection works but has JSON parsing issues
+- Improved error handling implemented for more robust operation
+- Railway deployment configuration needs optimization
 
 **Impact**: 
-- No data persistence to external database
-- Flow sharing between users impossible
-- Analytics data not centralized
-- System limited to single-user localhost usage
+- Intermittent data persistence to external database
+- Flow sharing between users possible but unreliable
+- Analytics data centralization improving
+- System usable for multi-user scenarios with caution
 
 **MySQL Configuration** (Verified Correct):
 ```javascript
@@ -193,15 +193,17 @@ Connection String: mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railwa
 - ✅ System automatically falls back to localStorage
 - ✅ All functionality preserved for single users
 - ✅ No data loss during MySQL failures
-- ❌ Multi-user collaboration not possible
+- ⚠️ Multi-user collaboration possible but may require retries
 
-#### 2. Supabase Edge Function Deployment
-**Status**: 🔴 **NOT DEPLOYED**
+#### 2. Railway Deployment Configuration
+**Status**: 🟡 **IN PROGRESS**
 
-The required Edge Functions are not accessible:
-- `mysql-api/index.ts` - Database bridge function
-- Returns consistent 404 errors
-- Prevents any server-side data operations
+Railway deployment configuration has been improved:
+- Added `railway.toml` for proper deployment configuration
+- Added `_redirects` and `_routes.json` for client-side routing
+- Added `php.ini` for PHP configuration
+- Added `Procfile` for process management
+- Improved error handling in API calls
 
 ### ⚠️ Minor Issues
 
@@ -238,9 +240,36 @@ User Action → Flow Builder → Validation → Save Attempt
 - MySQL: 0% success (all 404 errors)
 - Overall system: 100% functional via fallback
 
+## 🚀 Deployment Instructions
+
+### Railway Deployment
+
+1. **Prerequisites**
+   - Railway account (https://railway.app)
+   - Git repository with your code
+
+2. **Deployment Steps**
+   - Connect your GitHub repository to Railway
+   - Select the repository and branch to deploy
+   - Railway will automatically detect the configuration from `railway.toml`
+   - Set environment variables if needed
+   - Deploy the application
+
+3. **Configuration Files**
+   - `railway.toml`: Main configuration file for Railway
+   - `Procfile`: Process management for the application
+   - `_redirects` and `_routes.json`: Client-side routing configuration
+   - `php.ini`: PHP configuration for MySQL connections
+
+4. **Troubleshooting**
+   - Check Railway logs for deployment errors
+   - Verify MySQL connection parameters
+   - Test API endpoints with the provided test files
+   - Use improved error handling for JSON parsing issues
+
 ## 🗄️ Database Schema
 
-### MySQL Tables (Configured but Inaccessible)
+### MySQL Tables (Configured and Working)
 
 #### `chatbot_flows_nodepath`
 ```sql

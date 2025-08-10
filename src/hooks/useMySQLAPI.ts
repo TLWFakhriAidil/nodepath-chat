@@ -25,30 +25,52 @@ export const useMySQLAPI = () => {
     try {
       console.log('MySQL API call via Supabase Edge Function:', options);
       
-      const response = await fetch('/functions/v1/mysql-api', {
+      // Prepare the request payload
+      const payload = {
+        query: options.endpoint, // Using endpoint as SQL query
+        params: options.data ? Object.values(options.data) : [],
+        config: {
+          host: '159.89.198.71',
+          port: 3306,
+          user: 'admin_aqil',
+          password: 'admin_aqil',
+          database: 'admin_railway'
+        }
+      };
+      
+      console.log('Sending payload:', JSON.stringify(payload));
+      
+      // Use direct API endpoint instead of Supabase Edge Function
+      const response = await fetch('https://nodepath-chat-production.up.railway.app/mysql-api.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           ...options.headers
         },
-        body: JSON.stringify({
-          query: options.endpoint, // Using endpoint as SQL query
-          params: options.data ? Object.values(options.data) : [],
-          config: {
-            host: '159.89.198.71',
-            port: 3306,
-            user: 'admin_aqil',
-            password: 'admin_aqil',
-            database: 'admin_railway'
-          }
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
+      // Get response as text first to handle potential JSON parsing issues
+      const responseText = await response.text();
+      
+      // Check if response is empty
+      if (!responseText) {
+        throw new Error('Empty response from server');
+      }
+      
+      // Try to parse the response as JSON
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse JSON response:', responseText);
+        throw new Error(`JSON parse error: ${parseError.message}`);
+      }
       
       if (result.success) {
         toast({

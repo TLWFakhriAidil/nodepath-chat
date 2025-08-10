@@ -9,22 +9,31 @@ const MYSQL_CONFIG = {
 }
 
 // Direct MySQL connection using a simple backend API
-const callMySQLAPI = async (query: string, params: any[] = []) => {
+export async function callMySQLAPI(query: string, params: any[] = [], config = MYSQL_CONFIG) {
   try {
-    console.log('Direct MySQL connection...', query.substring(0, 50) + '...');
+    console.log(`Calling MySQL API with query: ${query}`);
+    console.log(`Params:`, params);
+    
+    const payload = {
+      query,
+      params,
+      config
+    };
+    
+    console.log('Sending payload:', JSON.stringify(payload));
+    
+    // Use a more reliable approach to ensure the JSON is properly formatted
+    const jsonPayload = JSON.stringify(payload);
+    console.log('JSON payload length:', jsonPayload.length);
     
     // Use Railway deployment URL for MySQL operations
     const response = await fetch('https://nodepath-chat-production.up.railway.app/mysql-api.php', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+        'Accept': 'application/json'
       },
-      body: JSON.stringify({
-        query,
-        params,
-        config: MYSQL_CONFIG
-      })
+      body: jsonPayload
     });
 
     if (!response.ok) {
