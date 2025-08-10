@@ -1,4 +1,22 @@
-FROM golang:1.24-alpine AS builder
+# Frontend build stage
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build the React application
+RUN npm run build
+
+# Backend build stage
+FROM golang:1.24-alpine AS backend-builder
 
 # Install build dependencies
 RUN apk add --no-cache git build-base ca-certificates
@@ -27,12 +45,15 @@ RUN apk add --no-cache ca-certificates tzdata wget
 # Create app directory
 RUN mkdir -p /app
 
-# Copy binary from builder
-COPY --from=builder /app/bin/server /app/server
+# Copy binary from backend builder
+COPY --from=backend-builder /app/bin/server /app/server
 
-# Copy templates and static files
-COPY --from=builder /src/templates /app/templates
-COPY --from=builder /src/static /app/static
+# Copy built React application from frontend builder
+COPY --from=frontend-builder /app/dist /app/dist
+
+# Copy templates and static files (fallback)
+COPY --from=backend-builder /src/templates /app/templates
+COPY --from=backend-builder /src/static /app/static
 
 # Set working directory
 WORKDIR /app

@@ -98,8 +98,9 @@ func main() {
 		}))
 	}
 
-	// Static files
-	app.Static("/static", "./static")
+	// Static files for React app
+	app.Static("/", "./dist")
+	app.Static("/static", "./static") // Keep for backward compatibility
 
 	// Health check endpoint
 	app.Get("/healthz", func(c *fiber.Ctx) error {
@@ -109,16 +110,14 @@ func main() {
 		})
 	})
 
-	// Root route to serve the main page
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.Render("dashboard", fiber.Map{
-			"Title": "NodePath Chat - Dashboard",
-		})
-	})
-
 	// Setup API routes
 	api := app.Group("/api")
 	handlers.SetupRoutes(api)
+
+	// Catch-all route for React Router (SPA)
+	app.Get("/*", func(c *fiber.Ctx) error {
+		return c.SendFile("./dist/index.html")
+	})
 
 	// Start background services
 	go whatsappService.StartQueueProcessor()
