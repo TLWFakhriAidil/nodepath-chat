@@ -10,7 +10,7 @@ yarn-error.log
 .yarn
 
 # Build artifacts
-dist
+# dist - commented out because we need it for the Docker build
 build
 *.exe
 server
