@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Settings, Sparkles, X, Send } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Sparkles, X, Send } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
@@ -270,6 +270,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   const [testMessages, setTestMessages] = useState<Array<{type: 'user' | 'bot', content: string}>>([]);
   const [testInput, setTestInput] = useState('');
 
+
   const sendTestMessage = useCallback(() => {
     if (!testInput.trim()) return;
     
@@ -305,9 +306,9 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   ];
 
   return (
-    <div className="w-full h-screen bg-background flex cyber-grid">
+    <div className="flex h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Compact Tool Sidebar */}
-      <Card className="w-56 h-full bg-card/95 backdrop-blur-xl border-border/50 rounded-none border-r overflow-y-auto futuristic-border flex flex-col">
+      <Card className="w-56 h-full bg-background/95 backdrop-blur-sm border-r border-primary/20 rounded-none">
         <div className="p-3 flex-1">
           <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
           

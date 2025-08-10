@@ -42,7 +42,7 @@ import { useSidebarNavigation, createNavigationItem } from '@/hooks/useSidebarNa
 // Main navigation items
 const mainItems = [
     createNavigationItem('Dashboard', Home, 'Overview and quick access', '/'),
-    createNavigationItem('Flow Builder', GitBranch, 'Create and edit chatbot flows', '/'),
+    createNavigationItem('Flow Builder', GitBranch, 'Create and edit chatbot flows', '/flow-builder'),
     createNavigationItem('Flow Manager', FolderOpen, 'Manage and preview saved flows', '/flows'),
     createNavigationItem('Test Chat', MessageSquare, 'Test your chatbot flows', '/test-chat'),
     createNavigationItem('Media Library', Image, 'Manage images, audio, and video files', '/media'),
