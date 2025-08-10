@@ -2,7 +2,7 @@
 
 A visual chatbot conversation flow builder built with React Flow, allowing users to create, edit, and manage complex chatbot interactions through a drag-and-drop interface.
 
-**Project URL**: https://lovable.dev/projects/1b9a34a4-e0bf-4bfe-971d-d3acdb7c0d33
+**Project URL**: https://nodepath-chat-production.up.railway.app/
 
 ## 🚀 Features
 
