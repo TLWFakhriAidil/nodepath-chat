@@ -32,6 +32,23 @@ const App = () => {
             <Route path="/flow-builder" element={<ChatbotBuilder />} />
             <Route path="/chat-simulation" element={<ChatSimulation />} />
             <Route path="/flow-manager" element={<FlowManager />} />
+            <Route path="/flows" element={<FlowManager />} />
+            <Route path="/test" element={<ChatSimulation />} />
+            <Route path="/test-chat" element={
+              <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                <TestChat />
+              </Suspense>
+            } />
+            <Route path="/media" element={
+              <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                <MediaManager />
+              </Suspense>
+            } />
+            <Route path="/analytics" element={
+              <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                <LeadAnalytics />
+              </Suspense>
+            } />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
