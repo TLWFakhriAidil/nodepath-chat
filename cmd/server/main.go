@@ -71,6 +71,11 @@ func main() {
 	// Initialize HTML template engine
 	engine := html.New("./templates", ".html")
 	engine.Reload(cfg.AppEnv == "development")
+	
+	// Add template functions
+	engine.AddFunc("now", func() time.Time {
+		return time.Now()
+	})
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
@@ -104,8 +109,16 @@ func main() {
 		})
 	})
 
-	// Setup routes
-	handlers.SetupRoutes(app)
+	// Root route to serve the main page
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.Render("dashboard", fiber.Map{
+			"Title": "NodePath Chat - Dashboard",
+		})
+	})
+
+	// Setup API routes
+	api := app.Group("/api")
+	handlers.SetupRoutes(api)
 
 	// Start background services
 	go whatsappService.StartQueueProcessor()
