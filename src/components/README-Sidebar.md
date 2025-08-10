@@ -5,12 +5,14 @@ This document explains the enhanced sidebar navigation system that has been impl
 ## Features
 
 ### 🎯 Core Features
-- **Collapsible Navigation**: Sidebar can be collapsed to icon-only mode
+- **Fixed Left Navigation**: Sidebar is positioned as a fixed left panel
+- **Collapsible Navigation**: Sidebar can be collapsed to icon-only mode (64px to 56px width)
 - **Active State Management**: Automatically highlights the current page
-- **Expandable Sections**: Settings section with collapsible sub-items
+- **Expandable Settings Section**: Settings section with collapsible sub-items
 - **Keyboard Shortcuts**: `Ctrl/Cmd + Shift + S` to toggle settings section
 - **Custom Actions**: Support for modal triggers and custom actions
-- **Responsive Design**: Adapts to mobile and desktop layouts
+- **Responsive Layout**: Main content area adjusts margin based on sidebar state
+- **Smooth Transitions**: 300ms transition animations for all state changes
 
 ### 📱 Navigation Items
 
@@ -25,6 +27,7 @@ This document explains the enhanced sidebar navigation system that has been impl
 #### Settings Section
 - **WhatsApp** - Configure WhatsApp integration
 - **AI Settings** - Configure AI model settings
+- **Device Setting** - Configure device and hardware settings
 - **Profile** - Manage your profile settings
 - **Help & Support** - Get help and support
 

@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useState } from "react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from '@/components/AppSidebar';
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -20,8 +20,10 @@ const TestChat = lazy(() => import("./pages/TestChat"));
 
 const queryClient = new QueryClient();
 
-const App = () => {
+const AppContent = () => {
   const [testFlowId, setTestFlowId] = useState<string | null>(null);
+  const { state } = useSidebar();
+  const isCollapsed = state === 'collapsed';
 
   const handleTestFlow = (flowId: string) => {
     setTestFlowId(flowId);
@@ -32,16 +34,11 @@ const App = () => {
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <SidebarProvider>
-            <div className="min-h-screen flex w-full bg-background">
-              <AppSidebar />
+    <div className="min-h-screen bg-background">
+      <AppSidebar />
               
-              <div className="flex-1 flex flex-col">
+              {/* Main content area with responsive left margin for sidebar */}
+              <div className={`${isCollapsed ? 'ml-14' : 'ml-64'} min-h-screen flex flex-col transition-all duration-300`}>
                 {/* Header with sidebar trigger */}
                 <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                   <SidebarTrigger className="ml-4" />
@@ -87,7 +84,19 @@ const App = () => {
                   </Routes>
                 </main>
               </div>
-            </div>
+    </div>
+  );
+};
+
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <SidebarProvider>
+            <AppContent />
           </SidebarProvider>
         </BrowserRouter>
       </TooltipProvider>

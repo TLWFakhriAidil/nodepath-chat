@@ -63,6 +63,11 @@ export function useSidebarNavigation(items: NavigationItem[]) {
           window.dispatchEvent(new CustomEvent('open-ai-settings-modal'));
         }
         break;
+      case 'device-settings-modal':
+        // Dispatch custom event for device settings modal
+        window.dispatchEvent(new CustomEvent('open-device-settings-modal'));
+        console.log('Opening device settings...');
+        break;
       case 'profile-settings':
         // Navigate to profile settings or open modal
         console.log('Opening profile settings');

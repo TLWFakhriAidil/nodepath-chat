@@ -39,21 +39,22 @@ import { useSidebarNavigation, createNavigationItem } from '@/hooks/useSidebarNa
 
 // Main navigation items
 const mainItems = [
-  createNavigationItem('Dashboard', Home, 'Overview and quick access', '/dashboard'),
-  createNavigationItem('Flow Builder', Workflow, 'Create and edit chatbot flows', '/'),
-  createNavigationItem('Flow Manager', FolderOpen, 'Manage and preview saved flows', '/flows'),
-  createNavigationItem('Test Chat', MessageCircle, 'Test your chatbot flows', '/test'),
-  createNavigationItem('Media Library', Image, 'Manage images, audio, and video files', '/media'),
-  createNavigationItem('Lead Analytics', BarChart3, 'Track and analyze leads from chatbot conversations', '/analytics')
-];
+    createNavigationItem('Dashboard', Home, 'Overview and quick access', '/'),
+    createNavigationItem('Flow Builder', GitBranch, 'Create and edit chatbot flows', '/'),
+    createNavigationItem('Flow Manager', FolderOpen, 'Manage and preview saved flows', '/flows'),
+    createNavigationItem('Test Chat', MessageSquare, 'Test your chatbot flows', '/test-chat'),
+    createNavigationItem('Media Library', Image, 'Manage images, audio, and video files', '/media'),
+    createNavigationItem('Lead Analytics', BarChart3, 'Track and analyze leads from chatbot conversations', '/analytics')
+  ];
 
 // Settings navigation items
 const settingsItems = [
-  createNavigationItem('WhatsApp', Smartphone, 'Configure WhatsApp integration', 'whatsapp-modal'),
-  createNavigationItem('AI Settings', Brain, 'Configure AI model settings', 'ai-settings-modal'),
-  createNavigationItem('Profile', User, 'Manage your profile settings', 'profile-settings'),
-  createNavigationItem('Help & Support', HelpCircle, 'Get help and support', 'help-support')
-];
+    createNavigationItem('WhatsApp', Smartphone, 'Configure WhatsApp integration', 'whatsapp-modal'),
+    createNavigationItem('AI Settings', Brain, 'Configure AI model settings', 'ai-settings-modal'),
+    createNavigationItem('Device Setting', Settings, 'Configure device and hardware settings', 'device-settings-modal'),
+    createNavigationItem('Profile', User, 'Manage your profile settings', 'profile-modal'),
+    createNavigationItem('Help & Support', HelpCircle, 'Get help and support', 'help-modal')
+  ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -72,7 +73,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar
-      className={isCollapsed ? "w-14" : "w-64"}
+      className={`fixed left-0 top-0 h-screen border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 transition-all duration-300 ${isCollapsed ? "w-14" : "w-64"}`}
       collapsible="icon"
     >
       <SidebarContent>
