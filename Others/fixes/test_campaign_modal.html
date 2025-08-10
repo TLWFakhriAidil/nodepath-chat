@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campaign Modal Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Campaign Modal Test Page</h1>
+        <p>Use this page to test campaign creation, editing, and cloning functionality</p>
+        
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <button class="btn btn-primary" onclick="testCreateCampaign()">
+                    Test Create Campaign
+                </button>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-warning" onclick="testEditCampaign()">
+                    Test Edit Campaign
+                </button>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-info" onclick="testCloneCampaign()">
+                    Test Clone Campaign
+                </button>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <h3>Test Results:</h3>
+            <div id="testResults" class="border p-3 bg-light">
+                <p>Click the buttons above to test campaign functionality</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const resultsDiv = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info';
+            resultsDiv.innerHTML += `<div class="alert alert-${color} mt-2">
+                <strong>[${timestamp}]</strong> ${message}
+            </div>`;
+        }
+        
+        function testCreateCampaign() {
+            log('Testing campaign creation...');
+            
+            // Test 1: Check if campaignDate element exists
+            const campaignDateEl = document.getElementById('campaignDate');
+            if (!campaignDateEl) {
+                log('ERROR: campaignDate element not found!', 'error');
+                return;
+            }
+            
+            // Test 2: Check if value can be set
+            const testDate = '2025-07-31';
+            campaignDateEl.value = testDate;
+            
+            if (campaignDateEl.value === testDate) {
+                log('✓ campaignDate can be set successfully', 'success');
+            } else {
+                log('ERROR: Failed to set campaignDate value', 'error');
+            }
+            
+            // Test 3: Check other required elements
+            const requiredElements = [
+                'campaignId',
+                'campaignTitle',
+                'campaignNiche',
+                'campaignTargetStatus',
+                'campaignMessage',
+                'campaignTime',
+                'campaignMinDelay',
+                'campaignMaxDelay',
+                'campaignImageUrl'
+            ];
+            
+            let allElementsFound = true;
+            requiredElements.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) {
+                    log(`ERROR: ${id} element not found!`, 'error');
+                    allElementsFound = false;
+                }
+            });
+            
+            if (allElementsFound) {
+                log('✓ All required form elements found', 'success');
+            }
+            
+            // Test 4: Simulate saveCampaign function
+            try {
+                const campaignData = {
+                    campaign_date: testDate,
+                    title: 'Test Campaign',
+                    niche: 'TEST',
+                    target_status: 'prospect',
+                    message: 'Test message',
+                    image_url: '',
+                    time_schedule: '14:30',
+                    min_delay_seconds: 10,
+                    max_delay_seconds: 30
+                };
+                
+                log('✓ Campaign data object created successfully', 'success');
+                log('Campaign data: ' + JSON.stringify(campaignData, null, 2));
+            } catch (error) {
+                log('ERROR: ' + error.message, 'error');
+            }
+        }
+        
+        function testEditCampaign() {
+            log('Testing campaign editing...');
+            
+            // Simulate editing with test data
+            const testCampaign = {
+                id: 123,
+                title: 'Existing Campaign',
+                niche: 'EXISTING',
+                target_status: 'customer',
+                message: 'Existing message',
+                time_schedule: '10:00',
+                min_delay_seconds: 5,
+                max_delay_seconds: 15,
+                image_url: 'https://example.com/test.jpg'
+            };
+            
+            // Set form values
+            try {
+                document.getElementById('campaignId').value = testCampaign.id;
+                document.getElementById('campaignDate').value = '2025-07-31';
+                document.getElementById('campaignTitle').value = testCampaign.title;
+                document.getElementById('campaignNiche').value = testCampaign.niche;
+                document.getElementById('campaignTargetStatus').value = testCampaign.target_status;
+                document.getElementById('campaignMessage').value = testCampaign.message;
+                document.getElementById('campaignTime').value = testCampaign.time_schedule;
+                document.getElementById('campaignMinDelay').value = testCampaign.min_delay_seconds;
+                document.getElementById('campaignMaxDelay').value = testCampaign.max_delay_seconds;
+                document.getElementById('campaignImageUrl').value = testCampaign.image_url;
+                
+                log('✓ Successfully populated form for editing', 'success');
+            } catch (error) {
+                log('ERROR during edit: ' + error.message, 'error');
+            }
+        }
+        
+        function testCloneCampaign() {
+            log('Testing campaign cloning...');
+            
+            // Test clone functionality
+            try {
+                const originalDate = '2025-07-30';
+                const newDate = new Date().toISOString().split('T')[0];
+                
+                document.getElementById('campaignId').value = ''; // Empty for new
+                document.getElementById('campaignDate').value = newDate;
+                document.getElementById('campaignTitle').value = 'Cloned Campaign (Copy)';
+                
+                log(`✓ Clone test successful. Original date: ${originalDate}, New date: ${newDate}`, 'success');
+            } catch (error) {
+                log('ERROR during clone: ' + error.message, 'error');
+            }
+        }
+        
+        // Add mock elements for testing
+        document.addEventListener('DOMContentLoaded', function() {
+            // Create hidden form elements for testing
+            const formElements = `
+                <input type="hidden" id="campaignId">
+                <input type="hidden" id="campaignDate">
+                <input type="hidden" id="campaignTitle">
+                <input type="hidden" id="campaignNiche">
+                <input type="hidden" id="campaignTargetStatus">
+                <input type="hidden" id="campaignMessage">
+                <input type="hidden" id="campaignTime">
+                <input type="hidden" id="campaignMinDelay">
+                <input type="hidden" id="campaignMaxDelay">
+                <input type="hidden" id="campaignImageUrl">
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', formElements);
+            log('Test page loaded. Mock form elements created.', 'info');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+	// Queue message to broadcast system
+	// Create broadcast message with anti-pattern protection
+	broadcastMsg := domainBroadcast.BroadcastMessage{
+		DeviceID:       deviceID,
+		RecipientPhone: job.phone,
+		RecipientName:  job.name,  // ADDED for greeting processor
+		Message:        job.messageText,
+		Content:        job.messageText,
+		Type:           job.messageType,
+		MinDelay:       job.minDelaySeconds,  // ADDED
+		MaxDelay:       job.maxDelaySeconds,  // ADDED
+	}

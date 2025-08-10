@@ -1,0 +1,1 @@
+-- Update the device phone number to match the WhatsApp account you're connecting

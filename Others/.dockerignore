@@ -1,0 +1,50 @@
+# Git files
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+LICENSE
+
+# Development files
+.env.example
+.env.local
+*.bat
+*.sh
+
+# Test files
+*_test.go
+test/
+
+# Build artifacts
+whatsapp
+whatsapp.exe
+main
+main.exe
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Local storage (will be created at runtime)
+storages/
+sessions/
+
+# Node modules (if any)
+node_modules/
+
+# Go workspace
+go.work
+go.work.sum

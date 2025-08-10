@@ -1,0 +1,58 @@
+// JavaScript fix for showSequenceStepLeadDetails function
+// This should be applied to src/views/dashboard.html
+
+// Find the function showSequenceStepLeadDetails (around line 7358)
+// Replace the fetch call with this updated version that includes date filters:
+
+function showSequenceStepLeadDetails(deviceId, stepId, status) {
+    if (!currentSequenceForReport) {
+        showAlert('error', 'No sequence selected');
+        return;
+    }
+
+    console.log('showSequenceStepLeadDetails:', { deviceId, stepId, status });
+
+    // Update modal title
+    let statusText = status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1);
+    document.getElementById('leadDetailsTitle').textContent = `${statusText} Leads - Step`;
+
+    // Show loading state
+    document.getElementById('leadDetailsTableBody').innerHTML = '<tr><td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm"></div> Loading leads...</td></tr>';
+
+    // Build URL with date filters
+    let url = `/api/sequences/${currentSequenceForReport.id}/device/${deviceId}/step/${stepId}/leads?status=${status}`;
+    
+    // Get the current date filters from the sequence summary
+    const startDate = document.getElementById('sequenceStartDate').value;
+    const endDate = document.getElementById('sequenceEndDate').value;
+    
+    if (startDate) {
+        url += `&start_date=${startDate}`;
+    }
+    if (endDate) {
+        url += `&end_date=${endDate}`;
+    }
+
+    console.log('Fetching sequence step leads with URL:', url);
+
+    // Fetch lead details for specific step
+    fetch(url, {
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.code === 'SUCCESS' && data.results) {
+            displayLeadDetails(data.results);
+        } else {
+            document.getElementById('leadDetailsTableBody').innerHTML = '<tr><td colspan="5" class="text-center text-muted">No leads found</td></tr>';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading lead details:', error);
+        document.getElementById('leadDetailsTableBody').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading leads</td></tr>';
+    });
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('leadDetailsModal'));
+    modal.show();
+}

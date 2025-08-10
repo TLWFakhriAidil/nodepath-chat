@@ -1,0 +1,13 @@
+-- First, let's verify the exact issue with both queries
+-- COLD Sequence ID: 0be82745-8f68-4352-abd0-0b405b43a905
+-- Date: 2025-08-04
+
+-- The CORRECT data:
+-- Done: 201
+-- Failed: 24
+-- Remaining: 250
+-- Total: 475
+
+-- But UI shows:
+-- Summary: 427 (Wrong)
+-- Device Report: 507 (Wrong)

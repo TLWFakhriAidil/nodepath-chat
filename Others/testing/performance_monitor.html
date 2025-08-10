@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp System Performance Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background-color: #f0f2f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #1f1f1f;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card h3 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1f1f1f;
+        }
+        
+        .stat-value.success {
+            color: #25d366;
+        }
+        
+        .stat-value.error {
+            color: #dc3545;
+        }
+        
+        .stat-subtitle {
+            color: #999;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .chart-container h3 {
+            margin-bottom: 20px;
+            color: #1f1f1f;
+        }
+        
+        .device-list {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .device-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #f0f2f5;
+        }
+        
+        .device-item:last-child {
+            border-bottom: none;
+        }
+        
+        .device-name {
+            font-weight: 500;
+        }
+        
+        .device-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .status-dot.online {
+            background-color: #25d366;
+        }
+        
+        .status-dot.offline {
+            background-color: #dc3545;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f2f5;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #25d366;
+            transition: width 0.3s ease;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background-color: #25d366;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 WhatsApp Multi-Device Performance Monitor</h1>
+        
+        <div class="controls">
+            <button class="btn-primary" onclick="startSimulation()">Start Simulation</button>
+            <button class="btn-secondary" onclick="pauseSimulation()">Pause</button>
+            <button class="btn-danger" onclick="stopSimulation()">Stop</button>
+            <button class="btn-secondary" onclick="resetStats()">Reset Stats</button>
+        </div>
+        
+        <div class="alert" id="alert"></div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Devices</h3>
+                <div class="stat-value">3,000</div>
+                <div class="stat-subtitle">2,700 online (90%)</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Messages Sent</h3>
+                <div class="stat-value success" id="totalMessages">0</div>
+                <div class="stat-subtitle" id="messageRate">0 msg/sec</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Success Rate</h3>
+                <div class="stat-value success" id="successRate">98%</div>
+                <div class="stat-subtitle" id="successCount">0 successful</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Failed Messages</h3>
+                <div class="stat-value error" id="failedCount">0</div>
+                <div class="stat-subtitle">2% failure rate</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Active Campaigns</h3>
+                <div class="stat-value">3</div>
+                <div class="stat-subtitle">2 regular, 1 AI</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Running Sequences</h3>
+                <div class="stat-value">4</div>
+                <div class="stat-subtitle">120 steps total</div>
+            </div>
+        </div>
+        
+        <div class="charts-grid">
+            <div class="chart-container">
+                <h3>Message Rate (per minute)</h3>
+                <canvas id="rateChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <h3>Device Load Distribution</h3>
+                <canvas id="deviceChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="charts-grid">
+            <div class="chart-container">
+                <h3>Campaign Progress</h3>
+                <div style="margin-bottom: 20px;">
+                    <strong>Test Campaign 1</strong> - Active Leads
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="campaign1Progress" style="width: 0%"></div>
+                    </div>
+                    <small>0 / 15,000 messages</small>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <strong>Test Campaign 2</strong> - All Leads  
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="campaign2Progress" style="width: 0%"></div>
+                    </div>
+                    <small>0 / 50,000 messages</small>
+                </div>
+                
+                <div>
+                    <strong>AI Campaign</strong> - Smart Distribution
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
+                    </div>
+                    <small>0 / 10,000 messages</small>
+                </div>
+            </div>
+            
+            <div class="device-list">
+                <h3>Top Active Devices</h3>
+                <div id="deviceList">
+                    <!-- Devices will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let simulationInterval;
+        let isRunning = false;
+        let stats = {
+            totalMessages: 0,
+            successMessages: 0,
+            failedMessages: 0,
+            startTime: null,
+            messageHistory: []
+        };
+        
+        // Initialize charts
+        const rateCtx = document.getElementById('rateChart').getContext('2d');
+        const rateChart = new Chart(rateCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Messages/min',
+                    data: [],
+                    borderColor: '#25d366',
+                    backgroundColor: 'rgba(37, 211, 102, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        
+        const deviceCtx = document.getElementById('deviceChart').getContext('2d');
+        const deviceChart = new Chart(deviceCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Low Load', 'Medium Load', 'High Load', 'Idle'],
+                datasets: [{
+                    data: [1200, 900, 600, 300],
+                    backgroundColor: [
+                        '#25d366',
+                        '#ffc107',
+                        '#dc3545',
+                        '#6c757d'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+        
+        // Start simulation
+        function startSimulation() {
+            if (isRunning) return;
+            
+            isRunning = true;
+            stats.startTime = Date.now();
+            showAlert('Simulation started!', 'success');
+            
+            simulationInterval = setInterval(() => {
+                simulateMessages();
+                updateStats();
+                updateCharts();
+            }, 1000);
+        }
+        
+        // Pause simulation
+        function pauseSimulation() {
+            isRunning = false;
+            clearInterval(simulationInterval);
+            showAlert('Simulation paused', 'success');
+        }
+        
+        // Stop simulation
+        function stopSimulation() {
+            isRunning = false;
+            clearInterval(simulationInterval);
+            resetStats();
+            showAlert('Simulation stopped', 'error');
+        }
+        
+        // Reset statistics
+        function resetStats() {
+            stats = {
+                totalMessages: 0,
+                successMessages: 0,
+                failedMessages: 0,
+                startTime: null,
+                messageHistory: []
+            };
+            updateStats();
+        }
+        
+        // Simulate message sending
+        function simulateMessages() {
+            const messagesPerSecond = Math.floor(Math.random() * 200) + 150;
+            const failureRate = 0.02;
+            
+            for (let i = 0; i < messagesPerSecond; i++) {
+                stats.totalMessages++;
+                
+                if (Math.random() > failureRate) {
+                    stats.successMessages++;
+                } else {
+                    stats.failedMessages++;
+                }
+            }
+            
+            // Track history for chart
+            stats.messageHistory.push({
+                time: new Date().toLocaleTimeString(),
+                rate: messagesPerSecond * 60
+            });
+            
+            // Keep only last 20 data points
+            if (stats.messageHistory.length > 20) {
+                stats.messageHistory.shift();
+            }
+        }
+        
+        // Update UI statistics
+        function updateStats() {
+            document.getElementById('totalMessages').textContent = stats.totalMessages.toLocaleString();
+            document.getElementById('successCount').textContent = stats.successMessages.toLocaleString() + ' successful';
+            document.getElementById('failedCount').textContent = stats.failedMessages.toLocaleString();
+            
+            const successRate = stats.totalMessages > 0 
+                ? ((stats.successMessages / stats.totalMessages) * 100).toFixed(1)
+                : 98;
+            document.getElementById('successRate').textContent = successRate + '%';
+            
+            // Calculate message rate
+            if (stats.startTime) {
+                const elapsed = (Date.now() - stats.startTime) / 1000;
+                const rate = Math.floor(stats.totalMessages / elapsed);
+                document.getElementById('messageRate').textContent = rate + ' msg/sec';
+            }
+            
+            // Update progress bars
+            updateProgress('campaign1Progress', stats.totalMessages, 15000);
+            updateProgress('campaign2Progress', stats.totalMessages / 3, 50000);
+            updateProgress('aiProgress', stats.totalMessages / 7, 10000);
+        }
+        
+        // Update charts
+        function updateCharts() {
+            if (stats.messageHistory.length > 0) {
+                // Update rate chart
+                rateChart.data.labels = stats.messageHistory.map(h => h.time);
+                rateChart.data.datasets[0].data = stats.messageHistory.map(h => h.rate);
+                rateChart.update();
+                
+                // Update device distribution randomly
+                const total = 3000;
+                const idle = Math.floor(Math.random() * 500) + 200;
+                const high = Math.floor(Math.random() * 800) + 400;
+                const medium = Math.floor(Math.random() * 1000) + 700;
+                const low = total - idle - high - medium;
+                
+                deviceChart.data.datasets[0].data = [low, medium, high, idle];
+                deviceChart.update();
+            }
+        }
+        
+        // Update progress bar
+        function updateProgress(elementId, current, total) {
+            const percentage = Math.min((current / total) * 100, 100);
+            document.getElementById(elementId).style.width = percentage + '%';
+            
+            const parent = document.getElementById(elementId).parentElement.parentElement;
+            const small = parent.querySelector('small');
+            small.textContent = `${Math.floor(current).toLocaleString()} / ${total.toLocaleString()} messages`;
+        }
+        
+        // Show alert
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = 'alert ' + type;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Generate device list
+        function generateDeviceList() {
+            const deviceList = document.getElementById('deviceList');
+            const devices = [];
+            
+            for (let i = 1; i <= 20; i++) {
+                const messagesCount = Math.floor(Math.random() * 1000) + 500;
+                devices.push({
+                    name: `TestDevice${String(i).padStart(4, '0')}`,
+                    messages: messagesCount,
+                    status: Math.random() > 0.1 ? 'online' : 'offline'
+                });
+            }
+            
+            // Sort by messages sent
+            devices.sort((a, b) => b.messages - a.messages);
+            
+            deviceList.innerHTML = devices.map(device => `
+                <div class="device-item">
+                    <span class="device-name">${device.name}</span>
+                    <div class="device-status">
+                        <span>${device.messages} messages</span>
+                        <span class="status-dot ${device.status}"></span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Initialize
+        generateDeviceList();
+        setInterval(generateDeviceList, 5000);
+    </script>
+</body>
+</html>

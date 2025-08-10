@@ -4,16 +4,15 @@
   # buildCommand = "chmod +x ./railway-build.sh && ./railway-build.sh"
 
 [deploy]
-  startCommand = "/bin/sh ./start.sh"
-  healthcheckCommand = "node healthcheck.js"
   healthcheckTimeout = 300
   restartPolicyType = "on_failure"
   restartPolicyMaxRetries = 10
 
-[phases.setup]
-  aptPkgs = ["php", "php-mysql"]
-  nixPkgs = ["nodejs", "npm"]
-  nodeVersion = "18"
+# Phases setup not needed when using Dockerfile
+# [phases.setup]
+#   aptPkgs = ["php", "php-mysql"]
+#   nixPkgs = ["nodejs", "npm"]
+#   nodeVersion = "18"
 
 [[services]]
   name = "web"

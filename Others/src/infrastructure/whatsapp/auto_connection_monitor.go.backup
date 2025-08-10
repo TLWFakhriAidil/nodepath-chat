@@ -1,0 +1,224 @@
+package whatsapp
+
+import (
+	"context"
+	"sync"
+	"time"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/repository"
+	"github.com/sirupsen/logrus"
+)
+
+// AutoConnectionMonitor continuously monitors and updates device connections
+type AutoConnectionMonitor struct {
+	mu              sync.RWMutex
+	isRunning       bool
+	checkInterval   time.Duration
+	ctx             context.Context
+	cancel          context.CancelFunc
+	userRepo        repository.UserRepositoryInterface
+	clientManager   *ClientManager
+}
+
+var (
+	autoMonitor     *AutoConnectionMonitor
+	autoMonitorOnce sync.Once
+)
+
+// GetAutoConnectionMonitor returns singleton instance
+func GetAutoConnectionMonitor() *AutoConnectionMonitor {
+	autoMonitorOnce.Do(func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		autoMonitor = &AutoConnectionMonitor{
+			checkInterval:  10 * time.Second, // Check every 10 seconds
+			ctx:           ctx,
+			cancel:        cancel,
+			userRepo:      repository.GetUserRepository(),
+			clientManager: GetClientManager(),
+		}
+	})
+	return autoMonitor
+}
+
+// Start begins automatic connection monitoring
+func (acm *AutoConnectionMonitor) Start() error {
+	acm.mu.Lock()
+	defer acm.mu.Unlock()
+	
+	if acm.isRunning {
+		return nil
+	}
+	
+	acm.isRunning = true
+	go acm.monitorLoop()
+	
+	logrus.Info("Auto connection monitor started - checking every 10 seconds")
+	return nil
+}
+
+// Stop stops the monitoring
+func (acm *AutoConnectionMonitor) Stop() {
+	acm.mu.Lock()
+	defer acm.mu.Unlock()
+	
+	if !acm.isRunning {
+		return
+	}
+	
+	acm.cancel()
+	acm.isRunning = false
+	logrus.Info("Auto connection monitor stopped")
+}
+
+// monitorLoop is the main monitoring loop
+func (acm *AutoConnectionMonitor) monitorLoop() {
+	// Initial check after 5 seconds
+	time.Sleep(5 * time.Second)
+	acm.checkAllConnections()
+	
+	ticker := time.NewTicker(acm.checkInterval)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-acm.ctx.Done():
+			return
+		case <-ticker.C:
+			acm.checkAllConnections()
+		}
+	}
+}
+
+// checkAllConnections checks all device connections
+func (acm *AutoConnectionMonitor) checkAllConnections() {
+	startTime := time.Now()
+	
+	// Get all devices from database
+	devices, err := acm.userRepo.GetAllDevices()
+	if err != nil {
+		logrus.Errorf("Failed to get all devices: %v", err)
+		return
+	}
+	
+	// Track statistics
+	totalDevices := len(devices)
+	onlineCount := 0
+	offlineCount := 0
+	reconnectedCount := 0
+	statusChanges := 0
+	
+	// Check each device
+	for _, device := range devices {
+		previousStatus := device.Status
+		currentStatus := "offline"
+		
+		// Get WhatsApp client
+		client, err := acm.clientManager.GetClient(device.ID)
+		if err != nil {
+			// No client exists
+			currentStatus = "not_initialized"
+		} else if client != nil {
+			// Check connection following broadcast pattern
+			if client.IsConnected() {
+				currentStatus = "online"
+				onlineCount++
+				
+				// Update phone/JID if available
+				if client.Store != nil && client.Store.ID != nil {
+					newJID := client.Store.ID.String()
+					newPhone := client.Store.ID.User
+					
+					if device.JID != newJID || device.Phone != newPhone {
+						device.JID = newJID
+						device.Phone = newPhone
+					}
+				}
+			} else if client.IsLoggedIn() {
+				// Try to reconnect if logged in but disconnected
+				currentStatus = "disconnected"
+				
+				// Attempt auto-reconnect
+				go func(deviceID, deviceName string, c *whatsmeow.Client) {
+					logrus.Infof("Auto-reconnecting device %s", deviceName)
+					err := c.Connect()
+					if err == nil {
+						time.Sleep(2 * time.Second)
+						if c.IsConnected() {
+							acm.userRepo.UpdateDeviceStatus(deviceID, "online", "", "")
+							logrus.Infof("Successfully auto-reconnected device %s", deviceName)
+						}
+					}
+				}(device.ID, device.DeviceName, client)
+				
+				reconnectedCount++
+			} else {
+				currentStatus = "logged_out"
+			}
+		}
+		
+		// Count offline devices
+		if currentStatus != "online" {
+			offlineCount++
+		}
+		
+		// Update database if status changed
+		if previousStatus != currentStatus {
+			err = acm.userRepo.UpdateDeviceStatus(device.ID, currentStatus, device.Phone, device.JID)
+			if err != nil {
+				logrus.Errorf("Failed to update device %s status: %v", device.DeviceName, err)
+			} else {
+				statusChanges++
+				logrus.Debugf("Device %s status: %s -> %s", device.DeviceName, previousStatus, currentStatus)
+			}
+		}
+	}
+	
+	duration := time.Since(startTime)
+	
+	// Log summary only if there are changes or every 5 minutes
+	if statusChanges > 0 || time.Now().Minute()%5 == 0 {
+		logrus.Infof("Connection check complete: %d devices, %d online, %d offline, %d status changes, %d reconnect attempts (took %v)",
+			totalDevices, onlineCount, offlineCount, statusChanges, reconnectedCount, duration)
+	}
+}
+
+// GetConnectionStats returns current connection statistics
+func (acm *AutoConnectionMonitor) GetConnectionStats() map[string]interface{} {
+	devices, err := acm.userRepo.GetAllDevices()
+	if err != nil {
+		return map[string]interface{}{
+			"error": err.Error(),
+		}
+	}
+	
+	stats := map[string]int{
+		"total":           0,
+		"online":          0,
+		"offline":         0,
+		"disconnected":    0,
+		"logged_out":      0,
+		"not_initialized": 0,
+	}
+	
+	for _, device := range devices {
+		stats["total"]++
+		switch device.Status {
+		case "online", "connected":
+			stats["online"]++
+		case "offline":
+			stats["offline"]++
+		case "disconnected":
+			stats["disconnected"]++
+		case "logged_out":
+			stats["logged_out"]++
+		case "not_initialized":
+			stats["not_initialized"]++
+		}
+	}
+	
+	return map[string]interface{}{
+		"stats":          stats,
+		"last_check":     time.Now().Unix(),
+		"check_interval": acm.checkInterval.Seconds(),
+		"is_running":     acm.isRunning,
+	}
+}

@@ -1,0 +1,34 @@
+18 DEVICES WITH INVALID API KEY ERRORS
+======================================
+
+Device Name     Platform    JID
+-----------     --------    ---
+
+1.  SCAST-S30   Whacenter   2f01ba96-4151-491c-aa5d-81b80695683d
+2.  SCARS-S46   Whacenter   96db8ea7-a306-4bed-8756-4dbafe18b1bb
+3.  SCRY-S08    Wablas      XXkwvjfnd1hySPsiwJ0PhfqyS45P0cKMj8Ayzv19OSx9zLDDXTalmFB.DQlqUIz7
+4.  SCAS-S74    Whacenter   4173c504-1982-4256-a2af-5617d37bc1d6
+5.  SCARR-S39   Whacenter   7337fcd6-f7b3-48d3-a15e-948f9401c7e3
+6.  SCSHQ-S05   Whacenter   2d3f668b-1f71-4736-9bca-201d51aefa9a
+7.  SCARS-S35   Whacenter   8043385a-5cd7-4c97-b022-96c348ac2437
+8.  SCAS-S05    Whacenter   39b2cb9b-1fa5-4760-a41c-d1df8c07efc9
+9.  SCTTN-S76   Whacenter   b6934b25-394a-4919-94e9-56b1c8bb19a6
+10. SMHQ-S05    Whacenter   be5e88bb-0fd0-4b1a-975d-24901361f939
+11. ADHQ-S30    Whacenter   478f24ae-e765-4553-8635-66cfb5fd2e18
+12. SCAST-S59   Whacenter   35ec9b5d-6996-4f0f-8123-1cc1f356db63
+13. SCTTN-S77   Whacenter   39b06136-0fa3-4feb-8214-8e6accf447f5
+14. SCAS-S40    Whacenter   2da21969-bdc6-4887-a455-12e8c7ace08e
+15. SCTP-S06    Whacenter   830eadbd-a1d7-4460-be89-ae93fedb5c15
+16. SCFF-S48    Whacenter   4eead7ac-85e3-4783-9bdb-92a8c4646ada
+17. SMHQ-S06    Whacenter   24d45cc8-146d-414f-86b3-45e6bc128218
+18. SCHQ-S35    Whacenter   87d2dfb4-4e96-4b2b-b5dc-01c71eef026a
+
+
+SUMMARY:
+--------
+Total Devices: 18
+Whacenter: 17 devices
+Wablas: 1 device
+
+All devices have JIDs but NO API configuration.
+This causes "Invalid API Key" errors when trying to send messages.

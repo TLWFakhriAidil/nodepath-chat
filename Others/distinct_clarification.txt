@@ -1,0 +1,41 @@
+CORRECTION: DISTINCT RECIPIENTS CLARIFICATION
+============================================
+
+You are correct! The DUPLICATE PREVENTION is based on three fields:
+- sequence_stepid
+- recipient_phone  
+- device_id
+
+This means the system prevents creating duplicate messages for the same:
+1. Recipient phone number
+2. Sequence step
+3. Device
+
+HOWEVER, for the UI SUMMARY COUNTING:
+-------------------------------------
+The UI only counts DISTINCT recipient_phone when calculating totals:
+
+```sql
+COUNT(DISTINCT CASE WHEN status = 'sent' THEN recipient_phone END) AS done_send
+```
+
+This is different from the duplicate prevention logic!
+
+WHY THE DIFFERENCE?
+------------------
+1. DUPLICATE PREVENTION (at insert time):
+   - Uses: sequence_stepid + recipient_phone + device_id
+   - Purpose: Prevent sending the same step multiple times from the same device
+   - Example: Can't send Step 1 to phone X from Device A twice
+
+2. UI SUMMARY COUNTING (for reporting):
+   - Uses: DISTINCT recipient_phone only
+   - Purpose: Show how many unique recipients were reached
+   - Example: If phone X received Step 1, 2, and 3, they count as 1 recipient
+
+This makes sense because:
+- For operations: We need to track each step/device combination
+- For reporting: Users want to know how many unique people were reached
+
+So while the duplicate prevention is more granular (step + phone + device), 
+the summary reporting is simpler (just unique phones) to show reach.

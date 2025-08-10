@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Image Modal</title>
+    <style>
+        .hidden { display: none !important; }
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); }
+        button { padding: 10px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Test Image Upload</h1>
+    <button onclick="document.getElementById('fileInput').click()">Select Image</button>
+    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+    
+    <div id="modal" class="modal hidden">
+        <h2>Modal is showing!</h2>
+        <button onclick="document.getElementById('modal').classList.add('hidden')">Close</button>
+    </div>
+    
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            console.log('File selected:', e.target.files[0]);
+            if (e.target.files[0]) {
+                console.log('Showing modal...');
+                document.getElementById('modal').classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

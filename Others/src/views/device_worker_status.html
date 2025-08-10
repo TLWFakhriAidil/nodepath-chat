@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Worker Status - WhatsApp Multi-Device</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 20px auto;
+            max-width: 800px;
+        }
+        .metric-box {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+        }
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .status-badge {
+            font-size: 1.2rem;
+            padding: 8px 16px;
+        }
+        .campaign-info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .sequence-info {
+            background: #f3e5f5;
+            border-left: 4px solid #9c27b0;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .device-selector {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="text-center mb-4">
+            <h1><i class="bi bi-cpu"></i> Device Worker Status</h1>
+            <p class="text-muted">Check what's running on a specific device</p>
+        </div>
+        
+        <div class="status-card">
+            <div class="device-selector mb-4">
+                <label for="deviceId" class="form-label">Enter Device ID:</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="deviceId" placeholder="e.g., uuid-123-456">
+                    <button class="btn btn-primary" onclick="checkWorkerStatus()">
+                        <i class="bi bi-search"></i> Check Status
+                    </button>
+                </div>
+                <small class="text-muted">You can find device IDs in the dashboard</small>
+            </div>
+            
+            <div id="statusResult" style="display: none;">
+                <hr>
+                
+                <div class="text-center mb-4">
+                    <h3 id="deviceIdDisplay"></h3>
+                    <span id="statusBadge" class="badge status-badge"></span>
+                </div>
+                
+                <div id="workerNotFound" style="display: none;" class="text-center">
+                    <i class="bi bi-exclamation-circle text-warning" style="font-size: 3rem;"></i>
+                    <p class="mt-3">No worker is currently running for this device.</p>
+                    <p class="text-muted">A worker will start automatically when messages are queued.</p>
+                </div>
+                
+                <div id="workerDetails" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="metric-box">
+                                <div class="metric-value" id="queueSize">0</div>
+                                <div class="metric-label">Queue Size</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-box">
+                                <div class="metric-value text-success" id="processedCount">0</div>
+                                <div class="metric-label">Processed</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-box">
+                                <div class="metric-value text-danger" id="failedCount">0</div>
+                                <div class="metric-label">Failed</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-box">
+                                <div class="metric-value text-info" id="successRate">0%</div>
+                                <div class="metric-label">Success Rate</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="campaignInfo" style="display: none;"></div>
+                    <div id="sequenceInfo" style="display: none;"></div>
+                    
+                    <div class="mt-4">
+                        <h5><i class="bi bi-clock-history"></i> Last Activity</h5>
+                        <p id="lastActivity" class="text-muted"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function checkWorkerStatus() {
+            const deviceId = document.getElementById('deviceId').value.trim();
+            if (!deviceId) {
+                alert('Please enter a device ID');
+                return;
+            }
+            
+            document.getElementById('statusResult').style.display = 'block';
+            document.getElementById('deviceIdDisplay').textContent = `Device: ${deviceId}`;
+            document.getElementById('workerNotFound').style.display = 'none';
+            document.getElementById('workerDetails').style.display = 'none';
+            
+            fetch(`/api/workers/device/${deviceId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const results = data.results;
+                    
+                    if (!results.worker_exists) {
+                        document.getElementById('workerNotFound').style.display = 'block';
+                        document.getElementById('statusBadge').className = 'badge status-badge bg-secondary';
+                        document.getElementById('statusBadge').textContent = 'No Worker';
+                    } else {
+                        document.getElementById('workerDetails').style.display = 'block';
+                        
+                        // Update status badge
+                        let badgeClass = 'bg-secondary';
+                        if (results.status === 'active' || results.status === 'processing') {
+                            badgeClass = 'bg-success';
+                        } else if (results.status === 'idle') {
+                            badgeClass = 'bg-warning';
+                        } else if (results.status === 'error') {
+                            badgeClass = 'bg-danger';
+                        }
+                        document.getElementById('statusBadge').className = `badge status-badge ${badgeClass}`;
+                        document.getElementById('statusBadge').textContent = results.status.toUpperCase();
+                        
+                        // Update metrics
+                        document.getElementById('queueSize').textContent = results.queue_size || 0;
+                        document.getElementById('processedCount').textContent = results.processed_count || 0;
+                        document.getElementById('failedCount').textContent = results.failed_count || 0;
+                        
+                        // Calculate success rate
+                        const total = (results.processed_count || 0) + (results.failed_count || 0);
+                        const successRate = total > 0 ? ((results.processed_count / total) * 100).toFixed(1) : 0;
+                        document.getElementById('successRate').textContent = successRate + '%';
+                        
+                        // Update last activity
+                        if (results.last_activity) {
+                            const lastActivity = new Date(results.last_activity);
+                            document.getElementById('lastActivity').textContent = lastActivity.toLocaleString();
+                        }
+                        
+                        // Show campaign/sequence info if available
+                        if (results.current_campaign) {
+                            document.getElementById('campaignInfo').style.display = 'block';
+                            document.getElementById('campaignInfo').innerHTML = `
+                                <div class="campaign-info">
+                                    <h5><i class="bi bi-megaphone"></i> Currently Processing Campaign</h5>
+                                    <p class="mb-1"><strong>Name:</strong> ${results.current_campaign.name}</p>
+                                    <p class="mb-0"><strong>Status:</strong> ${results.current_campaign.status}</p>
+                                </div>
+                            `;
+                        } else {
+                            document.getElementById('campaignInfo').style.display = 'none';
+                        }
+                        
+                        if (results.current_sequence) {
+                            document.getElementById('sequenceInfo').style.display = 'block';
+                            document.getElementById('sequenceInfo').innerHTML = `
+                                <div class="sequence-info">
+                                    <h5><i class="bi bi-arrow-repeat"></i> Currently Processing Sequence</h5>
+                                    <p class="mb-1"><strong>Name:</strong> ${results.current_sequence.name}</p>
+                                    <p class="mb-0"><strong>Status:</strong> ${results.current_sequence.status}</p>
+                                </div>
+                            `;
+                        } else {
+                            document.getElementById('sequenceInfo').style.display = 'none';
+                        }
+                    }
+                })
+                .catch(error => {
+                    alert('Error checking worker status: ' + error.message);
+                });
+        }
+        
+        // Allow Enter key to submit
+        document.getElementById('deviceId').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                checkWorkerStatus();
+            }
+        });
+    </script>
+</body>
+</html>

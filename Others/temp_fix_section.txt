@@ -1,0 +1,22 @@
+	// Add status filter if not "all"
+	if status != "all" {
+		if status == "success" {
+			query += ` AND bm.status IN ('sent', 'delivered', 'success')`
+		} else if status == "pending" {
+			query += ` AND bm.status IN ('pending', 'queued')`
+		} else if status == "failed" {
+			query += ` AND bm.status IN ('failed', 'error')`
+		}
+	}
+	
+	// Add date filter if provided
+	if startDate != "" && endDate != "" {
+		query += ` AND DATE(bm.sent_at) BETWEEN ? AND ?`
+		args = append(args, startDate, endDate)
+	} else if startDate != "" {
+		query += ` AND DATE(bm.sent_at) >= ?`
+		args = append(args, startDate)
+	} else if endDate != "" {
+		query += ` AND DATE(bm.sent_at) <= ?`
+		args = append(args, endDate)
+	}

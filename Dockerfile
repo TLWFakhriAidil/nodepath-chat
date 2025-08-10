@@ -40,7 +40,7 @@ WORKDIR /app
 # Expose port
 EXPOSE 8080
 
-# Set default environment variables
+# Set default environment variables (Railway will override PORT at runtime)
 ENV PORT=8080
 ENV APP_ENV=production
 

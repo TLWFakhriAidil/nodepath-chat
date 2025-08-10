@@ -1,0 +1,105 @@
+package broadcast
+
+import (
+	"context"
+	"encoding/base64"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/domains/broadcast"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp/multidevice"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/antipattern"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/external"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/repository"
+	"github.com/sirupsen/logrus"
+	"go.mau.fi/whatsmeow"
+	waE2E "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/types"
+	"google.golang.org/protobuf/proto"
+)
+
+// WhatsAppMessageSender handles message sending with self-healing capabilities
+type WhatsAppMessageSender struct {
+	greetingProcessor  *antipattern.GreetingProcessor
+	platformSender     *external.PlatformSender
+}
+
+// NewWhatsAppMessageSender creates a new message sender
+func NewWhatsAppMessageSender() *WhatsAppMessageSender {
+	return &WhatsAppMessageSender{
+		greetingProcessor: antipattern.NewGreetingProcessor(),
+		platformSender:    external.NewPlatformSender(),
+	}
+}
+
+// SendMessage sends a message via WhatsApp with self-healing capabilities
+func (w *WhatsAppMessageSender) SendMessage(deviceID string, msg *broadcast.BroadcastMessage) error {
+	// Check if this is a platform device (Wablas/Whacenter)
+	userRepo := repository.GetUserRepository()
+	device, err := userRepo.GetDeviceByID(deviceID)
+	if err != nil {
+		logrus.Errorf("Failed to get device %s: %v", deviceID, err)
+		return fmt.Errorf("device not found: %v", err)
+	}
+	
+	// Process message content with greeting and line breaks
+	processedContent := w.processMessageContent(msg, device.ID)
+	msg.Message = processedContent
+	msg.Content = processedContent
+	
+	// Debug log to see the processed content
+	logrus.Debugf("Processed message content for %s: %s", msg.RecipientPhone, strings.ReplaceAll(processedContent, "\n", "\\n"))
+	
+	// Check if it's a platform device
+	if device.Platform != "" {
+		logrus.Infof("Sending via platform %s for device %s", device.Platform, device.DeviceName)
+		return w.platformSender.SendMessage(
+			device.Platform,
+			device.JID,  // JID contains the instance/token for platform devices
+			msg.RecipientPhone,
+			msg.RecipientName,
+			msg.Message,
+			msg.ImageURL,
+			deviceID,
+		)
+	}
+	
+	// Normal WhatsApp Web sending
+	return w.sendViaWhatsApp(deviceID, msg)
+}
+
+// processMessageContent adds greeting and processes line breaks
+func (w *WhatsAppMessageSender) processMessageContent(msg *broadcast.BroadcastMessage, deviceID string) string {
+	// Get the original content
+	content := msg.Content
+	if content == "" {
+		content = msg.Message
+	}
+	
+	// Debug log original content
+	logrus.Debugf("Original content: %s", strings.ReplaceAll(content, "\n", "\\n"))
+	
+	// Process greeting only if recipientName is provided and not empty
+	if msg.RecipientName != "" && msg.RecipientName != "None" {
+		// Use the greeting processor to add personalized greeting
+		content = w.greetingProcessor.PrepareMessageWithGreeting(content, msg.RecipientName, deviceID, msg.RecipientPhone)
+	}
+	
+	// Fix line breaks for WhatsApp - ensure we have actual newline characters
+	// Replace various line break representations with actual newlines
+	content = strings.ReplaceAll(content, "\\n", "\n")
+	content = strings.ReplaceAll(content, "%0A", "\n")
+	content = strings.ReplaceAll(content, "%0a", "\n")
+	content = strings.ReplaceAll(content, "<br>", "\n")
+	content = strings.ReplaceAll(content, "<br/>", "\n")
+	content = strings.ReplaceAll(content, "<br />", "\n")
+	content = strings.ReplaceAll(content, "\r\n", "\n") // Windows line breaks
+	content = strings.ReplaceAll(content, "\r", "\n")   // Old Mac line breaks
+	
+	// Debug log processed content
+	logrus.Debugf("Processed content with line breaks: %s", strings.ReplaceAll(content, "\n", "\\n"))
+	
+	return content
+}

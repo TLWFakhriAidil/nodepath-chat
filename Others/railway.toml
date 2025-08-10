@@ -1,0 +1,33 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/app/whatsapp rest"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[[services]]
+name = "web"
+port = 3000
+
+[variables]
+# Database Configuration - Railway provides DATABASE_URL
+DB_URI = "${{DATABASE_URL}}"
+
+# Application Configuration
+APP_PORT = "3000"
+APP_DEBUG = "false"
+APP_OS = "WhatsApp Business System"
+APP_BASIC_AUTH = "admin:changeme123"
+APP_CHAT_FLUSH_INTERVAL = "30"
+
+# WhatsApp Features
+WHATSAPP_CHAT_STORAGE = "true"
+WHATSAPP_ACCOUNT_VALIDATION = "true"
+WHATSAPP_AUTO_REPLY = "Thank you for contacting us. We will respond shortly."
+
+# Performance Settings
+NODE_ENV = "production"
+NODE_TLS_REJECT_UNAUTHORIZED = "0"
+  

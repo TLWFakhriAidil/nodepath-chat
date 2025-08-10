@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequences - WhatsApp Multi-Device</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #128c7e;
+            --primary-dark: #075e54;
+            --success: #25d366;
+            --light-bg: #f0f2f5;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        body {
+            background-color: var(--light-bg);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .navbar {
+            background-color: white !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        .navbar-brand {
+            color: var(--primary) !important;
+            font-weight: 600;
+        }
+
+        .page-header {
+            background: white;
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .sequence-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--card-shadow);
+            border: none;
+            transition: all 0.3s;
+            height: 100%;
+        }
+
+        .sequence-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+        }
+
+        .status-active {
+            background-color: #d4f8d4;
+            color: #0a5f0a;
+        }
+
+        .status-inactive {
+            background-color: #ffd4d4;
+            color: #d32f2f;
+        }
+
+        .status-paused {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .status-draft {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+
+        .step-timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .step-timeline::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e0e0e0;
+        }
+
+        .step-item {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .step-item::before {
+            content: '';
+            position: absolute;
+            left: -24px;
+            top: 5px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid var(--primary);
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+        }
+
+        .nav-tabs .nav-link {
+            color: #666;
+            border-bottom: 3px solid transparent;
+        }
+
+        .nav-tabs .nav-link.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            color: #d0d0d0;
+        }
+
+        .modal-header {
+            background-color: var(--light-bg);
+        }
+
+        .step-input {
+            background: var(--light-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .add-step-btn {
+            border: 2px dashed #d0d0d0;
+            background: transparent;
+            color: #666;
+            padding: 15px;
+            width: 100%;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .add-step-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="bi bi-whatsapp"></i> WhatsApp Analytics
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">{{ .User.Email }}</span>
+                <a href="/logout" class="nav-link text-danger">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Navigation Bar -->
+    <div class="navigation-bar bg-light py-2 px-3 border-bottom">
+        <div class="container d-flex justify-content-between align-items-center">
+            <div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="history.back()">
+                    <i class="bi bi-arrow-left"></i> Back
+                </button>
+                <button class="btn btn-sm btn-outline-primary ms-2" onclick="window.location.href='/dashboard'">
+                    <i class="bi bi-house"></i> Home
+                </button>
+            </div>
+            <div class="breadcrumb mb-0">
+                <span class="text-muted">You are here: </span>
+                <span id="currentPage">Sequences</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h2 class="mb-0">Message Sequences</h2>
+                    <p class="text-muted mb-0">Create multi-day automated campaigns</p>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSequenceModal">
+                        <i class="bi bi-plus-circle"></i> Create Sequence
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container-fluid">
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mb-4" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" data-bs-toggle="tab" href="#active-sequences">
+                    Active <span class="badge bg-success ms-1" id="activeCount">0</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#inactive-sequences">
+                    Inactive <span class="badge bg-danger ms-1" id="inactiveCount">0</span>
+                </a>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="active-sequences">
+                <div class="row" id="activeSequencesList">
+                    <!-- Active sequences will be loaded here -->
+                </div>
+            </div>
+            <div class="tab-pane fade" id="inactive-sequences">
+                <div class="row" id="inactiveSequencesList">
+                    <!-- Inactive sequences will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Sequence Modal -->
+    <div class="modal fade" id="createSequenceModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Sequence</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createSequenceForm">
+                        <!-- Basic Info -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">Basic Information</h6>
+                            <div class="mb-3">
+                                <label class="form-label">Sequence Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="sequenceName" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Description</label>
+                                <textarea class="form-control" id="sequenceDescription" rows="2"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Niche/Category</label>
+                                <input type="text" class="form-control" id="sequenceNiche" 
+                                       placeholder="e.g., Sales, Onboarding, Follow-up">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Schedule Time</label>
+                                <input type="time" class="form-control" id="sequenceTimeSchedule" value="09:00">
+                                <small class="text-muted">Time to send messages each day (24-hour format)</small>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Min Delay (seconds)</label>
+                                    <input type="number" class="form-control" id="sequenceMinDelay" value="10" min="1">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Max Delay (seconds)</label>
+                                    <input type="number" class="form-control" id="sequenceMaxDelay" value="30" min="1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sequence Steps -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">Sequence Steps</h6>
+                            <div id="sequenceSteps">
+                                <!-- Step 1 (Default) -->
+                                <div class="step-input" data-step="1">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">Day 1</h6>
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-step" style="display:none;">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Message</label>
+                                        <textarea class="form-control step-content" rows="3" placeholder="Enter your message..."></textarea>
+                                        <small class="text-muted d-block mt-1">
+                                            <strong>WhatsApp Formatting:</strong> 
+                                            *bold* | _italic_ | ~strikethrough~ | ```monospace``` | 😊 Emojis supported
+                                        </small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Image (Optional)</label>
+                                        <input type="file" class="form-control step-image-file" accept="image/*" onchange="compressStepImage(this)">
+                                        <small class="text-muted">Max 5MB. Will be compressed automatically.</small>
+                                        <input type="hidden" class="step-image-url">
+                                        <div class="step-image-preview mt-2"></div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Min Delay (seconds)</label>
+                                            <input type="number" class="form-control step-min-delay" value="5" min="1">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Max Delay (seconds)</label>
+                                            <input type="number" class="form-control step-max-delay" value="15" min="1">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="button" class="add-step-btn" id="addStepBtn">
+                                <i class="bi bi-plus-circle"></i> Add Next Day
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createSequence()">Create Sequence</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty State Template -->
+    <template id="emptyStateTemplate">
+        <div class="col-12">
+            <div class="empty-state">
+                <i class="bi bi-collection mb-3"></i>
+                <h5>No sequences found</h5>
+                <p class="text-muted">Create your first automated message sequence</p>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSequenceModal">
+                    <i class="bi bi-plus-circle"></i> Create Sequence
+                </button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Sequence Card Template -->
+    <template id="sequenceCardTemplate">
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="sequence-card">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="mb-1">{name}</h5>
+                        <span class="status-badge status-{status}">{status}</span>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/sequences/{id}">View Details</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="toggleSequence('{id}', '{status}')">{toggleText}</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="#" onclick="deleteSequence('{id}')">Delete</a></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <p class="text-muted small mb-3">Niche: {niche} | Time: {schedule_time}</p>
+                <p class="mb-3">{description}</p>
+                
+                <div class="step-timeline">
+                    {steps}
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                    <div>
+                        <i class="bi bi-people"></i> <strong>{contacts_count}</strong> contacts
+                    </div>
+                    <div>
+                        <i class="bi bi-calendar3"></i> {step_count} days
+                    </div>
+                </div>
+                
+                <div class="d-flex gap-2 mt-3">
+                    <a href="/sequences/{id}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i> View
+                    </a>
+                    <button class="btn btn-sm btn-outline-success" onclick="updatePendingMessages('{id}')">
+                        <i class="bi bi-arrow-repeat"></i> Update
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSequence('{id}')">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let sequences = [];
+        let currentStep = 1;
+        
+        // Load sequences on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSequences();
+            setupEventListeners();
+        });
+        
+        function setupEventListeners() {
+            // Add step button
+            document.getElementById('addStepBtn').addEventListener('click', addStep);
+            
+            // Remove step
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.remove-step')) {
+                    removeStep(e.target.closest('.step-input'));
+                }
+            });
+        }
+        
+        async function loadSequences() {
+            try {
+                const response = await fetch('/api/sequences');
+                const data = await response.json();
+                
+                if (data.code === 'SUCCESS' && data.results) {
+                    sequences = data.results || [];
+                    displaySequences();
+                } else {
+                    displayEmptyState();
+                }
+            } catch (error) {
+                console.error('Error loading sequences:', error);
+                Swal.fire('Error', 'Failed to load sequences', 'error');
+            }
+        }
+        
+        function displaySequences() {
+            const active = sequences.filter(s => s.status === 'active');
+            const inactive = sequences.filter(s => s.status === 'inactive' || s.status === 'draft' || s.status === 'paused');
+            
+            // Update counts
+            document.getElementById('activeCount').textContent = active.length;
+            document.getElementById('inactiveCount').textContent = inactive.length;
+            
+            // Display sequences
+            displaySequenceList('activeSequencesList', active);
+            displaySequenceList('inactiveSequencesList', inactive);
+        }
+
+        
+        function displaySequenceList(containerId, sequences) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            if (sequences.length === 0) {
+                const template = document.getElementById('emptyStateTemplate');
+                container.appendChild(template.content.cloneNode(true));
+                return;
+            }
+            
+            const template = document.getElementById('sequenceCardTemplate').innerHTML;
+            
+            sequences.forEach(seq => {
+                console.log('Sequence data:', seq); // Debug log to see actual data
+                console.log('Schedule time value:', seq.time_schedule, seq.schedule_time, seq.ScheduleTime);
+                let card = template
+                    .replace(/{id}/g, seq.id || '')
+                    .replace(/{name}/g, seq.name || 'Untitled')
+                    .replace(/{status}/g, seq.status || 'inactive')
+                    .replace(/{niche}/g, seq.niche || 'General')
+                    .replace(/{schedule_time}/g, seq.time_schedule || seq.schedule_time || seq.ScheduleTime || '09:00')
+                    .replace(/{description}/g, seq.description || 'No description')
+                    .replace(/{contacts_count}/g, seq.contacts_count || 0)
+                    .replace(/{step_count}/g, seq.steps ? seq.steps.length : 0)
+                    .replace(/{toggleText}/g, (seq.status === 'active' ? 'Deactivate' : 'Activate'))
+                    .replace(/{steps}/g, generateStepsHTML(seq.steps || []));
+                
+                container.insertAdjacentHTML('beforeend', card);
+            });
+        }
+        
+        function generateStepsHTML(steps) {
+            if (!steps || steps.length === 0) return '<p class="text-muted">No steps defined</p>';
+            
+            return steps.slice(0, 3).map((step, index) => `
+                <div class="step-item">
+                    <strong>Day ${step.day_number}</strong><br>
+                    <small class="text-muted">${truncateText(step.content, 50)}</small>
+                </div>
+            `).join('') + (steps.length > 3 ? '<p class="text-muted small">...and ' + (steps.length - 3) + ' more days</p>' : '');
+        }
+        
+        function truncateText(text, length) {
+            if (!text) return '';
+            return text.length > length ? text.substring(0, length) + '...' : text;
+        }
+        
+        function displayEmptyState() {
+            ['activeSequencesList', 'inactiveSequencesList'].forEach(id => {
+                const container = document.getElementById(id);
+                const template = document.getElementById('emptyStateTemplate');
+                container.innerHTML = '';
+                container.appendChild(template.content.cloneNode(true));
+            });
+        }
+        
+        function addStep() {
+            currentStep++;
+            const stepsContainer = document.getElementById('sequenceSteps');
+            
+            const stepHTML = `
+                <div class="step-input" data-step="${currentStep}">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Day ${currentStep}</h6>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-step">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea class="form-control step-content" rows="3" placeholder="Enter your message..."></textarea>
+                        <small class="text-muted d-block mt-1">
+                            <strong>WhatsApp Formatting:</strong> 
+                            *bold* | _italic_ | ~strikethrough~ | ```monospace``` | 😊 Emojis supported
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Image (Optional)</label>
+                        <input type="file" class="form-control step-image-file" accept="image/*" onchange="compressStepImage(this)">
+                        <small class="text-muted">Max 5MB. Will be compressed automatically.</small>
+                        <input type="hidden" class="step-image-url">
+                        <div class="step-image-preview mt-2"></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Min Delay (seconds)</label>
+                            <input type="number" class="form-control step-min-delay" value="5" min="1">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Max Delay (seconds)</label>
+                            <input type="number" class="form-control step-max-delay" value="15" min="1">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            stepsContainer.insertAdjacentHTML('beforeend', stepHTML);
+        }
+        
+        function removeStep(stepElement) {
+            stepElement.remove();
+            updateStepNumbers();
+        }
+        
+        function updateStepNumbers() {
+            const steps = document.querySelectorAll('.step-input');
+            currentStep = steps.length;
+            
+            steps.forEach((step, index) => {
+                step.dataset.step = index + 1;
+                step.querySelector('h6').textContent = `Day ${index + 1}`;
+            });
+        }
+
+        
+        async function createSequence() {
+            const form = document.getElementById('createSequenceForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+            
+            // Collect steps
+            const steps = [];
+            document.querySelectorAll('.step-input').forEach((stepEl, index) => {
+                const step = {
+                    day: index + 1,
+                    day_number: index + 1,
+                    message_type: stepEl.querySelector('.step-image-url').value ? 'image' : 'text',
+                    content: stepEl.querySelector('.step-content').value,
+                    image_url: stepEl.querySelector('.step-image-url').value || '',
+                    media_url: stepEl.querySelector('.step-image-url').value || '',
+                    caption: stepEl.querySelector('.step-content').value || '', // Add caption for images
+                    min_delay_seconds: parseInt(stepEl.querySelector('.step-min-delay').value) || 5,
+                    max_delay_seconds: parseInt(stepEl.querySelector('.step-max-delay').value) || 15,
+                    send_time: document.getElementById('sequenceTimeSchedule').value || '09:00',
+                    time_schedule: document.getElementById('sequenceTimeSchedule').value || '09:00'
+                };
+                if (step.content || step.image_url) {
+                    steps.push(step);
+                }
+            });
+            
+            if (steps.length === 0) {
+                Swal.fire('Error', 'Please add at least one message', 'error');
+                return;
+            }
+            
+            const sequenceData = {
+                name: document.getElementById('sequenceName').value,
+                description: document.getElementById('sequenceDescription').value,
+                niche: document.getElementById('sequenceNiche').value || '',
+                schedule_time: document.getElementById('sequenceTimeSchedule').value || '09:00',
+                min_delay_seconds: parseInt(document.getElementById('sequenceMinDelay').value) || 10,
+                max_delay_seconds: parseInt(document.getElementById('sequenceMaxDelay').value) || 30,
+                steps: steps,
+                status: 'inactive',
+                is_active: false
+            };
+            
+            try {
+                const response = await fetch('/api/sequences', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(sequenceData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && (data.code === 'CREATED' || data.code === 'SUCCESS')) {
+                    Swal.fire('Success', 'Sequence created successfully!', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('createSequenceModal')).hide();
+                    // Reset form
+                    form.reset();
+                    document.getElementById('sequenceSteps').innerHTML = document.querySelector('.step-input').outerHTML;
+                    currentStep = 1;
+                    loadSequences();
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to create sequence', 'error');
+                }
+            } catch (error) {
+                console.error('Error creating sequence:', error);
+                Swal.fire('Error', 'Failed to create sequence', 'error');
+            }
+        }
+        
+        async function toggleSequence(id, currentStatus) {
+            try {
+                const response = await fetch(`/api/sequences/${id}/toggle`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.code === 'SUCCESS') {
+                    const newStatus = data.results.status;
+                    Swal.fire('Success', `Sequence ${newStatus} successfully!`, 'success');
+                    loadSequences();
+                } else {
+                    Swal.fire('Error', data.message || `Failed to toggle sequence`, 'error');
+                }
+            } catch (error) {
+                console.error(`Error toggling sequence:`, error);
+                Swal.fire('Error', `Failed to toggle sequence`, 'error');
+            }
+        }
+        
+        async function deleteSequence(id) {
+            const result = await Swal.fire({
+                title: 'Are you sure?',
+                text: "This will delete the sequence and all its data!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Yes, delete it!'
+            });
+            
+            if (result.isConfirmed) {
+                try {
+                    const response = await fetch(`/api/sequences/${id}`, { method: 'DELETE' });
+                    const data = await response.json();
+                    
+                    if (data.code === 'SUCCESS') {
+                        Swal.fire('Deleted!', 'Sequence has been deleted.', 'success');
+                        loadSequences();
+                    } else {
+                        Swal.fire('Error', data.message || 'Failed to delete sequence', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error deleting sequence:', error);
+                    Swal.fire('Error', 'Failed to delete sequence', 'error');
+                }
+            }
+        }
+        
+        async function updatePendingMessages(id) {
+            try {
+                // First, get preview of what will be updated
+                const previewResponse = await fetch(`/api/sequences/${id}/update-pending-messages`);
+                const previewData = await previewResponse.json();
+                
+                if (previewData.code === 'PREVIEW') {
+                    // Show preview to user
+                    let previewHtml = '<div class="text-start">';
+                    previewHtml += `<p><strong>Total messages to update:</strong> ${previewData.results.total_messages}</p>`;
+                    previewHtml += `<p><strong>Steps with changes:</strong> ${previewData.results.changed_steps}</p>`;
+                    
+                    if (previewData.results.steps && previewData.results.steps.length > 0) {
+                        previewHtml += '<div class="mt-3"><strong>Details:</strong><ul>';
+                        previewData.results.steps.forEach(step => {
+                            const changes = [];
+                            if (step.changes.content) changes.push('content');
+                            if (step.changes.media) changes.push('media');
+                            previewHtml += `<li>Day ${step.day}: ${step.message_count} messages (${changes.join(', ')} changed)</li>`;
+                        });
+                        previewHtml += '</ul></div>';
+                    }
+                    
+                    previewHtml += '</div>';
+                    
+                    const result = await Swal.fire({
+                        title: 'Update Pending Messages?',
+                        html: previewHtml,
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonColor: '#28a745',
+                        confirmButtonText: 'Yes, update them!',
+                        cancelButtonText: 'Cancel',
+                        width: 600
+                    });
+                    
+                    if (result.isConfirmed) {
+                        // Show loading
+                        Swal.fire({
+                            title: 'Updating Messages...',
+                            text: 'Please wait while we update the pending messages',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
+                        
+                        // Perform the update with confirm=true
+                        const updateResponse = await fetch(`/api/sequences/${id}/update-pending-messages?confirm=true`, {
+                            method: 'POST'
+                        });
+                        const updateData = await updateResponse.json();
+                        
+                        if (updateData.code === 'SUCCESS') {
+                            Swal.fire(
+                                'Updated!',
+                                `Successfully updated ${updateData.results.total_updated} messages in ${updateData.results.steps_updated} steps.`,
+                                'success'
+                            );
+                        } else {
+                            Swal.fire('Error', updateData.message || 'Failed to update messages', 'error');
+                        }
+                    }
+                } else if (previewData.results && previewData.results.total_messages === 0) {
+                    Swal.fire('No Changes', 'No pending messages need updating.', 'info');
+                } else {
+                    Swal.fire('Error', previewData.message || 'Failed to get update preview', 'error');
+                }
+            } catch (error) {
+                console.error('Error updating pending messages:', error);
+                Swal.fire('Error', 'Failed to update pending messages', 'error');
+            }
+        }
+        
+        function compressStepImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Start with original dimensions
+                    let width = img.width;
+                    let height = img.height;
+                    let quality = 0.9;
+                    
+                    // First resize if image is too large
+                    const maxSize = 1000;
+                    if (width > height) {
+                        if (width > maxSize) {
+                            height = (height * maxSize) / width;
+                            width = maxSize;
+                        }
+                    } else {
+                        if (height > maxSize) {
+                            width = (width * maxSize) / height;
+                            height = maxSize;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Find the corresponding hidden input and preview div
+                    const stepDiv = input.closest('.step-input');
+                    const hiddenInput = stepDiv.querySelector('.step-image-url');
+                    const previewDiv = stepDiv.querySelector('.step-image-preview');
+                    
+                    // Compress until under 350KB
+                    function tryCompress() {
+                        canvas.toBlob(function(blob) {
+                            if (blob.size > 350 * 1024 && quality > 0.1) {
+                                quality -= 0.1;
+                                tryCompress();
+                            } else {
+                                // Convert to base64
+                                const reader = new FileReader();
+                                reader.onload = function(e) {
+                                    hiddenInput.value = e.target.result;
+                                    previewDiv.innerHTML = 
+                                        `<img src="${e.target.result}" class="img-thumbnail" style="max-height: 150px;">
+                                         <small class="d-block mt-1">Size: ${(blob.size / 1024).toFixed(0)}KB</small>`;
+                                };
+                                reader.readAsDataURL(blob);
+                            }
+                        }, 'image/jpeg', quality);
+                    }
+                    
+                    tryCompress();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    </script>
+</body>
+</html>

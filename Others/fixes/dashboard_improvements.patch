@@ -1,0 +1,147 @@
+--- Dashboard Improvements Patch File ---
+--- This file contains all the fixes for the dashboard ---
+
+1. WORKER STATUS AUTO-REFRESH FIX
+=================================
+In src/views/dashboard.html, line 692:
+CHANGE: <input class="form-check-input" type="checkbox" id="workerAutoRefresh" checked>
+TO: <input class="form-check-input" type="checkbox" id="workerAutoRefresh">
+
+Also add after the refresh button (line 698):
+<button class="btn btn-success btn-sm ms-2" onclick="resumeFailedWorkers()">
+    <i class="bi bi-play-fill"></i> Resume Failed
+</button>
+<button class="btn btn-danger btn-sm ms-2" onclick="stopAllWorkers()">
+    <i class="bi bi-stop-fill"></i> Stop All
+</button>
+
+2. ADD WORKER CONTROL FUNCTIONS
+===============================
+Add after line 2750 (after loadWorkerStatus function):
+
+async function resumeFailedWorkers() {
+    try {
+        const response = await fetch('/api/workers/resume-failed', { method: 'POST' });
+        const data = await response.json();
+        if (data.code === 'SUCCESS') {
+            showToast('Failed workers resumed successfully', 'success');
+            loadWorkerStatus();
+        } else {
+            showToast(data.message || 'Failed to resume workers', 'error');
+        }
+    } catch (error) {
+        console.error('Error resuming workers:', error);
+        showToast('Failed to resume workers', 'error');
+    }
+}
+
+async function stopAllWorkers() {
+    const result = await Swal.fire({
+        title: 'Stop All Workers?',
+        text: 'This will stop all running workers',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'Yes, stop all!'
+    });
+    
+    if (result.isConfirmed) {
+        try {
+            const response = await fetch('/api/workers/stop-all', { method: 'POST' });
+            const data = await response.json();
+            if (data.code === 'SUCCESS') {
+                showToast('All workers stopped', 'success');
+                loadWorkerStatus();
+            } else {
+                showToast(data.message || 'Failed to stop workers', 'error');
+            }
+        } catch (error) {
+            console.error('Error stopping workers:', error);
+            showToast('Failed to stop workers', 'error');
+        }
+    }
+}
+
+3. FIX SEQUENCES DATA POPULATION
+================================
+In src/views/dashboard.html, update the displaySequences function (around line 2450):
+
+function displaySequences(sequences) {
+    const container = document.getElementById('sequencesContainer');
+    
+    if (!sequences || sequences.length === 0) {
+        // Keep the existing empty state HTML
+        return;
+    }
+    
+    let html = '<div class="row g-3">';
+    sequences.forEach(seq => {
+        const statusColor = seq.status === 'active' ? 'success' : 
+                           seq.status === 'paused' ? 'warning' : 'secondary';
+        
+        html += `
+            <div class="col-md-4">
+                <div class="card sequence-card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">${seq.name}</h5>
+                        <p class="text-muted mb-2">${seq.description || 'No description'}</p>
+                        <div class="mb-3">
+                            <small class="text-muted">Niche: ${seq.niche || 'Not set'}</small>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="badge bg-${statusColor}">${seq.status}</span>
+                            <small>${seq.contacts_count || 0} contacts</small>
+                        </div>
+                        <div class="progress mb-3" style="height: 5px;">
+                            <div class="progress-bar bg-${statusColor}" style="width: ${(seq.completed_count / seq.contacts_count * 100) || 0}%"></div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="window.location.href='/sequences/${seq.id}'">
+                                <i class="bi bi-eye"></i> View
+                            </button>
+                            <button class="btn btn-sm btn-outline-${seq.status === 'active' ? 'warning' : 'success'}" 
+                                    onclick="toggleSequence('${seq.id}', '${seq.status}')">
+                                <i class="bi bi-${seq.status === 'active' ? 'pause' : 'play'}"></i> 
+                                ${seq.status === 'active' ? 'Pause' : 'Start'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+4. ADD NAVIGATION BAR TO ALL PAGES
+==================================
+Add after the navbar closing tag (</nav>) in all HTML files:
+
+<div class="navigation-bar bg-light py-2 px-3 border-bottom">
+    <div class="container d-flex justify-content-between align-items-center">
+        <div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="history.back()">
+                <i class="bi bi-arrow-left"></i> Back
+            </button>
+            <button class="btn btn-sm btn-outline-primary ms-2" onclick="window.location.href='/dashboard'">
+                <i class="bi bi-house"></i> Home
+            </button>
+        </div>
+        <div class="breadcrumb mb-0">
+            <span class="text-muted">You are here: </span>
+            <span id="currentPage">Dashboard</span>
+        </div>
+    </div>
+</div>
+
+Also add this script to set the current page:
+<script>
+    // Set current page in breadcrumb
+    const pageName = document.title.split(' - ')[0] || 'Dashboard';
+    document.getElementById('currentPage').textContent = pageName;
+</script>
+
+5. UPDATE CAMPAIGN CALENDAR
+===========================
+Replace the renderCalendar function (
