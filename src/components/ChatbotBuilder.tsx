@@ -446,9 +446,11 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
           >
             <Controls 
               className="bg-card/80 backdrop-blur border-border/50 rounded-lg futuristic-border"
+              position="bottom-left"
             />
             <MiniMap 
               className="bg-card/80 backdrop-blur border-border/50 rounded-lg futuristic-border"
+              position="bottom-right"
               nodeColor={(node) => {
                 switch (node.type) {
                   case 'start': return 'hsl(var(--primary))'
