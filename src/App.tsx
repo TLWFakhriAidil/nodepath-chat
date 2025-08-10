@@ -34,56 +34,108 @@ const AppContent = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <AppSidebar />
-              
-              {/* Main content area */}
-              <div className="flex-1 min-h-screen flex flex-col">
-                {/* Header with sidebar trigger */}
-                <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
-                  <SidebarTrigger />
-                </header>
-
-                {/* Main content */}
-                <main className="flex-1 overflow-auto">
-                  <Routes>
-                    <Route 
-                      path="/" 
-                      element={<ChatbotBuilder onTestFlow={handleTestFlow} />} 
-                    />
-                    <Route 
-                      path="/flows" 
-                      element={
-                        <FlowManager 
-                          onCreateNew={handleCreateNewFlow}
-                          onTestFlow={handleTestFlow}
-                        />
-                      } 
-                    />
-                    <Route 
-                      path="/test" 
-                      element={<ChatSimulation key={testFlowId} preselectedFlowId={testFlowId} />} 
-                    />
-                    <Route path="/test-chat" element={
-                      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
-                        <TestChat />
-                      </Suspense>
-                    } />
-                    <Route path="/media" element={
-                      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
-                        <MediaManager />
-                      </Suspense>
-                    } />
-                     <Route path="/analytics" element={
-                       <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
-                         <LeadAnalytics />
-                       </Suspense>
-                     } />
-                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </main>
+    <div className="min-h-screen bg-background">
+      <Routes>
+        {/* Flow Builder with navigation sidebar */}
+        <Route 
+          path="/" 
+          element={
+            <div className="min-h-screen bg-background flex">
+              <AppSidebar />
+              <div className="flex-1 min-h-screen ml-56">
+                <ChatbotBuilder onTestFlow={handleTestFlow} />
               </div>
+            </div>
+          } 
+        />
+        
+        {/* Other routes use the sidebar layout */}
+        <Route path="/flows" element={
+          <div className="min-h-screen bg-background flex">
+            <AppSidebar />
+            
+            {/* Main content area */}
+            <div className="flex-1 min-h-screen flex flex-col">
+              {/* Header with sidebar trigger */}
+              <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+                <SidebarTrigger />
+              </header>
+
+              {/* Main content */}
+              <main className="flex-1 overflow-auto">
+                <FlowManager 
+                  onCreateNew={handleCreateNewFlow}
+                  onTestFlow={handleTestFlow}
+                />
+              </main>
+            </div>
+          </div>
+        } />
+        
+        <Route path="/test" element={
+          <div className="min-h-screen bg-background flex">
+            <AppSidebar />
+            <div className="flex-1 min-h-screen flex flex-col">
+              <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+                <SidebarTrigger />
+              </header>
+              <main className="flex-1 overflow-auto">
+                <ChatSimulation key={testFlowId} preselectedFlowId={testFlowId} />
+              </main>
+            </div>
+          </div>
+        } />
+        
+        <Route path="/test-chat" element={
+          <div className="min-h-screen bg-background flex">
+            <AppSidebar />
+            <div className="flex-1 min-h-screen flex flex-col">
+              <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+                <SidebarTrigger />
+              </header>
+              <main className="flex-1 overflow-auto">
+                <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                  <TestChat />
+                </Suspense>
+              </main>
+            </div>
+          </div>
+        } />
+        
+        <Route path="/media" element={
+          <div className="min-h-screen bg-background flex">
+            <AppSidebar />
+            <div className="flex-1 min-h-screen flex flex-col">
+              <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+                <SidebarTrigger />
+              </header>
+              <main className="flex-1 overflow-auto">
+                <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                  <MediaManager />
+                </Suspense>
+              </main>
+            </div>
+          </div>
+        } />
+        
+        <Route path="/analytics" element={
+          <div className="min-h-screen bg-background flex">
+            <AppSidebar />
+            <div className="flex-1 min-h-screen flex flex-col">
+              <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+                <SidebarTrigger />
+              </header>
+              <main className="flex-1 overflow-auto">
+                <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                  <LeadAnalytics />
+                </Suspense>
+              </main>
+            </div>
+          </div>
+        } />
+        
+        <Route path="*" element={<NotFound />} />
+      </Routes>
     </div>
   );
 };

@@ -305,15 +305,15 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   ];
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden cyber-grid">
-      {/* Futuristic Sidebar */}
-      <Card className="w-80 bg-card/95 backdrop-blur-xl border-border/50 rounded-none border-r overflow-y-auto futuristic-border">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold mb-6 text-foreground holographic-text">Chatbot Builder</h2>
+    <div className="w-full h-screen bg-background flex cyber-grid">
+      {/* Compact Tool Sidebar */}
+      <Card className="w-56 h-full bg-card/95 backdrop-blur-xl border-border/50 rounded-none border-r overflow-y-auto futuristic-border flex flex-col">
+        <div className="p-3 flex-1">
+          <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
           
-          <div className="space-y-4 mb-8">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-              <div className="w-2 h-2 bg-primary rounded-full pulse-glow"></div>
+          <div className="space-y-2 mb-4">
+            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <div className="w-1.5 h-1.5 bg-primary rounded-full pulse-glow"></div>
               Add Nodes
             </h3>
             {nodeTypeButtons.map(({ type, label, icon: Icon, color, gradient }) => (
@@ -321,86 +321,87 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                 key={type}
                 onClick={() => addNode(type)}
                 variant="outline"
-                className={`w-full justify-start h-12 ${color} text-white border-none hover:opacity-90 transition-all duration-300 glow-on-hover futuristic-border relative overflow-hidden group`}
+                className={`w-full justify-start h-9 ${color} text-white border-none hover:opacity-90 transition-all duration-300 glow-on-hover futuristic-border relative overflow-hidden group text-sm`}
               >
-                <Icon className="w-4 h-4 mr-3 relative z-10" />
+                <Icon className="w-3.5 h-3.5 mr-2 relative z-10" />
                 <span className="relative z-10">{label}</span>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
               </Button>
             ))}
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <Input
               placeholder="Flow name..."
               value={flowName}
               onChange={(e) => setFlowName(e.target.value)}
-              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 h-8 text-sm"
             />
             
             <Input
               placeholder="Global Instance..."
               value={globalInstance}
               onChange={(e) => setGlobalInstance(e.target.value)}
-              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 h-8 text-sm"
             />
             
             <Input
               placeholder="Global OpenRouter Key..."
               value={globalOpenRouterKey}
               onChange={(e) => setGlobalOpenRouterKey(e.target.value)}
-              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 h-8 text-sm"
             />
             
             <Button 
               onClick={saveFlowToStorage}
               variant="default"
-              className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary text-white glow-on-hover transition-all duration-300"
+              className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary text-white glow-on-hover transition-all duration-300 h-8 text-sm"
             >
-              <Save className="w-4 h-4 mr-2" />
+              <Save className="w-3.5 h-3.5 mr-2" />
               Save Flow
             </Button>
             
             <Button 
               onClick={exportFlow}
               variant="secondary" 
-              className="w-full bg-secondary/50 backdrop-blur border-border/50 hover:bg-secondary/70 glow-on-hover transition-all duration-300"
+              className="w-full bg-secondary/50 backdrop-blur border-border/50 hover:bg-secondary/70 glow-on-hover transition-all duration-300 h-8 text-sm"
             >
-              <Download className="w-4 h-4 mr-2" />
+              <Download className="w-3.5 h-3.5 mr-2" />
               Export JSON
             </Button>
             
             <Button 
               onClick={testFlow}
               variant="default" 
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-emerald-600 hover:to-green-500 text-white glow-on-hover transition-all duration-300"
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-emerald-600 hover:to-green-500 text-white glow-on-hover transition-all duration-300 h-8 text-sm"
             >
-              <Play className="w-4 h-4 mr-2" />
+              <Play className="w-3.5 h-3.5 mr-2" />
               Test Flow
             </Button>
           </div>
-
-          <div className="mt-8 p-4 bg-muted/30 backdrop-blur rounded-lg border border-border/50 futuristic-border">
-            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-primary rounded-full pulse-glow"></div>
-              Flow Stats
-            </h4>
-            <div className="text-sm text-muted-foreground space-y-1">
-              <div className="flex justify-between">
-                <span>Nodes:</span>
-                <span className="text-primary font-medium">{nodes.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Connections:</span>
-                <span className="text-primary font-medium">{edges.length}</span>
-              </div>
+        </div>
+        
+        {/* Flow Stats moved to bottom */}
+        <div className="p-3 border-t border-border/50 bg-muted/20 backdrop-blur">
+          <h4 className="text-xs font-medium mb-2 flex items-center gap-2">
+            <div className="w-1 h-1 bg-primary rounded-full pulse-glow"></div>
+            Flow Stats
+          </h4>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div className="flex justify-between">
+              <span>Nodes:</span>
+              <span className="text-primary font-medium">{nodes.length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Connections:</span>
+              <span className="text-primary font-medium">{edges.length}</span>
             </div>
           </div>
         </div>
       </Card>
 
       {/* Flow Canvas */}
-      <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-background via-background/95 to-background/90">
+      <div className="flex-1 h-full relative overflow-hidden bg-gradient-to-br from-background via-background/95 to-background/90">
         <ReactFlow
           nodes={nodes}
           edges={edges}

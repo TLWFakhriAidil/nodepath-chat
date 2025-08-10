@@ -75,20 +75,20 @@ export function AppSidebar() {
 
   return (
     <Sidebar
-      className={`fixed left-0 top-0 h-screen border-r border-border/50 bg-card/95 backdrop-blur-xl supports-[backdrop-filter]:bg-card/90 z-50 transition-all duration-300 futuristic-border ${isCollapsed ? "w-14" : "w-64"}`}
+      className={`fixed left-0 top-0 h-screen border-r border-border/50 bg-card/95 backdrop-blur-xl supports-[backdrop-filter]:bg-card/90 z-50 transition-all duration-300 futuristic-border ${isCollapsed ? "w-14" : "w-56"}`}
       collapsible="icon"
     >
       <SidebarContent className="bg-transparent">
         {/* Header */}
-        <div className="p-4 border-b border-border/50 bg-gradient-to-r from-primary/10 to-blue-600/10">
-          <div className="flex items-center gap-3">
+        <div className="p-3 border-b border-border/50 bg-gradient-to-r from-primary/10 to-blue-600/10">
+          <div className="flex items-center gap-2">
             <div className="relative">
-              <Bot className="w-7 h-7 text-primary drop-shadow-lg" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full pulse-glow"></div>
+              <Bot className="w-6 h-6 text-primary drop-shadow-lg" />
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full pulse-glow"></div>
             </div>
             {!isCollapsed && (
               <div>
-                <h1 className="font-bold text-lg text-foreground holographic-text">Chatbot Studio</h1>
+                <h1 className="font-bold text-base text-foreground holographic-text">Chatbot Studio</h1>
                 <p className="text-xs text-muted-foreground/80">Build conversational flows</p>
               </div>
             )}
