@@ -1,50 +1,52 @@
-# Use Node.js LTS version
-FROM node:18-alpine AS build
+FROM golang:1.24-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git build-base ca-certificates
 
 # Set working directory
-WORKDIR /app
+WORKDIR /src
 
-# Copy package files
-COPY package.json package-lock.json ./
+# Copy go mod files
+COPY go.mod go.sum ./
 
-# Install dependencies
-RUN npm install
+# Download dependencies
+RUN go mod download
 
-# Copy all files
+# Copy source code
 COPY . .
 
-# Build the application with fallback for failures
-RUN npm run build || (echo "Build failed, creating fallback files" && mkdir -p /app/dist && cp /app/public/index.html /app/dist/index.html)
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/server ./cmd/server
 
-# Production stage
-FROM node:18-alpine AS production
+# Final stage
+FROM alpine:latest
 
-# Install PHP and required extensions
-RUN apk add --no-cache php php-fpm php-pdo php-pdo_mysql php-json php-openssl
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates tzdata wget
+
+# Create app directory
+RUN mkdir -p /app
+
+# Copy binary from builder
+COPY --from=builder /app/bin/server /app/server
+
+# Copy templates and static files
+COPY --from=builder /src/templates /app/templates
+COPY --from=builder /src/static /app/static
 
 # Set working directory
 WORKDIR /app
 
-# Copy built assets from build stage
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/public ./public
-COPY --from=build /app/mysql-api.php ./mysql-api.php
-COPY --from=build /app/test-php.php ./test-php.php
-COPY --from=build /app/debug-api.php ./debug-api.php
-COPY --from=build /app/db-test.php ./db-test.php
-COPY --from=build /app/request-logger.php ./request-logger.php
-COPY --from=build /app/php.ini ./php.ini
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/healthcheck.js ./healthcheck.js
-COPY --from=build /app/start.sh ./start.sh
-RUN chmod +x ./start.sh
-
-# Install production dependencies and ensure vite is available
-RUN npm install --only=production
-RUN npm install -g vite
-
 # Expose port
-EXPOSE 4173
+EXPOSE 8080
 
-# Start the application
-CMD ["/bin/sh", "./start.sh"]
+# Set default environment variables
+ENV PORT=8080
+ENV APP_ENV=production
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/healthz || exit 1
+
+# Run the application
+CMD ["/app/server"]

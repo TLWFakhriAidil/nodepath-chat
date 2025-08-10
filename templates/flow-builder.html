@@ -1,0 +1,605 @@
+{{template "base.html" .}}
+
+{{define "head"}}
+<style>
+.flow-canvas {
+    background-color: #f8f9fa;
+    background-image: radial-gradient(circle, #dee2e6 1px, transparent 1px);
+    background-size: 20px 20px;
+    min-height: 600px;
+    position: relative;
+    overflow: auto;
+    border: 1px solid #dee2e6;
+}
+
+.flow-node {
+    position: absolute;
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    min-width: 200px;
+    cursor: move;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.2s;
+}
+
+.flow-node:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+}
+
+.flow-node.selected {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+
+.flow-node.ai-prompt {
+    border-color: #198754;
+}
+
+.flow-node.manual {
+    border-color: #fd7e14;
+}
+
+.flow-node.start {
+    border-color: #6f42c1;
+}
+
+.node-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.node-type-badge {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+}
+
+.node-content {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.node-actions {
+    display: none;
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.flow-node:hover .node-actions {
+    display: block;
+}
+
+.toolbox {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.toolbox-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    cursor: grab;
+    transition: all 0.2s;
+}
+
+.toolbox-item:hover {
+    background: #e9ecef;
+    transform: translateX(5px);
+}
+
+.toolbox-item:active {
+    cursor: grabbing;
+}
+
+.properties-panel {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.connection-point {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #0d6efd;
+    border: 2px solid white;
+    border-radius: 50%;
+    cursor: crosshair;
+}
+
+.connection-point.input {
+    top: 50%;
+    left: -6px;
+    transform: translateY(-50%);
+}
+
+.connection-point.output {
+    top: 50%;
+    right: -6px;
+    transform: translateY(-50%);
+}
+
+.flow-connection {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.flow-connection line {
+    stroke: #6c757d;
+    stroke-width: 2;
+    fill: none;
+}
+
+.flow-connection.selected line {
+    stroke: #0d6efd;
+    stroke-width: 3;
+}
+
+.zoom-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+}
+</style>
+{{end}}
+
+{{define "content"}}
+<div class="row">
+    <!-- Toolbox -->
+    <div class="col-md-2">
+        <div class="toolbox">
+            <h6 class="mb-3">
+                <i class="bi bi-tools"></i>
+                Node Types
+            </h6>
+            
+            <div class="toolbox-item" data-node-type="ai_prompt">
+                <i class="bi bi-robot text-success me-2"></i>
+                <div>
+                    <div class="fw-bold">AI Prompt</div>
+                    <small class="text-muted">AI-powered response</small>
+                </div>
+            </div>
+            
+            <div class="toolbox-item" data-node-type="manual">
+                <i class="bi bi-chat-text text-warning me-2"></i>
+                <div>
+                    <div class="fw-bold">Manual</div>
+                    <small class="text-muted">Static response</small>
+                </div>
+            </div>
+            
+            <div class="toolbox-item" data-node-type="condition">
+                <i class="bi bi-question-circle text-info me-2"></i>
+                <div>
+                    <div class="fw-bold">Condition</div>
+                    <small class="text-muted">Conditional logic</small>
+                </div>
+            </div>
+            
+            <div class="toolbox-item" data-node-type="delay">
+                <i class="bi bi-clock text-secondary me-2"></i>
+                <div>
+                    <div class="fw-bold">Delay</div>
+                    <small class="text-muted">Wait before next</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="toolbox mt-3">
+            <h6 class="mb-3">
+                <i class="bi bi-gear"></i>
+                Flow Settings
+            </h6>
+            
+            <div class="mb-3">
+                <label class="form-label">Flow Name</label>
+                <input type="text" id="flow-name" class="form-control" placeholder="Enter flow name">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Description</label>
+                <textarea id="flow-description" class="form-control" rows="3" placeholder="Enter flow description"></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Global Instance</label>
+                <input type="text" id="global-instance" class="form-control" placeholder="e.g., openai/gpt-4.1">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Global API Key</label>
+                <input type="password" id="global-api-key" class="form-control" placeholder="OpenRouter API key">
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button id="save-flow" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Save Flow
+                </button>
+                <button id="test-flow" class="btn btn-success">
+                    <i class="bi bi-play"></i> Test Flow
+                </button>
+                <button id="clear-canvas" class="btn btn-outline-danger">
+                    <i class="bi bi-trash"></i> Clear Canvas
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Canvas -->
+    <div class="col-md-7">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4>
+                <i class="bi bi-diagram-3"></i>
+                Flow Builder
+            </h4>
+            
+            <div class="zoom-controls">
+                <div class="btn-group">
+                    <button id="zoom-out" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-zoom-out"></i>
+                    </button>
+                    <button id="zoom-reset" class="btn btn-outline-secondary btn-sm">100%</button>
+                    <button id="zoom-in" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-zoom-in"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flow-canvas" id="flow-canvas">
+            <svg id="connections-svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
+                <!-- Connections will be drawn here -->
+            </svg>
+            
+            <!-- Nodes will be added here dynamically -->
+        </div>
+    </div>
+    
+    <!-- Properties Panel -->
+    <div class="col-md-3">
+        <div class="properties-panel">
+            <h6 class="mb-3">
+                <i class="bi bi-sliders"></i>
+                Node Properties
+            </h6>
+            
+            <div id="no-selection" class="text-center text-muted py-4">
+                <i class="bi bi-cursor text-muted" style="font-size: 2rem;"></i>
+                <p class="mt-2">Select a node to edit its properties</p>
+            </div>
+            
+            <div id="node-properties" style="display: none;">
+                <div class="mb-3">
+                    <label class="form-label">Node ID</label>
+                    <input type="text" id="node-id" class="form-control" readonly>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Node Type</label>
+                    <input type="text" id="node-type" class="form-control" readonly>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Label</label>
+                    <input type="text" id="node-label" class="form-control" placeholder="Enter node label">
+                </div>
+                
+                <!-- AI Prompt Properties -->
+                <div id="ai-prompt-properties" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">System Prompt</label>
+                        <textarea id="system-prompt" class="form-control" rows="4" placeholder="Enter system prompt for AI"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Instance</label>
+                        <input type="text" id="instance" class="form-control" placeholder="e.g., openai/gpt-4.1">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">API Provider (OpenRouter Key)</label>
+                        <input type="password" id="api-provider" class="form-control" placeholder="OpenRouter API key">
+                    </div>
+                </div>
+                
+                <!-- Manual Properties -->
+                <div id="manual-properties" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea id="manual-message" class="form-control" rows="4" placeholder="Enter manual response message"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Media URL (Optional)</label>
+                        <input type="url" id="media-url" class="form-control" placeholder="https://example.com/image.jpg">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Media Type</label>
+                        <select id="media-type" class="form-select">
+                            <option value="">No Media</option>
+                            <option value="image">Image</option>
+                            <option value="audio">Audio</option>
+                            <option value="video">Video</option>
+                            <option value="document">Document</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Condition Properties -->
+                <div id="condition-properties" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Condition</label>
+                        <textarea id="condition-logic" class="form-control" rows="3" placeholder="Enter condition logic"></textarea>
+                    </div>
+                </div>
+                
+                <!-- Delay Properties -->
+                <div id="delay-properties" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Delay (seconds)</label>
+                        <input type="number" id="delay-seconds" class="form-control" min="1" max="3600" value="5">
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 mt-3">
+                    <button id="update-node" class="btn btn-primary">
+                        <i class="bi bi-check"></i> Update Node
+                    </button>
+                    <button id="delete-node" class="btn btn-outline-danger">
+                        <i class="bi bi-trash"></i> Delete Node
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script src="/static/js/flow-builder.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize flow builder
+    window.flowBuilder = new FlowBuilder('#flow-canvas');
+    
+    // Load flow if ID is provided
+    const urlParams = new URLSearchParams(window.location.search);
+    const flowId = urlParams.get('id');
+    if (flowId) {
+        loadFlow(flowId);
+    }
+    
+    // Save flow
+    $('#save-flow').click(function() {
+        saveFlow();
+    });
+    
+    // Test flow
+    $('#test-flow').click(function() {
+        const flowData = window.flowBuilder.getFlowData();
+        if (flowData.nodes.length === 0) {
+            showToast('Warning', 'Please add some nodes to test the flow', 'warning');
+            return;
+        }
+        
+        // Save first, then redirect to test chat
+        saveFlow(function(savedFlowId) {
+            window.open('/test-chat?flow_id=' + savedFlowId, '_blank');
+        });
+    });
+    
+    // Clear canvas
+    $('#clear-canvas').click(function() {
+        if (confirm('Are you sure you want to clear the canvas? This will remove all nodes and connections.')) {
+            window.flowBuilder.clearCanvas();
+            clearProperties();
+        }
+    });
+    
+    // Update node properties
+    $('#update-node').click(function() {
+        updateSelectedNode();
+    });
+    
+    // Delete node
+    $('#delete-node').click(function() {
+        if (confirm('Are you sure you want to delete this node?')) {
+            window.flowBuilder.deleteSelectedNode();
+            clearProperties();
+        }
+    });
+    
+    // Zoom controls
+    $('#zoom-in').click(function() {
+        window.flowBuilder.zoomIn();
+    });
+    
+    $('#zoom-out').click(function() {
+        window.flowBuilder.zoomOut();
+    });
+    
+    $('#zoom-reset').click(function() {
+        window.flowBuilder.resetZoom();
+    });
+});
+
+function loadFlow(flowId) {
+    $.get('/api/flows/' + flowId)
+        .done(function(data) {
+            if (data.success && data.data) {
+                const flow = data.data;
+                
+                // Set flow properties
+                $('#flow-name').val(flow.name || '');
+                $('#flow-description').val(flow.description || '');
+                $('#global-instance').val(flow.global_instance || '');
+                $('#global-api-key').val(flow.global_open_router_key || '');
+                
+                // Load flow data into builder
+                window.flowBuilder.loadFlow(flow);
+                
+                showToast('Success', 'Flow loaded successfully', 'success');
+            }
+        })
+        .fail(function() {
+            showToast('Error', 'Failed to load flow', 'error');
+        });
+}
+
+function saveFlow(callback) {
+    const flowData = window.flowBuilder.getFlowData();
+    
+    const flow = {
+        name: $('#flow-name').val() || 'Unnamed Flow',
+        description: $('#flow-description').val() || '',
+        global_instance: $('#global-instance').val() || '',
+        global_open_router_key: $('#global-api-key').val() || '',
+        nodes: flowData.nodes,
+        edges: flowData.edges
+    };
+    
+    // Check if we're updating an existing flow
+    const urlParams = new URLSearchParams(window.location.search);
+    const flowId = urlParams.get('id');
+    
+    const method = flowId ? 'PUT' : 'POST';
+    const url = flowId ? '/api/flows/' + flowId : '/api/flows';
+    
+    $.ajax({
+        url: url,
+        method: method,
+        contentType: 'application/json',
+        data: JSON.stringify(flow)
+    })
+    .done(function(data) {
+        if (data.success) {
+            showToast('Success', 'Flow saved successfully', 'success');
+            
+            // Update URL if this was a new flow
+            if (!flowId && data.data && data.data.id) {
+                const newUrl = window.location.pathname + '?id=' + data.data.id;
+                window.history.replaceState({}, '', newUrl);
+            }
+            
+            if (callback) {
+                callback(data.data ? data.data.id : flowId);
+            }
+        }
+    })
+    .fail(function() {
+        showToast('Error', 'Failed to save flow', 'error');
+    });
+}
+
+function updateSelectedNode() {
+    const selectedNode = window.flowBuilder.getSelectedNode();
+    if (!selectedNode) return;
+    
+    const properties = {
+        label: $('#node-label').val(),
+    };
+    
+    // Add type-specific properties
+    switch (selectedNode.type) {
+        case 'ai_prompt':
+            properties.system_prompt = $('#system-prompt').val();
+            properties.instance = $('#instance').val();
+            properties.api_provider = $('#api-provider').val();
+            break;
+        case 'manual':
+            properties.message = $('#manual-message').val();
+            properties.media_url = $('#media-url').val();
+            properties.media_type = $('#media-type').val();
+            break;
+        case 'condition':
+            properties.condition = $('#condition-logic').val();
+            break;
+        case 'delay':
+            properties.delay_seconds = parseInt($('#delay-seconds').val()) || 5;
+            break;
+    }
+    
+    window.flowBuilder.updateNode(selectedNode.id, properties);
+    showToast('Success', 'Node updated successfully', 'success');
+}
+
+function clearProperties() {
+    $('#no-selection').show();
+    $('#node-properties').hide();
+    $('#ai-prompt-properties').hide();
+    $('#manual-properties').hide();
+    $('#condition-properties').hide();
+    $('#delay-properties').hide();
+}
+
+// Listen for node selection events
+$(document).on('nodeSelected', function(event, node) {
+    if (node) {
+        showNodeProperties(node);
+    } else {
+        clearProperties();
+    }
+});
+
+function showNodeProperties(node) {
+    $('#no-selection').hide();
+    $('#node-properties').show();
+    
+    // Hide all type-specific properties
+    $('#ai-prompt-properties').hide();
+    $('#manual-properties').hide();
+    $('#condition-properties').hide();
+    $('#delay-properties').hide();
+    
+    // Set basic properties
+    $('#node-id').val(node.id);
+    $('#node-type').val(node.type);
+    $('#node-label').val(node.data.label || '');
+    
+    // Show and populate type-specific properties
+    switch (node.type) {
+        case 'ai_prompt':
+            $('#ai-prompt-properties').show();
+            $('#system-prompt').val(node.data.system_prompt || '');
+            $('#instance').val(node.data.instance || '');
+            $('#api-provider').val(node.data.api_provider || '');
+            break;
+        case 'manual':
+            $('#manual-properties').show();
+            $('#manual-message').val(node.data.message || '');
+            $('#media-url').val(node.data.media_url || '');
+            $('#media-type').val(node.data.media_type || '');
+            break;
+        case 'condition':
+            $('#condition-properties').show();
+            $('#condition-logic').val(node.data.condition || '');
+            break;
+        case 'delay':
+            $('#delay-properties').show();
+            $('#delay-seconds').val(node.data.delay_seconds || 5);
+            break;
+    }
+}
+</script>
+{{end}}

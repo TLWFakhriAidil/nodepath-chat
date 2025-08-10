@@ -1,6 +1,6 @@
-# Chatbot Flow Builder System
+# NodePath Chat - WhatsApp AI Chatbot Platform
 
-A visual chatbot conversation flow builder built with React Flow, allowing users to create, edit, and manage complex chatbot interactions through a drag-and-drop interface.
+A comprehensive WhatsApp AI chatbot platform built with Go, Fiber, and whatsmeow. Features a visual flow builder, Test Chat simulator, MySQL persistence, OpenRouter integration, and real-time UI.
 
 **Project URL**: https://nodepath-chat-production.up.railway.app/
 

@@ -1,0 +1,230 @@
+package models
+
+import (
+	"encoding/json"
+	"time"
+)
+
+// FlowMode represents the execution mode of a chatbot flow
+type FlowMode string
+
+const (
+	FlowModeAuto     FlowMode = "AUTO"
+	FlowModeSemiAuto FlowMode = "SEMI-AUTO"
+	FlowModeManual   FlowMode = "MANUAL"
+)
+
+// NodeType represents the type of a flow node
+type NodeType string
+
+const (
+	NodeTypeAIPrompt NodeType = "ai_prompt"
+	NodeTypeManual   NodeType = "manual"
+	NodeTypeMessage  NodeType = "message"
+	NodeTypeImage    NodeType = "image"
+	NodeTypeAudio    NodeType = "audio"
+	NodeTypeVideo    NodeType = "video"
+	NodeTypeDelay    NodeType = "delay"
+	NodeTypeCondition NodeType = "condition"
+)
+
+// ExecutionStatus represents the status of a flow execution
+type ExecutionStatus string
+
+const (
+	ExecutionStatusActive    ExecutionStatus = "active"
+	ExecutionStatusCompleted ExecutionStatus = "completed"
+	ExecutionStatusFailed    ExecutionStatus = "failed"
+)
+
+// LeadStatus represents the status of a lead
+type LeadStatus string
+
+const (
+	LeadStatusNew       LeadStatus = "new"
+	LeadStatusContacted LeadStatus = "contacted"
+	LeadStatusQualified LeadStatus = "qualified"
+	LeadStatusConverted LeadStatus = "converted"
+)
+
+// MediaType represents the type of media
+type MediaType string
+
+const (
+	MediaTypeText  MediaType = "text"
+	MediaTypeImage MediaType = "image"
+	MediaTypeAudio MediaType = "audio"
+	MediaTypeVideo MediaType = "video"
+)
+
+// ChatbotFlow represents a chatbot flow configuration
+type ChatbotFlow struct {
+	ID                   string          `json:"id" db:"id"`
+	FlowID               string          `json:"flow_id" db:"flow_id"`
+	NodeID               string          `json:"node_id" db:"node_id"`
+	NodeType             NodeType        `json:"node_type" db:"node_type"`
+	Name                 string          `json:"name" db:"name"`
+	Description          string          `json:"description" db:"description"`
+	SystemPrompt         string          `json:"system_prompt" db:"system_prompt"`
+	Instance             string          `json:"instance" db:"instance"`
+	APIProvider          string          `json:"apiprovider" db:"apiprovider"`
+	GlobalInstance       string          `json:"global_instance" db:"global_instance"`
+	GlobalOpenRouterKey  string          `json:"global_open_router_key" db:"global_open_router_key"`
+	Mode                 FlowMode        `json:"mode" db:"mode"`
+	Nodes                json.RawMessage `json:"nodes" db:"nodes"`
+	Edges                json.RawMessage `json:"edges" db:"edges"`
+	CreatedAt            time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at" db:"updated_at"`
+}
+
+// FlowNode represents a single node in a flow
+type FlowNode struct {
+	ID           string                 `json:"id"`
+	Type         NodeType               `json:"type"`
+	Data         map[string]interface{} `json:"data"`
+	Position     Position               `json:"position"`
+	SystemPrompt string                 `json:"system_prompt,omitempty"`
+	Instance     string                 `json:"instance,omitempty"`
+	APIProvider  string                 `json:"apiprovider,omitempty"`
+}
+
+// FlowEdge represents a connection between nodes
+type FlowEdge struct {
+	ID       string `json:"id"`
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	SourceHandle string `json:"sourceHandle,omitempty"`
+	TargetHandle string `json:"targetHandle,omitempty"`
+}
+
+// Position represents the position of a node in the flow builder
+type Position struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// ChatbotExecution represents a flow execution instance
+type ChatbotExecution struct {
+	ID           string           `json:"id" db:"id"`
+	FlowID       string           `json:"flow_id" db:"flow_id"`
+	PhoneNumber  string           `json:"phone_number" db:"phone_number"`
+	StaffID      string           `json:"staff_id" db:"staff_id"`
+	ConvLast     json.RawMessage  `json:"conv_last" db:"conv_last"`
+	ConvCurrent  string           `json:"conv_current" db:"conv_current"`
+	CurrentNode  string           `json:"current_node" db:"current_node"`
+	Variables    json.RawMessage  `json:"variables" db:"variables"`
+	Status       ExecutionStatus  `json:"status" db:"status"`
+	CreatedAt    time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time        `json:"updated_at" db:"updated_at"`
+}
+
+// ConversationMessage represents a single message in a conversation
+type ConversationMessage struct {
+	Role    string `json:"role"`    // "USER" or "BOT"
+	Content string `json:"content"`
+}
+
+// ChatbotNodeManual represents manual node configuration
+type ChatbotNodeManual struct {
+	ID        string    `json:"id" db:"id"`
+	FlowID    string    `json:"flow_id" db:"flow_id"`
+	NodeID    string    `json:"node_id" db:"node_id"`
+	Message   string    `json:"message" db:"message"`
+	MediaType MediaType `json:"media_type" db:"media_type"`
+	MediaURL  string    `json:"media_url" db:"media_url"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// AISetting represents AI configuration for a specific node
+type AISetting struct {
+	ID           string  `json:"id" db:"id"`
+	FlowID       string  `json:"flow_id" db:"flow_id"`
+	NodeID       string  `json:"node_id" db:"node_id"`
+	SystemPrompt string  `json:"system_prompt" db:"system_prompt"`
+	Instance     string  `json:"instance" db:"instance"`
+	APIProvider  string  `json:"apiprovider" db:"apiprovider"`
+	Model        string  `json:"model" db:"model"`
+	Temperature  float64 `json:"temperature" db:"temperature"`
+	MaxTokens    int     `json:"max_tokens" db:"max_tokens"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// ChatbotLead represents a lead generated from chatbot interactions
+type ChatbotLead struct {
+	ID          string     `json:"id" db:"id"`
+	PhoneNumber string     `json:"phone_number" db:"phone_number"`
+	StaffID     string     `json:"staff_id" db:"staff_id"`
+	Name        string     `json:"name" db:"name"`
+	Email       string     `json:"email" db:"email"`
+	Status      LeadStatus `json:"status" db:"status"`
+	Source      string     `json:"source" db:"source"`
+	Notes       string     `json:"notes" db:"notes"`
+	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+// MediaFile represents an uploaded media file
+type MediaFile struct {
+	ID           string    `json:"id" db:"id"`
+	Filename     string    `json:"filename" db:"filename"`
+	OriginalName string    `json:"original_name" db:"original_name"`
+	MimeType     string    `json:"mime_type" db:"mime_type"`
+	Size         int64     `json:"size" db:"size"`
+	URL          string    `json:"url" db:"url"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+}
+
+// OpenRouterRequest represents a request to OpenRouter API
+type OpenRouterRequest struct {
+	Model    string                   `json:"model"`
+	Messages []OpenRouterMessage     `json:"messages"`
+	Stream   bool                     `json:"stream"`
+	Other    map[string]interface{}   `json:"-"`
+}
+
+// OpenRouterMessage represents a message in OpenRouter format
+type OpenRouterMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// OpenRouterResponse represents a response from OpenRouter API
+type OpenRouterResponse struct {
+	ID      string                 `json:"id"`
+	Object  string                 `json:"object"`
+	Created int64                  `json:"created"`
+	Model   string                 `json:"model"`
+	Choices []OpenRouterChoice     `json:"choices"`
+	Usage   OpenRouterUsage        `json:"usage"`
+}
+
+// OpenRouterChoice represents a choice in OpenRouter response
+type OpenRouterChoice struct {
+	Index        int                   `json:"index"`
+	Message      OpenRouterMessage     `json:"message"`
+	FinishReason string                `json:"finish_reason"`
+}
+
+// OpenRouterUsage represents usage statistics from OpenRouter
+type OpenRouterUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+// WebSocketMessage represents a WebSocket message
+type WebSocketMessage struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}
+
+// TestChatMessage represents a message in the test chat
+type TestChatMessage struct {
+	ID        string    `json:"id"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"timestamp"`
+	NodeID    string    `json:"node_id,omitempty"`
+}

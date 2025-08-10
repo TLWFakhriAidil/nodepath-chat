@@ -1,0 +1,731 @@
+{{template "base.html" .}}
+
+{{define "head"}}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+.metric-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.metric-card.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.metric-card.warning {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.metric-card.info {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.metric-change {
+    font-size: 0.8rem;
+    margin-top: 5px;
+}
+
+.chart-container {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.chart-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #495057;
+    margin: 0;
+}
+
+.time-filter {
+    display: flex;
+    gap: 5px;
+}
+
+.time-filter .btn {
+    padding: 5px 12px;
+    font-size: 0.8rem;
+}
+
+.flow-stats-table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.flow-stats-table .table {
+    margin-bottom: 0;
+}
+
+.flow-stats-table .table th {
+    background: #f8f9fa;
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+}
+
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-active {
+    background: #28a745;
+}
+
+.status-completed {
+    background: #17a2b8;
+}
+
+.status-failed {
+    background: #dc3545;
+}
+
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+}
+
+.refresh-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    border-radius: 50%;
+    width: 56px;
+    height: 56px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+</style>
+{{end}}
+
+{{define "content"}}
+<!-- Overview Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="metric-card">
+            <div class="metric-value" id="total-flows">0</div>
+            <div class="metric-label">Total Flows</div>
+            <div class="metric-change" id="flows-change">+0 this month</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card success">
+            <div class="metric-value" id="total-executions">0</div>
+            <div class="metric-label">Total Executions</div>
+            <div class="metric-change" id="executions-change">+0 this week</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card warning">
+            <div class="metric-value" id="success-rate">0%</div>
+            <div class="metric-label">Success Rate</div>
+            <div class="metric-change" id="success-change">+0% vs last week</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card info">
+            <div class="metric-value" id="avg-response-time">0ms</div>
+            <div class="metric-label">Avg Response Time</div>
+            <div class="metric-change" id="response-change">-0ms vs last week</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <!-- Executions Over Time -->
+    <div class="col-md-8">
+        <div class="chart-container">
+            <div class="chart-header">
+                <h5 class="chart-title">Executions Over Time</h5>
+                <div class="time-filter">
+                    <button class="btn btn-outline-primary btn-sm active" data-period="7d">7D</button>
+                    <button class="btn btn-outline-primary btn-sm" data-period="30d">30D</button>
+                    <button class="btn btn-outline-primary btn-sm" data-period="90d">90D</button>
+                </div>
+            </div>
+            <div class="loading-spinner" id="executions-loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <canvas id="executions-chart" style="display: none;"></canvas>
+        </div>
+    </div>
+    
+    <!-- Flow Mode Distribution -->
+    <div class="col-md-4">
+        <div class="chart-container">
+            <div class="chart-header">
+                <h5 class="chart-title">Flow Mode Distribution</h5>
+            </div>
+            <div class="loading-spinner" id="modes-loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <canvas id="modes-chart" style="display: none;"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Response Times and Success Rates -->
+<div class="row mb-4">
+    <!-- Response Times -->
+    <div class="col-md-6">
+        <div class="chart-container">
+            <div class="chart-header">
+                <h5 class="chart-title">Response Times</h5>
+            </div>
+            <div class="loading-spinner" id="response-loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <canvas id="response-chart" style="display: none;"></canvas>
+        </div>
+    </div>
+    
+    <!-- Success Rates -->
+    <div class="col-md-6">
+        <div class="chart-container">
+            <div class="chart-header">
+                <h5 class="chart-title">Success Rates by Flow</h5>
+            </div>
+            <div class="loading-spinner" id="success-loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <canvas id="success-chart" style="display: none;"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Flow Statistics Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="flow-stats-table">
+            <div class="chart-header" style="margin: 0; padding: 20px 20px 15px 20px;">
+                <h5 class="chart-title">Flow Performance</h5>
+                <div class="d-flex gap-2">
+                    <button id="refresh-stats" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                    <button id="export-stats" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Flow Name</th>
+                            <th>Mode</th>
+                            <th>Total Executions</th>
+                            <th>Active</th>
+                            <th>Completed</th>
+                            <th>Failed</th>
+                            <th>Success Rate</th>
+                            <th>Avg Response Time</th>
+                            <th>Last Activity</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="flow-stats-body">
+                        <tr>
+                            <td colspan="10" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Refresh Button -->
+<button id="refresh-all" class="btn btn-primary refresh-btn" title="Refresh All Data">
+    <i class="bi bi-arrow-clockwise"></i>
+</button>
+{{end}}
+
+{{define "scripts"}}
+<script>
+let charts = {};
+let refreshInterval;
+
+$(document).ready(function() {
+    // Load all analytics data
+    loadAnalyticsData();
+    
+    // Set up auto-refresh every 30 seconds
+    refreshInterval = setInterval(loadAnalyticsData, 30000);
+    
+    // Event handlers
+    $('#refresh-all').click(function() {
+        $(this).find('i').addClass('fa-spin');
+        loadAnalyticsData();
+        setTimeout(() => {
+            $(this).find('i').removeClass('fa-spin');
+        }, 1000);
+    });
+    
+    $('#refresh-stats').click(function() {
+        loadFlowStats();
+    });
+    
+    $('#export-stats').click(function() {
+        exportFlowStats();
+    });
+    
+    // Time filter handlers
+    $('.time-filter .btn').click(function() {
+        $('.time-filter .btn').removeClass('active');
+        $(this).addClass('active');
+        
+        const period = $(this).data('period');
+        loadExecutionsChart(period);
+    });
+});
+
+function loadAnalyticsData() {
+    loadOverviewMetrics();
+    loadExecutionsChart('7d');
+    loadModesChart();
+    loadResponseChart();
+    loadSuccessChart();
+    loadFlowStats();
+}
+
+function loadOverviewMetrics() {
+    $.get('/api/analytics/overview')
+        .done(function(data) {
+            if (data.success) {
+                const metrics = data.data;
+                
+                $('#total-flows').text(metrics.total_flows || 0);
+                $('#total-executions').text(metrics.active_executions || 0);
+                $('#success-rate').text((metrics.success_rate || 0).toFixed(1) + '%');
+                $('#avg-response-time').text(Math.round(metrics.avg_response_time || 0) + 'ms');
+                
+                // Update change indicators (mock data for now)
+                $('#flows-change').text('+' + Math.floor(Math.random() * 5) + ' this month');
+                $('#executions-change').text('+' + Math.floor(Math.random() * 20) + ' this week');
+                $('#success-change').text('+' + (Math.random() * 5).toFixed(1) + '% vs last week');
+                $('#response-change').text('-' + Math.floor(Math.random() * 50) + 'ms vs last week');
+            }
+        })
+        .fail(function() {
+            console.error('Failed to load overview metrics');
+        });
+}
+
+function loadExecutionsChart(period = '7d') {
+    $('#executions-loading').show();
+    $('#executions-chart').hide();
+    
+    // Mock data for executions over time
+    const days = period === '7d' ? 7 : (period === '30d' ? 30 : 90);
+    const labels = [];
+    const data = [];
+    
+    for (let i = days - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+        data.push(Math.floor(Math.random() * 50) + 10);
+    }
+    
+    setTimeout(() => {
+        $('#executions-loading').hide();
+        $('#executions-chart').show();
+        
+        if (charts.executions) {
+            charts.executions.destroy();
+        }
+        
+        const ctx = document.getElementById('executions-chart').getContext('2d');
+        charts.executions = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Executions',
+                    data: data,
+                    borderColor: '#4facfe',
+                    backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    }, 500);
+}
+
+function loadModesChart() {
+    $('#modes-loading').show();
+    $('#modes-chart').hide();
+    
+    // Mock data for flow modes
+    const modeData = {
+        'AUTO': Math.floor(Math.random() * 30) + 10,
+        'SEMI_AUTO': Math.floor(Math.random() * 20) + 5,
+        'MANUAL': Math.floor(Math.random() * 15) + 5
+    };
+    
+    setTimeout(() => {
+        $('#modes-loading').hide();
+        $('#modes-chart').show();
+        
+        if (charts.modes) {
+            charts.modes.destroy();
+        }
+        
+        const ctx = document.getElementById('modes-chart').getContext('2d');
+        charts.modes = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(modeData),
+                datasets: [{
+                    data: Object.values(modeData),
+                    backgroundColor: [
+                        '#28a745',
+                        '#ffc107',
+                        '#6c757d'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }, 500);
+}
+
+function loadResponseChart() {
+    $('#response-loading').show();
+    $('#response-chart').hide();
+    
+    // Mock data for response times
+    const responseData = [];
+    for (let i = 0; i < 24; i++) {
+        responseData.push(Math.floor(Math.random() * 1000) + 200);
+    }
+    
+    setTimeout(() => {
+        $('#response-loading').hide();
+        $('#response-chart').show();
+        
+        if (charts.response) {
+            charts.response.destroy();
+        }
+        
+        const ctx = document.getElementById('response-chart').getContext('2d');
+        charts.response = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => i + ':00'),
+                datasets: [{
+                    label: 'Response Time (ms)',
+                    data: responseData,
+                    backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                    borderColor: '#ffc107',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Response Time (ms)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Hour of Day'
+                        }
+                    }
+                }
+            }
+        });
+    }, 500);
+}
+
+function loadSuccessChart() {
+    $('#success-loading').show();
+    $('#success-chart').hide();
+    
+    // Mock data for success rates by flow
+    const flowNames = ['Customer Support', 'Lead Generation', 'FAQ Bot', 'Order Status', 'Feedback'];
+    const successRates = flowNames.map(() => Math.random() * 30 + 70); // 70-100%
+    
+    setTimeout(() => {
+        $('#success-loading').hide();
+        $('#success-chart').show();
+        
+        if (charts.success) {
+            charts.success.destroy();
+        }
+        
+        const ctx = document.getElementById('success-chart').getContext('2d');
+        charts.success = new Chart(ctx, {
+            type: 'horizontalBar',
+            data: {
+                labels: flowNames,
+                datasets: [{
+                    label: 'Success Rate (%)',
+                    data: successRates,
+                    backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                    borderColor: '#28a745',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Success Rate (%)'
+                        }
+                    }
+                }
+            }
+        });
+    }, 500);
+}
+
+function loadFlowStats() {
+    $.get('/api/flows')
+        .done(function(data) {
+            if (data.success && data.data) {
+                const flows = data.data;
+                const tbody = $('#flow-stats-body');
+                tbody.empty();
+                
+                if (flows.length === 0) {
+                    tbody.append(`
+                        <tr>
+                            <td colspan="10" class="text-center py-4 text-muted">
+                                <i class="bi bi-diagram-3" style="font-size: 2rem;"></i>
+                                <p class="mt-2 mb-0">No flows found</p>
+                            </td>
+                        </tr>
+                    `);
+                    return;
+                }
+                
+                flows.forEach(function(flow) {
+                    // Mock statistics for each flow
+                    const totalExecs = Math.floor(Math.random() * 100) + 10;
+                    const activeExecs = Math.floor(Math.random() * 10);
+                    const completedExecs = Math.floor(totalExecs * 0.8);
+                    const failedExecs = totalExecs - activeExecs - completedExecs;
+                    const successRate = ((completedExecs / (completedExecs + failedExecs)) * 100).toFixed(1);
+                    const avgResponseTime = Math.floor(Math.random() * 1000) + 200;
+                    
+                    const row = `
+                        <tr>
+                            <td>
+                                <strong>${escapeHtml(flow.name || 'Unnamed Flow')}</strong>
+                                <br>
+                                <small class="text-muted">${escapeHtml(flow.description || 'No description')}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-${getModeColor(flow.mode)}">${flow.mode || 'MANUAL'}</span>
+                            </td>
+                            <td>${totalExecs}</td>
+                            <td>
+                                <span class="status-indicator status-active"></span>
+                                ${activeExecs}
+                            </td>
+                            <td>
+                                <span class="status-indicator status-completed"></span>
+                                ${completedExecs}
+                            </td>
+                            <td>
+                                <span class="status-indicator status-failed"></span>
+                                ${failedExecs}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                                        <div class="progress-bar bg-success" style="width: ${successRate}%"></div>
+                                    </div>
+                                    <small>${successRate}%</small>
+                                </div>
+                            </td>
+                            <td>${avgResponseTime}ms</td>
+                            <td>
+                                <small>${formatDate(flow.updated_at || flow.created_at)}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="/analytics/flow/${flow.id}" class="btn btn-outline-primary" title="View Details">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="/flow-builder?id=${flow.id}" class="btn btn-outline-secondary" title="Edit Flow">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="/test-chat?flow_id=${flow.id}" class="btn btn-outline-success" title="Test Flow">
+                                        <i class="bi bi-play"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+            }
+        })
+        .fail(function() {
+            $('#flow-stats-body').html(`
+                <tr>
+                    <td colspan="10" class="text-center py-4 text-danger">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 2rem;"></i>
+                        <p class="mt-2 mb-0">Failed to load flow statistics</p>
+                    </td>
+                </tr>
+            `);
+        });
+}
+
+function exportFlowStats() {
+    // Mock export functionality
+    const csvData = 'Flow Name,Mode,Total Executions,Active,Completed,Failed,Success Rate,Avg Response Time\n';
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flow_stats_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('Success', 'Flow statistics exported successfully', 'success');
+}
+
+function getModeColor(mode) {
+    switch (mode) {
+        case 'AUTO': return 'success';
+        case 'SEMI_AUTO': return 'warning';
+        case 'MANUAL': return 'secondary';
+        default: return 'secondary';
+    }
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+}
+
+function escapeHtml(text) {
+    if (typeof text !== 'string') return text;
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Cleanup on page unload
+$(window).on('beforeunload', function() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+    
+    // Destroy all charts
+    Object.values(charts).forEach(chart => {
+        if (chart) chart.destroy();
+    });
+});
+</script>
+{{end}}
