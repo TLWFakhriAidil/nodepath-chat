@@ -58,5 +58,5 @@ test-*
 # Development folders
 New folder
 supabase
-public
-src
+# public - commented out because we need it for the Docker build
+# src - commented out because we need it for the Docker build
