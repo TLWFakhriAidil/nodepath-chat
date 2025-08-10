@@ -69,7 +69,21 @@ if (!$input || !is_array($input)) {
 
 $query = $input['query'] ?? '';
 $params = $input['params'] ?? [];
+
+// Get config from input or use environment variables as fallback
 $config = $input['config'] ?? [];
+
+// If config is empty or missing required fields, use environment variables
+if (empty($config) || empty($config['host']) || empty($config['user']) || empty($config['password']) || empty($config['database'])) {
+    $config = [
+        'host' => getenv('VITE_DB_HOST') ?: getenv('DB_HOST') ?: '159.89.198.71',
+        'database' => getenv('VITE_DB_NAME') ?: getenv('DB_NAME') ?: 'admin_railway',
+        'user' => getenv('VITE_DB_USER') ?: getenv('DB_USER') ?: 'admin_aqil',
+        'password' => getenv('VITE_DB_PASSWORD') ?: getenv('DB_PASSWORD') ?: 'admin_aqil',
+        'port' => getenv('VITE_DB_PORT') ?: getenv('DB_PORT') ?: '3306'
+    ];
+    debug_log('Using environment variables for database connection');
+}
 
 if (empty($query)) {
     http_response_code(400);

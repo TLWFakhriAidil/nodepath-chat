@@ -15,17 +15,19 @@ function debug_log($message) {
 debug_log('Starting database connection test');
 
 // Get database connection parameters from environment variables
-$host = getenv('DB_HOST') ?: 'localhost';
-$dbname = getenv('DB_NAME') ?: 'database';
-$user = getenv('DB_USER') ?: 'user';
-$pass = getenv('DB_PASSWORD') ?: 'password';
+// Check for both VITE_ prefixed variables (for local dev) and regular DB_ variables (for Railway)
+$host = getenv('VITE_DB_HOST') ?: getenv('DB_HOST') ?: '159.89.198.71';
+$dbname = getenv('VITE_DB_NAME') ?: getenv('DB_NAME') ?: 'admin_railway';
+$user = getenv('VITE_DB_USER') ?: getenv('DB_USER') ?: 'admin_aqil';
+$pass = getenv('VITE_DB_PASSWORD') ?: getenv('DB_PASSWORD') ?: 'admin_aqil';
+$port = getenv('VITE_DB_PORT') ?: getenv('DB_PORT') ?: '3306';
 
 debug_log("Connection parameters: host=$host, dbname=$dbname, user=$user");
 
 // Try to connect to the database
 try {
     // Construct DSN
-    $dsn = "mysql:host={$host};dbname={$dbname}";
+    $dsn = "mysql:host={$host};port={$port};dbname={$dbname}";
     debug_log("DSN: $dsn");
     
     // Set PDO options

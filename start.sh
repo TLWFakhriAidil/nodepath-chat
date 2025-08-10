@@ -275,6 +275,33 @@ echo "DB_HOST: ${DB_HOST:-not set}"
 echo "DB_NAME: ${DB_NAME:-not set}"
 echo "DB_USER: ${DB_USER:-not set}"
 echo "DB_PASSWORD: ${DB_PASSWORD:-masked}"
+echo "DB_PORT: ${DB_PORT:-not set}"
+
+# If environment variables are not set, use defaults
+if [ -z "$DB_HOST" ]; then
+  export DB_HOST="159.89.198.71"
+  echo "Using default DB_HOST: $DB_HOST"
+fi
+
+if [ -z "$DB_NAME" ]; then
+  export DB_NAME="admin_railway"
+  echo "Using default DB_NAME: $DB_NAME"
+fi
+
+if [ -z "$DB_USER" ]; then
+  export DB_USER="admin_aqil"
+  echo "Using default DB_USER: $DB_USER"
+fi
+
+if [ -z "$DB_PASSWORD" ]; then
+  export DB_PASSWORD="admin_aqil"
+  echo "Using default DB_PASSWORD: [masked]"
+fi
+
+if [ -z "$DB_PORT" ]; then
+  export DB_PORT="3306"
+  echo "Using default DB_PORT: $DB_PORT"
+fi
 
 # Start the application
 echo "Starting application..."

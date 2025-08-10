@@ -347,15 +347,48 @@ npm run dev
 ### Environment Configuration
 Currently no environment variables required due to localStorage fallback.
 
-For full MySQL functionality (when Edge Function is deployed):
+For full MySQL functionality, you need to set up environment variables:
+
+### Local Development (Vite)
 ```env
-# These would be used in Edge Function
-MYSQL_HOST=159.89.198.71
-MYSQL_PORT=3306
-MYSQL_USER=admin_aqil
-MYSQL_PASSWORD=admin_aqil
-MYSQL_DATABASE=admin_railway
+# For local development with Vite
+VITE_DB_HOST=159.89.198.71
+VITE_DB_NAME=admin_railway
+VITE_DB_USER=admin_aqil
+VITE_DB_PASSWORD=admin_aqil
+VITE_DB_PORT=3306
 ```
+
+### Railway Deployment
+```env
+# These should be set in Railway environment variables
+DB_HOST=159.89.198.71
+DB_NAME=admin_railway
+DB_USER=admin_aqil
+DB_PASSWORD=admin_aqil
+DB_PORT=3306
+```
+
+A `.env.example` file is provided as a template. Copy it to `.env` for local development.
+
+### Testing Database Connection
+
+To test the database connection, you can use one of the following methods:
+
+```bash
+# Using npm script
+npm run test:db
+
+# Using bash script (Linux/Mac)
+./test-db.sh
+
+# Using PowerShell script (Windows)
+.\test-db.ps1
+```
+
+These scripts will check your environment variables and test the database connection.
+
+For detailed instructions on deploying to Railway, see [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md).
 
 ## 📊 Success Metrics & Performance
 
@@ -432,11 +465,12 @@ MYSQL_DATABASE=admin_railway
 - Verify all required node fields are completed
 
 #### 2. "MySQL Connection Errors"
-**Cause**: Edge Function not deployed (expected issue)
+**Cause**: Missing environment variables or database connection issues
 **Solution**: 
-- ✅ System automatically uses localStorage
-- ✅ No user action required
-- ✅ All functionality preserved
+- ✅ System automatically falls back to localStorage
+- ✅ Set up environment variables in Railway (see [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md))
+- ✅ Run `npm run test:db` to test database connection
+- ✅ Check Railway logs for connection errors
 
 #### 3. "Nodes not connecting"
 **Cause**: Invalid handle connections
@@ -456,6 +490,9 @@ MYSQL_DATABASE=admin_railway
 - **Console Logs**: Available for all operations
 - **Network Requests**: All MySQL attempts logged
 - **localStorage**: Inspect browser dev tools → Application → localStorage
+- **Database Connection**: Run `npm run test:db` to test database connection
+- **PHP Test**: Access `/test-php.php` endpoint to check PHP environment
+- **DB Test**: Access `/db-test.php` endpoint to test database connection
 
 ## 🔮 Immediate Priorities
 
