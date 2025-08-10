@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Settings, Sparkles } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Settings, Sparkles, X, Send } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
@@ -221,15 +221,30 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     };
 
     console.log('Flow data to save:', flowData);
-    await saveFlow(flowData);
-    setCurrentFlowId(flowData.id);
     
-    console.log('Flow saved.');
-    
-    toast({
-      title: "Flow saved",
-      description: `"${flowName}" has been saved successfully`
-    });
+    try {
+      await saveFlow(flowData);
+      setCurrentFlowId(flowData.id);
+      
+      console.log('Flow saved successfully.');
+      
+      toast({
+        title: "Flow saved",
+        description: `"${flowName}" has been saved successfully`,
+        variant: "default"
+      });
+    } catch (error) {
+      console.error('Error saving flow:', error);
+      
+      toast({
+        title: "Save failed",
+        description: error instanceof Error ? error.message : 'Failed to save flow to database. Check console for details.',
+        variant: "destructive"
+      });
+      
+      // Still set the current flow ID for local editing
+      setCurrentFlowId(flowData.id);
+    }
   }, [flowName, currentFlowId, nodes, edges, toast]);
 
   const exportFlow = useCallback(() => {
@@ -251,78 +266,96 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     URL.revokeObjectURL(url);
   }, [nodes, edges]);
 
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testMessages, setTestMessages] = useState<Array<{type: 'user' | 'bot', content: string}>>([]);
+  const [testInput, setTestInput] = useState('');
+
+  const sendTestMessage = useCallback(() => {
+    if (!testInput.trim()) return;
+    
+    setTestMessages(prev => [...prev, { type: 'user', content: testInput }]);
+    
+    // Simple echo response for demo
+    setTimeout(() => {
+      setTestMessages(prev => [...prev, { type: 'bot', content: `Echo: ${testInput}` }]);
+    }, 500);
+    
+    setTestInput('');
+  }, [testInput]);
+
   const testFlow = useCallback(() => {
     if (!currentFlowId) {
       saveFlowToStorage();
       return;
     }
-    onTestFlow?.(currentFlowId);
-    navigate('/test');
-  }, [currentFlowId, saveFlowToStorage, onTestFlow, navigate]);
+    setShowTestModal(true);
+    setTestMessages([{ type: 'bot', content: 'Test flow started. Type a message to begin.' }]);
+  }, [currentFlowId, saveFlowToStorage]);
 
   const nodeTypeButtons = [
-    { type: 'message', label: 'Send Message', icon: MessageSquare, color: 'bg-node-message' },
-    { type: 'manual', label: 'Manual Response', icon: Settings, color: 'bg-blue-500' },
-    { type: 'prompt', label: 'AI Prompt', icon: Sparkles, color: 'bg-purple-500' },
-    { type: 'stage', label: 'Stage', icon: Settings, color: 'bg-orange-500' },
-    { type: 'image', label: 'Send Image', icon: Image, color: 'bg-blue-500' },
-    { type: 'audio', label: 'Send Audio', icon: Mic, color: 'bg-green-500' },
-    { type: 'video', label: 'Send Video', icon: Video, color: 'bg-purple-500' },
-    { type: 'delay', label: 'Delay', icon: Clock, color: 'bg-node-delay' },
-    { type: 'condition', label: 'Conditions', icon: GitBranch, color: 'bg-node-condition' },
+    { type: 'message', label: 'Send Message', icon: MessageSquare, color: 'bg-gradient-to-r from-blue-500 to-cyan-500', gradient: 'gradient-primary' },
+    { type: 'manual', label: 'Manual Response', icon: Settings, color: 'bg-gradient-to-r from-pink-500 to-rose-500', gradient: 'gradient-pink' },
+    { type: 'prompt', label: 'AI Prompt', icon: Sparkles, color: 'bg-gradient-to-r from-purple-500 to-violet-500', gradient: 'gradient-purple' },
+    { type: 'stage', label: 'Stage', icon: Settings, color: 'bg-gradient-to-r from-amber-500 to-orange-500', gradient: 'gradient-warning' },
+    { type: 'image', label: 'Send Image', icon: Image, color: 'bg-gradient-to-r from-blue-500 to-indigo-500', gradient: 'gradient-info' },
+    { type: 'audio', label: 'Send Audio', icon: Mic, color: 'bg-gradient-to-r from-green-500 to-emerald-500', gradient: 'gradient-success' },
+    { type: 'video', label: 'Send Video', icon: Video, color: 'bg-gradient-to-r from-purple-500 to-pink-500', gradient: 'gradient-purple' },
+    { type: 'delay', label: 'Delay', icon: Clock, color: 'bg-gradient-to-r from-orange-500 to-red-500', gradient: 'gradient-warning' },
+    { type: 'condition', label: 'Conditions', icon: GitBranch, color: 'bg-gradient-to-r from-violet-500 to-purple-500', gradient: 'gradient-purple' },
   ];
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden">
-      {/* Sidebar */}
-      <Card className="w-80 bg-card border-border rounded-none border-r overflow-y-auto">
+    <div className="h-screen bg-background flex overflow-hidden cyber-grid">
+      {/* Futuristic Sidebar */}
+      <Card className="w-80 bg-card/95 backdrop-blur-xl border-border/50 rounded-none border-r overflow-y-auto futuristic-border">
         <div className="p-6">
-          <h2 className="text-xl font-semibold mb-6 text-foreground">Chatbot Builder</h2>
+          <h2 className="text-2xl font-bold mb-6 text-foreground holographic-text">Chatbot Builder</h2>
           
           <div className="space-y-4 mb-8">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <div className="w-2 h-2 bg-primary rounded-full pulse-glow"></div>
               Add Nodes
             </h3>
-            {nodeTypeButtons.map(({ type, label, icon: Icon, color }) => (
+            {nodeTypeButtons.map(({ type, label, icon: Icon, color, gradient }) => (
               <Button
                 key={type}
                 onClick={() => addNode(type)}
                 variant="outline"
-                className="w-full justify-start h-12 border-border"
+                className={`w-full justify-start h-12 ${color} text-white border-none hover:opacity-90 transition-all duration-300 glow-on-hover futuristic-border relative overflow-hidden group`}
               >
-                <div className={`w-3 h-3 rounded-full ${color} mr-3`} />
-                <Icon className="w-4 h-4 mr-2" />
-                {label}
+                <Icon className="w-4 h-4 mr-3 relative z-10" />
+                <span className="relative z-10">{label}</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
               </Button>
             ))}
           </div>
 
           <div className="space-y-3">
             <Input
-              placeholder="Enter flow name..."
+              placeholder="Flow name..."
               value={flowName}
               onChange={(e) => setFlowName(e.target.value)}
-              className="w-full"
+              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
             />
             
             <Input
               placeholder="Global Instance..."
               value={globalInstance}
               onChange={(e) => setGlobalInstance(e.target.value)}
-              className="w-full"
+              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
             />
             
             <Input
               placeholder="Global OpenRouter Key..."
               value={globalOpenRouterKey}
               onChange={(e) => setGlobalOpenRouterKey(e.target.value)}
-              className="w-full"
+              className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
             />
             
             <Button 
               onClick={saveFlowToStorage}
               variant="default"
-              className="w-full"
+              className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary text-white glow-on-hover transition-all duration-300"
             >
               <Save className="w-4 h-4 mr-2" />
               Save Flow
@@ -331,7 +364,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
             <Button 
               onClick={exportFlow}
               variant="secondary" 
-              className="w-full"
+              className="w-full bg-secondary/50 backdrop-blur border-border/50 hover:bg-secondary/70 glow-on-hover transition-all duration-300"
             >
               <Download className="w-4 h-4 mr-2" />
               Export JSON
@@ -340,25 +373,34 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
             <Button 
               onClick={testFlow}
               variant="default" 
-              className="w-full bg-gradient-primary"
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-emerald-600 hover:to-green-500 text-white glow-on-hover transition-all duration-300"
             >
               <Play className="w-4 h-4 mr-2" />
               Test Flow
             </Button>
           </div>
 
-          <div className="mt-8 p-4 bg-muted/50 rounded-lg">
-            <h4 className="text-sm font-medium mb-2">Flow Stats</h4>
+          <div className="mt-8 p-4 bg-muted/30 backdrop-blur rounded-lg border border-border/50 futuristic-border">
+            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <div className="w-1.5 h-1.5 bg-primary rounded-full pulse-glow"></div>
+              Flow Stats
+            </h4>
             <div className="text-sm text-muted-foreground space-y-1">
-              <div>Nodes: {nodes.length}</div>
-              <div>Connections: {edges.length}</div>
+              <div className="flex justify-between">
+                <span>Nodes:</span>
+                <span className="text-primary font-medium">{nodes.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Connections:</span>
+                <span className="text-primary font-medium">{edges.length}</span>
+              </div>
             </div>
           </div>
         </div>
       </Card>
 
       {/* Flow Canvas */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-background via-background/95 to-background/90">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -369,26 +411,89 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
           nodeTypes={nodeTypes}
           fitView
           deleteKeyCode="Delete"
-          style={{ backgroundColor: 'hsl(var(--flow-background))' }}
+          className="bg-transparent"
           defaultEdgeOptions={{
             style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
             markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
           }}
         >
           <Controls 
-            className="bg-card border-border"
+            className="bg-card/80 backdrop-blur border-border/50 rounded-lg futuristic-border"
           />
           <MiniMap 
-            className="bg-card border-border"
-            style={{ backgroundColor: 'hsl(var(--card))' }}
+            className="bg-card/80 backdrop-blur border-border/50 rounded-lg futuristic-border"
+            nodeColor={(node) => {
+              switch (node.type) {
+                case 'start': return 'hsl(var(--primary))'
+                case 'message': return 'hsl(220 100% 60%)'
+                case 'condition': return 'hsl(45 100% 60%)'
+                case 'delay': return 'hsl(25 100% 60%)'
+                case 'image': return 'hsl(200 100% 60%)'
+                case 'audio': return 'hsl(120 100% 60%)'
+                case 'video': return 'hsl(280 100% 60%)'
+                case 'manual': return 'hsl(340 100% 60%)'
+                case 'prompt': return 'hsl(260 100% 60%)'
+                case 'stage': return 'hsl(35 100% 60%)'
+                default: return 'hsl(var(--muted-foreground))'
+              }
+            }}
             maskColor="hsl(var(--muted) / 0.3)"
           />
           <Background 
-            color="hsl(var(--border))" 
+            color="hsl(var(--primary) / 0.1)" 
             gap={20} 
-            style={{ backgroundColor: 'hsl(var(--flow-background))' }}
+            size={1}
+            variant="dots"
           />
         </ReactFlow>
+        {/* Test Modal */}
+        {showTestModal && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+            <Card className="w-96 max-h-96 overflow-y-auto bg-card/95 backdrop-blur-xl border-border/50 futuristic-border">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold holographic-text">Test Flow</h3>
+                  <Button
+                    onClick={() => setShowTestModal(false)}
+                    variant="ghost"
+                    size="sm"
+                    className="hover:bg-destructive/20 hover:text-destructive transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                <div className="space-y-4 max-h-64 overflow-y-auto">
+                  {testMessages.map((msg, index) => (
+                    <div key={index} className={`p-3 rounded-lg transition-all duration-300 ${
+                      msg.type === 'user' 
+                        ? 'bg-gradient-to-r from-primary to-blue-600 text-white ml-4 glow-on-hover' 
+                        : 'bg-muted/50 backdrop-blur mr-4 border border-border/50'
+                    }`}>
+                      {msg.content}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mt-4 flex gap-2">
+                  <Input
+                    placeholder="Type a message..."
+                    value={testInput}
+                    onChange={(e) => setTestInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendTestMessage()}
+                    className="flex-1 bg-input/50 backdrop-blur border-border/50 focus:border-primary focus:ring-primary/20"
+                  />
+                  <Button 
+                    onClick={sendTestMessage}
+                    className="bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary glow-on-hover"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );

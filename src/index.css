@@ -2,102 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Chatbot Builder Design System - Modern, professional colors */
+/* Futuristic AI Chatbot Design System - Modern, Tech-Forward */
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    /* Dark theme - Primary */
+    --background: 222 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 222 84% 4.9%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 240 5.9% 10%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 222 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 263 70% 50%;
+    /* Futuristic primary colors - Electric blue/cyan */
+    --primary: 199 89% 48%;
     --primary-foreground: 210 20% 98%;
 
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 263 70% 50%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 199 89% 48%;
 
     --radius: 0.75rem;
 
-    /* Chatbot Builder Specific Colors */
-    --flow-background: 240 8% 8%;
-    --node-message: 263 70% 50%;
-    --node-condition: 43 96% 56%;
-    --node-delay: 199 89% 48%;
-    --node-start: 142 76% 36%;
-    --node-shadow: 240 10% 3.9%;
+    /* Futuristic Flow Builder Colors */
+    --flow-background: 222 84% 4.9%;
+    --node-message: 199 89% 48%;     /* Electric blue */
+    --node-condition: 280 100% 70%;  /* Electric purple */
+    --node-delay: 45 93% 47%;        /* Electric orange */
+    --node-start: 142 76% 36%;       /* Electric green */
+    --node-manual: 320 100% 70%;     /* Electric pink */
+    --node-prompt: 260 100% 80%;     /* Electric violet */
+    --node-stage: 30 100% 50%;       /* Electric amber */
+    --node-shadow: 222 84% 4.9%;
     
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(263 70% 50%), hsl(273 80% 60%));
+    /* Futuristic Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(199 89% 48%), hsl(209 100% 60%));
     --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(152 86% 46%));
-    --gradient-warning: linear-gradient(135deg, hsl(43 96% 56%), hsl(53 100% 66%));
+    --gradient-warning: linear-gradient(135deg, hsl(45 93% 47%), hsl(55 100% 57%));
     --gradient-info: linear-gradient(135deg, hsl(199 89% 48%), hsl(209 99% 58%));
+    --gradient-purple: linear-gradient(135deg, hsl(280 100% 70%), hsl(290 100% 80%));
+    --gradient-pink: linear-gradient(135deg, hsl(320 100% 70%), hsl(330 100% 80%));
+    --gradient-cyber: linear-gradient(135deg, hsl(199 89% 48%), hsl(280 100% 70%), hsl(320 100% 70%));
     
-    /* Shadows */
-    --shadow-node: 0 4px 20px -4px hsl(var(--node-shadow) / 0.25);
-    --shadow-elevated: 0 8px 32px -8px hsl(var(--node-shadow) / 0.35);
+    /* Enhanced Shadows with Glow Effects */
+    --shadow-node: 0 4px 20px -4px hsl(var(--primary) / 0.25), 0 0 0 1px hsl(var(--primary) / 0.1);
+    --shadow-elevated: 0 8px 32px -8px hsl(var(--primary) / 0.35), 0 0 0 1px hsl(var(--primary) / 0.2);
+    --shadow-glow: 0 0 20px hsl(var(--primary) / 0.5);
+    --shadow-glow-strong: 0 0 30px hsl(var(--primary) / 0.7);
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar colors */
+    --sidebar-background: 222 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 199 89% 48%;
+    --sidebar-primary-foreground: 210 20% 98%;
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 199 89% 48%;
   }
 
   .light {
+    /* Light theme - Clean and modern */
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 222.2 84% 4.9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222.2 84% 4.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 263 70% 50%;
+    --primary: 199 89% 48%;
     --primary-foreground: 210 20% 98%;
 
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
     --ring: 263 70% 50%;
 
     --flow-background: 240 5% 96%;
@@ -176,10 +181,142 @@
 /* Flow Preview Styles */
 .flow-preview-node {
   @apply shadow-node;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .flow-preview-node:hover {
   @apply shadow-elevated;
-  transform: translateY(-2px);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Futuristic UI Enhancements */
+.futuristic-border {
+  position: relative;
+  overflow: hidden;
+}
+
+.futuristic-border::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.4), transparent);
+  transition: left 0.5s;
+}
+
+.futuristic-border:hover::before {
+  left: 100%;
+}
+
+/* Glowing button effect */
+.glow-on-hover {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.glow-on-hover:hover {
+  box-shadow: 0 0 20px hsl(var(--primary) / 0.6);
+  transform: translateY(-1px);
+}
+
+/* Animated gradient backgrounds */
+.gradient-animated {
+  background: linear-gradient(-45deg, hsl(var(--primary)), hsl(var(--node-condition)), hsl(var(--node-manual)), hsl(var(--primary)));
+  background-size: 400% 400%;
+  animation: gradientShift 4s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Pulse animation for active elements */
+.pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes pulseGlow {
+  from {
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.4);
+  }
+  to {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.8), 0 0 30px hsl(var(--primary) / 0.4);
+  }
+}
+
+/* Cyber grid background */
+.cyber-grid {
+  background-image: 
+    linear-gradient(hsl(var(--primary) / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--primary) / 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Holographic text effect */
+.holographic-text {
+  background: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--node-condition)), hsl(var(--node-manual)));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 200%;
+  animation: holographicShift 3s ease infinite;
+}
+
+@keyframes holographicShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Futuristic scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--node-condition)));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, hsl(var(--node-condition)), hsl(var(--primary)));
+  box-shadow: 0 0 10px hsl(var(--primary) / 0.5);
+}
+
+/* Node connection animations */
+.react-flow__edge-path {
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 4px hsl(var(--primary) / 0.6));
+  animation: connectionPulse 2s ease-in-out infinite;
+}
+
+@keyframes connectionPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+/* Enhanced node styles */
+.react-flow__node {
+  font-family: inherit;
+  filter: drop-shadow(0 0 8px hsl(var(--primary) / 0.3));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.react-flow__node:hover {
+  filter: drop-shadow(0 0 16px hsl(var(--primary) / 0.6));
+  transform: scale(1.02);
+}
+
+.react-flow__node.selected {
+  filter: drop-shadow(0 0 20px hsl(var(--primary) / 0.8));
+  transform: scale(1.05);
 }

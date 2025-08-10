@@ -75,18 +75,21 @@ export function AppSidebar() {
 
   return (
     <Sidebar
-      className={`fixed left-0 top-0 h-screen border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 transition-all duration-300 ${isCollapsed ? "w-14" : "w-64"}`}
+      className={`fixed left-0 top-0 h-screen border-r border-border/50 bg-card/95 backdrop-blur-xl supports-[backdrop-filter]:bg-card/90 z-50 transition-all duration-300 futuristic-border ${isCollapsed ? "w-14" : "w-64"}`}
       collapsible="icon"
     >
-      <SidebarContent>
+      <SidebarContent className="bg-transparent">
         {/* Header */}
-        <div className="p-4 border-b">
-          <div className="flex items-center gap-2">
-            <Bot className="w-6 h-6 text-primary" />
+        <div className="p-4 border-b border-border/50 bg-gradient-to-r from-primary/10 to-blue-600/10">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Bot className="w-7 h-7 text-primary drop-shadow-lg" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full pulse-glow"></div>
+            </div>
             {!isCollapsed && (
               <div>
-                <h1 className="font-semibold text-lg">Chatbot Studio</h1>
-                <p className="text-xs text-muted-foreground">Build conversational flows</p>
+                <h1 className="font-bold text-lg text-foreground holographic-text">Chatbot Studio</h1>
+                <p className="text-xs text-muted-foreground/80">Build conversational flows</p>
               </div>
             )}
           </div>
@@ -94,22 +97,29 @@ export function AppSidebar() {
 
         {/* Main Navigation */}
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-2 flex items-center gap-2">
+            <div className="w-2 h-2 bg-primary rounded-full pulse-glow"></div>
+            Navigation
+          </SidebarGroupLabel>
+          <SidebarGroupContent className="px-2">
+            <SidebarMenu className="space-y-1">
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="h-auto p-3">
-                    <NavLink to={item.url!} className={getNavClasses(item.url!)}>
-                      <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                  <SidebarMenuButton asChild className="h-auto p-0">
+                    <NavLink 
+                      to={item.url!} 
+                      className={`${getNavClasses(item.url!)} p-3 rounded-lg transition-all duration-300 hover:bg-primary/10 hover:border-primary/20 border border-transparent glow-on-hover group relative overflow-hidden`}
+                    >
+                      <item.icon className="mr-3 h-5 w-5 flex-shrink-0 text-primary group-hover:scale-110 transition-transform duration-300" />
                       {!isCollapsed && (
-                        <div className="flex-1">
-                          <div className="font-medium">{item.title}</div>
-                          <div className="text-xs text-muted-foreground">
+                        <div className="flex-1 relative z-10">
+                          <div className="font-medium text-foreground group-hover:text-primary transition-colors">{item.title}</div>
+                          <div className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
                             {item.description}
                           </div>
                         </div>
                       )}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -120,7 +130,11 @@ export function AppSidebar() {
 
         {/* Settings Section */}
         <SidebarGroup>
-          <SidebarGroupContent>
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-2 flex items-center gap-2">
+            <div className="w-2 h-2 bg-orange-500 rounded-full pulse-glow"></div>
+            Settings
+          </SidebarGroupLabel>
+          <SidebarGroupContent className="px-2">
             <SidebarMenu>
               <Collapsible 
                 open={isSettingsOpen} 
@@ -129,42 +143,44 @@ export function AppSidebar() {
               >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton className="h-auto p-3">
-                      <Settings className="mr-3 h-5 w-5 flex-shrink-0" />
+                    <SidebarMenuButton className="h-auto p-3 rounded-lg transition-all duration-300 hover:bg-orange-500/10 hover:border-orange-500/20 border border-transparent glow-on-hover group relative overflow-hidden">
+                      <Settings className="mr-3 h-5 w-5 flex-shrink-0 text-orange-500 group-hover:scale-110 transition-transform duration-300" />
                       {!isCollapsed && (
                         <>
-                          <div className="flex-1">
-                            <div className="font-medium">Settings</div>
-                            <div className="text-xs text-muted-foreground">
+                          <div className="flex-1 relative z-10">
+                            <div className="font-medium text-foreground group-hover:text-orange-500 transition-colors">Settings</div>
+                            <div className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
                               Configure application settings
                             </div>
                           </div>
                           {isSettingsOpen ? (
-                            <ChevronDown className="h-4 w-4" />
+                            <ChevronDown className="h-4 w-4 text-orange-500 transition-transform duration-300" />
                           ) : (
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4 text-orange-500 transition-transform duration-300" />
                           )}
                         </>
                       )}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
+                  <CollapsibleContent className="transition-all duration-300">
+                    <SidebarMenuSub className="space-y-1 mt-2">
                       {settingsItems.map((item) => (
                         <SidebarMenuSubItem key={item.title}>
                           <SidebarMenuSubButton
                             onClick={() => handleNavigationAction(item.action!)}
-                            className="cursor-pointer"
+                            className="cursor-pointer h-auto p-3 rounded-lg transition-all duration-300 hover:bg-orange-500/10 hover:border-orange-500/20 border border-transparent glow-on-hover group relative overflow-hidden ml-4"
                           >
-                            <item.icon className="mr-2 h-4 w-4" />
+                            <item.icon className="mr-3 h-4 w-4 text-orange-500 group-hover:scale-110 transition-transform duration-300" />
                             {!isCollapsed && (
-                              <div className="flex-1">
-                                <div className="font-medium text-sm">{item.title}</div>
-                                <div className="text-xs text-muted-foreground">
+                              <div className="flex-1 relative z-10">
+                                <div className="font-medium text-sm text-foreground group-hover:text-orange-500 transition-colors">{item.title}</div>
+                                <div className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
                                   {item.description}
                                 </div>
                               </div>
                             )}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       ))}
