@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { 
   Bot, 
   Workflow, 
@@ -7,7 +7,14 @@ import {
   FolderOpen, 
   Image,
   BarChart3,
-  
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  Home,
+  Smartphone,
+  Brain,
+  User,
+  HelpCircle
 } from 'lucide-react';
 import {
   Sidebar,
@@ -18,61 +25,50 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   useSidebar,
 } from '@/components/ui/sidebar';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { useSidebarNavigation, createNavigationItem } from '@/hooks/useSidebarNavigation';
 
+// Main navigation items
 const mainItems = [
-  { 
-    title: 'Flow Builder', 
-    url: '/', 
-    icon: Workflow,
-    description: 'Create and edit chatbot flows'
-  },
-  { 
-    title: 'Flow Manager', 
-    url: '/flows', 
-    icon: FolderOpen,
-    description: 'Manage and preview saved flows'
-  },
-  { 
-    title: 'Test Chat', 
-    url: '/test', 
-    icon: MessageCircle,
-    description: 'Test your chatbot flows'
-  },
-  { 
-    title: 'Media Library', 
-    url: '/media', 
-    icon: Image,
-    description: 'Manage images, audio, and video files'
-  },
-  { 
-    title: 'Lead Analytics', 
-    url: '/analytics', 
-    icon: BarChart3,
-    description: 'Track and analyze leads from chatbot conversations'
-  }
+  createNavigationItem('Dashboard', Home, 'Overview and quick access', '/dashboard'),
+  createNavigationItem('Flow Builder', Workflow, 'Create and edit chatbot flows', '/'),
+  createNavigationItem('Flow Manager', FolderOpen, 'Manage and preview saved flows', '/flows'),
+  createNavigationItem('Test Chat', MessageCircle, 'Test your chatbot flows', '/test'),
+  createNavigationItem('Media Library', Image, 'Manage images, audio, and video files', '/media'),
+  createNavigationItem('Lead Analytics', BarChart3, 'Track and analyze leads from chatbot conversations', '/analytics')
+];
+
+// Settings navigation items
+const settingsItems = [
+  createNavigationItem('WhatsApp', Smartphone, 'Configure WhatsApp integration', 'whatsapp-modal'),
+  createNavigationItem('AI Settings', Brain, 'Configure AI model settings', 'ai-settings-modal'),
+  createNavigationItem('Profile', User, 'Manage your profile settings', 'profile-settings'),
+  createNavigationItem('Help & Support', HelpCircle, 'Get help and support', 'help-support')
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const location = useLocation();
-  const currentPath = location.pathname;
   const isCollapsed = state === 'collapsed';
+  
+  // Use the custom navigation hook
+  const {
+    expandedSections,
+    isActive,
+    getNavClasses,
+    toggleSection,
+    handleNavigationAction
+  } = useSidebarNavigation([...mainItems, ...settingsItems]);
 
-  const isActive = (path: string) => {
-    if (path === '/' && currentPath === '/') return true;
-    if (path !== '/' && currentPath.startsWith(path)) return true;
-    return false;
-  };
-
-  const getNavCls = (path: string) => {
-    const active = isActive(path);
-    return active 
-      ? "bg-primary/10 text-primary font-medium border-l-2 border-primary" 
-      : "hover:bg-muted/50 text-foreground";
-  };
+  const isSettingsOpen = expandedSections['settings'] || false;
 
   return (
     <Sidebar
@@ -93,6 +89,7 @@ export function AppSidebar() {
           </div>
         </div>
 
+        {/* Main Navigation */}
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -100,7 +97,7 @@ export function AppSidebar() {
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild className="h-auto p-3">
-                    <NavLink to={item.url} className={getNavCls(item.url)}>
+                    <NavLink to={item.url!} className={getNavClasses(item.url!)}>
                       <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
                       {!isCollapsed && (
                         <div className="flex-1">
@@ -114,6 +111,65 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Settings Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Settings</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <Collapsible 
+                open={isSettingsOpen} 
+                onOpenChange={() => toggleSection('settings')}
+                className="group/collapsible"
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton className="h-auto p-3">
+                      <Settings className="mr-3 h-5 w-5 flex-shrink-0" />
+                      {!isCollapsed && (
+                        <>
+                          <div className="flex-1">
+                            <div className="font-medium">Settings</div>
+                            <div className="text-xs text-muted-foreground">
+                              Configure application settings
+                            </div>
+                          </div>
+                          {isSettingsOpen ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </>
+                      )}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {settingsItems.map((item) => (
+                        <SidebarMenuSubItem key={item.title}>
+                          <SidebarMenuSubButton
+                            onClick={() => handleNavigationAction(item.action!)}
+                            className="cursor-pointer"
+                          >
+                            <item.icon className="mr-2 h-4 w-4" />
+                            {!isCollapsed && (
+                              <div className="flex-1">
+                                <div className="font-medium text-sm">{item.title}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {item.description}
+                                </div>
+                              </div>
+                            )}
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
