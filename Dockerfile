@@ -3,14 +3,22 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files and npm configuration
+COPY package*.json .npmrc ./
 
 # Install dependencies
 RUN npm ci
 
-# Copy source code
-COPY . .
+# Copy source code and configuration files needed for build
+COPY src/ ./src/
+COPY public/ ./public/
+COPY index.html ./
+COPY vite.config.ts ./
+COPY tsconfig*.json ./
+COPY tailwind.config.ts ./
+COPY postcss.config.js ./
+COPY components.json ./
+COPY eslint.config.js ./
 
 # Build the React application
 RUN npm run build
