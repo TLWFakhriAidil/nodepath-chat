@@ -34,18 +34,18 @@ const AppContent = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex">
       <AppSidebar />
               
-              {/* Main content area with responsive left margin for sidebar */}
-              <div className={`${isCollapsed ? 'ml-14' : 'ml-64'} min-h-screen flex flex-col transition-all duration-300`}>
+              {/* Main content area */}
+              <div className="flex-1 min-h-screen flex flex-col">
                 {/* Header with sidebar trigger */}
-                <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                  <SidebarTrigger className="ml-4" />
+                <header className="h-12 flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+                  <SidebarTrigger />
                 </header>
 
                 {/* Main content */}
-                <main className="flex-1 overflow-hidden">
+                <main className="flex-1 overflow-auto">
                   <Routes>
                     <Route 
                       path="/" 

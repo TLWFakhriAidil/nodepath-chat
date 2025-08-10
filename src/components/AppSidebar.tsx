@@ -14,7 +14,9 @@ import {
   Smartphone,
   Brain,
   User,
-  HelpCircle
+  HelpCircle,
+  GitBranch,
+  MessageSquare
 } from 'lucide-react';
 import {
   Sidebar,
@@ -118,7 +120,6 @@ export function AppSidebar() {
 
         {/* Settings Section */}
         <SidebarGroup>
-          <SidebarGroupLabel>Settings</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <Collapsible 
