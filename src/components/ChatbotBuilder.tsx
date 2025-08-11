@@ -17,7 +17,7 @@ import '@xyflow/react/dist/style.css';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Sparkles, X, Send, Bot } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Play, Download, Upload, Image, Mic, Video, Save, Sparkles, X, Send, Bot } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
@@ -225,6 +225,70 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     URL.revokeObjectURL(url);
   }, [nodes, edges]);
 
+  const importFlow = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const flowData = JSON.parse(event.target?.result as string);
+          
+          if (flowData.nodes && Array.isArray(flowData.nodes)) {
+            // Clear current flow
+            setNodes([]);
+            setEdges([]);
+            
+            // Import nodes
+            const importedNodes = flowData.nodes.map((node: any) => ({
+              id: node.id || `node_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+              type: node.type || 'message',
+              position: node.position || { x: Math.random() * 400, y: Math.random() * 400 },
+              data: {
+                ...node.data,
+                onDelete: deleteNode,
+                onUpdate: updateNodeData,
+              }
+            }));
+            
+            // Import edges if they exist
+            const importedEdges = (flowData.edges || []).map((edge: any) => ({
+              id: edge.id || `${edge.source}-${edge.target}`,
+              source: edge.source,
+              target: edge.target,
+              sourceHandle: edge.sourceHandle,
+              targetHandle: edge.targetHandle
+            }));
+            
+            setNodes(importedNodes);
+            setEdges(importedEdges);
+            
+            toast({
+              title: "Flow imported",
+              description: `Successfully imported ${importedNodes.length} nodes and ${importedEdges.length} connections`,
+              variant: "default"
+            });
+          } else {
+            throw new Error('Invalid flow format');
+          }
+        } catch (error) {
+          console.error('Error importing flow:', error);
+          toast({
+            title: "Import failed",
+            description: "Failed to import flow. Please check the file format.",
+            variant: "destructive"
+          });
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, [setNodes, setEdges, deleteNode, updateNodeData, toast]);
+
   const [showTestModal, setShowTestModal] = useState(false);
   const [testMessages, setTestMessages] = useState<Array<{type: 'user' | 'bot', content: string}>>([]);
   const [testInput, setTestInput] = useState('');
@@ -366,6 +430,15 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                    </Button>
                    
                    <Button
+                     onClick={importFlow}
+                     size="sm"
+                     variant="outline"
+                     className="h-7 text-xs border-border/50 hover:bg-background/80"
+                   >
+                     <Upload className="w-3 h-3" />
+                   </Button>
+                   
+                   <Button
                      onClick={testFlow}
                      size="sm"
                      className="h-7 text-xs bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white border-0 shadow-lg"
@@ -422,8 +495,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                 style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
                 markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
               }}
-              panOnScroll
-              selectionOnDrag
+              panOnScroll={true}
+              selectionOnDrag={true}
               panOnDrag={[1, 2]}
               selectNodesOnDrag={false}
               nodesDraggable={true}
@@ -433,18 +506,29 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
               snapGrid={[15, 15]}
               connectionMode="loose"
               defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+              zoomOnScroll={true}
+              zoomOnPinch={true}
+              zoomOnDoubleClick={true}
+              preventScrolling={false}
             >
               <Controls 
                 className="!bg-background/95 !border-border/50 backdrop-blur rounded-lg shadow-xl"
                 position="bottom-left"
+                showZoom={true}
+                showFitView={true}
+                showInteractive={true}
                 style={{ 
                   bottom: '20px', 
                   left: '20px', 
-                  transform: 'scale(0.9)', 
+                  transform: 'scale(1.1)', 
                   transformOrigin: 'bottom left', 
                   zIndex: 1000,
                   visibility: 'visible',
-                  opacity: 1
+                  opacity: 1,
+                  backgroundColor: 'hsl(var(--background))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                  padding: '4px'
                 }}
               />
               <MiniMap 

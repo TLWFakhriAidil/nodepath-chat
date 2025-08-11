@@ -40,8 +40,8 @@ export const useMySQLAPI = () => {
       
       console.log('Sending payload:', JSON.stringify(payload));
       
-      // Use direct API endpoint instead of Supabase Edge Function
-      const response = await fetch('https://nodepath-chat-production.up.railway.app/mysql-api.php', {
+      // Use local PHP endpoint for MySQL operations
+      const response = await fetch('/mysql-api.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
