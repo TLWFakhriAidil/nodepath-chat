@@ -89,8 +89,6 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     [setNodes]
   );
 
-
-
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
@@ -274,145 +272,169 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
             <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
             
             <div className="space-y-2 mb-4">
+               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                 <div className="w-1.5 h-1.5 bg-primary rounded-full pulse-glow"></div>
+                 Add Nodes
+               </h3>
+               
+               <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+                 <div className="grid gap-1.5 pr-1">
+                   {nodeTypeButtons.map((nodeType) => {
+                     const IconComponent = nodeType.icon;
+                     return (
+                       <Button
+                         key={nodeType.type}
+                         onClick={() => addNode(nodeType.type)}
+                         variant="ghost"
+                         size="sm"
+                         className={`w-full justify-start text-xs h-8 ${nodeType.color} text-white hover:opacity-90 transition-all duration-200 transform hover:scale-105 shadow-lg border-0`}
+                       >
+                         <IconComponent className="w-3.5 h-3.5 mr-2" />
+                         {nodeType.label}
+                       </Button>
+                     );
+                   })}
+                 </div>
+               </div>
+             </div>
+
+            {/* Flow Controls */}
+            <div className="space-y-2 mb-4">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-primary rounded-full pulse-glow"></div>
-                Add Nodes
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full pulse-glow"></div>
+                Flow Controls
               </h3>
-              {nodeTypeButtons.map(({ type, label, icon: Icon, color, gradient }) => (
-                <Button
-                  key={type}
-                  onClick={() => addNode(type)}
-                  variant="outline"
-                  className={`w-full justify-start h-9 ${color} text-white border-none hover:opacity-90 transition-all duration-300 glow-on-hover futuristic-border relative overflow-hidden group text-sm`}
-                >
-                  <Icon className="w-3.5 h-3.5 mr-2 relative z-10" />
-                  <span className="relative z-10">{label}</span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-                </Button>
-              ))}
+              
+              <div className="space-y-1.5">
+                <Input
+                  placeholder="Flow name..."
+                  value={flowName}
+                  onChange={(e) => setFlowName(e.target.value)}
+                  className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
+                />
+                
+                <div className="flex gap-1">
+                  <Button
+                    onClick={saveFlowToStorage}
+                    size="sm"
+                    className="flex-1 h-7 text-xs bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 shadow-lg"
+                  >
+                    <Save className="w-3 h-3 mr-1" />
+                    Save
+                  </Button>
+                  
+                  <Button
+                    onClick={exportFlow}
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-border/50 hover:bg-background/80"
+                  >
+                    <Download className="w-3 h-3" />
+                  </Button>
+                  
+                  <Button
+                    onClick={testFlow}
+                    size="sm"
+                    className="h-7 text-xs bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white border-0 shadow-lg"
+                  >
+                    <Play className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
             </div>
 
+            {/* Flow Stats */}
             <div className="space-y-2">
-              <Input
-                placeholder="Flow name..."
-                value={flowName}
-                onChange={(e) => setFlowName(e.target.value)}
-                className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 h-8 text-sm"
-              />
-              
-              <Input
-                placeholder="Global Instance..."
-                value={globalInstance}
-                onChange={(e) => setGlobalInstance(e.target.value)}
-                className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 h-8 text-sm"
-              />
-              
-              <Input
-                placeholder="Global OpenRouter Key..."
-                value={globalOpenRouterKey}
-                onChange={(e) => setGlobalOpenRouterKey(e.target.value)}
-                className="bg-input/50 backdrop-blur border-border/50 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 h-8 text-sm"
-              />
-              
-              <Button 
-                onClick={saveFlowToStorage}
-                variant="default"
-                className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary text-white glow-on-hover transition-all duration-300 h-8 text-sm"
-              >
-                <Save className="w-3.5 h-3.5 mr-2" />
-                Save Flow
-              </Button>
-              
-              <Button 
-                onClick={exportFlow}
-                variant="secondary" 
-                className="w-full bg-secondary/50 backdrop-blur border-border/50 hover:bg-secondary/70 glow-on-hover transition-all duration-300 h-8 text-sm"
-              >
-                <Download className="w-3.5 h-3.5 mr-2" />
-                Export JSON
-              </Button>
-              
-              <Button 
-                onClick={testFlow}
-                variant="default" 
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-emerald-600 hover:to-green-500 text-white glow-on-hover transition-all duration-300 h-8 text-sm"
-              >
-                <Play className="w-3.5 h-3.5 mr-2" />
-                Test Flow
-              </Button>
-            </div>
-          </div>
-          
-          {/* Flow Stats moved to bottom */}
-          <div className="p-3 border-t border-border/50 bg-muted/20 backdrop-blur">
-            <h4 className="text-xs font-medium mb-2 flex items-center gap-2">
-              <div className="w-1 h-1 bg-primary rounded-full pulse-glow"></div>
-              Flow Stats
-            </h4>
-            <div className="text-xs text-muted-foreground space-y-1">
-              <div className="flex justify-between">
-                <span>Nodes:</span>
-                <span className="text-primary font-medium">{nodes.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Connections:</span>
-                <span className="text-primary font-medium">{edges.length}</span>
+              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full pulse-glow"></div>
+                Flow Stats
+              </h4>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <div className="flex justify-between">
+                  <span>Nodes:</span>
+                  <span className="text-primary font-medium">{nodes.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Connections:</span>
+                  <span className="text-primary font-medium">{edges.length}</span>
+                </div>
               </div>
             </div>
           </div>
         </Card>
 
         {/* Flow Canvas */}
-        <div className="flex-1 h-full relative overflow-auto bg-gradient-to-br from-background via-background/95 to-background/90">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onEdgesDelete={onEdgesDelete}
-            nodeTypes={nodeTypes}
-            fitView
-            deleteKeyCode="Delete"
-            className="bg-transparent min-h-[200vh] min-w-[200vw]"
-            defaultEdgeOptions={{
-              style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
-              markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
-            }}
-          >
-            <Controls 
-              className="bg-card/90 backdrop-blur border-border/50 rounded-md shadow-lg scale-75 origin-bottom-left"
-              position="bottom-left"
-              style={{ bottom: '10px', left: '10px' }}
-            />
-            <MiniMap 
-              className="bg-card/90 backdrop-blur border-border/50 rounded-md shadow-lg scale-75 origin-bottom-right"
-              position="bottom-right"
-              style={{ bottom: '10px', right: '10px', width: '120px', height: '90px' }}
-              nodeColor={(node) => {
-                switch (node.type) {
-                  case 'start': return 'hsl(var(--primary))'
-                  case 'message': return 'hsl(220 100% 60%)'
-                  case 'condition': return 'hsl(45 100% 60%)'
-                  case 'delay': return 'hsl(25 100% 60%)'
-                  case 'image': return 'hsl(200 100% 60%)'
-                  case 'audio': return 'hsl(120 100% 60%)'
-                  case 'video': return 'hsl(280 100% 60%)'
-                  case 'manual': return 'hsl(340 100% 60%)'
-                  case 'prompt': return 'hsl(260 100% 60%)'
-                  case 'stage': return 'hsl(35 100% 60%)'
-                  default: return 'hsl(var(--muted-foreground))'
-                }
+        <div className="flex-1 h-full relative bg-gradient-to-br from-background via-background/95 to-background/90">
+          <div className="w-full h-full">
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onEdgesDelete={onEdgesDelete}
+              nodeTypes={nodeTypes}
+              fitView
+              fitViewOptions={{
+                padding: 0.2,
+                minZoom: 0.1,
+                maxZoom: 2
               }}
-              maskColor="hsl(var(--muted) / 0.3)"
-            />
-            <Background 
-              color="hsl(var(--primary) / 0.1)" 
-              gap={20} 
-              size={1}
-              variant="dots"
-            />
-          </ReactFlow>
+              minZoom={0.05}
+              maxZoom={4}
+              defaultZoom={0.8}
+              deleteKeyCode="Delete"
+              className="bg-transparent"
+              defaultEdgeOptions={{
+                style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
+              }}
+              panOnScroll
+              selectionOnDrag
+              panOnDrag={[1, 2]}
+              selectNodesOnDrag={false}
+              nodesDraggable={true}
+              nodesConnectable={true}
+              elementsSelectable={true}
+              snapToGrid={true}
+              snapGrid={[15, 15]}
+              connectionMode="loose"
+              defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+            >
+              <Controls 
+                className="!bg-white/95 dark:!bg-slate-800/95 backdrop-blur border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl"
+                position="bottom-left"
+                style={{ bottom: '20px', left: '20px', transform: 'scale(0.8)', transformOrigin: 'bottom left', zIndex: 1000 }}
+              />
+              <MiniMap 
+                className="!bg-white/95 dark:!bg-slate-800/95 backdrop-blur border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl"
+                position="bottom-right"
+                style={{ bottom: '20px', right: '20px', width: '150px', height: '100px', transform: 'scale(0.8)', transformOrigin: 'bottom right', zIndex: 1000 }}
+                nodeColor={(node) => {
+                  switch (node.type) {
+                    case 'start': return 'hsl(var(--primary))'
+                    case 'message': return 'hsl(220 100% 60%)'
+                    case 'condition': return 'hsl(45 100% 60%)'
+                    case 'delay': return 'hsl(25 100% 60%)'
+                    case 'image': return 'hsl(200 100% 60%)'
+                    case 'audio': return 'hsl(120 100% 60%)'
+                    case 'video': return 'hsl(280 100% 60%)'
+                    case 'manual': return 'hsl(340 100% 60%)'
+                    case 'prompt': return 'hsl(260 100% 60%)'
+                    case 'stage': return 'hsl(35 100% 60%)'
+                    default: return 'hsl(var(--muted-foreground))'
+                  }
+                }}
+                maskColor="hsl(var(--muted) / 0.3)"
+              />
+              <Background 
+                color="hsl(var(--primary) / 0.1)" 
+                gap={20} 
+                size={1}
+                variant="dots"
+              />
+            </ReactFlow>
+          </div>
           
           {/* Test Modal */}
           {showTestModal && (
@@ -431,30 +453,30 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                     </Button>
                   </div>
                   
-                  <div className="space-y-4 max-h-64 overflow-y-auto">
+                  <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
                     {testMessages.map((msg, index) => (
-                      <div key={index} className={`p-3 rounded-lg transition-all duration-300 ${
-                        msg.type === 'user' 
-                          ? 'bg-gradient-to-r from-primary to-blue-600 text-white ml-4 glow-on-hover' 
-                          : 'bg-muted/50 backdrop-blur mr-4 border border-border/50'
-                      }`}>
-                        {msg.content}
+                      <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-xs p-2 rounded-lg text-sm ${
+                          msg.type === 'user' 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {msg.type === 'bot' && <Bot className="w-3 h-3 inline mr-1" />}
+                          {msg.content}
+                        </div>
                       </div>
                     ))}
                   </div>
                   
-                  <div className="mt-4 flex gap-2">
+                  <div className="flex gap-2">
                     <Input
                       placeholder="Type a message..."
                       value={testInput}
                       onChange={(e) => setTestInput(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && sendTestMessage()}
-                      className="flex-1 bg-input/50 backdrop-blur border-border/50 focus:border-primary focus:ring-primary/20"
+                      className="flex-1"
                     />
-                    <Button 
-                      onClick={sendTestMessage}
-                      className="bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary glow-on-hover"
-                    >
+                    <Button onClick={sendTestMessage} size="sm">
                       <Send className="w-4 h-4" />
                     </Button>
                   </div>
