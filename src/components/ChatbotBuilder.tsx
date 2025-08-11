@@ -274,30 +274,6 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
             <div className="p-3">
               <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
               
-              {/* API Configuration */}
-              <div className="space-y-2 mb-4">
-                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-orange-500 rounded-full pulse-glow"></div>
-                  API Configuration
-                </h3>
-                
-                <div className="space-y-1.5">
-                  <Input
-                    placeholder="Field Instance..."
-                    value={fieldInstance}
-                    onChange={(e) => setFieldInstance(e.target.value)}
-                    className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
-                  />
-                  <Input
-                    placeholder="OpenRouter API Key..."
-                    type="password"
-                    value={openRouterApiKey}
-                    onChange={(e) => setOpenRouterApiKey(e.target.value)}
-                    className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
-                  />
-                </div>
-              </div>
-              
               <div className="space-y-2 mb-4">
                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                    <div className="w-1.5 h-1.5 bg-primary rounded-full pulse-glow"></div>
@@ -368,23 +344,47 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                 </div>
               </div>
 
-              {/* Flow Stats */}
-              <div className="space-y-2 mb-4">
-                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full pulse-glow"></div>
-                  Flow Stats
-                </h4>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div className="flex justify-between">
-                    <span>Nodes:</span>
-                    <span className="text-primary font-medium">{nodes.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Connections:</span>
-                    <span className="text-primary font-medium">{edges.length}</span>
-                  </div>
-                </div>
-              </div>
+              {/* API Configuration */}
+               <div className="space-y-2 mb-4">
+                 <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                   <div className="w-1.5 h-1.5 bg-orange-500 rounded-full pulse-glow"></div>
+                   API Configuration
+                 </h3>
+                 
+                 <div className="space-y-1.5">
+                   <Input
+                     placeholder="Field Instance..."
+                     value={fieldInstance}
+                     onChange={(e) => setFieldInstance(e.target.value)}
+                     className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
+                   />
+                   <Input
+                     placeholder="OpenRouter API Key..."
+                     type="password"
+                     value={openRouterApiKey}
+                     onChange={(e) => setOpenRouterApiKey(e.target.value)}
+                     className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
+                   />
+                 </div>
+               </div>
+
+               {/* Flow Stats */}
+               <div className="space-y-2 mb-6">
+                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full pulse-glow"></div>
+                   Flow Stats
+                 </h4>
+                 <div className="text-xs text-muted-foreground space-y-1">
+                   <div className="flex justify-between">
+                     <span>Nodes:</span>
+                     <span className="text-primary font-medium">{nodes.length}</span>
+                   </div>
+                   <div className="flex justify-between">
+                     <span>Connections:</span>
+                     <span className="text-primary font-medium">{edges.length}</span>
+                   </div>
+                 </div>
+               </div>
             </div>
           </div>
         </Card>
