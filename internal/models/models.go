@@ -37,15 +37,7 @@ const (
 	ExecutionStatusFailed    ExecutionStatus = "failed"
 )
 
-// LeadStatus represents the status of a lead
-type LeadStatus string
 
-const (
-	LeadStatusNew       LeadStatus = "new"
-	LeadStatusContacted LeadStatus = "contacted"
-	LeadStatusQualified LeadStatus = "qualified"
-	LeadStatusConverted LeadStatus = "converted"
-)
 
 // MediaType represents the type of media
 type MediaType string
@@ -114,57 +106,7 @@ type ConversationMessage struct {
 	Content string `json:"content"`
 }
 
-// ChatbotNodeManual represents manual node configuration
-type ChatbotNodeManual struct {
-	ID            string    `json:"id" db:"id"`
-	FlowReference string    `json:"flow_reference" db:"flow_reference"`
-	NodeReference string    `json:"node_reference" db:"node_reference"`
-	Message       string    `json:"message" db:"message"`
-	MediaType     MediaType `json:"media_type" db:"media_type"`
-	MediaURL      string    `json:"media_url" db:"media_url"`
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
-}
 
-// AISetting represents AI configuration for a specific node
-type AISetting struct {
-	ID            string  `json:"id" db:"id"`
-	FlowReference string  `json:"flow_reference" db:"flow_reference"`
-	NodeReference string  `json:"node_reference" db:"node_reference"`
-	SystemPrompt  string  `json:"system_prompt" db:"system_prompt"`
-	Instance      string  `json:"instance" db:"instance"`
-	APIProvider   string  `json:"apiprovider" db:"apiprovider"`
-	Model         string  `json:"model" db:"model"`
-	Temperature   float64 `json:"temperature" db:"temperature"`
-	MaxTokens     int     `json:"max_tokens" db:"max_tokens"`
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
-}
-
-// ChatbotLead represents a lead generated from chatbot interactions
-type ChatbotLead struct {
-	ID          string     `json:"id" db:"id"`
-	PhoneNumber string     `json:"phone_number" db:"phone_number"`
-	StaffID     string     `json:"staff_id" db:"staff_id"`
-	Name        string     `json:"name" db:"name"`
-	Email       string     `json:"email" db:"email"`
-	Status      LeadStatus `json:"status" db:"status"`
-	Source      string     `json:"source" db:"source"`
-	Notes       string     `json:"notes" db:"notes"`
-	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
-}
-
-// MediaFile represents an uploaded media file
-type MediaFile struct {
-	ID           string    `json:"id" db:"id"`
-	Filename     string    `json:"filename" db:"filename"`
-	OriginalName string    `json:"original_name" db:"original_name"`
-	MimeType     string    `json:"mime_type" db:"mime_type"`
-	Size         int64     `json:"size" db:"size"`
-	URL          string    `json:"url" db:"url"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-}
 
 // OpenRouterRequest represents a request to OpenRouter API
 type OpenRouterRequest struct {

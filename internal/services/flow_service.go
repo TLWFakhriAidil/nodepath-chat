@@ -55,7 +55,7 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"flow_id": flow.ID,
+		"flow_reference": flow.ID,
 		"name":    flow.Name,
 	}).Info("Flow created successfully")
 
@@ -143,7 +143,7 @@ func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"flow_id": flow.ID,
+		"flow_reference": flow.ID,
 		"name":    flow.Name,
 	}).Info("Flow updated successfully")
 
@@ -158,7 +158,7 @@ func (s *FlowService) DeleteFlow(flowID string) error {
 		return fmt.Errorf("failed to delete flow: %w", err)
 	}
 
-	logrus.WithField("flow_id", flowID).Info("Flow deleted successfully")
+	logrus.WithField("flow_reference", flowID).Info("Flow deleted successfully")
 	return nil
 }
 

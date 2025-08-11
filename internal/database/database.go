@@ -42,10 +42,6 @@ func RunMigrations(db *sql.DB) error {
 	migrations := []string{
 		createFlowsTable,
 		createExecutionsTable,
-		createNodeManualTable,
-		createAISettingsTable,
-		createLeadsTable,
-		createMediaFilesTable,
 	}
 
 	for i, migration := range migrations {
@@ -99,71 +95,7 @@ CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-const createNodeManualTable = `
-CREATE TABLE IF NOT EXISTS chatbot_node_manual (
-    id VARCHAR(255) PRIMARY KEY,
-    flow_reference VARCHAR(255) NOT NULL,
-    node_reference VARCHAR(255) NOT NULL,
-    message TEXT COLLATE utf8mb4_unicode_ci,
-    media_type ENUM('text', 'image', 'audio', 'video') DEFAULT 'text',
-    media_url VARCHAR(500),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_flow_reference (flow_reference),
-    INDEX idx_node_reference (node_reference)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`
 
-const createAISettingsTable = `
-CREATE TABLE IF NOT EXISTS ai_setting_nodepath (
-    id VARCHAR(255) PRIMARY KEY,
-    flow_reference VARCHAR(255) NOT NULL,
-    node_reference VARCHAR(255) NOT NULL,
-    system_prompt TEXT COLLATE utf8mb4_unicode_ci,
-    instance VARCHAR(255),
-    apiprovider VARCHAR(255),
-    model VARCHAR(100) DEFAULT 'openai/gpt-4.1',
-    temperature DECIMAL(3,2) DEFAULT 0.7,
-    max_tokens INT DEFAULT 1000,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_flow_reference (flow_reference),
-    INDEX idx_node_reference (node_reference)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`
-
-const createLeadsTable = `
-CREATE TABLE IF NOT EXISTS chatbot_leads (
-    id VARCHAR(255) PRIMARY KEY,
-    phone_number VARCHAR(20) NOT NULL,
-    staff_id VARCHAR(255) NOT NULL,
-    name VARCHAR(255),
-    email VARCHAR(255),
-    status ENUM('new', 'contacted', 'qualified', 'converted') DEFAULT 'new',
-    source VARCHAR(100) DEFAULT 'whatsapp',
-    notes TEXT COLLATE utf8mb4_unicode_ci,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_phone_staff (phone_number, staff_id),
-    INDEX idx_phone_number (phone_number),
-    INDEX idx_staff_id (staff_id),
-    INDEX idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`
-
-const createMediaFilesTable = `
-CREATE TABLE IF NOT EXISTS media_files (
-    id VARCHAR(255) PRIMARY KEY,
-    filename VARCHAR(255) NOT NULL,
-    original_name VARCHAR(255),
-    mime_type VARCHAR(100),
-    size BIGINT,
-    url VARCHAR(500),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_filename (filename),
-    INDEX idx_mime_type (mime_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`
 
 // addMissingColumnsToFlowsTable adds missing columns to the flows table
 func addMissingColumnsToFlowsTable(db *sql.DB) error {
@@ -173,7 +105,6 @@ func addMissingColumnsToFlowsTable(db *sql.DB) error {
 	}{
 		{"global_instance", "VARCHAR(255)"},
 		{"global_open_router_key", "VARCHAR(500)"},
-		{"mode", "VARCHAR(50) DEFAULT 'standard'"},
 	}
 
 	for _, col := range columns {
