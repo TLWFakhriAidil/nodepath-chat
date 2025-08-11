@@ -67,51 +67,6 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
   const { toast } = useToast();
 
-  // Load flow data when flowId is provided
-  useEffect(() => {
-    const loadFlowData = async () => {
-      if (!flowId) return;
-      
-      try {
-        const flowData = await getFlow(flowId);
-        if (flowData) {
-          setFlowName(flowData.name);
-          setCurrentFlowId(flowData.id);
-          setFieldInstance(flowData.globalInstance || '');
-          setOpenRouterApiKey(flowData.globalOpenRouterKey || '');
-          
-          // Load nodes with proper callbacks
-          const loadedNodes = flowData.nodes.map((node: any) => ({
-            ...node,
-            data: {
-              ...node.data,
-              onDelete: deleteNode,
-              onUpdate: updateNodeData,
-            }
-          }));
-          
-          setNodes(loadedNodes);
-          setEdges(flowData.edges || []);
-          
-          toast({
-            title: "Flow loaded",
-            description: `"${flowData.name}" has been loaded for editing`,
-            variant: "default"
-          });
-        }
-      } catch (error) {
-        console.error('Error loading flow:', error);
-        toast({
-          title: "Load failed",
-          description: "Failed to load flow data",
-          variant: "destructive"
-        });
-      }
-    };
-    
-    loadFlowData();
-  }, [flowId, setNodes, setEdges, toast, deleteNode, updateNodeData]);
-
   const deleteNode = useCallback(
     (nodeId: string) => {
       setNodes((nds) => nds.filter((node) => node.id !== nodeId));
@@ -182,6 +137,51 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     },
     [setNodes, deleteNode, updateNodeData]
   );
+
+  // Load flow data when flowId is provided
+  useEffect(() => {
+    const loadFlowData = async () => {
+      if (!flowId) return;
+      
+      try {
+        const flowData = await getFlow(flowId);
+        if (flowData) {
+          setFlowName(flowData.name);
+          setCurrentFlowId(flowData.id);
+          setFieldInstance(flowData.globalInstance || '');
+          setOpenRouterApiKey(flowData.globalOpenRouterKey || '');
+          
+          // Load nodes with proper callbacks
+          const loadedNodes = flowData.nodes.map((node: any) => ({
+            ...node,
+            data: {
+              ...node.data,
+              onDelete: deleteNode,
+              onUpdate: updateNodeData,
+            }
+          }));
+          
+          setNodes(loadedNodes);
+          setEdges(flowData.edges || []);
+          
+          toast({
+            title: "Flow loaded",
+            description: `"${flowData.name}" has been loaded for editing`,
+            variant: "default"
+          });
+        }
+      } catch (error) {
+        console.error('Error loading flow:', error);
+        toast({
+          title: "Load failed",
+          description: "Failed to load flow data",
+          variant: "destructive"
+        });
+      }
+    };
+    
+    loadFlowData();
+  }, [flowId, setNodes, setEdges, toast, deleteNode, updateNodeData]);
 
   const saveFlowToStorage = useCallback(async () => {
     if (!flowName.trim()) {
