@@ -313,34 +313,6 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                     onChange={(e) => setFlowName(e.target.value)}
                     className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
                   />
-                  
-                  <div className="flex gap-1">
-                    <Button
-                      onClick={saveFlowToStorage}
-                      size="sm"
-                      className="flex-1 h-7 text-xs bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 shadow-lg"
-                    >
-                      <Save className="w-3 h-3 mr-1" />
-                      Save
-                    </Button>
-                    
-                    <Button
-                      onClick={exportFlow}
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs border-border/50 hover:bg-background/80"
-                    >
-                      <Download className="w-3 h-3" />
-                    </Button>
-                    
-                    <Button
-                      onClick={testFlow}
-                      size="sm"
-                      className="h-7 text-xs bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white border-0 shadow-lg"
-                    >
-                      <Play className="w-3 h-3" />
-                    </Button>
-                  </div>
                 </div>
               </div>
 
@@ -368,8 +340,44 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                  </div>
                </div>
 
+               {/* Action Buttons */}
+               <div className="space-y-2 mb-4">
+                 <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                   <div className="w-1.5 h-1.5 bg-purple-500 rounded-full pulse-glow"></div>
+                   Actions
+                 </h3>
+                 
+                 <div className="flex gap-1">
+                   <Button
+                     onClick={saveFlowToStorage}
+                     size="sm"
+                     className="flex-1 h-7 text-xs bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 shadow-lg"
+                   >
+                     <Save className="w-3 h-3 mr-1" />
+                     Save
+                   </Button>
+                   
+                   <Button
+                     onClick={exportFlow}
+                     size="sm"
+                     variant="outline"
+                     className="h-7 text-xs border-border/50 hover:bg-background/80"
+                   >
+                     <Download className="w-3 h-3" />
+                   </Button>
+                   
+                   <Button
+                     onClick={testFlow}
+                     size="sm"
+                     className="h-7 text-xs bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white border-0 shadow-lg"
+                   >
+                     <Play className="w-3 h-3" />
+                   </Button>
+                 </div>
+               </div>
+
                {/* Flow Stats */}
-               <div className="space-y-2 mb-6">
+               <div className="space-y-2 mb-8">
                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full pulse-glow"></div>
                    Flow Stats
