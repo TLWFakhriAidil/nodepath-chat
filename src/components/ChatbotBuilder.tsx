@@ -294,7 +294,7 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       // Still set the current flow ID for local editing
       setCurrentFlowId(flowData.id);
     }
-  }, [flowName, currentFlowId, nodes, edges, toast]);
+  }, [flowName, currentFlowId, nodes, edges, fieldInstance, openRouterApiKey, toast]);
 
   const exportFlow = useCallback(() => {
     const flowData = {
