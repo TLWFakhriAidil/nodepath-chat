@@ -46,7 +46,6 @@ func RunMigrations(db *sql.DB) error {
 		createAISettingsTable,
 		createLeadsTable,
 		createMediaFilesTable,
-		addMissingColumns,
 	}
 
 	for i, migration := range migrations {
@@ -54,6 +53,11 @@ func RunMigrations(db *sql.DB) error {
 		if _, err := db.Exec(migration); err != nil {
 			return fmt.Errorf("failed to run migration %d: %w", i+1, err)
 		}
+	}
+
+	// Add missing columns with error handling
+	if err := addMissingColumnsToFlowsTable(db); err != nil {
+		logrus.WithError(err).Warn("Some columns may already exist, continuing...")
 	}
 
 	logrus.Info("Database migrations completed successfully")
@@ -170,9 +174,43 @@ CREATE TABLE IF NOT EXISTS media_files (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-const addMissingColumns = `
-ALTER TABLE chatbot_flows_nodepath 
-ADD COLUMN global_instance VARCHAR(255),
-ADD COLUMN global_open_router_key VARCHAR(500),
-ADD COLUMN mode VARCHAR(50) DEFAULT 'standard';
-`
+// addMissingColumnsToFlowsTable adds missing columns to the flows table
+func addMissingColumnsToFlowsTable(db *sql.DB) error {
+	columns := []struct {
+		name string
+		definition string
+	}{
+		{"global_instance", "VARCHAR(255)"},
+		{"global_open_router_key", "VARCHAR(500)"},
+		{"mode", "VARCHAR(50) DEFAULT 'standard'"},
+	}
+
+	for _, col := range columns {
+		// Check if column exists
+		var count int
+		err := db.QueryRow(`
+			SELECT COUNT(*) 
+			FROM INFORMATION_SCHEMA.COLUMNS 
+			WHERE TABLE_SCHEMA = DATABASE() 
+			AND TABLE_NAME = 'chatbot_flows_nodepath' 
+			AND COLUMN_NAME = ?
+		`, col.name).Scan(&count)
+		
+		if err != nil {
+			return fmt.Errorf("failed to check column %s: %w", col.name, err)
+		}
+		
+		if count == 0 {
+			// Column doesn't exist, add it
+			query := fmt.Sprintf("ALTER TABLE chatbot_flows_nodepath ADD COLUMN %s %s", col.name, col.definition)
+			if _, err := db.Exec(query); err != nil {
+				return fmt.Errorf("failed to add column %s: %w", col.name, err)
+			}
+			logrus.WithField("column", col.name).Info("Added missing column")
+		} else {
+			logrus.WithField("column", col.name).Debug("Column already exists")
+		}
+	}
+	
+	return nil
+}
