@@ -28,15 +28,15 @@ func NewChatService(db *sql.DB, redis *redis.Client) *ChatService {
 }
 
 // StartExecution starts a new flow execution
-func (s *ChatService) StartExecution(flowID, phoneNumber, staffID string) (*models.ChatbotExecution, error) {
+func (s *ChatService) StartExecution(flowReference, phoneNumber, staffID string) (*models.ChatbotExecution, error) {
 	execution := &models.ChatbotExecution{
-		ID:          uuid.New().String(),
-		FlowID:      flowID,
-		PhoneNumber: phoneNumber,
-		StaffID:     staffID,
-		Status:      models.ExecutionStatusActive,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:            uuid.New().String(),
+		FlowReference: flowReference,
+		PhoneNumber:   phoneNumber,
+		StaffID:       staffID,
+		Status:        models.ExecutionStatusActive,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	// Initialize empty conversation and variables
@@ -47,12 +47,12 @@ func (s *ChatService) StartExecution(flowID, phoneNumber, staffID string) (*mode
 
 	query := `
 		INSERT INTO chatbot_executions_nodepath 
-		(id, flow_id, phone_number, staff_id, conv_last, conv_current, current_node, variables, status, created_at, updated_at)
+		(id, flow_reference, phone_number, staff_id, conv_last, conv_current, current_node, variables, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.Exec(query,
-		execution.ID, execution.FlowID, execution.PhoneNumber, execution.StaffID,
+		execution.ID, execution.FlowReference, execution.PhoneNumber, execution.StaffID,
 		execution.ConvLast, execution.ConvCurrent, execution.CurrentNode,
 		execution.Variables, execution.Status, execution.CreatedAt, execution.UpdatedAt,
 	)
@@ -62,9 +62,9 @@ func (s *ChatService) StartExecution(flowID, phoneNumber, staffID string) (*mode
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"execution_id": execution.ID,
-		"flow_id":      flowID,
-		"phone_number": phoneNumber,
+		"execution_id":   execution.ID,
+		"flow_reference": flowReference,
+		"phone_number":   phoneNumber,
 	}).Info("Execution started")
 
 	return execution, nil
@@ -73,7 +73,7 @@ func (s *ChatService) StartExecution(flowID, phoneNumber, staffID string) (*mode
 // GetExecution retrieves an execution by ID
 func (s *ChatService) GetExecution(executionID string) (*models.ChatbotExecution, error) {
 	query := `
-		SELECT id, flow_id, phone_number, staff_id, conv_last, conv_current, current_node, 
+		SELECT id, flow_reference, phone_number, staff_id, conv_last, conv_current, current_node, 
 		       variables, status, created_at, updated_at
 		FROM chatbot_executions_nodepath 
 		WHERE id = ?
@@ -81,7 +81,7 @@ func (s *ChatService) GetExecution(executionID string) (*models.ChatbotExecution
 
 	var execution models.ChatbotExecution
 	err := s.db.QueryRow(query, executionID).Scan(
-		&execution.ID, &execution.FlowID, &execution.PhoneNumber, &execution.StaffID,
+		&execution.ID, &execution.FlowReference, &execution.PhoneNumber, &execution.StaffID,
 		&execution.ConvLast, &execution.ConvCurrent, &execution.CurrentNode,
 		&execution.Variables, &execution.Status, &execution.CreatedAt, &execution.UpdatedAt,
 	)
@@ -99,7 +99,7 @@ func (s *ChatService) GetExecution(executionID string) (*models.ChatbotExecution
 // GetActiveExecution retrieves active execution for phone number and staff
 func (s *ChatService) GetActiveExecution(phoneNumber, staffID string) (*models.ChatbotExecution, error) {
 	query := `
-		SELECT id, flow_id, phone_number, staff_id, conv_last, conv_current, current_node, 
+		SELECT id, flow_reference, phone_number, staff_id, conv_last, conv_current, current_node, 
 		       variables, status, created_at, updated_at
 		FROM chatbot_executions_nodepath 
 		WHERE phone_number = ? AND staff_id = ? AND status = 'active'
@@ -109,7 +109,7 @@ func (s *ChatService) GetActiveExecution(phoneNumber, staffID string) (*models.C
 
 	var execution models.ChatbotExecution
 	err := s.db.QueryRow(query, phoneNumber, staffID).Scan(
-		&execution.ID, &execution.FlowID, &execution.PhoneNumber, &execution.StaffID,
+		&execution.ID, &execution.FlowReference, &execution.PhoneNumber, &execution.StaffID,
 		&execution.ConvLast, &execution.ConvCurrent, &execution.CurrentNode,
 		&execution.Variables, &execution.Status, &execution.CreatedAt, &execution.UpdatedAt,
 	)
@@ -279,16 +279,16 @@ func (s *ChatService) CreateOrUpdateLead(phoneNumber, staffID, name, email strin
 }
 
 // GetExecutionsByFlow retrieves all executions for a flow
-func (s *ChatService) GetExecutionsByFlow(flowID string) ([]*models.ChatbotExecution, error) {
+func (s *ChatService) GetExecutionsByFlow(flowReference string) ([]*models.ChatbotExecution, error) {
 	query := `
-		SELECT id, flow_id, phone_number, staff_id, conv_last, conv_current, current_node, 
+		SELECT id, flow_reference, phone_number, staff_id, conv_last, conv_current, current_node, 
 		       variables, status, created_at, updated_at
 		FROM chatbot_executions_nodepath 
-		WHERE flow_id = ?
+		WHERE flow_reference = ?
 		ORDER BY created_at DESC
 	`
 
-	rows, err := s.db.Query(query, flowID)
+	rows, err := s.db.Query(query, flowReference)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get executions: %w", err)
 	}
@@ -298,7 +298,7 @@ func (s *ChatService) GetExecutionsByFlow(flowID string) ([]*models.ChatbotExecu
 	for rows.Next() {
 		var execution models.ChatbotExecution
 		err := rows.Scan(
-			&execution.ID, &execution.FlowID, &execution.PhoneNumber, &execution.StaffID,
+			&execution.ID, &execution.FlowReference, &execution.PhoneNumber, &execution.StaffID,
 			&execution.ConvLast, &execution.ConvCurrent, &execution.CurrentNode,
 			&execution.Variables, &execution.Status, &execution.CreatedAt, &execution.UpdatedAt,
 		)

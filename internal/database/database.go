@@ -68,27 +68,21 @@ func RunMigrations(db *sql.DB) error {
 const createFlowsTable = `
 CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
     id VARCHAR(255) PRIMARY KEY,
-    flow_id VARCHAR(255) NOT NULL,
-    node_id VARCHAR(255) NOT NULL,
-    node_type VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT COLLATE utf8mb4_unicode_ci,
     global_instance VARCHAR(255),
     global_open_router_key VARCHAR(500),
-    mode VARCHAR(50) DEFAULT 'standard',
     nodes JSON,
     edges JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_flow_id (flow_id),
-    INDEX idx_node_type (node_type)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
 const createExecutionsTable = `
 CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
     id VARCHAR(255) PRIMARY KEY,
-    flow_id VARCHAR(255) NOT NULL,
+    flow_reference VARCHAR(255) NOT NULL,
     phone_number VARCHAR(20),
     staff_id VARCHAR(255),
     conv_last JSON,
@@ -98,7 +92,7 @@ CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
     status ENUM('active', 'completed', 'failed') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_flow_id (flow_id),
+    INDEX idx_flow_reference (flow_reference),
     INDEX idx_phone_number (phone_number),
     INDEX idx_staff_id (staff_id),
     INDEX idx_status (status)
@@ -108,23 +102,23 @@ CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
 const createNodeManualTable = `
 CREATE TABLE IF NOT EXISTS chatbot_node_manual (
     id VARCHAR(255) PRIMARY KEY,
-    flow_id VARCHAR(255) NOT NULL,
-    node_id VARCHAR(255) NOT NULL,
+    flow_reference VARCHAR(255) NOT NULL,
+    node_reference VARCHAR(255) NOT NULL,
     message TEXT COLLATE utf8mb4_unicode_ci,
     media_type ENUM('text', 'image', 'audio', 'video') DEFAULT 'text',
     media_url VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_flow_id (flow_id),
-    INDEX idx_node_id (node_id)
+    INDEX idx_flow_reference (flow_reference),
+    INDEX idx_node_reference (node_reference)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
 const createAISettingsTable = `
 CREATE TABLE IF NOT EXISTS ai_setting_nodepath (
     id VARCHAR(255) PRIMARY KEY,
-    flow_id VARCHAR(255) NOT NULL,
-    node_id VARCHAR(255) NOT NULL,
+    flow_reference VARCHAR(255) NOT NULL,
+    node_reference VARCHAR(255) NOT NULL,
     system_prompt TEXT COLLATE utf8mb4_unicode_ci,
     instance VARCHAR(255),
     apiprovider VARCHAR(255),
@@ -133,8 +127,8 @@ CREATE TABLE IF NOT EXISTS ai_setting_nodepath (
     max_tokens INT DEFAULT 1000,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_flow_id (flow_id),
-    INDEX idx_node_id (node_id)
+    INDEX idx_flow_reference (flow_reference),
+    INDEX idx_node_reference (node_reference)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 

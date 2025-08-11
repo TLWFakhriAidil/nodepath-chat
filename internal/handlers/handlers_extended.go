@@ -13,10 +13,10 @@ import (
 
 // GetExecutions returns all executions
 func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
-	flowID := c.Query("flow_id")
+	flowReference := c.Query("flow_reference")
 
-	if flowID != "" {
-		executions, err := h.chatService.GetExecutionsByFlow(flowID)
+	if flowReference != "" {
+		executions, err := h.chatService.GetExecutionsByFlow(flowReference)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to get executions by flow")
 			return h.errorResponse(c, 500, "Failed to retrieve executions")
@@ -269,13 +269,13 @@ func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
 
 // GetFlowStats returns statistics for a specific flow
 func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
+	flowReference := c.Params("id")
+	if flowReference == "" {
+		return h.errorResponse(c, 400, "Flow reference is required")
 	}
 
 	// Get executions for the flow
-	executions, err := h.chatService.GetExecutionsByFlow(flowID)
+	executions, err := h.chatService.GetExecutionsByFlow(flowReference)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow executions")
 		return h.errorResponse(c, 500, "Failed to get flow statistics")
@@ -306,7 +306,7 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 // processTestChatMessage processes a message in test chat mode
 func (h *Handlers) processTestChatMessage(execution *models.ChatbotExecution, userInput string) (string, error) {
 	// Get the flow
-	flow, err := h.flowService.GetFlow(execution.FlowID)
+	flow, err := h.flowService.GetFlow(execution.FlowReference)
 	if err != nil {
 		return "", fmt.Errorf("failed to get flow: %w", err)
 	}

@@ -176,7 +176,7 @@ func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Invalid request body")
 	}
 
-	flow.FlowID = flowID
+	flow.ID = flowID
 	if err := h.flowService.UpdateFlow(&flow); err != nil {
 		logrus.WithError(err).Error("Failed to update flow")
 		return h.errorResponse(c, 500, "Failed to update flow")
@@ -203,9 +203,9 @@ func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
 // Test Chat handlers
 
 type StartTestChatRequest struct {
-	FlowID      string `json:"flow_id"`
-	PhoneNumber string `json:"phone_number"`
-	StaffID     string `json:"staff_id"`
+	FlowReference string `json:"flow_reference"`
+	PhoneNumber   string `json:"phone_number"`
+	StaffID       string `json:"staff_id"`
 }
 
 // StartTestChat starts a new test chat session
@@ -215,8 +215,8 @@ func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Invalid request body")
 	}
 
-	if req.FlowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
+	if req.FlowReference == "" {
+		return h.errorResponse(c, 400, "Flow reference is required")
 	}
 
 	// Use default values for test chat
@@ -227,7 +227,7 @@ func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
 		req.StaffID = "test_staff"
 	}
 
-	execution, err := h.chatService.StartExecution(req.FlowID, req.PhoneNumber, req.StaffID)
+	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to start test chat")
 		return h.errorResponse(c, 500, "Failed to start test chat")

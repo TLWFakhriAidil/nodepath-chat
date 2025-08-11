@@ -276,14 +276,14 @@ func (s *Service) processIncomingMessage(phoneNumber, content string) {
 	}
 
 	// Get the flow
-	flow, err := s.flowService.GetFlow(execution.FlowID)
+	flow, err := s.flowService.GetFlow(execution.FlowReference)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow")
 		return
 	}
 
 	if flow == nil {
-		logrus.WithField("flow_id", execution.FlowID).Error("Flow not found")
+		logrus.WithField("flow_reference", execution.FlowReference).Error("Flow not found")
 		return
 	}
 

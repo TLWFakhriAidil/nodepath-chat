@@ -60,14 +60,10 @@ const (
 // ChatbotFlow represents a chatbot flow configuration
 type ChatbotFlow struct {
 	ID                   string          `json:"id" db:"id"`
-	FlowID               string          `json:"flow_id" db:"flow_id"`
-	NodeID               string          `json:"node_id" db:"node_id"`
-	NodeType             NodeType        `json:"node_type" db:"node_type"`
 	Name                 string          `json:"name" db:"name"`
 	Description          string          `json:"description" db:"description"`
 	GlobalInstance       string          `json:"global_instance" db:"global_instance"`
 	GlobalOpenRouterKey  string          `json:"global_open_router_key" db:"global_open_router_key"`
-	Mode                 FlowMode        `json:"mode" db:"mode"`
 	Nodes                *json.RawMessage `json:"nodes" db:"nodes"`
 	Edges                *json.RawMessage `json:"edges" db:"edges"`
 	CreatedAt            time.Time       `json:"created_at" db:"created_at"`
@@ -99,17 +95,17 @@ type Position struct {
 
 // ChatbotExecution represents a flow execution instance
 type ChatbotExecution struct {
-	ID           string           `json:"id" db:"id"`
-	FlowID       string           `json:"flow_id" db:"flow_id"`
-	PhoneNumber  string           `json:"phone_number" db:"phone_number"`
-	StaffID      string           `json:"staff_id" db:"staff_id"`
-	ConvLast     json.RawMessage  `json:"conv_last" db:"conv_last"`
-	ConvCurrent  string           `json:"conv_current" db:"conv_current"`
-	CurrentNode  string           `json:"current_node" db:"current_node"`
-	Variables    json.RawMessage  `json:"variables" db:"variables"`
-	Status       ExecutionStatus  `json:"status" db:"status"`
-	CreatedAt    time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time        `json:"updated_at" db:"updated_at"`
+	ID            string           `json:"id" db:"id"`
+	FlowReference string           `json:"flow_reference" db:"flow_reference"`
+	PhoneNumber   string           `json:"phone_number" db:"phone_number"`
+	StaffID       string           `json:"staff_id" db:"staff_id"`
+	ConvLast      json.RawMessage  `json:"conv_last" db:"conv_last"`
+	ConvCurrent   string           `json:"conv_current" db:"conv_current"`
+	CurrentNode   string           `json:"current_node" db:"current_node"`
+	Variables     json.RawMessage  `json:"variables" db:"variables"`
+	Status        ExecutionStatus  `json:"status" db:"status"`
+	CreatedAt     time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at" db:"updated_at"`
 }
 
 // ConversationMessage represents a single message in a conversation
@@ -120,28 +116,28 @@ type ConversationMessage struct {
 
 // ChatbotNodeManual represents manual node configuration
 type ChatbotNodeManual struct {
-	ID        string    `json:"id" db:"id"`
-	FlowID    string    `json:"flow_id" db:"flow_id"`
-	NodeID    string    `json:"node_id" db:"node_id"`
-	Message   string    `json:"message" db:"message"`
-	MediaType MediaType `json:"media_type" db:"media_type"`
-	MediaURL  string    `json:"media_url" db:"media_url"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	ID            string    `json:"id" db:"id"`
+	FlowReference string    `json:"flow_reference" db:"flow_reference"`
+	NodeReference string    `json:"node_reference" db:"node_reference"`
+	Message       string    `json:"message" db:"message"`
+	MediaType     MediaType `json:"media_type" db:"media_type"`
+	MediaURL      string    `json:"media_url" db:"media_url"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // AISetting represents AI configuration for a specific node
 type AISetting struct {
-	ID           string  `json:"id" db:"id"`
-	FlowID       string  `json:"flow_id" db:"flow_id"`
-	NodeID       string  `json:"node_id" db:"node_id"`
-	SystemPrompt string  `json:"system_prompt" db:"system_prompt"`
-	Instance     string  `json:"instance" db:"instance"`
-	APIProvider  string  `json:"apiprovider" db:"apiprovider"`
-	Model        string  `json:"model" db:"model"`
-	Temperature  float64 `json:"temperature" db:"temperature"`
-	MaxTokens    int     `json:"max_tokens" db:"max_tokens"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	ID            string  `json:"id" db:"id"`
+	FlowReference string  `json:"flow_reference" db:"flow_reference"`
+	NodeReference string  `json:"node_reference" db:"node_reference"`
+	SystemPrompt  string  `json:"system_prompt" db:"system_prompt"`
+	Instance      string  `json:"instance" db:"instance"`
+	APIProvider   string  `json:"apiprovider" db:"apiprovider"`
+	Model         string  `json:"model" db:"model"`
+	Temperature   float64 `json:"temperature" db:"temperature"`
+	MaxTokens     int     `json:"max_tokens" db:"max_tokens"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
 
@@ -216,9 +212,9 @@ type WebSocketMessage struct {
 
 // TestChatMessage represents a message in the test chat
 type TestChatMessage struct {
-	ID        string    `json:"id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
-	NodeID    string    `json:"node_id,omitempty"`
+	ID            string    `json:"id"`
+	Role          string    `json:"role"`
+	Content       string    `json:"content"`
+	Timestamp     time.Time `json:"timestamp"`
+	NodeReference string    `json:"node_reference,omitempty"`
 }

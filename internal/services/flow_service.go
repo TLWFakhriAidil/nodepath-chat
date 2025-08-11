@@ -33,27 +33,21 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 	if flow.ID == "" {
 		flow.ID = uuid.New().String()
 	}
-	if flow.FlowID == "" {
-		flow.FlowID = flow.ID
-	}
 
 	flow.CreatedAt = time.Now()
 	flow.UpdatedAt = time.Now()
 
-	// Determine flow mode based on nodes
-	flow.Mode = s.determineFlowMode(flow)
-
 	query := `
 		INSERT INTO chatbot_flows_nodepath 
-		(id, flow_id, node_id, node_type, name, description, 
-		 global_instance, global_open_router_key, mode, nodes, edges, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, name, description, global_instance, global_open_router_key, 
+		 nodes, edges, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.Exec(query,
-		flow.ID, flow.FlowID, flow.NodeID, flow.NodeType, flow.Name, flow.Description,
-		flow.GlobalInstance, flow.GlobalOpenRouterKey, flow.Mode,
-		flow.Nodes, flow.Edges, flow.CreatedAt, flow.UpdatedAt,
+		flow.ID, flow.Name, flow.Description, flow.GlobalInstance, 
+		flow.GlobalOpenRouterKey, flow.Nodes, flow.Edges, 
+		flow.CreatedAt, flow.UpdatedAt,
 	)
 
 	if err != nil {
@@ -61,9 +55,8 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"flow_id": flow.FlowID,
+		"flow_id": flow.ID,
 		"name":    flow.Name,
-		"mode":    flow.Mode,
 	}).Info("Flow created successfully")
 
 	return nil
@@ -72,18 +65,18 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 // GetFlow retrieves a flow by ID
 func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 	query := `
-		SELECT id, flow_id, node_id, node_type, name, description,
-		       global_instance, global_open_router_key, mode, nodes, edges, created_at, updated_at
+		SELECT id, name, description, global_instance, global_open_router_key, 
+		       nodes, edges, created_at, updated_at
 		FROM chatbot_flows_nodepath 
-		WHERE flow_id = ?
+		WHERE id = ?
 		LIMIT 1
 	`
 
 	var flow models.ChatbotFlow
 	err := s.db.QueryRow(query, flowID).Scan(
-		&flow.ID, &flow.FlowID, &flow.NodeID, &flow.NodeType, &flow.Name, &flow.Description,
-		&flow.GlobalInstance, &flow.GlobalOpenRouterKey, &flow.Mode,
-		&flow.Nodes, &flow.Edges, &flow.CreatedAt, &flow.UpdatedAt,
+		&flow.ID, &flow.Name, &flow.Description, &flow.GlobalInstance, 
+		&flow.GlobalOpenRouterKey, &flow.Nodes, &flow.Edges, 
+		&flow.CreatedAt, &flow.UpdatedAt,
 	)
 
 	if err != nil {
@@ -99,8 +92,8 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 // GetAllFlows retrieves all flows
 func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 	query := `
-		SELECT id, flow_id, node_id, node_type, name, description,
-		       global_instance, global_open_router_key, mode, nodes, edges, created_at, updated_at
+		SELECT id, name, description, global_instance, global_open_router_key, 
+		       nodes, edges, created_at, updated_at
 		FROM chatbot_flows_nodepath 
 		ORDER BY created_at DESC
 	`
@@ -115,9 +108,9 @@ func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 	for rows.Next() {
 		var flow models.ChatbotFlow
 		err := rows.Scan(
-			&flow.ID, &flow.FlowID, &flow.NodeID, &flow.NodeType, &flow.Name, &flow.Description,
-			&flow.GlobalInstance, &flow.GlobalOpenRouterKey, &flow.Mode,
-			&flow.Nodes, &flow.Edges, &flow.CreatedAt, &flow.UpdatedAt,
+			&flow.ID, &flow.Name, &flow.Description, &flow.GlobalInstance, 
+			&flow.GlobalOpenRouterKey, &flow.Nodes, &flow.Edges, 
+			&flow.CreatedAt, &flow.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan flow: %w", err)
@@ -131,20 +124,18 @@ func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 // UpdateFlow updates an existing flow
 func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 	flow.UpdatedAt = time.Now()
-	flow.Mode = s.determineFlowMode(flow)
 
 	query := `
 		UPDATE chatbot_flows_nodepath 
-		SET node_id = ?, node_type = ?, name = ?, description = ?, 
-		    global_instance = ?, global_open_router_key = ?, 
-		    mode = ?, nodes = ?, edges = ?, updated_at = ?
-		WHERE flow_id = ?
+		SET name = ?, description = ?, global_instance = ?, 
+		    global_open_router_key = ?, nodes = ?, edges = ?, updated_at = ?
+		WHERE id = ?
 	`
 
 	_, err := s.db.Exec(query,
-		flow.NodeID, flow.NodeType, flow.Name, flow.Description,
-		flow.GlobalInstance, flow.GlobalOpenRouterKey,
-		flow.Mode, flow.Nodes, flow.Edges, flow.UpdatedAt, flow.FlowID,
+		flow.Name, flow.Description, flow.GlobalInstance, 
+		flow.GlobalOpenRouterKey, flow.Nodes, flow.Edges, 
+		flow.UpdatedAt, flow.ID,
 	)
 
 	if err != nil {
@@ -152,9 +143,8 @@ func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"flow_id": flow.FlowID,
+		"flow_id": flow.ID,
 		"name":    flow.Name,
-		"mode":    flow.Mode,
 	}).Info("Flow updated successfully")
 
 	return nil
@@ -162,7 +152,7 @@ func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 
 // DeleteFlow deletes a flow
 func (s *FlowService) DeleteFlow(flowID string) error {
-	query := `DELETE FROM chatbot_flows_nodepath WHERE flow_id = ?`
+	query := `DELETE FROM chatbot_flows_nodepath WHERE id = ?`
 	_, err := s.db.Exec(query, flowID)
 	if err != nil {
 		return fmt.Errorf("failed to delete flow: %w", err)
@@ -273,60 +263,7 @@ func (s *FlowService) GetStartNode(flow *models.ChatbotFlow) (*models.FlowNode, 
 	return nil, fmt.Errorf("no start node found in flow")
 }
 
-// determineFlowMode analyzes the flow to determine its execution mode
-func (s *FlowService) determineFlowMode(flow *models.ChatbotFlow) models.FlowMode {
-	nodes, err := s.GetFlowNodes(flow)
-	if err != nil {
-		return models.FlowModeManual
-	}
 
-	hasAIPrompt := false
-	hasCompleteAI := false
-	hasIncompleteAI := false
-
-	for _, node := range nodes {
-		if node.Type == models.NodeTypeAIPrompt {
-			hasAIPrompt = true
-			// Check if AI prompt node has complete configuration
-			var systemPrompt, instance, apiProvider string
-
-			// Check in node data
-			if sp, ok := node.Data["system_prompt"].(string); ok {
-				systemPrompt = sp
-			}
-			if inst, ok := node.Data["instance"].(string); ok {
-				instance = inst
-			}
-			if ap, ok := node.Data["apiprovider"].(string); ok {
-				apiProvider = ap
-			}
-
-			// Use global settings as fallback
-			if instance == "" {
-				instance = flow.GlobalInstance
-			}
-			if apiProvider == "" {
-				apiProvider = flow.GlobalOpenRouterKey
-			}
-
-			if systemPrompt != "" && instance != "" && apiProvider != "" {
-				hasCompleteAI = true
-			} else {
-				hasIncompleteAI = true
-			}
-		}
-	}
-
-	if !hasAIPrompt {
-		return models.FlowModeManual
-	}
-
-	if hasCompleteAI && !hasIncompleteAI {
-		return models.FlowModeAuto
-	}
-
-	return models.FlowModeSemiAuto
-}
 
 // ReplaceVariables replaces variables in text with actual values
 func (s *FlowService) ReplaceVariables(text string, variables map[string]interface{}) string {
