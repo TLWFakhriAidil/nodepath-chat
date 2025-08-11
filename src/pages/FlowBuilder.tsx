@@ -3,16 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Save, 
-  Play, 
-  Download, 
-  Upload, 
-  Settings, 
-  Eye,
   Maximize2,
   Minimize2,
   Grid3X3,
-  Layers
+  Layers,
+  Settings
 } from 'lucide-react';
 import ChatbotBuilder from '@/components/ChatbotBuilder';
 import { useNavigate } from 'react-router-dom';
@@ -27,40 +22,7 @@ const FlowBuilder = () => {
     navigate(`/test-chat?flowId=${flowId}`);
   };
 
-  const toolbarActions = [
-    {
-      icon: Save,
-      label: 'Save Flow',
-      action: () => {},
-      variant: 'default' as const,
-      className: 'bg-green-600 hover:bg-green-700'
-    },
-    {
-      icon: Play,
-      label: 'Test Flow',
-      action: () => navigate('/test-chat'),
-      variant: 'default' as const,
-      className: 'bg-blue-600 hover:bg-blue-700'
-    },
-    {
-      icon: Download,
-      label: 'Export',
-      action: () => {},
-      variant: 'outline' as const
-    },
-    {
-      icon: Upload,
-      label: 'Import',
-      action: () => {},
-      variant: 'outline' as const
-    },
-    {
-      icon: Eye,
-      label: 'Preview',
-      action: () => {},
-      variant: 'outline' as const
-    }
-  ];
+
 
   const viewControls = [
     {
@@ -103,58 +65,10 @@ const FlowBuilder = () => {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              {toolbarActions.map((action, index) => {
-                const Icon = action.icon;
-                return (
-                  <Button
-                    key={index}
-                    variant={action.variant}
-                    size="sm"
-                    onClick={action.action}
-                    className={action.className}
-                  >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {action.label}
-                  </Button>
-                );
-              })}
-            </div>
-            
-            <div className="flex items-center space-x-1">
-              {viewControls.map((control, index) => {
-                const Icon = control.icon;
-                return (
-                  <Button
-                    key={index}
-                    variant={control.active ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={control.action}
-                    className={control.active ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="sr-only">{control.label}</span>
-                  </Button>
-                );
-              })}
-              
-              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-2" />
-              
-              <Button variant="ghost" size="sm">
-                <Settings className="w-4 h-4" />
-                <span className="sr-only">Settings</span>
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
 
       {/* Flow Builder */}
-      <Card className={`border-0 shadow-xl overflow-hidden ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[calc(100vh-280px)]'}`}>
+      <Card className={`border-0 shadow-xl overflow-hidden ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[calc(100vh-180px)]'}`}>
         <CardContent className="p-0 h-full">
           <ChatbotBuilder onTestFlow={handleTestFlow} />
         </CardContent>

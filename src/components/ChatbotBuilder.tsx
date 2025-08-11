@@ -376,7 +376,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                </div>
 
                {/* Flow Stats */}
-               <div className="space-y-2 mb-12">
+               <div className="space-y-2 mb-20">
                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full pulse-glow"></div>
                    Flow Stats
