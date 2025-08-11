@@ -171,25 +171,8 @@ CREATE TABLE IF NOT EXISTS media_files (
 `
 
 const addMissingColumns = `
-SET @sql = '';
-SELECT COUNT(*) INTO @col_exists FROM INFORMATION_SCHEMA.COLUMNS 
-WHERE TABLE_NAME = 'chatbot_flows_nodepath' AND COLUMN_NAME = 'global_instance';
-SET @sql = IF(@col_exists = 0, 'ALTER TABLE chatbot_flows_nodepath ADD COLUMN global_instance VARCHAR(255)', 'SELECT "Column global_instance already exists"');
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SELECT COUNT(*) INTO @col_exists FROM INFORMATION_SCHEMA.COLUMNS 
-WHERE TABLE_NAME = 'chatbot_flows_nodepath' AND COLUMN_NAME = 'global_open_router_key';
-SET @sql = IF(@col_exists = 0, 'ALTER TABLE chatbot_flows_nodepath ADD COLUMN global_open_router_key VARCHAR(500)', 'SELECT "Column global_open_router_key already exists"');
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SELECT COUNT(*) INTO @col_exists FROM INFORMATION_SCHEMA.COLUMNS 
-WHERE TABLE_NAME = 'chatbot_flows_nodepath' AND COLUMN_NAME = 'mode';
-SET @sql = IF(@col_exists = 0, 'ALTER TABLE chatbot_flows_nodepath ADD COLUMN mode VARCHAR(50) DEFAULT \'standard\'', 'SELECT "Column mode already exists"');
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
+ALTER TABLE chatbot_flows_nodepath 
+ADD COLUMN IF NOT EXISTS global_instance VARCHAR(255),
+ADD COLUMN IF NOT EXISTS global_open_router_key VARCHAR(500),
+ADD COLUMN IF NOT EXISTS mode VARCHAR(50) DEFAULT 'standard';
 `
