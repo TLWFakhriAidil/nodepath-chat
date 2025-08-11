@@ -172,7 +172,7 @@ CREATE TABLE IF NOT EXISTS media_files (
 
 const addMissingColumns = `
 ALTER TABLE chatbot_flows_nodepath 
-ADD COLUMN IF NOT EXISTS global_instance VARCHAR(255),
-ADD COLUMN IF NOT EXISTS global_open_router_key VARCHAR(500),
-ADD COLUMN IF NOT EXISTS mode VARCHAR(50) DEFAULT 'standard';
+ADD COLUMN global_instance VARCHAR(255),
+ADD COLUMN global_open_router_key VARCHAR(500),
+ADD COLUMN mode VARCHAR(50) DEFAULT 'standard';
 `
