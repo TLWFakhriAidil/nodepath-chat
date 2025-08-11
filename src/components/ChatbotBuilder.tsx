@@ -363,7 +363,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
         </Card>
 
         {/* Flow Canvas */}
-        <div className="flex-1 h-full relative overflow-hidden bg-gradient-to-br from-background via-background/95 to-background/90">
+        <div className="flex-1 h-full relative overflow-auto bg-gradient-to-br from-background via-background/95 to-background/90">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -374,19 +374,21 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
             nodeTypes={nodeTypes}
             fitView
             deleteKeyCode="Delete"
-            className="bg-transparent"
+            className="bg-transparent min-h-[200vh] min-w-[200vw]"
             defaultEdgeOptions={{
               style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
               markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
             }}
           >
             <Controls 
-              className="bg-card/80 backdrop-blur border-border/50 rounded-lg futuristic-border"
+              className="bg-card/90 backdrop-blur border-border/50 rounded-md shadow-lg scale-75 origin-bottom-left"
               position="bottom-left"
+              style={{ bottom: '10px', left: '10px' }}
             />
             <MiniMap 
-              className="bg-card/80 backdrop-blur border-border/50 rounded-lg futuristic-border"
+              className="bg-card/90 backdrop-blur border-border/50 rounded-md shadow-lg scale-75 origin-bottom-right"
               position="bottom-right"
+              style={{ bottom: '10px', right: '10px', width: '120px', height: '90px' }}
               nodeColor={(node) => {
                 switch (node.type) {
                   case 'start': return 'hsl(var(--primary))'
