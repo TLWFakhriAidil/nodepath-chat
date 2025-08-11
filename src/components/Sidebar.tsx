@@ -16,7 +16,8 @@ import {
   User,
   LogOut,
   HelpCircle,
-  Zap
+  Zap,
+  List
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -52,6 +53,12 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       icon: Workflow,
       current: location.pathname === '/flow-builder',
       badge: notifications.flows
+    },
+    {
+      name: 'Flow Manager',
+      href: '/flow-manager',
+      icon: List,
+      current: location.pathname === '/flow-manager'
     },
     {
       name: 'Test Chat',

@@ -22,6 +22,7 @@ import {
 // Import pages
 import Dashboard from './pages/Dashboard';
 import FlowBuilder from './pages/FlowBuilder';
+import FlowManager from './pages/FlowManager';
 import TestChat from './pages/TestChat';
 import MediaManager from './pages/MediaManager';
 import Analytics from './pages/Analytics';
@@ -35,6 +36,7 @@ const App = () => {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home, current: true },
     { name: 'Flow Builder', href: '/flow-builder', icon: Workflow, current: false },
+    { name: 'Flow Manager', href: '/flow-manager', icon: Workflow, current: false },
     { name: 'Test Chat', href: '/test-chat', icon: MessageSquare, current: false },
     { name: 'Media Manager', href: '/media', icon: Upload, current: false },
     { name: 'Analytics', href: '/analytics', icon: BarChart3, current: false },
@@ -153,6 +155,7 @@ const App = () => {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/flow-builder" element={<FlowBuilder />} />
+                  <Route path="/flow-manager" element={<FlowManager />} />
                   <Route path="/test-chat" element={<TestChat />} />
                   <Route path="/media" element={<MediaManager />} />
                   <Route path="/analytics" element={<Analytics />} />
