@@ -63,8 +63,6 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
   const [flowName, setFlowName] = useState('');
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
-  const [globalInstance, setGlobalInstance] = useState('');
-  const [globalOpenRouterKey, setGlobalOpenRouterKey] = useState('');
   const [fieldInstance, setFieldInstance] = useState('');
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
   const { toast } = useToast();
@@ -164,8 +162,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       name: flowName,
       description: `Chatbot flow: ${flowName}`,
-      globalInstance,
-      globalOpenRouterKey,
+      globalInstance: fieldInstance,
+      globalOpenRouterKey: openRouterApiKey,
       nodes: nodes.map(node => ({
         id: node.id,
         type: node.type as any,

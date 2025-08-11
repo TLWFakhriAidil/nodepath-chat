@@ -7,7 +7,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    allowedHosts: ["nodepath-chat-production.up.railway.app"]
+    allowedHosts: ["nodepath-chat-production.up.railway.app"],
+    proxy: {
+      '/mysql-api.php': {
+        target: 'https://nodepath-chat-production.up.railway.app',
+        changeOrigin: true,
+        secure: true
+      }
+    }
   },
   preview: {
     host: "0.0.0.0",
