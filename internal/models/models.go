@@ -65,14 +65,11 @@ type ChatbotFlow struct {
 	NodeType             NodeType        `json:"node_type" db:"node_type"`
 	Name                 string          `json:"name" db:"name"`
 	Description          string          `json:"description" db:"description"`
-	SystemPrompt         string          `json:"system_prompt" db:"system_prompt"`
-	Instance             string          `json:"instance" db:"instance"`
-	APIProvider          string          `json:"apiprovider" db:"apiprovider"`
 	GlobalInstance       string          `json:"global_instance" db:"global_instance"`
 	GlobalOpenRouterKey  string          `json:"global_open_router_key" db:"global_open_router_key"`
 	Mode                 FlowMode        `json:"mode" db:"mode"`
-	Nodes                json.RawMessage `json:"nodes" db:"nodes"`
-	Edges                json.RawMessage `json:"edges" db:"edges"`
+	Nodes                *json.RawMessage `json:"nodes" db:"nodes"`
+	Edges                *json.RawMessage `json:"edges" db:"edges"`
 	CreatedAt            time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt            time.Time       `json:"updated_at" db:"updated_at"`
 }
@@ -83,9 +80,6 @@ type FlowNode struct {
 	Type         NodeType               `json:"type"`
 	Data         map[string]interface{} `json:"data"`
 	Position     Position               `json:"position"`
-	SystemPrompt string                 `json:"system_prompt,omitempty"`
-	Instance     string                 `json:"instance,omitempty"`
-	APIProvider  string                 `json:"apiprovider,omitempty"`
 }
 
 // FlowEdge represents a connection between nodes

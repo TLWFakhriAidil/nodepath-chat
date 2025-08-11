@@ -343,26 +343,18 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, execution *models
 
 // processAIPromptNode processes an AI prompt node
 func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
-	// Get AI configuration
-	systemPrompt := node.SystemPrompt
-	instance := node.Instance
-	apiProvider := node.APIProvider
+	// Get AI configuration from node data
+	var systemPrompt, instance, apiProvider string
 
 	// Check node data for configuration
-	if systemPrompt == "" {
-		if sp, ok := node.Data["system_prompt"].(string); ok {
-			systemPrompt = sp
-		}
+	if sp, ok := node.Data["system_prompt"].(string); ok {
+		systemPrompt = sp
 	}
-	if instance == "" {
-		if inst, ok := node.Data["instance"].(string); ok {
-			instance = inst
-		}
+	if inst, ok := node.Data["instance"].(string); ok {
+		instance = inst
 	}
-	if apiProvider == "" {
-		if ap, ok := node.Data["apiprovider"].(string); ok {
-			apiProvider = ap
-		}
+	if ap, ok := node.Data["apiprovider"].(string); ok {
+		apiProvider = ap
 	}
 
 	// Use global settings as fallback

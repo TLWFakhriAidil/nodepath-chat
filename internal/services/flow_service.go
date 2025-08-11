@@ -45,14 +45,13 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 
 	query := `
 		INSERT INTO chatbot_flows_nodepath 
-		(id, flow_id, node_id, node_type, name, description, system_prompt, instance, apiprovider, 
+		(id, flow_id, node_id, node_type, name, description, 
 		 global_instance, global_open_router_key, mode, nodes, edges, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.Exec(query,
 		flow.ID, flow.FlowID, flow.NodeID, flow.NodeType, flow.Name, flow.Description,
-		flow.SystemPrompt, flow.Instance, flow.APIProvider,
 		flow.GlobalInstance, flow.GlobalOpenRouterKey, flow.Mode,
 		flow.Nodes, flow.Edges, flow.CreatedAt, flow.UpdatedAt,
 	)
@@ -73,7 +72,7 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 // GetFlow retrieves a flow by ID
 func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 	query := `
-		SELECT id, flow_id, node_id, node_type, name, description, system_prompt, instance, apiprovider,
+		SELECT id, flow_id, node_id, node_type, name, description,
 		       global_instance, global_open_router_key, mode, nodes, edges, created_at, updated_at
 		FROM chatbot_flows_nodepath 
 		WHERE flow_id = ?
@@ -83,7 +82,6 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 	var flow models.ChatbotFlow
 	err := s.db.QueryRow(query, flowID).Scan(
 		&flow.ID, &flow.FlowID, &flow.NodeID, &flow.NodeType, &flow.Name, &flow.Description,
-		&flow.SystemPrompt, &flow.Instance, &flow.APIProvider,
 		&flow.GlobalInstance, &flow.GlobalOpenRouterKey, &flow.Mode,
 		&flow.Nodes, &flow.Edges, &flow.CreatedAt, &flow.UpdatedAt,
 	)
@@ -101,7 +99,7 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 // GetAllFlows retrieves all flows
 func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 	query := `
-		SELECT id, flow_id, node_id, node_type, name, description, system_prompt, instance, apiprovider,
+		SELECT id, flow_id, node_id, node_type, name, description,
 		       global_instance, global_open_router_key, mode, nodes, edges, created_at, updated_at
 		FROM chatbot_flows_nodepath 
 		ORDER BY created_at DESC
@@ -118,7 +116,6 @@ func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 		var flow models.ChatbotFlow
 		err := rows.Scan(
 			&flow.ID, &flow.FlowID, &flow.NodeID, &flow.NodeType, &flow.Name, &flow.Description,
-			&flow.SystemPrompt, &flow.Instance, &flow.APIProvider,
 			&flow.GlobalInstance, &flow.GlobalOpenRouterKey, &flow.Mode,
 			&flow.Nodes, &flow.Edges, &flow.CreatedAt, &flow.UpdatedAt,
 		)
@@ -138,15 +135,15 @@ func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 
 	query := `
 		UPDATE chatbot_flows_nodepath 
-		SET node_id = ?, node_type = ?, name = ?, description = ?, system_prompt = ?, 
-		    instance = ?, apiprovider = ?, global_instance = ?, global_open_router_key = ?, 
+		SET node_id = ?, node_type = ?, name = ?, description = ?, 
+		    global_instance = ?, global_open_router_key = ?, 
 		    mode = ?, nodes = ?, edges = ?, updated_at = ?
 		WHERE flow_id = ?
 	`
 
 	_, err := s.db.Exec(query,
-		flow.NodeID, flow.NodeType, flow.Name, flow.Description, flow.SystemPrompt,
-		flow.Instance, flow.APIProvider, flow.GlobalInstance, flow.GlobalOpenRouterKey,
+		flow.NodeID, flow.NodeType, flow.Name, flow.Description,
+		flow.GlobalInstance, flow.GlobalOpenRouterKey,
 		flow.Mode, flow.Nodes, flow.Edges, flow.UpdatedAt, flow.FlowID,
 	)
 
@@ -182,7 +179,7 @@ func (s *FlowService) GetFlowNodes(flow *models.ChatbotFlow) ([]*models.FlowNode
 	}
 
 	var nodes []*models.FlowNode
-	err := json.Unmarshal(flow.Nodes, &nodes)
+	err := json.Unmarshal(*flow.Nodes, &nodes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse flow nodes: %w", err)
 	}
@@ -197,7 +194,7 @@ func (s *FlowService) GetFlowEdges(flow *models.ChatbotFlow) ([]*models.FlowEdge
 	}
 
 	var edges []*models.FlowEdge
-	err := json.Unmarshal(flow.Edges, &edges)
+	err := json.Unmarshal(*flow.Edges, &edges)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse flow edges: %w", err)
 	}
@@ -291,25 +288,17 @@ func (s *FlowService) determineFlowMode(flow *models.ChatbotFlow) models.FlowMod
 		if node.Type == models.NodeTypeAIPrompt {
 			hasAIPrompt = true
 			// Check if AI prompt node has complete configuration
-			systemPrompt := node.SystemPrompt
-			instance := node.Instance
-			apiProvider := node.APIProvider
+			var systemPrompt, instance, apiProvider string
 
-			// Also check in node data
-			if systemPrompt == "" {
-				if sp, ok := node.Data["system_prompt"].(string); ok {
-					systemPrompt = sp
-				}
+			// Check in node data
+			if sp, ok := node.Data["system_prompt"].(string); ok {
+				systemPrompt = sp
 			}
-			if instance == "" {
-				if inst, ok := node.Data["instance"].(string); ok {
-					instance = inst
-				}
+			if inst, ok := node.Data["instance"].(string); ok {
+				instance = inst
 			}
-			if apiProvider == "" {
-				if ap, ok := node.Data["apiprovider"].(string); ok {
-					apiProvider = ap
-				}
+			if ap, ok := node.Data["apiprovider"].(string); ok {
+				apiProvider = ap
 			}
 
 			// Use global settings as fallback
