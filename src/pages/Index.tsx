@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
 import { Bot, Workflow, MessageSquare, Upload } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import ChatbotBuilder from '@/components/ChatbotBuilder';
 import ChatSimulation from '@/components/ChatSimulation';
 
@@ -43,11 +42,9 @@ const Index = () => {
                 </TabsTrigger>
               </TabsList>
               
-              <Button asChild variant="outline">
-                <Link to="/media" className="flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  Media Manager
-                </Link>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                Media Manager
               </Button>
             </div>
           </div>

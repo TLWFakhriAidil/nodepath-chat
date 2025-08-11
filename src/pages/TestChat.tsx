@@ -1,365 +1,351 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { useState, useRef, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MessageCircle, Send, Trash2, Sparkles } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { getFlows } from '@/lib/mysqlStorage';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { 
+  Send, 
+  Bot, 
+  User, 
+  RotateCcw, 
+  Download, 
+  Settings,
+  Mic,
+  Paperclip,
+  MoreVertical,
+  Play,
+  Square
+} from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 
-interface FlowNode {
+interface Message {
   id: string;
-  type: string;
-  data: {
-    label?: string;
-    instance?: string;
-    openRouterKey?: string;
-    node_type?: string;
-  };
-}
-
-interface ChatMessage {
-  role: 'USER' | 'BOT';
+  type: 'user' | 'bot';
   content: string;
-  timestamp: string;
+  timestamp: Date;
+  status?: 'sending' | 'sent' | 'error';
 }
 
-interface ConversationData {
-  id: string;
-  instance: string;
-  open_router_key: string;
-  conv_last: any[];
-  conv_current: string;
-}
-
-export default function TestChat() {
-  const [flows, setFlows] = useState<any[]>([]);
-  const [aiNodes, setAiNodes] = useState<FlowNode[]>([]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
-  const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null);
-  const [userMessage, setUserMessage] = useState('');
-  const [conversation, setConversation] = useState<ConversationData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    loadFlows();
-  }, []);
-
-  useEffect(() => {
-    if (selectedNodeId) {
-      const node = aiNodes.find(n => n.id === selectedNodeId);
-      setSelectedNode(node || null);
-      if (node) {
-        loadOrCreateConversation(node);
-      }
+const TestChat = () => {
+  const [searchParams] = useSearchParams();
+  const flowId = searchParams.get('flowId');
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      type: 'bot',
+      content: 'Hello! I\'m your AI assistant. How can I help you today?',
+      timestamp: new Date()
     }
-  }, [selectedNodeId, aiNodes]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [conversation]);
+  ]);
+  const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const loadFlows = async () => {
-    try {
-      const data = await getFlows();
-      setFlows(data || []);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-      // Extract AI prompt nodes from all flows
-      const allAiNodes: FlowNode[] = [];
-      (data || []).forEach(flow => {
-        const nodes = Array.isArray(flow.nodes) ? flow.nodes : [];
-        const promptNodes = nodes.filter((node: any) => 
-          node.type === 'prompt' || node.data?.node_type === 'ai_prompt' || node.type === 'manual'
-        );
-        allAiNodes.push(...promptNodes.map((node: any) => ({
-          ...node,
-          flowName: flow.name
-        })));
-      });
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) return;
 
-      setAiNodes(allAiNodes);
-    } catch (error) {
-      console.error('Error loading flows:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load flows",
-        variant: "destructive"
-      });
-    }
-  };
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: inputValue,
+      timestamp: new Date(),
+      status: 'sending'
+    };
 
-  const loadOrCreateConversation = async (node: FlowNode) => {
-    try {
-      // Since MySQL is disconnected, use localStorage
-      const conversations = JSON.parse(localStorage.getItem('test_conversations') || '{}');
-      
-      if (conversations[node.id]) {
-        setConversation(conversations[node.id]);
-      } else {
-        // Create new conversation with data from the flow node
-        const newConversation = {
-          id: node.id,
-          instance: node.data.instance || 'default',
-          open_router_key: node.data.openRouterKey || '',
-          conv_last: [],
-          conv_current: ''
-        };
+    setMessages(prev => [...prev, userMessage]);
+    setInputValue('');
+    setIsTyping(true);
 
-        conversations[node.id] = newConversation;
-        localStorage.setItem('test_conversations', JSON.stringify(conversations));
-        setConversation(newConversation);
-      }
-    } catch (error) {
-      console.error('Error loading conversation:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load conversation data",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!userMessage.trim() || !selectedNode || !conversation) return;
-
-    setIsLoading(true);
-
-    try {
-      // Add user message to conversation
-      const userMsg: ChatMessage = {
-        role: 'USER',
-        content: userMessage.trim(),
-        timestamp: new Date().toISOString()
-      };
-
-      let botReply = '';
-
-      if (selectedNode.type === 'manual') {
-        // Handle manual node - use predefined response
-        botReply = selectedNode.data.label || 'Manual response configured in Flow Builder';
-      } else if (selectedNode.type === 'prompt') {
-        // AI functionality has been removed
-        botReply = `AI functionality has been removed. This was an AI prompt node with instance: ${conversation.instance}`;
-      } else {
-        // Default fallback for other node types
-        botReply = `Node type "${selectedNode.type}" response: ${selectedNode.data.label || 'Default response'}`;
-      }
-
-      const botMsg: ChatMessage = {
-        role: 'BOT',
-        content: botReply,
-        timestamp: new Date().toISOString()
-      };
-
-      // Update conversation in localStorage
-      const updatedConvLast = [...(conversation.conv_last || []), userMsg, botMsg];
-      const updatedConversation = {
-        ...conversation,
-        conv_last: updatedConvLast,
-        conv_current: botReply
+    // Simulate bot response
+    setTimeout(() => {
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: `I received your message: "${userMessage.content}". This is a simulated response from the chatbot flow.`,
+        timestamp: new Date()
       };
       
-      const conversations = JSON.parse(localStorage.getItem('test_conversations') || '{}');
-      conversations[conversation.id] = updatedConversation;
-      localStorage.setItem('test_conversations', JSON.stringify(conversations));
-
-      // Update local state
-      setConversation(updatedConversation);
-      setUserMessage('');
-
-      toast({
-        title: "Message sent",
-        description: selectedNode.type === 'manual' ? "Manual response delivered" : "Mock response generated"
-      });
-
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send message",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const clearConversation = async () => {
-    if (!conversation) return;
-
-    try {
-      const conversations = JSON.parse(localStorage.getItem('test_conversations') || '{}');
-      conversations[conversation.id] = {
-        ...conversation,
-        conv_last: [],
-        conv_current: ''
-      };
-      localStorage.setItem('test_conversations', JSON.stringify(conversations));
-
-      setConversation({
-        ...conversation,
-        conv_last: [],
-        conv_current: ''
-      });
-
-      toast({
-        title: "Conversation cleared",
-        description: "Chat history has been reset"
-      });
-
-    } catch (error) {
-      console.error('Error clearing conversation:', error);
-      toast({
-        title: "Error",
-        description: "Failed to clear conversation",
-        variant: "destructive"
-      });
-    }
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === userMessage.id 
+            ? { ...msg, status: 'sent' }
+            : msg
+        ).concat(botMessage)
+      );
+      setIsTyping(false);
+    }, 1500);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      handleSendMessage();
     }
   };
 
+  const handleReset = () => {
+    setMessages([
+      {
+        id: '1',
+        type: 'bot',
+        content: 'Hello! I\'m your AI assistant. How can I help you today?',
+        timestamp: new Date()
+      }
+    ]);
+  };
+
+  const handleExportChat = () => {
+    const chatData = {
+      flowId,
+      messages,
+      exportedAt: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(chatData, null, 2)], {
+      type: 'application/json'
+    });
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-export-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-          <MessageCircle className="w-8 h-8 text-primary" />
-          Test Chat
-        </h1>
-        <p className="text-muted-foreground">
-          Test chatbot nodes with simulated conversations. AI functionality has been removed.
-        </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+            Test Chat
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400">
+            Test your conversational flows in real-time
+            {flowId && (
+              <Badge variant="outline" className="ml-2">
+                Flow: {flowId}
+              </Badge>
+            )}
+          </p>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm" onClick={handleReset}>
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportChat}>
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+          <Button variant="ghost" size="sm">
+            <Settings className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
-      <Card className="h-[600px] flex flex-col">
-        <CardHeader className="pb-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5" />
-              Chat Simulation (No AI)
-            </CardTitle>
-            <div className="flex gap-2">
-              <Select value={selectedNodeId} onValueChange={setSelectedNodeId}>
-                <SelectTrigger className="w-[300px]">
-                  <SelectValue placeholder="Select a prompt node to test" />
-                </SelectTrigger>
-                <SelectContent>
-                  {aiNodes.map((node) => (
-                    <SelectItem key={node.id} value={node.id}>
-                      {(node as any).flowName} - {node.data.label || `Node ${node.id.slice(0, 8)}`}
-                      {node.type === 'manual' && ' (Manual)'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {conversation && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearConversation}
-                  className="flex items-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {selectedNode && (
-            <div className="mt-4 p-3 bg-muted rounded-lg text-sm">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <span className="font-medium">Instance:</span>
-                  <p className="text-muted-foreground mt-1">
-                    {conversation?.instance || selectedNode.data.instance || 'default'}
-                  </p>
+      {/* Chat Interface */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Chat Area */}
+        <div className="lg:col-span-3">
+          <Card className="h-[600px] flex flex-col border-0 shadow-xl">
+            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">AI Assistant</CardTitle>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {isTyping ? 'Typing...' : 'Online'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <span className="font-medium">Status:</span>
-                  <p className="text-muted-foreground mt-1">
-                    AI Disabled - Manual responses only
-                  </p>
+                
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <Button variant="ghost" size="sm">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
-            </div>
-          )}
-        </CardHeader>
-
-        <CardContent className="flex-1 flex flex-col">
-          {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto mb-4 p-4 bg-muted/20 rounded-lg">
-            {!selectedNode ? (
-              <div className="text-center text-muted-foreground py-8">
-                Select a prompt node from the dropdown above to start testing
-              </div>
-            ) : !conversation?.conv_last?.length ? (
-              <div className="text-center text-muted-foreground py-8">
-                No messages yet. Type a message below to start the conversation.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {conversation.conv_last.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${message.role === 'USER' ? 'justify-end' : 'justify-start'}`}
-                  >
+            </CardHeader>
+            
+            <CardContent className="flex-1 p-0">
+              <ScrollArea className="h-full p-4">
+                <div className="space-y-4">
+                  {messages.map((message) => (
                     <div
-                      className={`max-w-[80%] p-3 rounded-lg ${
-                        message.role === 'USER'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-card border'
+                      key={message.id}
+                      className={`flex items-start space-x-3 ${
+                        message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''
                       }`}
                     >
-                      <div className="text-sm font-medium mb-1">
-                        {message.role === 'USER' ? 'User' : 'Bot'}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        message.type === 'user' 
+                          ? 'bg-green-600' 
+                          : 'bg-blue-600'
+                      }`}>
+                        {message.type === 'user' ? (
+                          <User className="w-4 h-4 text-white" />
+                        ) : (
+                          <Bot className="w-4 h-4 text-white" />
+                        )}
                       </div>
-                      <div className="whitespace-pre-wrap">{message.content}</div>
-                      <div className="text-xs opacity-70 mt-2">
-                        {new Date(message.timestamp).toLocaleTimeString()}
+                      
+                      <div className={`max-w-[70%] ${
+                        message.type === 'user' ? 'text-right' : 'text-left'
+                      }`}>
+                        <div className={`inline-block p-3 rounded-lg ${
+                          message.type === 'user'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white'
+                        }`}>
+                          <p className="text-sm">{message.content}</p>
+                        </div>
+                        
+                        <div className="flex items-center mt-1 space-x-2 text-xs text-slate-500">
+                          <span>{message.timestamp.toLocaleTimeString()}</span>
+                          {message.status && (
+                            <Badge 
+                              variant={message.status === 'error' ? 'destructive' : 'secondary'}
+                              className="text-xs"
+                            >
+                              {message.status}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                  
+                  {isTyping && (
+                    <div className="flex items-start space-x-3">
+                      <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                        <Bot className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="bg-slate-100 dark:bg-slate-700 p-3 rounded-lg">
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div ref={messagesEndRef} />
+                </div>
+              </ScrollArea>
+            </CardContent>
+            
+            {/* Input Area */}
+            <div className="border-t p-4">
+              <div className="flex items-center space-x-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setIsRecording(!isRecording)}
+                  className={isRecording ? 'text-red-600' : ''}
+                >
+                  {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </Button>
+                
+                <Button variant="ghost" size="sm">
+                  <Paperclip className="w-4 h-4" />
+                </Button>
+                
+                <Input
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your message..."
+                  className="flex-1"
+                  disabled={isTyping}
+                />
+                
+                <Button 
+                  onClick={handleSendMessage}
+                  disabled={!inputValue.trim() || isTyping}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Message Input */}
-          {selectedNode && (
-            <div className="flex gap-3">
-              <Textarea
-                value={userMessage}
-                onChange={(e) => setUserMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your test message here..."
-                className="flex-1 min-h-[80px] resize-none"
-                disabled={isLoading}
-              />
-              <Button
-                onClick={sendMessage}
-                disabled={!userMessage.trim() || isLoading}
-                size="lg"
-                className="px-6"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </Card>
+        </div>
+        
+        {/* Sidebar */}
+        <div className="space-y-4">
+          {/* Flow Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Flow Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Status</p>
+                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                  Active
+                </Badge>
+              </div>
+              
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Messages</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{messages.length}</p>
+              </div>
+              
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Session Duration</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">5 minutes</p>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <Play className="w-4 h-4 mr-2" />
+                Restart Flow
+              </Button>
+              
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <Download className="w-4 h-4 mr-2" />
+                Save Conversation
+              </Button>
+              
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <Settings className="w-4 h-4 mr-2" />
+                Flow Settings
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
-}
+};
+
+export default TestChat;

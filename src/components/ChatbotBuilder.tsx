@@ -1,5 +1,4 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ReactFlow,
   addEdge,
@@ -19,11 +18,10 @@ import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Sparkles, X, Send, Home, Bot, Upload } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Sparkles, X, Send, Bot } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
-import { Link } from 'react-router-dom';
 
 import MessageNode from './nodes/MessageNode';
 import ConditionNode from './nodes/ConditionNode';
@@ -61,8 +59,6 @@ const initialNodes: Node[] = [
 const initialEdges: Edge[] = [];
 
 export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: string) => void }) {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
@@ -93,29 +89,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
     [setNodes]
   );
 
-  // Load flow for editing if edit parameter is present
-  useEffect(() => {
-    const loadFlowForEdit = async () => {
-      const editFlowId = searchParams.get('edit');
-      if (editFlowId) {
-        const flowToEdit = await getFlow(editFlowId);
-        if (flowToEdit) {
-          setFlowName(flowToEdit.name);
-          setCurrentFlowId(flowToEdit.id);
-          setNodes(flowToEdit.nodes.map(node => ({
-            ...node,
-            data: { ...node.data, onDelete: deleteNode, onUpdate: updateNodeData }
-          })));
-          setEdges(flowToEdit.edges);
-          toast({
-            title: "Flow loaded for editing",
-            description: `"${flowToEdit.name}" is now loaded in the editor`
-          });
-        }
-      }
-    };
-    loadFlowForEdit();
-  }, [searchParams, setNodes, setEdges, toast, deleteNode]);
+
 
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -292,46 +266,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header with Navigation */}
-      <div className="bg-card border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-gradient-primary p-2 rounded-lg">
-              <Bot className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">ChatBot Builder</h1>
-              <p className="text-sm text-muted-foreground">Build intelligent conversational flows</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <Button asChild variant="outline">
-              <Link to="/" className="flex items-center gap-2">
-                <Home className="w-4 h-4" />
-                Back to Home
-              </Link>
-            </Button>
-            
-            <Button asChild variant="outline">
-              <Link to="/test-chat" className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4" />
-                Test Chat
-              </Link>
-            </Button>
-            
-            <Button asChild variant="outline">
-              <Link to="/media" className="flex items-center gap-2">
-                <Upload className="w-4 h-4" />
-                Media Manager
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content */}
-      <div className="flex h-[calc(100vh-80px)] bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="flex h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         {/* Compact Tool Sidebar */}
         <Card className="w-56 h-full bg-background/95 backdrop-blur-sm border-r border-primary/20 rounded-none">
           <div className="p-3 flex-1">
