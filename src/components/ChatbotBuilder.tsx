@@ -16,7 +16,6 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { MessageSquare, GitBranch, Clock, Play, Download, Image, Mic, Video, Save, Sparkles, X, Send, Bot } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
@@ -269,9 +268,9 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       {/* Main Content */}
       <div className="flex h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         {/* Compact Tool Sidebar */}
-        <Card className="w-64 h-full bg-background/95 backdrop-blur-sm border-r border-primary/20 rounded-none">
-          <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
-            <div className="p-3 pb-8">
+        <div className="w-64 h-full bg-background/95 backdrop-blur-sm border-r border-primary/20 flex flex-col">
+          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+            <div className="p-3 pb-16 min-h-full">
               <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
               
               <div className="space-y-2 mb-4">
@@ -395,7 +394,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                </div>
             </div>
           </div>
-        </Card>
+        </div>
 
         {/* Flow Canvas */}
         <div className="flex-1 h-full relative bg-gradient-to-br from-background via-background/95 to-background/90">
