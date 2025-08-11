@@ -46,6 +46,7 @@ func RunMigrations(db *sql.DB) error {
 		createAISettingsTable,
 		createLeadsTable,
 		createMediaFilesTable,
+		addMissingColumns,
 	}
 
 	for i, migration := range migrations {
@@ -71,6 +72,9 @@ CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
     system_prompt TEXT COLLATE utf8mb4_unicode_ci,
     instance VARCHAR(255),
     apiprovider VARCHAR(255),
+    global_instance VARCHAR(255),
+    global_open_router_key VARCHAR(500),
+    mode VARCHAR(50) DEFAULT 'standard',
     nodes JSON,
     edges JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -177,14 +181,14 @@ DEALLOCATE PREPARE stmt;
 
 SELECT COUNT(*) INTO @col_exists FROM INFORMATION_SCHEMA.COLUMNS 
 WHERE TABLE_NAME = 'chatbot_flows_nodepath' AND COLUMN_NAME = 'global_open_router_key';
-SET @sql = IF(@col_exists = 0, 'ALTER TABLE chatbot_flows_nodepath ADD COLUMN global_open_router_key VARCHAR(255)', 'SELECT "Column global_open_router_key already exists"');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE chatbot_flows_nodepath ADD COLUMN global_open_router_key VARCHAR(500)', 'SELECT "Column global_open_router_key already exists"');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 SELECT COUNT(*) INTO @col_exists FROM INFORMATION_SCHEMA.COLUMNS 
 WHERE TABLE_NAME = 'chatbot_flows_nodepath' AND COLUMN_NAME = 'mode';
-SET @sql = IF(@col_exists = 0, 'ALTER TABLE chatbot_flows_nodepath ADD COLUMN mode ENUM(\'AUTO\', \'SEMI-AUTO\', \'MANUAL\') DEFAULT \'MANUAL\'', 'SELECT "Column mode already exists"');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE chatbot_flows_nodepath ADD COLUMN mode VARCHAR(50) DEFAULT \'standard\'', 'SELECT "Column mode already exists"');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
