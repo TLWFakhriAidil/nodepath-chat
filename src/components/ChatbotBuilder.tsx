@@ -271,7 +271,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
         {/* Compact Tool Sidebar */}
         <Card className="w-64 h-full bg-background/95 backdrop-blur-sm border-r border-primary/20 rounded-none">
           <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
-            <div className="p-3">
+            <div className="p-3 pb-8">
               <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
               
               <div className="space-y-2 mb-4">
@@ -377,7 +377,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                </div>
 
                {/* Flow Stats */}
-               <div className="space-y-2 mb-8">
+               <div className="space-y-2 mb-12">
                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full pulse-glow"></div>
                    Flow Stats
