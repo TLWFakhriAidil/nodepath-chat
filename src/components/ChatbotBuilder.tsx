@@ -149,10 +149,20 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     [setNodes, deleteNode, updateNodeData]
   );
 
-  // Load flow data when flowId is provided
+  // Load flow data when flowId is provided, or clear state when creating new flow
   useEffect(() => {
     const loadFlowData = async () => {
-      if (!flowId) return;
+      if (!flowId) {
+        // Clear state when creating a new flow
+        console.log('New flow mode - Clearing state values');
+        setFlowName('');
+        setCurrentFlowId(null);
+        setFieldInstance('');
+        setOpenRouterApiKey('');
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+        return;
+      }
       
       try {
         const flowData = await getFlow(flowId);
