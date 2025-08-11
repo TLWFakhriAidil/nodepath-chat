@@ -270,7 +270,7 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
         {/* Compact Tool Sidebar */}
         <div className="w-64 h-full bg-background/95 backdrop-blur-sm border-r border-primary/20 flex flex-col">
           <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
-            <div className="p-3 pb-16 min-h-full">
+            <div className="p-3 pb-32 min-h-full">
               <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
               
               <div className="space-y-2 mb-4">
