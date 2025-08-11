@@ -97,20 +97,7 @@ const App = () => {
                 })}
               </nav>
               
-              <div className="absolute bottom-6 left-4 right-4">
-                <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-200/50 dark:border-blue-700/50">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Zap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium text-slate-900 dark:text-white">Pro Features</span>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
-                    Unlock advanced AI capabilities and unlimited flows.
-                  </p>
-                  <Button size="sm" className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-                    Upgrade Now
-                  </Button>
-                </div>
-              </div>
+
             </div>
 
             {/* Mobile sidebar overlay */}

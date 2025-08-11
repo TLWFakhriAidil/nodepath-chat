@@ -66,6 +66,8 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
   const [globalInstance, setGlobalInstance] = useState('');
   const [globalOpenRouterKey, setGlobalOpenRouterKey] = useState('');
+  const [fieldInstance, setFieldInstance] = useState('');
+  const [openRouterApiKey, setOpenRouterApiKey] = useState('');
   const { toast } = useToast();
 
   const deleteNode = useCallback(
@@ -267,18 +269,42 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
       {/* Main Content */}
       <div className="flex h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         {/* Compact Tool Sidebar */}
-        <Card className="w-56 h-full bg-background/95 backdrop-blur-sm border-r border-primary/20 rounded-none">
-          <div className="p-3 flex-1">
-            <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
-            
-            <div className="space-y-2 mb-4">
-               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 bg-primary rounded-full pulse-glow"></div>
-                 Add Nodes
-               </h3>
-               
-               <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
-                 <div className="grid gap-1.5 pr-1">
+        <Card className="w-64 h-full bg-background/95 backdrop-blur-sm border-r border-primary/20 rounded-none">
+          <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+            <div className="p-3">
+              <h2 className="text-lg font-bold mb-3 text-foreground holographic-text">Flow Builder</h2>
+              
+              {/* API Configuration */}
+              <div className="space-y-2 mb-4">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-orange-500 rounded-full pulse-glow"></div>
+                  API Configuration
+                </h3>
+                
+                <div className="space-y-1.5">
+                  <Input
+                    placeholder="Field Instance..."
+                    value={fieldInstance}
+                    onChange={(e) => setFieldInstance(e.target.value)}
+                    className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
+                  />
+                  <Input
+                    placeholder="OpenRouter API Key..."
+                    type="password"
+                    value={openRouterApiKey}
+                    onChange={(e) => setOpenRouterApiKey(e.target.value)}
+                    className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2 mb-4">
+                 <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                   <div className="w-1.5 h-1.5 bg-primary rounded-full pulse-glow"></div>
+                   Add Nodes
+                 </h3>
+                 
+                 <div className="grid gap-1.5">
                    {nodeTypeButtons.map((nodeType) => {
                      const IconComponent = nodeType.icon;
                      return (
@@ -296,67 +322,67 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
                    })}
                  </div>
                </div>
-             </div>
 
-            {/* Flow Controls */}
-            <div className="space-y-2 mb-4">
-              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full pulse-glow"></div>
-                Flow Controls
-              </h3>
-              
-              <div className="space-y-1.5">
-                <Input
-                  placeholder="Flow name..."
-                  value={flowName}
-                  onChange={(e) => setFlowName(e.target.value)}
-                  className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
-                />
+              {/* Flow Controls */}
+              <div className="space-y-2 mb-4">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full pulse-glow"></div>
+                  Flow Controls
+                </h3>
                 
-                <div className="flex gap-1">
-                  <Button
-                    onClick={saveFlowToStorage}
-                    size="sm"
-                    className="flex-1 h-7 text-xs bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 shadow-lg"
-                  >
-                    <Save className="w-3 h-3 mr-1" />
-                    Save
-                  </Button>
+                <div className="space-y-1.5">
+                  <Input
+                    placeholder="Flow name..."
+                    value={flowName}
+                    onChange={(e) => setFlowName(e.target.value)}
+                    className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
+                  />
                   
-                  <Button
-                    onClick={exportFlow}
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs border-border/50 hover:bg-background/80"
-                  >
-                    <Download className="w-3 h-3" />
-                  </Button>
-                  
-                  <Button
-                    onClick={testFlow}
-                    size="sm"
-                    className="h-7 text-xs bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white border-0 shadow-lg"
-                  >
-                    <Play className="w-3 h-3" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      onClick={saveFlowToStorage}
+                      size="sm"
+                      className="flex-1 h-7 text-xs bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 shadow-lg"
+                    >
+                      <Save className="w-3 h-3 mr-1" />
+                      Save
+                    </Button>
+                    
+                    <Button
+                      onClick={exportFlow}
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-border/50 hover:bg-background/80"
+                    >
+                      <Download className="w-3 h-3" />
+                    </Button>
+                    
+                    <Button
+                      onClick={testFlow}
+                      size="sm"
+                      className="h-7 text-xs bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white border-0 shadow-lg"
+                    >
+                      <Play className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Flow Stats */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full pulse-glow"></div>
-                Flow Stats
-              </h4>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <div className="flex justify-between">
-                  <span>Nodes:</span>
-                  <span className="text-primary font-medium">{nodes.length}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Connections:</span>
-                  <span className="text-primary font-medium">{edges.length}</span>
+              {/* Flow Stats */}
+              <div className="space-y-2 mb-4">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full pulse-glow"></div>
+                  Flow Stats
+                </h4>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div className="flex justify-between">
+                    <span>Nodes:</span>
+                    <span className="text-primary font-medium">{nodes.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Connections:</span>
+                    <span className="text-primary font-medium">{edges.length}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -402,14 +428,32 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
               defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
             >
               <Controls 
-                className="!bg-white/95 dark:!bg-slate-800/95 backdrop-blur border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl"
+                className="!bg-background/95 !border-border/50 backdrop-blur rounded-lg shadow-xl"
                 position="bottom-left"
-                style={{ bottom: '20px', left: '20px', transform: 'scale(0.8)', transformOrigin: 'bottom left', zIndex: 1000 }}
+                style={{ 
+                  bottom: '20px', 
+                  left: '20px', 
+                  transform: 'scale(0.9)', 
+                  transformOrigin: 'bottom left', 
+                  zIndex: 1000,
+                  visibility: 'visible',
+                  opacity: 1
+                }}
               />
               <MiniMap 
-                className="!bg-white/95 dark:!bg-slate-800/95 backdrop-blur border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl"
+                className="!bg-background/95 !border-border/50 backdrop-blur rounded-lg shadow-xl"
                 position="bottom-right"
-                style={{ bottom: '20px', right: '20px', width: '150px', height: '100px', transform: 'scale(0.8)', transformOrigin: 'bottom right', zIndex: 1000 }}
+                style={{ 
+                  bottom: '20px', 
+                  right: '20px', 
+                  width: '150px', 
+                  height: '100px', 
+                  transform: 'scale(0.9)', 
+                  transformOrigin: 'bottom right', 
+                  zIndex: 1000,
+                  visibility: 'visible',
+                  opacity: 1
+                }}
                 nodeColor={(node) => {
                   switch (node.type) {
                     case 'start': return 'hsl(var(--primary))'
