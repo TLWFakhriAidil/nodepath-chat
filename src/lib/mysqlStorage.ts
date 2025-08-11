@@ -84,12 +84,22 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
 
     console.log('Saving flow using Go API:', flow.id)
     
+    // Check if flow already exists to determine if we should create or update
+    let isUpdate = false;
+    try {
+      const existingFlowResponse = await fetch(`/api/flows/${flow.id}`);
+      if (existingFlowResponse.ok) {
+        const existingFlow = await existingFlowResponse.json();
+        isUpdate = existingFlow.success && existingFlow.data;
+      }
+    } catch (error) {
+      // If we can't check, assume it's a new flow
+      console.log('Could not check if flow exists, treating as new flow');
+    }
+    
     // Prepare flow data for Go API
     const flowData = {
       id: flow.id,
-      flow_id: flow.id,
-      node_id: 'root',
-      node_type: 'flow',
       name: flow.name,
       description: flow.description || '',
       global_instance: flow.globalInstance || '',
@@ -104,12 +114,16 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
       id: flowData.id,
       name: flowData.name,
       global_instance: flowData.global_instance,
-      global_open_router_key: flowData.global_open_router_key
+      global_open_router_key: flowData.global_open_router_key,
+      isUpdate: isUpdate
     });
     
-    // Use Go API endpoint for saving flows
-    const response = await fetch('/api/flows', {
-      method: 'POST',
+    // Use appropriate endpoint and method based on whether flow exists
+    const url = isUpdate ? `/api/flows/${flow.id}` : '/api/flows';
+    const method = isUpdate ? 'PUT' : 'POST';
+    
+    const response = await fetch(url, {
+      method: method,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
