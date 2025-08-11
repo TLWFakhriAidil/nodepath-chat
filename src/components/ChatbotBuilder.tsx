@@ -58,6 +58,8 @@ const initialNodes: Node[] = [
 const initialEdges: Edge[] = [];
 
 export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (flowId: string) => void; flowId?: string | null }) {
+  console.log('ChatbotBuilder component rendered with flowId:', flowId);
+  
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
@@ -65,6 +67,15 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
   const [fieldInstance, setFieldInstance] = useState('');
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
+  
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('State change - fieldInstance:', fieldInstance);
+  }, [fieldInstance]);
+  
+  useEffect(() => {
+    console.log('State change - openRouterApiKey:', openRouterApiKey ? '[HIDDEN]' : 'empty');
+  }, [openRouterApiKey]);
   const { toast } = useToast();
 
   const deleteNode = useCallback(
@@ -146,10 +157,22 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       try {
         const flowData = await getFlow(flowId);
         if (flowData) {
+          console.log('Load flow - Flow data received:', {
+            id: flowData.id,
+            name: flowData.name,
+            globalInstance: flowData.globalInstance,
+            globalOpenRouterKey: flowData.globalOpenRouterKey
+          });
+          
           setFlowName(flowData.name);
           setCurrentFlowId(flowData.id);
           setFieldInstance(flowData.globalInstance || '');
           setOpenRouterApiKey(flowData.globalOpenRouterKey || '');
+          
+          console.log('Load flow - State values set to:', {
+            fieldInstance: flowData.globalInstance || '',
+            openRouterApiKey: flowData.globalOpenRouterKey || ''
+          });
           
           // Load nodes with proper callbacks
           const loadedNodes = flowData.nodes.map((node: any) => ({
@@ -203,6 +226,13 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       return;
     }
 
+    // Debug logging
+    console.log('Save flow - Current state values:', {
+      fieldInstance,
+      openRouterApiKey,
+      flowName
+    });
+
     const flowData: ChatbotFlow = {
       id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       name: flowName,
@@ -225,6 +255,13 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
+    
+    console.log('Save flow - Flow data being saved:', {
+      id: flowData.id,
+      name: flowData.name,
+      globalInstance: flowData.globalInstance,
+      globalOpenRouterKey: flowData.globalOpenRouterKey
+    });
     
     try {
       await saveFlow(flowData);
