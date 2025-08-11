@@ -9,7 +9,7 @@ const MYSQL_CONFIG = {
   database: import.meta.env.VITE_DB_NAME || 'admin_railway'
 }
 
-// Direct MySQL connection using a simple backend API
+// Direct MySQL connection using Go backend API
 export async function callMySQLAPI(query: string, params: any[] = [], config = MYSQL_CONFIG) {
   try {
     console.log(`Calling MySQL API with query: ${query}`);
@@ -27,8 +27,8 @@ export async function callMySQLAPI(query: string, params: any[] = [], config = M
     const jsonPayload = JSON.stringify(payload);
     console.log('JSON payload length:', jsonPayload.length);
     
-    // Use local PHP endpoint for MySQL operations
-    const response = await fetch('/mysql-api.php', {
+    // Use Go backend API endpoint for MySQL operations
+    const response = await fetch('/api/mysql', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -70,7 +70,7 @@ export async function callMySQLAPI(query: string, params: any[] = [], config = M
   }
 }
 
-// Flow management
+// Flow management using Go API
 export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
   try {
     // Validate required parameters before saving
@@ -82,61 +82,48 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
       throw new Error('Flow must have at least one node')
     }
 
-    console.log('Saving flow to MySQL database:', flow.id)
+    console.log('Saving flow using Go API:', flow.id)
     
-    // Prepare flow data for MySQL
+    // Prepare flow data for Go API
     const flowData = {
       id: flow.id,
+      flow_id: flow.id,
+      node_id: 'root',
+      node_type: 'flow',
       name: flow.name,
       description: flow.description || '',
-      instance: flow.globalInstance || null,
-      open_router_key: flow.globalOpenRouterKey || null,
-      nodes: JSON.stringify(flow.nodes),
-      edges: JSON.stringify(flow.edges || []),
+      global_instance: flow.globalInstance || '',
+      global_open_router_key: flow.globalOpenRouterKey || '',
+      nodes: flow.nodes,
+      edges: flow.edges || [],
       created_at: flow.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
     
-    // Single MySQL operation - create table and insert/update in one call
-    const saveQuery = `
-      CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
-        id VARCHAR(255) PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        instance VARCHAR(255),
-        open_router_key VARCHAR(255),
-        nodes LONGTEXT,
-        edges LONGTEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      );
-      
-      INSERT INTO chatbot_flows_nodepath (
-        id, name, description, instance, open_router_key, nodes, edges, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        name = VALUES(name),
-        description = VALUES(description),
-        instance = VALUES(instance),
-        open_router_key = VALUES(open_router_key),
-        nodes = VALUES(nodes),
-        edges = VALUES(edges),
-        updated_at = VALUES(updated_at);
-    `;
+    console.log('Flow data being sent:', {
+      id: flowData.id,
+      name: flowData.name,
+      global_instance: flowData.global_instance,
+      global_open_router_key: flowData.global_open_router_key
+    });
     
-    const params = [
-      flowData.id,
-      flowData.name,
-      flowData.description,
-      flowData.instance,
-      flowData.open_router_key,
-      flowData.nodes,
-      flowData.edges,
-      flowData.created_at,
-      flowData.updated_at
-    ];
+    // Use Go API endpoint for saving flows
+    const response = await fetch('/api/flows', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(flowData)
+    });
     
-    const result = await callMySQLAPI(saveQuery, params);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Go API error:', response.status, errorText);
+      throw new Error(`Failed to save flow: ${response.status} ${errorText}`);
+    }
+    
+    const result = await response.json();
     
     // Also save to localStorage as backup/fallback
     const flows = JSON.parse(localStorage.getItem('chatbot_flows') || '[]');
@@ -162,7 +149,7 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
       name: flow.name,
       instance: flow.globalInstance,
       openRouterKey: flow.globalOpenRouterKey,
-      affectedRows: result.affectedRows
+      success: result.success
     })
   } catch (error) {
     console.error('Error saving flow:', error)
@@ -195,24 +182,31 @@ const ensureTableStructure = async () => {
 
 export const getFlows = async (): Promise<ChatbotFlow[]> => {
   try {
-    // Get flows from MySQL database
-    const query = 'SELECT * FROM chatbot_flows_nodepath ORDER BY updated_at DESC';
-    const result = await callMySQLAPI(query);
+    // Get flows from Go API
+    const response = await fetch('/api/flows', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
     
-    if (result.data) {
-      const formattedFlows = result.data.map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        globalInstance: row.instance,
-        globalOpenRouterKey: row.open_router_key,
-        nodes: JSON.parse(row.nodes || '[]'),
-        edges: JSON.parse(row.edges || '[]'),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      }));
-      
-      return formattedFlows;
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data) {
+        const formattedFlows = result.data.map((row: any) => ({
+          id: row.id || row.flow_id,
+          name: row.name,
+          description: row.description,
+          globalInstance: row.global_instance || row.instance,
+          globalOpenRouterKey: row.global_open_router_key || row.open_router_key,
+          nodes: Array.isArray(row.nodes) ? row.nodes : JSON.parse(row.nodes || '[]'),
+          edges: Array.isArray(row.edges) ? row.edges : JSON.parse(row.edges || '[]'),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        }));
+        
+        return formattedFlows;
+      }
     }
     
     return [];
@@ -235,23 +229,30 @@ export const getFlows = async (): Promise<ChatbotFlow[]> => {
 
 export const getFlow = async (id: string): Promise<ChatbotFlow | null> => {
   try {
-    // Get flow from MySQL database
-    const query = 'SELECT * FROM chatbot_flows_nodepath WHERE id = ?';
-    const result = await callMySQLAPI(query, [id]);
+    // Get flow from Go API
+    const response = await fetch(`/api/flows/${id}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
     
-    if (result.data && result.data.length > 0) {
-      const row = result.data[0];
-      return {
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        globalInstance: row.instance,
-        globalOpenRouterKey: row.open_router_key,
-        nodes: JSON.parse(row.nodes || '[]'),
-        edges: JSON.parse(row.edges || '[]'),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      };
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data) {
+        const row = result.data;
+        return {
+          id: row.id || row.flow_id,
+          name: row.name,
+          description: row.description,
+          globalInstance: row.global_instance || row.instance,
+          globalOpenRouterKey: row.global_open_router_key || row.open_router_key,
+          nodes: Array.isArray(row.nodes) ? row.nodes : JSON.parse(row.nodes || '[]'),
+          edges: Array.isArray(row.edges) ? row.edges : JSON.parse(row.edges || '[]'),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        };
+      }
     }
     
     return null;
@@ -280,12 +281,22 @@ export const getFlow = async (id: string): Promise<ChatbotFlow | null> => {
 
 export const deleteFlow = async (id: string): Promise<void> => {
   try {
-    // Delete flow from MySQL database
-    const query = 'DELETE FROM chatbot_flows_nodepath WHERE id = ?';
-    await callMySQLAPI(query, [id]);
-    console.log('Flow deleted from MySQL database successfully')
+    // Delete flow using Go API
+    const response = await fetch(`/api/flows/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to delete flow: ${response.status} ${errorText}`);
+    }
+    
+    console.log('Flow deleted successfully')
   } catch (error) {
-    console.error('Error deleting flow from MySQL:', error)
+    console.error('Error deleting flow:', error)
     throw error
   }
 }

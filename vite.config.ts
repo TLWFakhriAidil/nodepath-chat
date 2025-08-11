@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => ({
         target: 'https://nodepath-chat-production.up.railway.app',
         changeOrigin: true,
         secure: true
+      },
+      '/api': {
+        target: 'https://nodepath-chat-production.up.railway.app',
+        changeOrigin: true,
+        secure: true
       }
     }
   },
