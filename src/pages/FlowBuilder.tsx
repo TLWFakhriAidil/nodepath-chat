@@ -10,10 +10,12 @@ import {
   Settings
 } from 'lucide-react';
 import ChatbotBuilder from '@/components/ChatbotBuilder';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const FlowBuilder = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const flowId = searchParams.get('id');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showMinimap, setShowMinimap] = useState(true);
@@ -70,7 +72,7 @@ const FlowBuilder = () => {
       {/* Flow Builder */}
       <Card className={`border-0 shadow-xl overflow-hidden ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[calc(100vh-180px)]'}`}>
         <CardContent className="p-0 h-full">
-          <ChatbotBuilder onTestFlow={handleTestFlow} />
+          <ChatbotBuilder onTestFlow={handleTestFlow} flowId={flowId} />
         </CardContent>
       </Card>
 

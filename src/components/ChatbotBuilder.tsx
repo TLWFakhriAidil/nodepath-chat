@@ -57,7 +57,7 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [];
 
-export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: string) => void }) {
+export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (flowId: string) => void; flowId?: string | null }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
@@ -66,6 +66,51 @@ export default function ChatbotBuilder({ onTestFlow }: { onTestFlow?: (flowId: s
   const [fieldInstance, setFieldInstance] = useState('');
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
   const { toast } = useToast();
+
+  // Load flow data when flowId is provided
+  useEffect(() => {
+    const loadFlowData = async () => {
+      if (!flowId) return;
+      
+      try {
+        const flowData = await getFlow(flowId);
+        if (flowData) {
+          setFlowName(flowData.name);
+          setCurrentFlowId(flowData.id);
+          setFieldInstance(flowData.globalInstance || '');
+          setOpenRouterApiKey(flowData.globalOpenRouterKey || '');
+          
+          // Load nodes with proper callbacks
+          const loadedNodes = flowData.nodes.map((node: any) => ({
+            ...node,
+            data: {
+              ...node.data,
+              onDelete: deleteNode,
+              onUpdate: updateNodeData,
+            }
+          }));
+          
+          setNodes(loadedNodes);
+          setEdges(flowData.edges || []);
+          
+          toast({
+            title: "Flow loaded",
+            description: `"${flowData.name}" has been loaded for editing`,
+            variant: "default"
+          });
+        }
+      } catch (error) {
+        console.error('Error loading flow:', error);
+        toast({
+          title: "Load failed",
+          description: "Failed to load flow data",
+          variant: "destructive"
+        });
+      }
+    };
+    
+    loadFlowData();
+  }, [flowId, setNodes, setEdges, toast, deleteNode, updateNodeData]);
 
   const deleteNode = useCallback(
     (nodeId: string) => {
