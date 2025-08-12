@@ -756,3 +756,198 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		},
 	})
 }
+
+// CheckDeviceStatus checks the status of a device based on provider
+func (h *Handlers) CheckDeviceStatus(c *fiber.Ctx) error {
+	deviceID := c.Params("id")
+	if deviceID == "" {
+		return h.errorResponse(c, 400, "Device ID is required")
+	}
+
+	// Get device settings from database
+	device, err := h.deviceSettingsService.GetByID(deviceID)
+	if err != nil {
+		return h.errorResponse(c, 404, "Device not found")
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	if device.Provider == "whacenter" {
+		return h.checkWhacenterStatus(c, device, client)
+	} else if device.Provider == "wablas" {
+		return h.checkWablasStatus(c, device, client)
+	}
+
+	return h.errorResponse(c, 400, "Unsupported provider")
+}
+
+// checkWhacenterStatus handles Whacenter status checking
+func (h *Handlers) checkWhacenterStatus(c *fiber.Ctx, device *models.DeviceSettings, client *http.Client) error {
+	if !device.Instance.Valid || device.Instance.String == "" {
+		return h.errorResponse(c, 400, "Instance not found for Whacenter device")
+	}
+
+	apiKey := "abebe840-156c-441c-8252-da0342c5a07c" // Use the same API key as in generation
+	statusURL := fmt.Sprintf("https://api.whacenter.com/api/getDevice?device_id=%s", device.Instance.String)
+
+	req, err := http.NewRequest("GET", statusURL, nil)
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to create request")
+	}
+
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to check device status")
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to read response")
+	}
+
+	var apiResponse map[string]interface{}
+	if err := json.Unmarshal(body, &apiResponse); err != nil {
+		return h.errorResponse(c, 500, "Failed to parse response")
+	}
+
+	// Check if device is connected
+	data, ok := apiResponse["data"].(map[string]interface{})
+	if !ok {
+		return h.errorResponse(c, 500, "Invalid response format")
+	}
+
+	deviceInfo, ok := data["device"].(map[string]interface{})
+	if !ok {
+		return h.errorResponse(c, 500, "Invalid device data format")
+	}
+
+	status, _ := deviceInfo["status"].(string)
+	responseData := map[string]interface{}{
+		"provider": "whacenter",
+		"status":   status,
+		"device_id": device.Instance.String,
+	}
+
+	// If status is NOT CONNECTED, get QR code
+	if status == "NOT CONNECTED" {
+		qrURL := fmt.Sprintf("https://api.whacenter.com/api/getQrCode?device_id=%s", device.Instance.String)
+		qrReq, err := http.NewRequest("GET", qrURL, nil)
+		if err == nil {
+			qrReq.Header.Set("Accept", "application/json")
+			qrResp, err := client.Do(qrReq)
+			if err == nil {
+				defer qrResp.Body.Close()
+				qrBody, err := io.ReadAll(qrResp.Body)
+				if err == nil {
+					var qrResponse map[string]interface{}
+					if json.Unmarshal(qrBody, &qrResponse) == nil {
+						if qrData, ok := qrResponse["data"].(map[string]interface{}); ok {
+							if qrCode, ok := qrData["qr_code"].(string); ok {
+								responseData["qr_code"] = qrCode
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return c.JSON(map[string]interface{}{
+		"success": true,
+		"data":    responseData,
+	})
+}
+
+// checkWablasStatus handles Wablas status checking
+func (h *Handlers) checkWablasStatus(c *fiber.Ctx, device *models.DeviceSettings, client *http.Client) error {
+	if !device.DeviceID.Valid || device.DeviceID.String == "" {
+		return h.errorResponse(c, 400, "Device ID not found for Wablas device")
+	}
+
+	// Extract token from device_id (format: token.secret)
+	parts := strings.Split(device.DeviceID.String, ".")
+	if len(parts) != 2 {
+		return h.errorResponse(c, 400, "Invalid device ID format for Wablas")
+	}
+
+	token := parts[0]
+	statusURL := fmt.Sprintf("https://my.wablas.com/api/device/info?token=%s", token)
+
+	req, err := http.NewRequest("GET", statusURL, nil)
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to create request")
+	}
+
+	req.Header.Set("Authorization", device.DeviceID.String)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to check device status")
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to read response")
+	}
+
+	var apiResponse map[string]interface{}
+	if err := json.Unmarshal(body, &apiResponse); err != nil {
+		return h.errorResponse(c, 500, "Failed to parse response")
+	}
+
+	// Check response status
+	status, ok := apiResponse["status"].(bool)
+	if !ok || !status {
+		return h.errorResponse(c, 500, "API request failed")
+	}
+
+	data, ok := apiResponse["data"].(map[string]interface{})
+	if !ok {
+		return h.errorResponse(c, 500, "Invalid response format")
+	}
+
+	deviceStatus, _ := data["status"].(string)
+	responseData := map[string]interface{}{
+		"provider":  "wablas",
+		"status":    deviceStatus,
+		"device_id": device.DeviceID.String,
+	}
+
+	// If device is disconnected, get QR code
+	if deviceStatus == "disconnected" {
+		qrURL := fmt.Sprintf("https://my.wablas.com/api/device/qr?token=%s", token)
+		qrReq, err := http.NewRequest("GET", qrURL, nil)
+		if err == nil {
+			qrReq.Header.Set("Authorization", device.DeviceID.String)
+			qrReq.Header.Set("Accept", "application/json")
+			qrResp, err := client.Do(qrReq)
+			if err == nil {
+				defer qrResp.Body.Close()
+				qrBody, err := io.ReadAll(qrResp.Body)
+				if err == nil {
+					var qrResponse map[string]interface{}
+					if json.Unmarshal(qrBody, &qrResponse) == nil {
+						if qrStatus, ok := qrResponse["status"].(bool); ok && qrStatus {
+							if qrData, ok := qrResponse["data"].(map[string]interface{}); ok {
+								if qrCode, ok := qrData["qr_code"].(string); ok {
+									responseData["qr_code"] = qrCode
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return c.JSON(map[string]interface{}{
+		"success": true,
+		"data":    responseData,
+	})
+}
