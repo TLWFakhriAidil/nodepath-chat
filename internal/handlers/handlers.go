@@ -98,6 +98,10 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Device generation routes
 	deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
 	deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
+
+	// Webhook routes for receiving messages from providers
+	webhook := api.Group("/webhook")
+	webhook.Post("/:id_device/:instance", h.HandleWebhook)
 }
 
 // Response helpers

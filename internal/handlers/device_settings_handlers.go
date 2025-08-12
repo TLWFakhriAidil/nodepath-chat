@@ -138,45 +138,66 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "ID Device is required")
 	}
 
-	// Delete existing device first (cleanup)
-	if req.DeviceID != "" {
-		logrus.Info("Cleaning up existing Whacenter device")
-		
-		// Call Whacenter delete API
-		deleteURL := fmt.Sprintf("https://api.whacenter.com/api/deleteDevice?api_key=%s&device_id=%s", 
-			req.APIKey, req.DeviceID)
-		
-		deleteClient := &http.Client{Timeout: 30 * time.Second}
-		deleteReq, err := http.NewRequest("GET", deleteURL, nil)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to create delete request")
+	// Check existing device settings by IDDevice to get instance value
+	existingDevice, err := h.deviceSettingsService.GetByIDDevice(req.IDDevice)
+	var whacenterAPIKey string
+	
+	if err != nil {
+		// No existing device found, create new with hardcoded API key
+		logrus.WithFields(logrus.Fields{
+			"id_device": req.IDDevice,
+			"action": "create_new",
+		}).Info("🆕 WHACENTER: No existing device found, creating new device")
+		whacenterAPIKey = "abebe840-156c-441c-8252-da0342c5a07c" // Hardcoded API key for new devices
+	} else {
+		// Existing device found, check instance column
+		if !existingDevice.Instance.Valid || existingDevice.Instance.String == "" {
+			// Instance is null, create new device with hardcoded API key
+			logrus.WithFields(logrus.Fields{
+				"id_device": req.IDDevice,
+				"action": "create_new_null_instance",
+			}).Info("🆕 WHACENTER: Instance is null, creating new device")
+			whacenterAPIKey = "abebe840-156c-441c-8252-da0342c5a07c" // Hardcoded API key for new devices
 		} else {
-			deleteReq.Header.Set("Accept", "application/json")
-			deleteReq.Header.Set("Content-Type", "application/json")
+			// Instance is not null, delete existing device data using instance value
+			logrus.WithFields(logrus.Fields{
+				"id_device": req.IDDevice,
+				"instance": existingDevice.Instance.String,
+				"action": "delete_existing",
+			}).Info("🗑️ WHACENTER: Instance found, deleting existing device data")
 			
-			deleteResp, err := deleteClient.Do(deleteReq)
+			// Delete existing device using instance value as device_id
+			deleteURL := fmt.Sprintf("https://api.whacenter.com/api/deleteDevice?api_key=%s&device_id=%s", 
+				"abebe840-156c-441c-8252-da0342c5a07c", existingDevice.Instance.String)
+			
+			deleteClient := &http.Client{Timeout: 30 * time.Second}
+			deleteReq, err := http.NewRequest("GET", deleteURL, nil)
 			if err != nil {
-				logrus.WithError(err).Warn("Failed to delete existing device")
+				logrus.WithError(err).Warn("Failed to create delete request")
 			} else {
-				defer deleteResp.Body.Close()
-				logrus.WithField("status", deleteResp.StatusCode).Info("Device deletion attempted")
+				deleteReq.Header.Set("Accept", "application/json")
+				deleteReq.Header.Set("Content-Type", "application/json")
+				
+				deleteResp, err := deleteClient.Do(deleteReq)
+				if err != nil {
+					logrus.WithError(err).Warn("Failed to delete existing device")
+				} else {
+					defer deleteResp.Body.Close()
+					logrus.WithFields(logrus.Fields{
+						"status": deleteResp.StatusCode,
+						"device_id": existingDevice.Instance.String,
+					}).Info("📥 WHACENTER: Device deletion attempted")
+				}
 			}
+			
+			// Now create new device with hardcoded API key
+			whacenterAPIKey = "abebe840-156c-441c-8252-da0342c5a07c"
 		}
 	}
 
-	// Check if user has existing device_id in database for Whacenter
-	var whacenterAPIKey string
-	if req.DeviceID == "" {
-		// Use the provided default Whacenter API key when device_id is empty
-		whacenterAPIKey = "abebe840-156c-441c-8252-da0342c5a07c"
-	} else {
-		// Use user's device_id as API key when device_id is not empty
-		whacenterAPIKey = req.DeviceID
-	}
-
-	// Prepare Whacenter API request with GET parameters including webhook
-	whacenterURL := fmt.Sprintf("https://api.whacenter.com/api/addDevice?api_key=%s&name=%s&number=%s&webhook=%s", 
-		whacenterAPIKey, req.IDDevice, req.PhoneNumber, url.QueryEscape(req.WebhookURL))
+	// Prepare Whacenter API request with GET parameters (without webhook initially)
+	whacenterURL := fmt.Sprintf("https://api.whacenter.com/api/addDevice?api_key=%s&name=%s&number=%s", 
+		whacenterAPIKey, req.IDDevice, req.PhoneNumber)
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -282,25 +303,61 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 		apiKey = whacenterAPIKey
 	}
 
-	// Save device data to database
+	// Construct production webhook URL using the actual device_id from API response
+	productionWebhookURL := fmt.Sprintf("https://nodepath-chat-production.up.railway.app/api/webhook/%s/%s", req.IDDevice, deviceID)
+	
+	// Set webhook for the created device
+	setWebhookURL := fmt.Sprintf("https://api.whacenter.com/api/setWebhook?device_id=%s&webhook=%s", 
+		deviceID, url.QueryEscape(productionWebhookURL))
+	
+	logrus.WithFields(logrus.Fields{
+		"provider": "whacenter",
+		"device_id": deviceID,
+		"webhook_url": productionWebhookURL,
+		"set_webhook_url": setWebhookURL,
+	}).Info("🔗 WHACENTER: Setting webhook for device")
+	
+	// Create webhook request
+	webhookRequest, err := http.NewRequest("GET", setWebhookURL, nil)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create webhook request")
+	} else {
+		webhookRequest.Header.Set("Accept", "application/json")
+		
+		// Execute webhook request
+		webhookResp, err := client.Do(webhookRequest)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to set webhook")
+		} else {
+			defer webhookResp.Body.Close()
+			webhookBody, _ := io.ReadAll(webhookResp.Body)
+			
+			logrus.WithFields(logrus.Fields{
+				"status_code": webhookResp.StatusCode,
+				"response": string(webhookBody),
+			}).Info("📥 WHACENTER: Webhook set response")
+		}
+	}
+
+	// Save device data to database - Whacenter mapping: webhook_id stores webhook_url, instance stores device_id, device_id should be null
 	createReq := &models.CreateDeviceSettingsRequest{
-		DeviceID:     deviceID,
+		// DeviceID is intentionally left empty (null) for Whacenter devices
 		APIKeyOption: req.APIKeyOption,
-		WebhookID:    req.WebhookURL,
+		WebhookID:    productionWebhookURL, // Store webhook URL
 		Provider:     "whacenter",
 		PhoneNumber:  req.PhoneNumber,
 		APIKey:       req.APIKey, // Preserve the original OpenRouter API key
 		IDDevice:     req.IDDevice,
 		IDERP:        req.IDERP,
 		IDAdmin:      req.IDAdmin,
-		Instance:     apiKey, // Store Whacenter API key as instance
+		Instance:     deviceID, // Store device_id as instance for Whacenter
 	}
 
 	// Debug logging for database save
 	logrus.WithFields(logrus.Fields{
 		"device_id": deviceID,
-		"webhook_id": req.WebhookURL,
-		"instance": apiKey,
+		"webhook_id": productionWebhookURL,
+		"instance": deviceID,
 		"provider": "whacenter",
 		"phone_number": req.PhoneNumber,
 	}).Info("💾 WHACENTER: Saving device data to database")
@@ -328,10 +385,83 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 		"message": "Device generated successfully via Whacenter",
 		"data": map[string]interface{}{
 			"device_id":   deviceID,
-			"webhook_url": req.WebhookURL,
+			"webhook_url": productionWebhookURL,
 			"api_key":     apiKey,
 			"provider":    "whacenter",
 		},
+	})
+}
+
+// HandleWebhook processes incoming webhook requests from WhatsApp providers
+func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
+	idDevice := c.Params("id_device")
+	instance := c.Params("instance")
+	
+	if idDevice == "" {
+		return h.errorResponse(c, 400, "ID Device is required")
+	}
+	if instance == "" {
+		return h.errorResponse(c, 400, "Instance is required")
+	}
+	
+	// Get the raw webhook payload
+	body := c.Body()
+	
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"instance": instance,
+		"content_type": c.Get("Content-Type"),
+		"user_agent": c.Get("User-Agent"),
+		"payload_size": len(body),
+	}).Info("📨 WEBHOOK: Received webhook request")
+	
+	// Verify the device exists in our database
+	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"error": err.Error(),
+		}).Warn("⚠️ WEBHOOK: Device not found in database")
+		return h.errorResponse(c, 404, "Device not found")
+	}
+	
+	// Verify the instance matches
+	if !deviceSettings.Instance.Valid || deviceSettings.Instance.String != instance {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"expected_instance": deviceSettings.Instance.String,
+			"received_instance": instance,
+		}).Warn("⚠️ WEBHOOK: Instance mismatch")
+		return h.errorResponse(c, 401, "Invalid instance")
+	}
+	
+	// Parse the webhook payload based on provider
+	var webhookData map[string]interface{}
+	if err := json.Unmarshal(body, &webhookData); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"error": err.Error(),
+			"payload": string(body),
+		}).Error("❌ WEBHOOK: Failed to parse JSON payload")
+		return h.errorResponse(c, 400, "Invalid JSON payload")
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"provider": deviceSettings.Provider,
+		"instance": instance,
+		"webhook_data": webhookData,
+	}).Info("✅ WEBHOOK: Successfully processed webhook")
+	
+	// TODO: Process the webhook data based on provider type
+	// This is where you would integrate with your chatbot flow engine
+	// For now, we just acknowledge receipt
+	
+	return h.successResponse(c, map[string]interface{}{
+		"success": true,
+		"message": "Webhook received and processed",
+		"id_device": idDevice,
+		"provider": deviceSettings.Provider,
 	})
 }
 
@@ -358,35 +488,66 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "ID Device is required")
 	}
 
-	// Delete existing device first (cleanup)
-	if req.DeviceID != "" {
-		logrus.Info("Cleaning up existing Wablas device")
-		
-		// Call Wablas delete API
-		deleteURL := "https://my.wablas.com/api/device/delete"
-		
-		// Create HTTP client for delete request
-		deleteClient := &http.Client{
-			Timeout: 30 * time.Second,
-		}
-		
-		// Create delete request
-		deleteRequest, err := http.NewRequest("DELETE", deleteURL, nil)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to create delete request")
+	// Check existing device settings by IDDevice to get instance value
+	existingDevice, err := h.deviceSettingsService.GetByIDDevice(req.IDDevice)
+	var wablasToken string
+	
+	if err != nil {
+		// No existing device found, create new with hardcoded token
+		logrus.WithFields(logrus.Fields{
+			"id_device": req.IDDevice,
+			"action": "create_new",
+		}).Info("🆕 WABLAS: No existing device found, creating new device")
+		wablasToken = "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY.7hDkbW0f" // Hardcoded token for new devices
+	} else {
+		// Existing device found, check instance column
+		if !existingDevice.Instance.Valid || existingDevice.Instance.String == "" {
+			// Instance is null, create new device with hardcoded token
+			logrus.WithFields(logrus.Fields{
+				"id_device": req.IDDevice,
+				"action": "create_new_null_instance",
+			}).Info("🆕 WABLAS: Instance is null, creating new device")
+			wablasToken = "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY.7hDkbW0f" // Hardcoded token for new devices
 		} else {
-			// Set headers for delete request
-			deleteRequest.Header.Set("Authorization", req.DeviceID)
-			deleteRequest.Header.Set("Accept", "application/json")
+			// Instance is not null, delete existing device data using instance value
+			logrus.WithFields(logrus.Fields{
+				"id_device": req.IDDevice,
+				"instance": existingDevice.Instance.String,
+				"action": "delete_existing",
+			}).Info("🗑️ WABLAS: Instance found, deleting existing device data")
 			
-			// Execute delete request
-			deleteResp, err := deleteClient.Do(deleteRequest)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to delete existing Wablas device")
-			} else {
-				defer deleteResp.Body.Close()
-				logrus.WithField("status_code", deleteResp.StatusCode).Info("Wablas device deletion attempted")
+			// Delete existing device using instance value as authorization
+			deleteURL := "https://my.wablas.com/api/device/delete"
+			
+			// Create HTTP client for delete request
+			deleteClient := &http.Client{
+				Timeout: 30 * time.Second,
 			}
+			
+			// Create delete request
+			deleteRequest, err := http.NewRequest("DELETE", deleteURL, nil)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to create delete request")
+			} else {
+				// Set headers for delete request using instance value
+				deleteRequest.Header.Set("Authorization", existingDevice.Instance.String)
+				deleteRequest.Header.Set("Accept", "application/json")
+				
+				// Execute delete request
+				deleteResp, err := deleteClient.Do(deleteRequest)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to delete existing Wablas device")
+				} else {
+					defer deleteResp.Body.Close()
+					logrus.WithFields(logrus.Fields{
+						"status_code": deleteResp.StatusCode,
+						"auth_token": existingDevice.Instance.String,
+					}).Info("📥 WABLAS: Device deletion attempted")
+				}
+			}
+			
+			// Now create new device with hardcoded token
+			wablasToken = "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY.7hDkbW0f"
 		}
 	}
 
@@ -414,8 +575,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		return h.errorResponse(c, 500, "Failed to create request")
 	}
 
-	// Use the provided default Wablas credentials for device creation
-	wablasToken := "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY.7hDkbW0f"
+	// Use the determined Wablas token for device creation
 	authHeader := wablasToken
 	
 	request.Header.Set("Authorization", authHeader)
@@ -503,12 +663,12 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	// Create new auth header with device token and secret
 	newAuthHeader := fmt.Sprintf("%s.%s", deviceToken, deviceSecret)
 
-	// Configure webhook URL with auth header
-	webhookURL := fmt.Sprintf("https://chatbot.growrvsb.com/chatgpt/%s/%s", req.IDDevice, newAuthHeader)
+	// Use production webhook URL
+	productionWebhookURL := fmt.Sprintf("https://nodepath-chat-production.up.railway.app/api/webhook/%s/%s", req.IDDevice, newAuthHeader)
 
 	// Setup webhook configuration using the correct endpoint
 	webhookFormData := url.Values{}
-	webhookFormData.Set("webhook_url", webhookURL)
+	webhookFormData.Set("webhook_url", productionWebhookURL)
 	
 	webhookFormEncoded := webhookFormData.Encode()
 
@@ -544,19 +704,28 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		}
 	}
 
-	// Save device data to database
+	// Save device data to database - Wablas mapping: device_id stores device_id, webhook_id stores webhook_url, instance stores api_key
 	createReq := &models.CreateDeviceSettingsRequest{
-		DeviceID:     deviceID,
+		DeviceID:     deviceID, // Store device_id
 		APIKeyOption: req.APIKeyOption,
-		WebhookID:    webhookURL,
+		WebhookID:    productionWebhookURL, // Store webhook URL
 		Provider:     "wablas",
 		PhoneNumber:  req.PhoneNumber,
 		APIKey:       req.APIKey, // Preserve the original OpenRouter API key
 		IDDevice:     req.IDDevice,
 		IDERP:        req.IDERP,
 		IDAdmin:      req.IDAdmin,
-		Instance:     newAuthHeader, // Store Wablas API key as instance
+		Instance:     newAuthHeader, // Store API key as instance for Wablas
 	}
+
+	// Debug logging for database save
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"webhook_id": productionWebhookURL,
+		"instance": newAuthHeader,
+		"provider": "wablas",
+		"phone_number": req.PhoneNumber,
+	}).Info("💾 WABLAS: Saving device data to database")
 
 	// Upsert device setting in database (update if exists, create if not)
 	deviceSetting, err := h.deviceSettingsService.Upsert(createReq)
@@ -571,7 +740,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	logrus.WithFields(logrus.Fields{
 		"provider": "wablas",
 		"device_id": deviceID,
-		"webhook_url": webhookURL,
+		"webhook_url": productionWebhookURL,
 		"phone_number": req.PhoneNumber,
 	}).Info("✅ WABLAS: Device generated successfully")
 	
@@ -581,7 +750,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		"message": "Device generated successfully via Wablas",
 		"data": map[string]interface{}{
 			"device_id":   deviceID,
-			"webhook_url": webhookURL,
+			"webhook_url": productionWebhookURL,
 			"api_key":     newAuthHeader,
 			"provider":    "wablas",
 		},

@@ -61,32 +61,7 @@ const DeviceForm: React.FC<{
             >
               {isSaving ? 'GENERATING...' : 'GENERATE DEVICE'}
             </Button>
-            <Button
-              onClick={() => {
-                console.log('🧪 TEST VALIDATION BUTTON CLICKED');
-                console.log('📊 Current form state for testing:', {
-                  phone_number: settings.phone_number,
-                  id_device: settings.id_device,
-                  provider: settings.provider,
-                  api_key: settings.api_key ? '[HIDDEN]' : settings.api_key
-                });
-                // Clear all fields to test validation
-                setSettings(prev => ({
-                  ...prev,
-                  phone_number: '',
-                  id_device: '',
-                  provider: '',
-                  api_key: ''
-                }));
-                console.log('🧹 Cleared all fields for validation testing');
-                toast.info('Fields cleared - now click GENERATE DEVICE to test validation');
-              }}
-              variant="outline"
-              size="sm"
-              className="text-xs px-2"
-            >
-              TEST
-            </Button>
+
           </div>
         </div>
       </div>
@@ -695,6 +670,16 @@ const DeviceSettings: React.FC = () => {
             
             console.log('🎊 Showing success toast');
             toast.success(`Device generated successfully via ${settings.provider}!`);
+            
+            // Close modal and reset form after successful generation
+            console.log('🔄 Closing modal and resetting form...');
+            setIsModalOpen(false);
+            resetForm();
+            
+            // Refresh the device settings table to show the new data
+            console.log('🔄 Refreshing device settings table...');
+            loadDeviceSettings();
+            
             console.log('=== DEVICE GENERATION COMPLETED SUCCESSFULLY ===');
           } else {
             console.error('❌ API call failed with message:', result.message);
@@ -861,7 +846,14 @@ const DeviceSettings: React.FC = () => {
               <TableBody>
                 {devices.map((device) => (
                   <TableRow key={device.id}>
-                    <TableCell className="font-medium">{device.device_id || 'Not generated'}</TableCell>
+                    <TableCell className="font-medium">
+                      {device.provider === 'wablas' 
+                        ? (device.device_id || 'Not generated')
+                        : device.provider === 'whacenter'
+                        ? (device.instance || 'Not generated')
+                        : 'Not generated'
+                      }
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{device.provider}</Badge>
                     </TableCell>
