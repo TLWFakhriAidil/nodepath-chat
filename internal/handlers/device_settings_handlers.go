@@ -501,6 +501,29 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		}
 	}
 
+	// Save device data to database
+	createReq := &models.CreateDeviceSettingsRequest{
+		DeviceID:     deviceID,
+		APIKeyOption: req.APIKeyOption,
+		WebhookID:    webhookURL,
+		Provider:     "wablas",
+		PhoneNumber:  req.PhoneNumber,
+		APIKey:       newAuthHeader,
+		IDDevice:     req.IDDevice,
+		IDERP:        req.IDERP,
+		IDAdmin:      req.IDAdmin,
+		Instance:     newAuthHeader, // Store API key as instance
+	}
+
+	// Create device setting in database
+	deviceSetting, err := h.deviceSettingsService.Create(createReq)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to save device setting to database")
+		// Continue with success response even if database save fails
+	} else {
+		logrus.WithField("device_setting_id", deviceSetting.ID).Info("Device setting saved to database")
+	}
+
 	// Log successful device generation
 	logrus.WithFields(logrus.Fields{
 		"provider": "wablas",

@@ -160,11 +160,13 @@ func addMissingColumnsToFlowsTable(db *sql.DB) error {
 
 // addMissingColumnsToDeviceSettingsTable adds missing columns to the device settings table
 func addMissingColumnsToDeviceSettingsTable(db *sql.DB) error {
+	// Define columns that should exist
 	columns := []struct {
-		name string
+		name       string
 		definition string
 	}{
 		{"phone_number", "VARCHAR(20)"},
+		{"instance", "TEXT"},
 	}
 
 	for _, col := range columns {

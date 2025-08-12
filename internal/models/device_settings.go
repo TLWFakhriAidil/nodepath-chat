@@ -16,6 +16,7 @@ type DeviceSettings struct {
 	IDDevice     string    `json:"id_device" db:"id_device"`
 	IDERP        string    `json:"id_erp" db:"id_erp"`
 	IDAdmin      string    `json:"id_admin" db:"id_admin"`
+	Instance     string    `json:"instance" db:"instance"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -31,6 +32,7 @@ type CreateDeviceSettingsRequest struct {
 	IDDevice     string `json:"id_device" validate:"required"`
 	IDERP        string `json:"id_erp" validate:"required"`
 	IDAdmin      string `json:"id_admin" validate:"required"`
+	Instance     string `json:"instance"`
 }
 
 // UpdateDeviceSettingsRequest represents the request to update device settings
@@ -44,4 +46,5 @@ type UpdateDeviceSettingsRequest struct {
 	IDDevice     string `json:"id_device"`
 	IDERP        string `json:"id_erp"`
 	IDAdmin      string `json:"id_admin"`
+	Instance     string `json:"instance"`
 }

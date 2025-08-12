@@ -27,7 +27,7 @@ func NewDeviceSettingsService(db *sql.DB) *DeviceSettingsService {
 func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
-		       id_device, id_erp, id_admin, created_at, updated_at
+		       id_device, id_erp, id_admin, instance, created_at, updated_at
 		FROM device_setting_nodepath
 		ORDER BY created_at DESC
 	`
@@ -52,6 +52,7 @@ func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
 			&setting.IDDevice,
 			&setting.IDERP,
 			&setting.IDAdmin,
+			&setting.Instance,
 			&setting.CreatedAt,
 			&setting.UpdatedAt,
 		)
@@ -72,7 +73,7 @@ func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
 func (s *DeviceSettingsService) GetByID(id string) (*models.DeviceSettings, error) {
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
-		       id_device, id_erp, id_admin, created_at, updated_at
+		       id_device, id_erp, id_admin, instance, created_at, updated_at
 		FROM device_setting_nodepath
 		WHERE id = ?
 	`
@@ -89,6 +90,7 @@ func (s *DeviceSettingsService) GetByID(id string) (*models.DeviceSettings, erro
 		&setting.IDDevice,
 		&setting.IDERP,
 		&setting.IDAdmin,
+		&setting.Instance,
 		&setting.CreatedAt,
 		&setting.UpdatedAt,
 	)
@@ -121,8 +123,8 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 
 	query := `
 		INSERT INTO device_setting_nodepath 
-		(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, instance, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.Exec(query,
@@ -136,6 +138,7 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 		req.IDDevice,
 		req.IDERP,
 		req.IDAdmin,
+		req.Instance,
 		now,
 		now,
 	)
@@ -191,13 +194,16 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 	if req.IDAdmin != "" {
 		existing.IDAdmin = req.IDAdmin
 	}
+	if req.Instance != "" {
+		existing.Instance = req.Instance
+	}
 
 	existing.UpdatedAt = time.Now()
 
 	query := `
 		UPDATE device_setting_nodepath 
 		SET device_id = ?, api_key_option = ?, webhook_id = ?, provider = ?, phone_number = ?, api_key = ?, 
-		    id_device = ?, id_erp = ?, id_admin = ?, updated_at = ?
+		    id_device = ?, id_erp = ?, id_admin = ?, instance = ?, updated_at = ?
 		WHERE id = ?
 	`
 
@@ -211,6 +217,7 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 		existing.IDDevice,
 		existing.IDERP,
 		existing.IDAdmin,
+		existing.Instance,
 		existing.UpdatedAt,
 		id,
 	)
