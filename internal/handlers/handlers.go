@@ -53,16 +53,16 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 
 	// Test chat routes
 	testChat := api.Group("/test-chat")
-	testChat.Post("/start", h.StartTestChat)
-	testChat.Post("/message", h.SendTestMessage)
+	testChat.Post("/start/:flowId", h.StartTestChat)
+	testChat.Post("/send/:executionId", h.SendTestMessage)
 	testChat.Get("/history/:executionId", h.GetTestChatHistory)
-	testChat.Delete("/reset/:executionId", h.ResetTestChat)
+	testChat.Post("/reset/:executionId", h.ResetTestChat)
 
 	// Execution routes
 	executions := api.Group("/executions")
 	executions.Get("/", h.GetExecutions)
 	executions.Get("/:id", h.GetExecution)
-	executions.Put("/:id/complete", h.CompleteExecution)
+	executions.Post("/:id/complete", h.CompleteExecution)
 	executions.Delete("/:id", h.DeleteExecution)
 
 	// WhatsApp routes
@@ -73,10 +73,10 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	whatsapp.Get("/qr", h.GetWhatsAppQR)
 	whatsapp.Post("/send", h.SendWhatsAppMessage)
 
-	// Queue management routes
+	// Queue routes
 	queue := api.Group("/queue")
 	queue.Get("/stats", h.GetQueueStats)
-	queue.Delete("/failed", h.ClearFailedQueue)
+	queue.Post("/clear-failed", h.ClearFailedQueue)
 
 	// AI routes
 	ai := api.Group("/ai")
@@ -86,16 +86,15 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Analytics routes
 	analytics := api.Group("/analytics")
 	analytics.Get("/overview", h.GetAnalyticsOverview)
-	analytics.Get("/flows/:id/stats", h.GetFlowStats)
+	analytics.Get("/flows", h.GetFlowStats)
 
 	// Device settings routes
 	deviceSettings := api.Group("/device-settings")
 	deviceSettings.Get("/", h.GetDeviceSettings)
-	deviceSettings.Post("/", h.CreateDeviceSettings)
 	deviceSettings.Get("/:id", h.GetDeviceSettingsById)
+	deviceSettings.Post("/", h.CreateDeviceSettings)
 	deviceSettings.Put("/:id", h.UpdateDeviceSettings)
 	deviceSettings.Delete("/:id", h.DeleteDeviceSettings)
-	// Device generation routes
 	deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
 	deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
 
@@ -159,23 +158,20 @@ func (h *Handlers) CreateFlow(c *fiber.Ctx) error {
 		return h.errorResponse(c, 500, "Failed to create flow")
 	}
 
-	return h.successMessageResponse(c, "Flow created successfully", flow)
+	return h.successResponse(c, flow)
 }
 
 // GetFlow returns a specific flow
 func (h *Handlers) GetFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
+	id := c.Params("id")
+	flowID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		return h.errorResponse(c, 400, "Invalid flow ID")
 	}
 
-	flow, err := h.flowService.GetFlow(flowID)
+	flow, err := h.flowService.GetFlowByID(uint(flowID))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow")
-		return h.errorResponse(c, 500, "Failed to retrieve flow")
-	}
-
-	if flow == nil {
 		return h.errorResponse(c, 404, "Flow not found")
 	}
 
@@ -184,9 +180,10 @@ func (h *Handlers) GetFlow(c *fiber.Ctx) error {
 
 // UpdateFlow updates an existing flow
 func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
+	id := c.Params("id")
+	flowID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		return h.errorResponse(c, 400, "Invalid flow ID")
 	}
 
 	var flow models.ChatbotFlow
@@ -194,23 +191,24 @@ func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Invalid request body")
 	}
 
-	flow.ID = flowID
+	flow.ID = uint(flowID)
 	if err := h.flowService.UpdateFlow(&flow); err != nil {
 		logrus.WithError(err).Error("Failed to update flow")
 		return h.errorResponse(c, 500, "Failed to update flow")
 	}
 
-	return h.successMessageResponse(c, "Flow updated successfully", flow)
+	return h.successResponse(c, flow)
 }
 
 // DeleteFlow deletes a flow
 func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
+	id := c.Params("id")
+	flowID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		return h.errorResponse(c, 400, "Invalid flow ID")
 	}
 
-	if err := h.flowService.DeleteFlow(flowID); err != nil {
+	if err := h.flowService.DeleteFlow(uint(flowID)); err != nil {
 		logrus.WithError(err).Error("Failed to delete flow")
 		return h.errorResponse(c, 500, "Failed to delete flow")
 	}
@@ -218,126 +216,101 @@ func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
 	return h.successMessageResponse(c, "Flow deleted successfully", nil)
 }
 
-// Test Chat handlers
-
-type StartTestChatRequest struct {
-	FlowReference string `json:"flow_reference"`
-	PhoneNumber   string `json:"phone_number"`
-	StaffID       string `json:"staff_id"`
-}
+// Test chat handlers
 
 // StartTestChat starts a new test chat session
 func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
-	var req StartTestChatRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.FlowReference == "" {
-		return h.errorResponse(c, 400, "Flow reference is required")
-	}
-
-	// Use default values for test chat
-	if req.PhoneNumber == "" {
-		req.PhoneNumber = "test_" + strconv.FormatInt(time.Now().Unix(), 10)
-	}
-	if req.StaffID == "" {
-		req.StaffID = "test_staff"
-	}
-
-	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
+	flowID := c.Params("flowId")
+	parsedFlowID, err := strconv.ParseUint(flowID, 10, 32)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to start test chat")
+		return h.errorResponse(c, 400, "Invalid flow ID")
+	}
+
+	// Get the flow to validate it exists
+	flow, err := h.flowService.GetFlowByID(uint(parsedFlowID))
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get flow for test chat")
+		return h.errorResponse(c, 404, "Flow not found")
+	}
+
+	// Create a new execution for the test chat
+	execution := &models.ChatbotExecution{
+		FlowID:      flow.ID,
+		CurrentStep: "start",
+		Status:      "active",
+		StartedAt:   time.Now(),
+	}
+
+	if err := h.chatService.CreateExecution(execution); err != nil {
+		logrus.WithError(err).Error("Failed to create test chat execution")
 		return h.errorResponse(c, 500, "Failed to start test chat")
 	}
 
-	return h.successMessageResponse(c, "Test chat started", execution)
+	return h.successResponse(c, map[string]interface{}{
+		"executionId": execution.ID,
+		"flow":        flow,
+		"message":     "Test chat started successfully",
+	})
 }
 
-type SendTestMessageRequest struct {
-	ExecutionID string `json:"execution_id"`
-	Message     string `json:"message"`
-}
-
-// SendTestMessage sends a message in test chat
+// SendTestMessage sends a message in the test chat
 func (h *Handlers) SendTestMessage(c *fiber.Ctx) error {
-	var req SendTestMessageRequest
-	if err := c.BodyParser(&req); err != nil {
+	executionID := c.Params("executionId")
+	if executionID == "" {
+		return h.errorResponse(c, 400, "Execution ID is required")
+	}
+
+	var request struct {
+		Message string `json:"message"`
+	}
+
+	if err := c.BodyParser(&request); err != nil {
 		return h.errorResponse(c, 400, "Invalid request body")
 	}
 
-	if req.ExecutionID == "" || req.Message == "" {
-		return h.errorResponse(c, 400, "Execution ID and message are required")
+	if request.Message == "" {
+		return h.errorResponse(c, 400, "Message is required")
 	}
 
-	// Get execution
-	execution, err := h.chatService.GetExecution(req.ExecutionID)
+	// Get the execution
+	execution, err := h.chatService.GetExecution(executionID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
 		return h.errorResponse(c, 404, "Execution not found")
 	}
 
-	// Add user message
-	err = h.chatService.AddConversationMessage(execution, "USER", req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to add user message")
-		return h.errorResponse(c, 500, "Failed to add user message")
-	}
-
-	// Process message through flow
-	response, err := h.processTestChatMessage(execution, req.Message)
+	// Process the message
+	response, err := h.processTestChatMessage(execution, request.Message)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process test chat message")
 		return h.errorResponse(c, 500, "Failed to process message")
 	}
 
-	// Add bot response
-	if response != "" {
-		err = h.chatService.AddConversationMessage(execution, "BOT", response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to add bot message")
-		}
-	}
-
-	// Get updated conversation history
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
 	return h.successResponse(c, map[string]interface{}{
+		"response": response,
 		"execution": execution,
-		"history":   history,
-		"response":  response,
 	})
 }
 
-// GetTestChatHistory returns the conversation history for a test chat
+// GetTestChatHistory returns the chat history for a test session
 func (h *Handlers) GetTestChatHistory(c *fiber.Ctx) error {
 	executionID := c.Params("executionId")
 	if executionID == "" {
 		return h.errorResponse(c, 400, "Execution ID is required")
 	}
 
+	// Get the execution with its history
 	execution, err := h.chatService.GetExecution(executionID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
 		return h.errorResponse(c, 404, "Execution not found")
 	}
 
-	history, err := h.chatService.GetConversationHistory(execution)
+	// Get chat history
+	history, err := h.chatService.GetChatHistory(executionID)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
+		logrus.WithError(err).Error("Failed to get chat history")
+		return h.errorResponse(c, 500, "Failed to retrieve chat history")
 	}
 
 	return h.successResponse(c, map[string]interface{}{
@@ -362,1584 +335,3 @@ func (h *Handlers) ResetTestChat(c *fiber.Ctx) error {
 
 	return h.successMessageResponse(c, "Test chat reset successfully", nil)
 }
-
-// Device generation routes
-deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
-deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
-
-// Webhook routes for receiving messages from providers
-webhook := api.Group("/webhook")
-webhook.Post("/:id_device/:instance", h.HandleWebhook)
-}
-
-// Response helpers
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Message string      `json:"message,omitempty"`
-}
-
-func (h *Handlers) successResponse(c *fiber.Ctx, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) successMessageResponse(c *fiber.Ctx, message string, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Message: message,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) errorResponse(c *fiber.Ctx, statusCode int, message string) error {
-	return c.Status(statusCode).JSON(APIResponse{
-		Success: false,
-		Error:   message,
-	})
-}
-
-// Flow handlers
-
-// GetFlows returns all flows
-func (h *Handlers) GetFlows(c *fiber.Ctx) error {
-	flows, err := h.flowService.GetAllFlows()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flows")
-		return h.errorResponse(c, 500, "Failed to retrieve flows")
-	}
-
-	return h.successResponse(c, flows)
-}
-
-// CreateFlow creates a new flow
-func (h *Handlers) CreateFlow(c *fiber.Ctx) error {
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if err := h.flowService.CreateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to create flow")
-		return h.errorResponse(c, 500, "Failed to create flow")
-	}
-
-	return h.successMessageResponse(c, "Flow created successfully", flow)
-}
-
-// GetFlow returns a specific flow
-func (h *Handlers) GetFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	flow, err := h.flowService.GetFlow(flowID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flow")
-		return h.errorResponse(c, 500, "Failed to retrieve flow")
-	}
-
-	if flow == nil {
-		return h.errorResponse(c, 404, "Flow not found")
-	}
-
-	return h.successResponse(c, flow)
-}
-
-// UpdateFlow updates an existing flow
-func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	flow.ID = flowID
-	if err := h.flowService.UpdateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to update flow")
-		return h.errorResponse(c, 500, "Failed to update flow")
-	}
-
-	return h.successMessageResponse(c, "Flow updated successfully", flow)
-}
-
-// DeleteFlow deletes a flow
-func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	if err := h.flowService.DeleteFlow(flowID); err != nil {
-		logrus.WithError(err).Error("Failed to delete flow")
-		return h.errorResponse(c, 500, "Failed to delete flow")
-	}
-
-	return h.successMessageResponse(c, "Flow deleted successfully", nil)
-}
-
-// Test Chat handlers
-
-type StartTestChatRequest struct {
-	FlowReference string `json:"flow_reference"`
-	PhoneNumber   string `json:"phone_number"`
-	StaffID       string `json:"staff_id"`
-}
-
-// StartTestChat starts a new test chat session
-func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
-	var req StartTestChatRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.FlowReference == "" {
-		return h.errorResponse(c, 400, "Flow reference is required")
-	}
-
-	// Use default values for test chat
-	if req.PhoneNumber == "" {
-		req.PhoneNumber = "test_" + strconv.FormatInt(time.Now().Unix(), 10)
-	}
-	if req.StaffID == "" {
-		req.StaffID = "test_staff"
-	}
-
-	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to start test chat")
-		return h.errorResponse(c, 500, "Failed to start test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat started", execution)
-}
-
-type SendTestMessageRequest struct {
-	ExecutionID string `json:"execution_id"`
-	Message     string `json:"message"`
-}
-
-// SendTestMessage sends a message in test chat
-func (h *Handlers) SendTestMessage(c *fiber.Ctx) error {
-	var req SendTestMessageRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.ExecutionID == "" || req.Message == "" {
-		return h.errorResponse(c, 400, "Execution ID and message are required")
-	}
-
-	// Get execution
-	execution, err := h.chatService.GetExecution(req.ExecutionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	// Add user message
-	err = h.chatService.AddConversationMessage(execution, "USER", req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to add user message")
-		return h.errorResponse(c, 500, "Failed to add user message")
-	}
-
-	// Process message through flow
-	response, err := h.processTestChatMessage(execution, req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to process test chat message")
-		return h.errorResponse(c, 500, "Failed to process message")
-	}
-
-	// Add bot response
-	if response != "" {
-		err = h.chatService.AddConversationMessage(execution, "BOT", response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to add bot message")
-		}
-	}
-
-	// Get updated conversation history
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-		"response":  response,
-	})
-}
-
-// GetTestChatHistory returns the conversation history for a test chat
-func (h *Handlers) GetTestChatHistory(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	execution, err := h.chatService.GetExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-	})
-}
-
-// ResetTestChat resets a test chat session
-func (h *Handlers) ResetTestChat(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	// Complete the current execution
-	err := h.chatService.CompleteExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to complete execution")
-		return h.errorResponse(c, 500, "Failed to reset test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat reset successfully", nil)
-}
-
-// Device generation routes
-deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
-deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
-
-// Webhook routes for receiving messages from providers
-webhook := api.Group("/webhook")
-webhook.Post("/:id_device/:instance", h.HandleWebhook)
-}
-
-// Response helpers
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Message string      `json:"message,omitempty"`
-}
-
-func (h *Handlers) successResponse(c *fiber.Ctx, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) successMessageResponse(c *fiber.Ctx, message string, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Message: message,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) errorResponse(c *fiber.Ctx, statusCode int, message string) error {
-	return c.Status(statusCode).JSON(APIResponse{
-		Success: false,
-		Error:   message,
-	})
-}
-
-// Flow handlers
-
-// GetFlows returns all flows
-func (h *Handlers) GetFlows(c *fiber.Ctx) error {
-	flows, err := h.flowService.GetAllFlows()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flows")
-		return h.errorResponse(c, 500, "Failed to retrieve flows")
-	}
-
-	return h.successResponse(c, flows)
-}
-
-// CreateFlow creates a new flow
-func (h *Handlers) CreateFlow(c *fiber.Ctx) error {
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if err := h.flowService.CreateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to create flow")
-		return h.errorResponse(c, 500, "Failed to create flow")
-	}
-
-	return h.successMessageResponse(c, "Flow created successfully", flow)
-}
-
-// GetFlow returns a specific flow
-func (h *Handlers) GetFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	flow, err := h.flowService.GetFlow(flowID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flow")
-		return h.errorResponse(c, 500, "Failed to retrieve flow")
-	}
-
-	if flow == nil {
-		return h.errorResponse(c, 404, "Flow not found")
-	}
-
-	return h.successResponse(c, flow)
-}
-
-// UpdateFlow updates an existing flow
-func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	flow.ID = flowID
-	if err := h.flowService.UpdateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to update flow")
-		return h.errorResponse(c, 500, "Failed to update flow")
-	}
-
-	return h.successMessageResponse(c, "Flow updated successfully", flow)
-}
-
-// DeleteFlow deletes a flow
-func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	if err := h.flowService.DeleteFlow(flowID); err != nil {
-		logrus.WithError(err).Error("Failed to delete flow")
-		return h.errorResponse(c, 500, "Failed to delete flow")
-	}
-
-	return h.successMessageResponse(c, "Flow deleted successfully", nil)
-}
-
-// Test Chat handlers
-
-type StartTestChatRequest struct {
-	FlowReference string `json:"flow_reference"`
-	PhoneNumber   string `json:"phone_number"`
-	StaffID       string `json:"staff_id"`
-}
-
-// StartTestChat starts a new test chat session
-func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
-	var req StartTestChatRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.FlowReference == "" {
-		return h.errorResponse(c, 400, "Flow reference is required")
-	}
-
-	// Use default values for test chat
-	if req.PhoneNumber == "" {
-		req.PhoneNumber = "test_" + strconv.FormatInt(time.Now().Unix(), 10)
-	}
-	if req.StaffID == "" {
-		req.StaffID = "test_staff"
-	}
-
-	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to start test chat")
-		return h.errorResponse(c, 500, "Failed to start test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat started", execution)
-}
-
-type SendTestMessageRequest struct {
-	ExecutionID string `json:"execution_id"`
-	Message     string `json:"message"`
-}
-
-// SendTestMessage sends a message in test chat
-func (h *Handlers) SendTestMessage(c *fiber.Ctx) error {
-	var req SendTestMessageRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.ExecutionID == "" || req.Message == "" {
-		return h.errorResponse(c, 400, "Execution ID and message are required")
-	}
-
-	// Get execution
-	execution, err := h.chatService.GetExecution(req.ExecutionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	// Add user message
-	err = h.chatService.AddConversationMessage(execution, "USER", req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to add user message")
-		return h.errorResponse(c, 500, "Failed to add user message")
-	}
-
-	// Process message through flow
-	response, err := h.processTestChatMessage(execution, req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to process test chat message")
-		return h.errorResponse(c, 500, "Failed to process message")
-	}
-
-	// Add bot response
-	if response != "" {
-		err = h.chatService.AddConversationMessage(execution, "BOT", response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to add bot message")
-		}
-	}
-
-	// Get updated conversation history
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-		"response":  response,
-	})
-}
-
-// GetTestChatHistory returns the conversation history for a test chat
-func (h *Handlers) GetTestChatHistory(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	execution, err := h.chatService.GetExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-	})
-}
-
-// ResetTestChat resets a test chat session
-func (h *Handlers) ResetTestChat(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	// Complete the current execution
-	err := h.chatService.CompleteExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to complete execution")
-		return h.errorResponse(c, 500, "Failed to reset test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat reset successfully", nil)
-}
-
-// Device generation routes
-deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
-deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
-
-// Webhook routes for receiving messages from providers
-webhook := api.Group("/webhook")
-webhook.Post("/:id_device/:instance", h.HandleWebhook)
-}
-
-// Response helpers
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Message string      `json:"message,omitempty"`
-}
-
-func (h *Handlers) successResponse(c *fiber.Ctx, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) successMessageResponse(c *fiber.Ctx, message string, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Message: message,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) errorResponse(c *fiber.Ctx, statusCode int, message string) error {
-	return c.Status(statusCode).JSON(APIResponse{
-		Success: false,
-		Error:   message,
-	})
-}
-
-// Flow handlers
-
-// GetFlows returns all flows
-func (h *Handlers) GetFlows(c *fiber.Ctx) error {
-	flows, err := h.flowService.GetAllFlows()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flows")
-		return h.errorResponse(c, 500, "Failed to retrieve flows")
-	}
-
-	return h.successResponse(c, flows)
-}
-
-// CreateFlow creates a new flow
-func (h *Handlers) CreateFlow(c *fiber.Ctx) error {
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if err := h.flowService.CreateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to create flow")
-		return h.errorResponse(c, 500, "Failed to create flow")
-	}
-
-	return h.successMessageResponse(c, "Flow created successfully", flow)
-}
-
-// GetFlow returns a specific flow
-func (h *Handlers) GetFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	flow, err := h.flowService.GetFlow(flowID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flow")
-		return h.errorResponse(c, 500, "Failed to retrieve flow")
-	}
-
-	if flow == nil {
-		return h.errorResponse(c, 404, "Flow not found")
-	}
-
-	return h.successResponse(c, flow)
-}
-
-// UpdateFlow updates an existing flow
-func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	flow.ID = flowID
-	if err := h.flowService.UpdateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to update flow")
-		return h.errorResponse(c, 500, "Failed to update flow")
-	}
-
-	return h.successMessageResponse(c, "Flow updated successfully", flow)
-}
-
-// DeleteFlow deletes a flow
-func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	if err := h.flowService.DeleteFlow(flowID); err != nil {
-		logrus.WithError(err).Error("Failed to delete flow")
-		return h.errorResponse(c, 500, "Failed to delete flow")
-	}
-
-	return h.successMessageResponse(c, "Flow deleted successfully", nil)
-}
-
-// Test Chat handlers
-
-type StartTestChatRequest struct {
-	FlowReference string `json:"flow_reference"`
-	PhoneNumber   string `json:"phone_number"`
-	StaffID       string `json:"staff_id"`
-}
-
-// StartTestChat starts a new test chat session
-func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
-	var req StartTestChatRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.FlowReference == "" {
-		return h.errorResponse(c, 400, "Flow reference is required")
-	}
-
-	// Use default values for test chat
-	if req.PhoneNumber == "" {
-		req.PhoneNumber = "test_" + strconv.FormatInt(time.Now().Unix(), 10)
-	}
-	if req.StaffID == "" {
-		req.StaffID = "test_staff"
-	}
-
-	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to start test chat")
-		return h.errorResponse(c, 500, "Failed to start test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat started", execution)
-}
-
-type SendTestMessageRequest struct {
-	ExecutionID string `json:"execution_id"`
-	Message     string `json:"message"`
-}
-
-// SendTestMessage sends a message in test chat
-func (h *Handlers) SendTestMessage(c *fiber.Ctx) error {
-	var req SendTestMessageRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.ExecutionID == "" || req.Message == "" {
-		return h.errorResponse(c, 400, "Execution ID and message are required")
-	}
-
-	// Get execution
-	execution, err := h.chatService.GetExecution(req.ExecutionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	// Add user message
-	err = h.chatService.AddConversationMessage(execution, "USER", req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to add user message")
-		return h.errorResponse(c, 500, "Failed to add user message")
-	}
-
-	// Process message through flow
-	response, err := h.processTestChatMessage(execution, req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to process test chat message")
-		return h.errorResponse(c, 500, "Failed to process message")
-	}
-
-	// Add bot response
-	if response != "" {
-		err = h.chatService.AddConversationMessage(execution, "BOT", response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to add bot message")
-		}
-	}
-
-	// Get updated conversation history
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-		"response":  response,
-	})
-}
-
-// GetTestChatHistory returns the conversation history for a test chat
-func (h *Handlers) GetTestChatHistory(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	execution, err := h.chatService.GetExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-	})
-}
-
-// ResetTestChat resets a test chat session
-func (h *Handlers) ResetTestChat(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	// Complete the current execution
-	err := h.chatService.CompleteExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to complete execution")
-		return h.errorResponse(c, 500, "Failed to reset test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat reset successfully", nil)
-}
-
-// Device generation routes
-deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
-deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
-
-// Webhook routes for receiving messages from providers
-webhook := api.Group("/webhook")
-webhook.Post("/:id_device/:instance", h.HandleWebhook)
-}
-
-// Response helpers
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Message string      `json:"message,omitempty"`
-}
-
-func (h *Handlers) successResponse(c *fiber.Ctx, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) successMessageResponse(c *fiber.Ctx, message string, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Message: message,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) errorResponse(c *fiber.Ctx, statusCode int, message string) error {
-	return c.Status(statusCode).JSON(APIResponse{
-		Success: false,
-		Error:   message,
-	})
-}
-
-// Flow handlers
-
-// GetFlows returns all flows
-func (h *Handlers) GetFlows(c *fiber.Ctx) error {
-	flows, err := h.flowService.GetAllFlows()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flows")
-		return h.errorResponse(c, 500, "Failed to retrieve flows")
-	}
-
-	return h.successResponse(c, flows)
-}
-
-// CreateFlow creates a new flow
-func (h *Handlers) CreateFlow(c *fiber.Ctx) error {
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if err := h.flowService.CreateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to create flow")
-		return h.errorResponse(c, 500, "Failed to create flow")
-	}
-
-	return h.successMessageResponse(c, "Flow created successfully", flow)
-}
-
-// GetFlow returns a specific flow
-func (h *Handlers) GetFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	flow, err := h.flowService.GetFlow(flowID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flow")
-		return h.errorResponse(c, 500, "Failed to retrieve flow")
-	}
-
-	if flow == nil {
-		return h.errorResponse(c, 404, "Flow not found")
-	}
-
-	return h.successResponse(c, flow)
-}
-
-// UpdateFlow updates an existing flow
-func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	flow.ID = flowID
-	if err := h.flowService.UpdateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to update flow")
-		return h.errorResponse(c, 500, "Failed to update flow")
-	}
-
-	return h.successMessageResponse(c, "Flow updated successfully", flow)
-}
-
-// DeleteFlow deletes a flow
-func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	if err := h.flowService.DeleteFlow(flowID); err != nil {
-		logrus.WithError(err).Error("Failed to delete flow")
-		return h.errorResponse(c, 500, "Failed to delete flow")
-	}
-
-	return h.successMessageResponse(c, "Flow deleted successfully", nil)
-}
-
-// Test Chat handlers
-
-type StartTestChatRequest struct {
-	FlowReference string `json:"flow_reference"`
-	PhoneNumber   string `json:"phone_number"`
-	StaffID       string `json:"staff_id"`
-}
-
-// StartTestChat starts a new test chat session
-func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
-	var req StartTestChatRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.FlowReference == "" {
-		return h.errorResponse(c, 400, "Flow reference is required")
-	}
-
-	// Use default values for test chat
-	if req.PhoneNumber == "" {
-		req.PhoneNumber = "test_" + strconv.FormatInt(time.Now().Unix(), 10)
-	}
-	if req.StaffID == "" {
-		req.StaffID = "test_staff"
-	}
-
-	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to start test chat")
-		return h.errorResponse(c, 500, "Failed to start test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat started", execution)
-}
-
-type SendTestMessageRequest struct {
-	ExecutionID string `json:"execution_id"`
-	Message     string `json:"message"`
-}
-
-// SendTestMessage sends a message in test chat
-func (h *Handlers) SendTestMessage(c *fiber.Ctx) error {
-	var req SendTestMessageRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.ExecutionID == "" || req.Message == "" {
-		return h.errorResponse(c, 400, "Execution ID and message are required")
-	}
-
-	// Get execution
-	execution, err := h.chatService.GetExecution(req.ExecutionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	// Add user message
-	err = h.chatService.AddConversationMessage(execution, "USER", req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to add user message")
-		return h.errorResponse(c, 500, "Failed to add user message")
-	}
-
-	// Process message through flow
-	response, err := h.processTestChatMessage(execution, req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to process test chat message")
-		return h.errorResponse(c, 500, "Failed to process message")
-	}
-
-	// Add bot response
-	if response != "" {
-		err = h.chatService.AddConversationMessage(execution, "BOT", response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to add bot message")
-		}
-	}
-
-	// Get updated conversation history
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-		"response":  response,
-	})
-}
-
-// GetTestChatHistory returns the conversation history for a test chat
-func (h *Handlers) GetTestChatHistory(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	execution, err := h.chatService.GetExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-	})
-}
-
-// ResetTestChat resets a test chat session
-func (h *Handlers) ResetTestChat(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	// Complete the current execution
-	err := h.chatService.CompleteExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to complete execution")
-		return h.errorResponse(c, 500, "Failed to reset test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat reset successfully", nil)
-}
-
-// Device generation routes
-deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
-deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
-
-// Webhook routes for receiving messages from providers
-webhook := api.Group("/webhook")
-webhook.Post("/:id_device/:instance", h.HandleWebhook)
-}
-
-// Response helpers
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Message string      `json:"message,omitempty"`
-}
-
-func (h *Handlers) successResponse(c *fiber.Ctx, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) successMessageResponse(c *fiber.Ctx, message string, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Message: message,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) errorResponse(c *fiber.Ctx, statusCode int, message string) error {
-	return c.Status(statusCode).JSON(APIResponse{
-		Success: false,
-		Error:   message,
-	})
-}
-
-// Flow handlers
-
-// GetFlows returns all flows
-func (h *Handlers) GetFlows(c *fiber.Ctx) error {
-	flows, err := h.flowService.GetAllFlows()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flows")
-		return h.errorResponse(c, 500, "Failed to retrieve flows")
-	}
-
-	return h.successResponse(c, flows)
-}
-
-// CreateFlow creates a new flow
-func (h *Handlers) CreateFlow(c *fiber.Ctx) error {
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if err := h.flowService.CreateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to create flow")
-		return h.errorResponse(c, 500, "Failed to create flow")
-	}
-
-	return h.successMessageResponse(c, "Flow created successfully", flow)
-}
-
-// GetFlow returns a specific flow
-func (h *Handlers) GetFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	flow, err := h.flowService.GetFlow(flowID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flow")
-		return h.errorResponse(c, 500, "Failed to retrieve flow")
-	}
-
-	if flow == nil {
-		return h.errorResponse(c, 404, "Flow not found")
-	}
-
-	return h.successResponse(c, flow)
-}
-
-// UpdateFlow updates an existing flow
-func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	flow.ID = flowID
-	if err := h.flowService.UpdateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to update flow")
-		return h.errorResponse(c, 500, "Failed to update flow")
-	}
-
-	return h.successMessageResponse(c, "Flow updated successfully", flow)
-}
-
-// DeleteFlow deletes a flow
-func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	if err := h.flowService.DeleteFlow(flowID); err != nil {
-		logrus.WithError(err).Error("Failed to delete flow")
-		return h.errorResponse(c, 500, "Failed to delete flow")
-	}
-
-	return h.successMessageResponse(c, "Flow deleted successfully", nil)
-}
-
-// Test Chat handlers
-
-type StartTestChatRequest struct {
-	FlowReference string `json:"flow_reference"`
-	PhoneNumber   string `json:"phone_number"`
-	StaffID       string `json:"staff_id"`
-}
-
-// StartTestChat starts a new test chat session
-func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
-	var req StartTestChatRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.FlowReference == "" {
-		return h.errorResponse(c, 400, "Flow reference is required")
-	}
-
-	// Use default values for test chat
-	if req.PhoneNumber == "" {
-		req.PhoneNumber = "test_" + strconv.FormatInt(time.Now().Unix(), 10)
-	}
-	if req.StaffID == "" {
-		req.StaffID = "test_staff"
-	}
-
-	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to start test chat")
-		return h.errorResponse(c, 500, "Failed to start test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat started", execution)
-}
-
-type SendTestMessageRequest struct {
-	ExecutionID string `json:"execution_id"`
-	Message     string `json:"message"`
-}
-
-// SendTestMessage sends a message in test chat
-func (h *Handlers) SendTestMessage(c *fiber.Ctx) error {
-	var req SendTestMessageRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.ExecutionID == "" || req.Message == "" {
-		return h.errorResponse(c, 400, "Execution ID and message are required")
-	}
-
-	// Get execution
-	execution, err := h.chatService.GetExecution(req.ExecutionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	// Add user message
-	err = h.chatService.AddConversationMessage(execution, "USER", req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to add user message")
-		return h.errorResponse(c, 500, "Failed to add user message")
-	}
-
-	// Process message through flow
-	response, err := h.processTestChatMessage(execution, req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to process test chat message")
-		return h.errorResponse(c, 500, "Failed to process message")
-	}
-
-	// Add bot response
-	if response != "" {
-		err = h.chatService.AddConversationMessage(execution, "BOT", response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to add bot message")
-		}
-	}
-
-	// Get updated conversation history
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-		"response":  response,
-	})
-}
-
-// GetTestChatHistory returns the conversation history for a test chat
-func (h *Handlers) GetTestChatHistory(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	execution, err := h.chatService.GetExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-	})
-}
-
-// ResetTestChat resets a test chat session
-func (h *Handlers) ResetTestChat(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	// Complete the current execution
-	err := h.chatService.CompleteExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to complete execution")
-		return h.errorResponse(c, 500, "Failed to reset test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat reset successfully", nil)
-}
-
-// Device generation routes
-deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
-deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
-
-// Webhook routes for receiving messages from providers
-webhook := api.Group("/webhook")
-webhook.Post("/:id_device/:instance", h.HandleWebhook)
-}
-
-// Response helpers
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Message string      `json:"message,omitempty"`
-}
-
-func (h *Handlers) successResponse(c *fiber.Ctx, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) successMessageResponse(c *fiber.Ctx, message string, data interface{}) error {
-	return c.JSON(APIResponse{
-		Success: true,
-		Message: message,
-		Data:    data,
-	})
-}
-
-func (h *Handlers) errorResponse(c *fiber.Ctx, statusCode int, message string) error {
-	return c.Status(statusCode).JSON(APIResponse{
-		Success: false,
-		Error:   message,
-	})
-}
-
-// Flow handlers
-
-// GetFlows returns all flows
-func (h *Handlers) GetFlows(c *fiber.Ctx) error {
-	flows, err := h.flowService.GetAllFlows()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flows")
-		return h.errorResponse(c, 500, "Failed to retrieve flows")
-	}
-
-	return h.successResponse(c, flows)
-}
-
-// CreateFlow creates a new flow
-func (h *Handlers) CreateFlow(c *fiber.Ctx) error {
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if err := h.flowService.CreateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to create flow")
-		return h.errorResponse(c, 500, "Failed to create flow")
-	}
-
-	return h.successMessageResponse(c, "Flow created successfully", flow)
-}
-
-// GetFlow returns a specific flow
-func (h *Handlers) GetFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	flow, err := h.flowService.GetFlow(flowID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get flow")
-		return h.errorResponse(c, 500, "Failed to retrieve flow")
-	}
-
-	if flow == nil {
-		return h.errorResponse(c, 404, "Flow not found")
-	}
-
-	return h.successResponse(c, flow)
-}
-
-// UpdateFlow updates an existing flow
-func (h *Handlers) UpdateFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	var flow models.ChatbotFlow
-	if err := c.BodyParser(&flow); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	flow.ID = flowID
-	if err := h.flowService.UpdateFlow(&flow); err != nil {
-		logrus.WithError(err).Error("Failed to update flow")
-		return h.errorResponse(c, 500, "Failed to update flow")
-	}
-
-	return h.successMessageResponse(c, "Flow updated successfully", flow)
-}
-
-// DeleteFlow deletes a flow
-func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
-	flowID := c.Params("id")
-	if flowID == "" {
-		return h.errorResponse(c, 400, "Flow ID is required")
-	}
-
-	if err := h.flowService.DeleteFlow(flowID); err != nil {
-		logrus.WithError(err).Error("Failed to delete flow")
-		return h.errorResponse(c, 500, "Failed to delete flow")
-	}
-
-	return h.successMessageResponse(c, "Flow deleted successfully", nil)
-}
-
-// Test Chat handlers
-
-type StartTestChatRequest struct {
-	FlowReference string `json:"flow_reference"`
-	PhoneNumber   string `json:"phone_number"`
-	StaffID       string `json:"staff_id"`
-}
-
-// StartTestChat starts a new test chat session
-func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
-	var req StartTestChatRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.FlowReference == "" {
-		return h.errorResponse(c, 400, "Flow reference is required")
-	}
-
-	// Use default values for test chat
-	if req.PhoneNumber == "" {
-		req.PhoneNumber = "test_" + strconv.FormatInt(time.Now().Unix(), 10)
-	}
-	if req.StaffID == "" {
-		req.StaffID = "test_staff"
-	}
-
-	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to start test chat")
-		return h.errorResponse(c, 500, "Failed to start test chat")
-	}
-
-	return h.successMessageResponse(c, "Test chat started", execution)
-}
-
-type SendTestMessageRequest struct {
-	ExecutionID string `json:"execution_id"`
-	Message     string `json:"message"`
-}
-
-// SendTestMessage sends a message in test chat
-func (h *Handlers) SendTestMessage(c *fiber.Ctx) error {
-	var req SendTestMessageRequest
-	if err := c.BodyParser(&req); err != nil {
-		return h.errorResponse(c, 400, "Invalid request body")
-	}
-
-	if req.ExecutionID == "" || req.Message == "" {
-		return h.errorResponse(c, 400, "Execution ID and message are required")
-	}
-
-	// Get execution
-	execution, err := h.chatService.GetExecution(req.ExecutionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	// Add user message
-	err = h.chatService.AddConversationMessage(execution, "USER", req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to add user message")
-		return h.errorResponse(c, 500, "Failed to add user message")
-	}
-
-	// Process message through flow
-	response, err := h.processTestChatMessage(execution, req.Message)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to process test chat message")
-		return h.errorResponse(c, 500, "Failed to process message")
-	}
-
-	// Add bot response
-	if response != "" {
-		err = h.chatService.AddConversationMessage(execution, "BOT", response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to add bot message")
-		}
-	}
-
-	// Get updated conversation history
-	history, err := h.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return h.errorResponse(c, 500, "Failed to get conversation history")
-	}
-
-	return h.successResponse(c, map[string]interface{}{
-		"execution": execution,
-		"history":   history,
-		"response":  response,
-	})
-}
-
-// GetTestChatHistory returns the conversation history for a test chat
-func (h *Handlers) GetTestChatHistory(c *fiber.Ctx) error {
-	executionID := c.Params("executionId")
-	if executionID == "" {
-		return h.errorResponse(c, 400, "Execution ID is required")
-	}
-
-	execution, err := h.chatService.GetExecution(executionID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get execution")
-		return h.errorResponse(c, 500, "Failed to get execution")
-	}
-
-	if execution == nil {
-		return h.errorResponse(c, 404, "Execution not found")
-	}
-
-	history,
