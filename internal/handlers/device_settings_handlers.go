@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"nodepath-chat/internal/models"
 	"strings"
 	"time"
@@ -141,33 +141,29 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	// Delete existing device first (cleanup)
 	if req.DeviceID != "" {
 		logrus.Info("Cleaning up existing Whacenter device")
-		// Note: In production, you would call Whacenter delete API here
+		
+		// Call Whacenter delete API
+		deleteURL := fmt.Sprintf("https://api.whacenter.com/api/deleteDevice?api_key=%s&device_id=%s", 
+			req.APIKey, req.DeviceID)
+		
+		deleteClient := &http.Client{Timeout: 30 * time.Second}
+		deleteReq, err := http.NewRequest("GET", deleteURL, nil)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to create delete request")
+		} else {
+			deleteReq.Header.Set("Accept", "application/json")
+			deleteReq.Header.Set("Content-Type", "application/json")
+			
+			deleteResp, err := deleteClient.Do(deleteReq)
+			if err != nil {
+				logrus.WithError(err).Warn("Failed to delete existing device")
+			} else {
+				defer deleteResp.Body.Close()
+				logrus.WithField("status", deleteResp.StatusCode).Info("Device deletion attempted")
+			}
+		}
 	}
 
-	// Prepare Whacenter API request
-	whacenterURL := "https://api.whacenter.com/api/create_device"
-	deviceData := map[string]interface{}{
-		"device_name": req.IDDevice,
-		"webhook_url": req.WebhookURL,
-	}
-
-	jsonData, err := json.Marshal(deviceData)
-	if err != nil {
-		return h.errorResponse(c, 500, "Failed to prepare request data")
-	}
-
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-
-	// Create request with proper headers
-	request, err := http.NewRequest("POST", whacenterURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return h.errorResponse(c, 500, "Failed to create request")
-	}
-
-	request.Header.Set("Content-Type", "application/json")
 	// Check if user has existing device_id in database for Whacenter
 	var whacenterAPIKey string
 	if req.DeviceID == "" {
@@ -177,7 +173,24 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 		// Use user's device_id as API key when device_id is not empty
 		whacenterAPIKey = req.DeviceID
 	}
-	request.Header.Set("Authorization", "Bearer "+whacenterAPIKey)
+
+	// Prepare Whacenter API request with GET parameters
+	whacenterURL := fmt.Sprintf("https://api.whacenter.com/api/addDevice?api_key=%s&name=%s&number=%s", 
+		whacenterAPIKey, req.IDDevice, req.WebhookURL)
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Create GET request with proper headers
+	request, err := http.NewRequest("GET", whacenterURL, nil)
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to create request")
+	}
+
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
 
 	// Make request to Whacenter API
 	logrus.WithFields(logrus.Fields{
@@ -193,7 +206,7 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	logrus.WithFields(logrus.Fields{
 		"content_type": request.Header.Get("Content-Type"),
 		"has_auth_header": request.Header.Get("Authorization") != "",
-		"request_body": string(jsonData),
+		"request_method": "GET",
 	}).Info("🔵 WHACENTER: Request details")
 	
 	resp, err := client.Do(request)
@@ -305,20 +318,47 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	// Delete existing device first (cleanup)
 	if req.DeviceID != "" {
 		logrus.Info("Cleaning up existing Wablas device")
-		// Note: In production, you would call Wablas delete API here
+		
+		// Call Wablas delete API
+		deleteURL := "https://my.wablas.com/api/device/delete"
+		
+		// Create HTTP client for delete request
+		deleteClient := &http.Client{
+			Timeout: 30 * time.Second,
+		}
+		
+		// Create delete request
+		deleteRequest, err := http.NewRequest("DELETE", deleteURL, nil)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create delete request")
+		} else {
+			// Set headers for delete request
+			deleteRequest.Header.Set("Authorization", req.DeviceID)
+			deleteRequest.Header.Set("Accept", "application/json")
+			
+			// Execute delete request
+			deleteResp, err := deleteClient.Do(deleteRequest)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to delete existing Wablas device")
+			} else {
+				defer deleteResp.Body.Close()
+				logrus.WithField("status_code", deleteResp.StatusCode).Info("Wablas device deletion attempted")
+			}
+		}
 	}
 
-// Prepare Wablas API request for device creation
-	wablasURL := "https://console.wablas.com/api/v2/instance/init"
-	deviceData := map[string]interface{}{
-		"device_name": req.IDDevice,
-		"phone_number": req.PhoneNumber,
-	}
-
-	jsonData, err := json.Marshal(deviceData)
-	if err != nil {
-		return h.errorResponse(c, 500, "Failed to prepare request data")
-	}
+	// Prepare Wablas API request for device creation
+	wablasURL := "https://my.wablas.com/api/device/create"
+	
+	// Prepare form data
+	formData := url.Values{}
+	formData.Set("name", req.IDDevice)
+	formData.Set("phone", req.PhoneNumber)
+	formData.Set("bank", "BCA")
+	formData.Set("periode", "monthly")
+	formData.Set("product", "large")
+	
+	formDataEncoded := formData.Encode()
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -326,25 +366,17 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	}
 
 	// Create request with proper headers
-	request, err := http.NewRequest("POST", wablasURL, bytes.NewBuffer(jsonData))
+	request, err := http.NewRequest("POST", wablasURL, strings.NewReader(formDataEncoded))
 	if err != nil {
 		return h.errorResponse(c, 500, "Failed to create request")
 	}
 
-	// Check if user has existing device_id in database
-	var authHeader string
-	if req.DeviceID == "" {
-		// Use the provided default Wablas credentials when device_id is empty
-		wablasToken := "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY"
-		wablasSecretKey := "7hDkbW0f"
-		authHeader = fmt.Sprintf("%s.%s", wablasToken, wablasSecretKey)
-	} else {
-		// Use user's device_id as API key when device_id is not empty
-		authHeader = req.DeviceID
-	}
+	// Use the provided default Wablas credentials for device creation
+	wablasToken := "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY.7hDkbW0f"
+	authHeader := wablasToken
 	
 	request.Header.Set("Authorization", authHeader)
-	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Make request to Wablas API
 	logrus.WithFields(logrus.Fields{
@@ -359,7 +391,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	logrus.WithFields(logrus.Fields{
 		"content_type": request.Header.Get("Content-Type"),
 		"has_auth_header": request.Header.Get("Authorization") != "",
-		"request_body": string(jsonData),
+		"request_body": formDataEncoded,
 	}).Info("🟡 WABLAS: Request details")
 	
 	resp, err := client.Do(request)
@@ -422,45 +454,49 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	}
 
 	deviceID, _ := data["device"].(string)
+	deviceToken, _ := data["token"].(string)
+	deviceSecret, _ := data["secret_key"].(string)
 
-	// Use the same auth header logic for webhook configuration
-	// If device_id was empty, use default credentials, otherwise use device_id
-	var finalAuthHeader string
-	if req.DeviceID == "" {
-		wablasToken := "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY"
-		wablasSecretKey := "7hDkbW0f"
-		finalAuthHeader = fmt.Sprintf("%s.%s", wablasToken, wablasSecretKey)
-	} else {
-		finalAuthHeader = req.DeviceID
-	}
-	authHeader = finalAuthHeader
+	// Create new auth header with device token and secret
+	newAuthHeader := fmt.Sprintf("%s.%s", deviceToken, deviceSecret)
 
 	// Configure webhook URL with auth header
-	webhookURL := fmt.Sprintf("%s/%s", strings.TrimSuffix(req.WebhookURL, "/"), authHeader)
+	webhookURL := fmt.Sprintf("https://chatbot.growrvsb.com/chatgpt/%s/%s", req.IDDevice, newAuthHeader)
 
-	// Setup webhook configuration
-	webhookData := map[string]interface{}{
-		"webhook_url": webhookURL,
-	}
+	// Setup webhook configuration using the correct endpoint
+	webhookFormData := url.Values{}
+	webhookFormData.Set("webhook_url", webhookURL)
+	
+	webhookFormEncoded := webhookFormData.Encode()
 
-	webhookJSON, err := json.Marshal(webhookData)
+	// Setup webhook
+	webhookRequest, err := http.NewRequest("POST", "https://my.wablas.com/api/device/change-webhook-url", strings.NewReader(webhookFormEncoded))
 	if err != nil {
-		logrus.WithError(err).Error("Failed to prepare webhook data")
-		// Continue without webhook setup
+		logrus.WithError(err).Error("Failed to create webhook request")
 	} else {
-		// Setup webhook
-		webhookRequest, err := http.NewRequest("POST", "https://console.wablas.com/api/v2/instance/webhook", bytes.NewBuffer(webhookJSON))
-		if err == nil {
-			webhookRequest.Header.Set("Authorization", authHeader)
-			webhookRequest.Header.Set("Accept", "application/json")
-			webhookRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		webhookRequest.Header.Set("Authorization", newAuthHeader)
+		webhookRequest.Header.Set("Accept", "application/json")
+		webhookRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-			webhookResp, err := client.Do(webhookRequest)
+		webhookResp, err := client.Do(webhookRequest)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to setup webhook")
+		} else {
+			defer webhookResp.Body.Close()
+			
+			// Read webhook response
+			webhookBody, err := io.ReadAll(webhookResp.Body)
 			if err != nil {
-				logrus.WithError(err).Error("Failed to setup webhook")
+				logrus.WithError(err).Error("Failed to read webhook response")
 			} else {
-				webhookResp.Body.Close()
-				logrus.Info("Webhook configured successfully")
+				var webhookResponse map[string]interface{}
+				if err := json.Unmarshal(webhookBody, &webhookResponse); err == nil {
+					if status, ok := webhookResponse["status"].(bool); ok && status {
+						logrus.Info("Webhook configured successfully")
+					} else {
+						logrus.WithField("response", string(webhookBody)).Warn("Webhook setup may have failed")
+					}
+				}
 			}
 		}
 	}
@@ -480,7 +516,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		"data": map[string]interface{}{
 			"device_id":   deviceID,
 			"webhook_url": webhookURL,
-			"api_key":     authHeader,
+			"api_key":     newAuthHeader,
 			"provider":    "wablas",
 		},
 	})
