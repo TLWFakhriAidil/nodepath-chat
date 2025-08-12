@@ -35,7 +35,8 @@ const DeviceForm: React.FC<{
   isSaving: boolean;
   apiKeyOptions: Array<{value: string; label: string}>;
   providerOptions: Array<{value: string; label: string}>;
-}> = ({ settings, handleInputChange, generateDeviceId, generateWebhookId, handleSave, handleClose, isSaving, apiKeyOptions, providerOptions }) => (
+  setSettings: React.Dispatch<React.SetStateAction<DeviceSettings>>;
+}> = ({ settings, handleInputChange, generateDeviceId, generateWebhookId, handleSave, handleClose, isSaving, apiKeyOptions, providerOptions, setSettings }) => (
   <div className="space-y-6">
     {/* Device ID Section */}
     <div className="space-y-4">
@@ -48,12 +49,45 @@ const DeviceForm: React.FC<{
             className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
             readOnly
           />
-          <Button
-            onClick={generateDeviceId}
-            className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700"
-          >
-            GENERATE DEVICE
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                console.log('🔘 GENERATE DEVICE BUTTON CLICKED');
+                console.log('📊 Button click timestamp:', new Date().toISOString());
+                generateDeviceId();
+              }}
+              disabled={isSaving}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+            >
+              {isSaving ? 'GENERATING...' : 'GENERATE DEVICE'}
+            </Button>
+            <Button
+              onClick={() => {
+                console.log('🧪 TEST VALIDATION BUTTON CLICKED');
+                console.log('📊 Current form state for testing:', {
+                  phone_number: settings.phone_number,
+                  id_device: settings.id_device,
+                  provider: settings.provider,
+                  api_key: settings.api_key ? '[HIDDEN]' : settings.api_key
+                });
+                // Clear all fields to test validation
+                setSettings(prev => ({
+                  ...prev,
+                  phone_number: '',
+                  id_device: '',
+                  provider: '',
+                  api_key: ''
+                }));
+                console.log('🧹 Cleared all fields for validation testing');
+                toast.info('Fields cleared - now click GENERATE DEVICE to test validation');
+              }}
+              variant="outline"
+              size="sm"
+              className="text-xs px-2"
+            >
+              TEST
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -369,22 +403,94 @@ const DeviceSettings: React.FC = () => {
   };
 
   const generateDeviceId = async () => {
-    // Validation: Check if phone number and id_device are provided
-    if (!settings.phone_number.trim()) {
-      toast.error('Please enter a phone number before generating device');
+    console.log('=== DEVICE GENERATION STARTED ===');
+    console.log('🚀 generateDeviceId function called');
+    console.log('📋 Current settings state:', JSON.stringify(settings, null, 2));
+    
+    // Enhanced validation with detailed logging
+    console.log('🔍 Starting validation checks...');
+    const validationErrors = [];
+    
+    console.log('📞 Checking phone_number:', {
+      value: settings.phone_number,
+      type: typeof settings.phone_number,
+      trimmed: settings.phone_number?.trim(),
+      isEmpty: !settings.phone_number?.trim()
+    });
+    if (!settings.phone_number?.trim()) {
+      console.log('❌ Phone number validation failed');
+      validationErrors.push('Phone number is required');
+    } else {
+      console.log('✅ Phone number validation passed');
+    }
+    
+    console.log('📱 Checking id_device:', {
+      value: settings.id_device,
+      type: typeof settings.id_device,
+      trimmed: settings.id_device?.trim(),
+      isEmpty: !settings.id_device?.trim()
+    });
+    if (!settings.id_device?.trim()) {
+      console.log('❌ ID Device validation failed');
+      validationErrors.push('ID Device is required');
+    } else {
+      console.log('✅ ID Device validation passed');
+    }
+    
+    console.log('🏢 Checking provider:', {
+      value: settings.provider,
+      type: typeof settings.provider,
+      trimmed: settings.provider?.trim(),
+      isEmpty: !settings.provider?.trim()
+    });
+    if (!settings.provider?.trim()) {
+      console.log('❌ Provider validation failed');
+      validationErrors.push('Provider is required');
+    } else {
+      console.log('✅ Provider validation passed');
+    }
+    
+    console.log('🔑 Checking api_key:', {
+      value: settings.api_key ? '[HIDDEN]' : settings.api_key,
+      type: typeof settings.api_key,
+      length: settings.api_key?.length || 0,
+      trimmed_length: settings.api_key?.trim()?.length || 0,
+      isEmpty: !settings.api_key?.trim()
+    });
+    if (!settings.api_key?.trim()) {
+      console.log('❌ API Key validation failed');
+      validationErrors.push('API Key is required');
+    } else {
+      console.log('✅ API Key validation passed');
+    }
+    
+    console.log('📊 Validation summary:', {
+      totalErrors: validationErrors.length,
+      errors: validationErrors
+    });
+    
+    if (validationErrors.length > 0) {
+      console.log('🚫 VALIDATION FAILED - Stopping execution');
+      console.log('❌ Validation errors:', validationErrors);
+      const errorMessage = validationErrors.join(', ');
+      console.log('🔔 Showing toast error:', errorMessage);
+      
+      // Force toast to show
+      try {
+        toast.error(`Validation Error: ${errorMessage}`);
+        console.log('✅ Toast error displayed successfully');
+      } catch (toastError) {
+        console.error('❌ Failed to show toast:', toastError);
+        // Fallback: show browser alert
+        alert(`Validation Error: ${errorMessage}`);
+      }
+      
       return;
     }
     
-    if (!settings.id_device.trim()) {
-      toast.error('Please enter ID Device before generating device');
-      return;
-    }
+    console.log('✅ ALL VALIDATIONS PASSED - Proceeding with device generation');
 
-    if (!settings.phone_number.trim() && !settings.id_device.trim()) {
-      toast.error('Please enter both phone number and ID Device before generating device');
-      return;
-    }
-
+    console.log('Validation passed, starting device generation');
     setIsSaving(true);
     toast.info('Generating device... Please wait');
 
@@ -396,41 +502,153 @@ const DeviceSettings: React.FC = () => {
       let apiResponse;
       
       if (settings.provider === 'whacenter') {
+        console.log('🔵 Using Whacenter provider');
+        console.log('📡 Preparing Whacenter API request...');
+        
         // Whacenter API integration
         const whacenterData = {
           device_name: settings.id_device,
           webhook_url: webhookUrl
         };
         
-        apiResponse = await fetch('/api/device-settings/generate-whacenter', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...settings,
-            webhook_url: webhookUrl,
-            device_data: whacenterData
-          })
-        });
+        const requestBody = {
+          ...settings,
+          webhook_url: webhookUrl,
+          device_data: whacenterData
+        };
+        
+        console.log('📤 Whacenter Request Details:');
+        console.log('  - Endpoint: /api/device-settings/generate-whacenter');
+        console.log('  - Method: POST');
+        console.log('  - Headers: Content-Type: application/json');
+        console.log('  - Body:', JSON.stringify(requestBody, null, 2));
+        
+        const startTime = Date.now();
+        
+        try {
+          console.log('🌐 Making network request to Whacenter API...');
+          
+          apiResponse = await fetch('/api/device-settings/generate-whacenter', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          
+          console.log(`📥 Whacenter API Response (${duration}ms):`);
+          console.log('  - Status:', apiResponse.status, apiResponse.statusText);
+          console.log('  - OK:', apiResponse.ok);
+          console.log('  - Headers:', Object.fromEntries(apiResponse.headers.entries()));
+          
+          // Clone response to read body without consuming it
+          const responseClone = apiResponse.clone();
+          const responseText = await responseClone.text();
+          console.log('  - Body Length:', responseText.length);
+          console.log('  - Body:', responseText);
+          
+          // Log network timing
+          console.log('⏱️ Network Timing:', {
+            duration: `${duration}ms`,
+            url: '/api/device-settings/generate-whacenter',
+            method: 'POST',
+            status: apiResponse.status,
+            ok: apiResponse.ok
+          });
+          
+        } catch (fetchError) {
+          console.error('💥 NETWORK ERROR - Whacenter API Request Failed');
+          console.error('❌ Fetch Error Details:', {
+            name: fetchError.name,
+            message: fetchError.message,
+            stack: fetchError.stack,
+            cause: fetchError.cause
+          });
+          console.error('🌐 Network Request Info:', {
+            url: '/api/device-settings/generate-whacenter',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            bodyLength: JSON.stringify(requestBody).length
+          });
+          throw new Error(`Network Error: ${fetchError.message}`);
+        }
       } else if (settings.provider === 'wablas') {
+        console.log('🟢 Using Wablas provider');
+        console.log('📡 Preparing Wablas API request...');
+        
         // Wablas API integration
         const wablasData = {
           device_name: settings.id_device,
           webhook_url: webhookUrl
         };
         
-        apiResponse = await fetch('/api/device-settings/generate-wablas', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...settings,
-            webhook_url: webhookUrl,
-            device_data: wablasData
-          })
-        });
+        const requestBody = {
+          ...settings,
+          webhook_url: webhookUrl,
+          device_data: wablasData
+        };
+        
+        console.log('📤 Wablas Request Details:');
+        console.log('  - Endpoint: /api/device-settings/generate-wablas');
+        console.log('  - Method: POST');
+        console.log('  - Headers: Content-Type: application/json');
+        console.log('  - Body:', JSON.stringify(requestBody, null, 2));
+        
+        const startTime = Date.now();
+        
+        try {
+          console.log('🌐 Making network request to Wablas API...');
+          
+          apiResponse = await fetch('/api/device-settings/generate-wablas', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          
+          console.log(`📥 Wablas API Response (${duration}ms):`);
+          console.log('  - Status:', apiResponse.status, apiResponse.statusText);
+          console.log('  - OK:', apiResponse.ok);
+          console.log('  - Headers:', Object.fromEntries(apiResponse.headers.entries()));
+          
+          // Clone response to read body without consuming it
+          const responseClone = apiResponse.clone();
+          const responseText = await responseClone.text();
+          console.log('  - Body Length:', responseText.length);
+          console.log('  - Body:', responseText);
+          
+          // Log network timing
+          console.log('⏱️ Network Timing:', {
+            duration: `${duration}ms`,
+            url: '/api/device-settings/generate-wablas',
+            method: 'POST',
+            status: apiResponse.status,
+            ok: apiResponse.ok
+          });
+          
+        } catch (fetchError) {
+          console.error('💥 NETWORK ERROR - Wablas API Request Failed');
+          console.error('❌ Fetch Error Details:', {
+            name: fetchError.name,
+            message: fetchError.message,
+            stack: fetchError.stack,
+            cause: fetchError.cause
+          });
+          console.error('🌐 Network Request Info:', {
+            url: '/api/device-settings/generate-wablas',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            bodyLength: JSON.stringify(requestBody).length
+          });
+          throw new Error(`Network Error: ${fetchError.message}`);
+        }
       } else {
         // Fallback: Generate local device ID
         const deviceId = `C${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}H`;
@@ -441,37 +659,103 @@ const DeviceSettings: React.FC = () => {
         return;
       }
 
+      console.log('🔍 Processing API response...');
+      
       if (apiResponse && apiResponse.ok) {
-        const result = await apiResponse.json();
-        
-        if (result.success) {
-          // Update form with generated data
-          if (result.data.device_id) {
-            handleInputChange('device_id', result.data.device_id);
-          }
-          if (result.data.webhook_url) {
-            handleInputChange('webhook_id', result.data.webhook_url);
-          }
-          if (result.data.api_key) {
-            handleInputChange('api_key', result.data.api_key);
-          }
+        console.log('✅ API response is OK, parsing JSON...');
+        try {
+          const result = await apiResponse.json();
+          console.log('📋 Parsed API result:', JSON.stringify(result, null, 2));
           
-          toast.success(`Device generated successfully via ${settings.provider}!`);
-        } else {
-          throw new Error(result.message || 'Failed to generate device');
+          if (result.success) {
+            console.log('🎉 API call successful! Updating form data...');
+            
+            // Track what data was received
+            const receivedData = {
+              device_id: result.data?.device_id,
+              webhook_url: result.data?.webhook_url,
+              api_key: result.data?.api_key,
+              provider: result.data?.provider
+            };
+            console.log('📊 Received data from provider:', receivedData);
+            
+            // Update form with generated data
+            if (result.data?.device_id) {
+              console.log('✏️ Setting device_id:', result.data.device_id);
+              handleInputChange('device_id', result.data.device_id);
+            }
+            if (result.data?.webhook_url) {
+              console.log('✏️ Setting webhook_id:', result.data.webhook_url);
+              handleInputChange('webhook_id', result.data.webhook_url);
+            }
+            if (result.data?.api_key) {
+              console.log('✏️ Setting api_key:', result.data.api_key);
+              handleInputChange('api_key', result.data.api_key);
+            }
+            
+            console.log('🎊 Showing success toast');
+            toast.success(`Device generated successfully via ${settings.provider}!`);
+            console.log('=== DEVICE GENERATION COMPLETED SUCCESSFULLY ===');
+          } else {
+            console.error('❌ API call failed with message:', result.message);
+            console.error('❌ Full error response:', result);
+            toast.error(`Provider Error: ${result.message || 'Unknown error from provider'}`);
+            throw new Error(result.message || 'Failed to generate device');
+          }
+        } catch (jsonError) {
+          console.error('❌ Failed to parse JSON response:', jsonError);
+          const responseText = await apiResponse.text();
+          console.error('❌ Raw response text:', responseText);
+          toast.error('Invalid response format from server');
+          throw new Error('Invalid response format');
         }
       } else {
-        throw new Error('Failed to communicate with device provider');
+        console.error('❌ API response not OK');
+        console.error('❌ Status:', apiResponse?.status, apiResponse?.statusText);
+        
+        try {
+          const errorText = await apiResponse?.text();
+          console.error('❌ Error response body:', errorText);
+          
+          // Try to parse error as JSON for better error messages
+          try {
+            const errorJson = JSON.parse(errorText);
+            const errorMessage = errorJson.message || errorJson.error || 'Unknown server error';
+            toast.error(`Server Error (${apiResponse?.status}): ${errorMessage}`);
+          } catch {
+            toast.error(`Server Error (${apiResponse?.status}): ${errorText || 'Unknown error'}`);
+          }
+        } catch (readError) {
+          console.error('❌ Failed to read error response:', readError);
+          toast.error(`Network Error: Failed to communicate with server (${apiResponse?.status})`);
+        }
+        
+        throw new Error(`HTTP ${apiResponse?.status}: Failed to communicate with device provider`);
       }
     } catch (error) {
-      console.error('Error generating device:', error);
-      toast.error(`Failed to generate device: ${error.message}`);
+      console.error('💥 DEVICE GENERATION FAILED');
+      console.error('❌ Error generating device:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        provider: settings.provider,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Show user-friendly error message
+      const userErrorMessage = error.message || 'Unknown error occurred';
+      toast.error(`Device Generation Failed: ${userErrorMessage}`);
       
       // Fallback: Generate local device ID
+      console.log('🔄 Generating fallback local device ID...');
       const deviceId = `C${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}H`;
+      console.log('🆔 Generated fallback device ID:', deviceId);
       handleInputChange('device_id', deviceId);
       toast.info('Generated local device ID as fallback');
+      console.log('=== FALLBACK DEVICE GENERATION COMPLETED ===');
     } finally {
+      console.log('🏁 Device generation process completed, setting isSaving to false');
       setIsSaving(false);
     }
   };
@@ -538,6 +822,7 @@ const DeviceSettings: React.FC = () => {
               isSaving={isSaving}
               apiKeyOptions={apiKeyOptions}
               providerOptions={providerOptions}
+              setSettings={setSettings}
             />
           </DialogContent>
         </Dialog>

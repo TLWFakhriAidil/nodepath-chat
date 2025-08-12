@@ -145,9 +145,9 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	}
 
 	// Prepare Whacenter API request
-	whacenterURL := "https://panel.whacenter.com/api/create_device"
+	whacenterURL := "https://api.whacenter.com/api/create_device"
 	deviceData := map[string]interface{}{
-		"device_name": req.DeviceData.DeviceName,
+		"device_name": req.IDDevice,
 		"webhook_url": req.WebhookURL,
 	}
 
@@ -161,21 +161,73 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 		Timeout: 30 * time.Second,
 	}
 
-	// Make request to Whacenter API
-	resp, err := client.Post(whacenterURL, "application/json", bytes.NewBuffer(jsonData))
+	// Create request with proper headers
+	request, err := http.NewRequest("POST", whacenterURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		logrus.WithError(err).Error("Failed to call Whacenter API")
-		return h.errorResponse(c, 500, "Failed to communicate with Whacenter API")
+		return h.errorResponse(c, 500, "Failed to create request")
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+req.APIKey)
+
+	// Make request to Whacenter API
+	logrus.WithFields(logrus.Fields{
+		"provider": "whacenter",
+		"url": whacenterURL,
+		"device_name": req.IDDevice,
+		"phone_number": req.PhoneNumber,
+		"webhook_url": req.WebhookURL,
+		"api_key_length": len(req.APIKey),
+	}).Info("🔵 WHACENTER: Making external API request")
+	
+	// Log request headers (without sensitive data)
+	logrus.WithFields(logrus.Fields{
+		"content_type": request.Header.Get("Content-Type"),
+		"has_auth_header": request.Header.Get("Authorization") != "",
+		"request_body": string(jsonData),
+	}).Info("🔵 WHACENTER: Request details")
+	
+	resp, err := client.Do(request)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": "whacenter",
+			"url": whacenterURL,
+			"error": err.Error(),
+		}).Error("❌ WHACENTER: Failed to call external API")
+		return h.errorResponse(c, 500, fmt.Sprintf("Failed to communicate with Whacenter API: %v", err))
 	}
 	defer resp.Body.Close()
+	
+	logrus.WithFields(logrus.Fields{
+		"provider": "whacenter",
+		"status_code": resp.StatusCode,
+		"status": resp.Status,
+		"content_type": resp.Header.Get("Content-Type"),
+		"content_length": resp.Header.Get("Content-Length"),
+	}).Info("📥 WHACENTER: Received response from external API")
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": "whacenter",
+			"error": err.Error(),
+		}).Error("❌ WHACENTER: Failed to read response body")
 		return h.errorResponse(c, 500, "Failed to read API response")
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"provider": "whacenter",
+		"response_body": string(body),
+		"response_length": len(body),
+	}).Info("📄 WHACENTER: API response body received")
+
 	var apiResponse map[string]interface{}
 	if err := json.Unmarshal(body, &apiResponse); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": "whacenter",
+			"error": err.Error(),
+			"response_body": string(body),
+		}).Error("❌ WHACENTER: Failed to unmarshal response JSON")
 		return h.errorResponse(c, 500, "Failed to parse API response")
 	}
 
@@ -197,6 +249,14 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	deviceID, _ := data["device_id"].(string)
 	apiKey, _ := data["api_key"].(string)
 
+	// Log successful device generation
+	logrus.WithFields(logrus.Fields{
+		"provider": "whacenter",
+		"device_id": deviceID,
+		"webhook_url": req.WebhookURL,
+		"phone_number": req.PhoneNumber,
+	}).Info("✅ WHACENTER: Device generated successfully")
+	
 	// Return success response
 	return h.successResponse(c, map[string]interface{}{
 		"success": true,
@@ -239,10 +299,11 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		// Note: In production, you would call Wablas delete API here
 	}
 
-	// Prepare Wablas API request for device creation
-	wablasURL := "https://my.wablas.com/api/device/create"
+// Prepare Wablas API request for device creation
+	wablasURL := "https://console.wablas.com/api/v2/instance/init"
 	deviceData := map[string]interface{}{
-		"device_name": req.DeviceData.DeviceName,
+		"device_name": req.IDDevice,
+		"phone_number": req.PhoneNumber,
 	}
 
 	jsonData, err := json.Marshal(deviceData)
@@ -261,25 +322,66 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		return h.errorResponse(c, 500, "Failed to create request")
 	}
 
-	// Note: In production, you would use actual Wablas API credentials
-	request.Header.Set("Authorization", "Bearer YOUR_WABLAS_TOKEN")
+	request.Header.Set("Authorization", "Bearer "+req.APIKey)
 	request.Header.Set("Content-Type", "application/json")
 
 	// Make request to Wablas API
+	logrus.WithFields(logrus.Fields{
+		"provider": "wablas",
+		"url": wablasURL,
+		"device_name": req.IDDevice,
+		"phone_number": req.PhoneNumber,
+		"api_key_length": len(req.APIKey),
+	}).Info("🟡 WABLAS: Making external API request")
+	
+	// Log request headers (without sensitive data)
+	logrus.WithFields(logrus.Fields{
+		"content_type": request.Header.Get("Content-Type"),
+		"has_auth_header": request.Header.Get("Authorization") != "",
+		"request_body": string(jsonData),
+	}).Info("🟡 WABLAS: Request details")
+	
 	resp, err := client.Do(request)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to call Wablas API")
-		return h.errorResponse(c, 500, "Failed to communicate with Wablas API")
+		logrus.WithFields(logrus.Fields{
+			"provider": "wablas",
+			"url": wablasURL,
+			"error": err.Error(),
+		}).Error("❌ WABLAS: Failed to call external API")
+		return h.errorResponse(c, 500, fmt.Sprintf("Failed to communicate with Wablas API: %v", err))
 	}
 	defer resp.Body.Close()
+	
+	logrus.WithFields(logrus.Fields{
+		"provider": "wablas",
+		"status_code": resp.StatusCode,
+		"status": resp.Status,
+		"content_type": resp.Header.Get("Content-Type"),
+		"content_length": resp.Header.Get("Content-Length"),
+	}).Info("📥 WABLAS: Received response from external API")
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": "wablas",
+			"error": err.Error(),
+		}).Error("❌ WABLAS: Failed to read response body")
 		return h.errorResponse(c, 500, "Failed to read API response")
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"provider": "wablas",
+		"response_body": string(body),
+		"response_length": len(body),
+	}).Info("📄 WABLAS: API response body received")
+
 	var apiResponse map[string]interface{}
 	if err := json.Unmarshal(body, &apiResponse); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": "wablas",
+			"error": err.Error(),
+			"response_body": string(body),
+		}).Error("❌ WABLAS: Failed to unmarshal response JSON")
 		return h.errorResponse(c, 500, "Failed to parse API response")
 	}
 
@@ -319,7 +421,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		// Continue without webhook setup
 	} else {
 		// Setup webhook
-		webhookRequest, err := http.NewRequest("POST", "https://my.wablas.com/api/device/change-webhook-url", bytes.NewBuffer(webhookJSON))
+		webhookRequest, err := http.NewRequest("POST", "https://console.wablas.com/api/v2/instance/webhook", bytes.NewBuffer(webhookJSON))
 		if err == nil {
 			webhookRequest.Header.Set("Authorization", authHeader)
 			webhookRequest.Header.Set("Accept", "application/json")
@@ -335,6 +437,14 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		}
 	}
 
+	// Log successful device generation
+	logrus.WithFields(logrus.Fields{
+		"provider": "wablas",
+		"device_id": deviceID,
+		"webhook_url": webhookURL,
+		"phone_number": req.PhoneNumber,
+	}).Info("✅ WABLAS: Device generated successfully")
+	
 	// Return success response
 	return h.successResponse(c, map[string]interface{}{
 		"success": true,
