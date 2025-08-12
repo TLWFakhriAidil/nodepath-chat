@@ -756,3 +756,163 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		},
 	})
 }
+
+// GetDeviceStatus checks the connection status of a device
+func (h *Handlers) GetDeviceStatus(c *fiber.Ctx) error {
+	deviceID := c.Params("id")
+	if deviceID == "" {
+		return h.errorResponse(c, 400, "Device ID is required")
+	}
+
+	// Get device settings
+	device, err := h.deviceSettingsService.GetByID(deviceID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get device settings")
+		return h.errorResponse(c, 404, "Device not found")
+	}
+
+	// Initialize status response
+	status := map[string]interface{}{
+		"device_id":    deviceID,
+		"provider":     device.Provider,
+		"connected":    false,
+		"status":       "disconnected",
+		"last_checked": time.Now(),
+		"details":      map[string]interface{}{},
+	}
+
+	// Check status based on provider
+	switch device.Provider {
+	case "whacenter":
+		status = h.checkWhacenterStatus(device, status)
+	case "wablas":
+		status = h.checkWablasStatus(device, status)
+	default:
+		status["status"] = "unsupported_provider"
+		status["details"] = map[string]interface{}{
+			"error": "Provider not supported for status checking",
+		}
+	}
+
+	return h.successResponse(c, status)
+}
+
+// checkWhacenterStatus checks the status of a Whacenter device
+func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status map[string]interface{}) map[string]interface{} {
+	if !device.Instance.Valid || device.Instance.String == "" {
+		status["status"] = "not_configured"
+		status["details"] = map[string]interface{}{
+			"error": "Device instance not configured",
+		}
+		return status
+	}
+
+	// Make API call to check Whacenter device status
+	client := &http.Client{Timeout: 10 * time.Second}
+	apiKey := "abebe840-156c-441c-8252-da0342c5a07c" // Use the same hardcoded API key
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.whacenter.com/api/device/%s/status", device.Instance.String), nil)
+	if err != nil {
+		status["status"] = "error"
+		status["details"] = map[string]interface{}{
+			"error": "Failed to create status request",
+		}
+		return status
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		status["status"] = "connection_error"
+		status["details"] = map[string]interface{}{
+			"error": "Failed to connect to Whacenter API",
+		}
+		return status
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		var apiResponse map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err == nil {
+			if connected, ok := apiResponse["connected"].(bool); ok {
+				status["connected"] = connected
+				if connected {
+					status["status"] = "connected"
+				} else {
+					status["status"] = "disconnected"
+				}
+			}
+			status["details"] = apiResponse
+		}
+	} else {
+		status["status"] = "api_error"
+		status["details"] = map[string]interface{}{
+			"http_status": resp.StatusCode,
+			"error":       "API returned error status",
+		}
+	}
+
+	return status
+}
+
+// checkWablasStatus checks the status of a Wablas device
+func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[string]interface{}) map[string]interface{} {
+	if !device.Instance.Valid || device.Instance.String == "" {
+		status["status"] = "not_configured"
+		status["details"] = map[string]interface{}{
+			"error": "Device instance not configured",
+		}
+		return status
+	}
+
+	// Make API call to check Wablas device status
+	client := &http.Client{Timeout: 10 * time.Second}
+	token := device.Instance.String // The instance contains the auth token for Wablas
+
+	req, err := http.NewRequest("GET", "https://my.wablas.com/api/device/status", nil)
+	if err != nil {
+		status["status"] = "error"
+		status["details"] = map[string]interface{}{
+			"error": "Failed to create status request",
+		}
+		return status
+	}
+
+	req.Header.Set("Authorization", token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		status["status"] = "connection_error"
+		status["details"] = map[string]interface{}{
+			"error": "Failed to connect to Wablas API",
+		}
+		return status
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		var apiResponse map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err == nil {
+			if statusField, ok := apiResponse["status"].(bool); ok {
+				status["connected"] = statusField
+				if statusField {
+					status["status"] = "connected"
+				} else {
+					status["status"] = "disconnected"
+				}
+			}
+			status["details"] = apiResponse
+		}
+	} else {
+		status["status"] = "api_error"
+		status["details"] = map[string]interface{}{
+			"http_status": resp.StatusCode,
+			"error":       "API returned error status",
+		}
+	}
+
+	return status
+}

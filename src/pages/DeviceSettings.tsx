@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Smartphone, Settings, Save, X, Link, Copy, Plus, Edit, Trash2, Eye } from 'lucide-react';
+import DeviceStatusPopup from '@/components/DeviceStatusPopup';
 
 interface DeviceSettings {
   id: string;
@@ -22,6 +23,7 @@ interface DeviceSettings {
   id_device: string;
   id_erp: string;
   id_admin: string;
+  instance: string;
 }
 
 // DeviceForm component moved outside to prevent re-creation on every render
@@ -231,12 +233,15 @@ const DeviceSettings: React.FC = () => {
     api_key: '',
     id_device: '',
     id_erp: '',
-    id_admin: ''
+    id_admin: '',
+    instance: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<DeviceSettings | null>(null);
+  const [statusPopupOpen, setStatusPopupOpen] = useState(false);
+  const [selectedDeviceForStatus, setSelectedDeviceForStatus] = useState<DeviceSettings | null>(null);
 
   const apiKeyOptions = [
     { value: 'chat_gpt_so', label: 'Chat GPT So' },
@@ -375,6 +380,16 @@ const DeviceSettings: React.FC = () => {
       console.error('Error deleting device:', error);
       toast.error('Failed to delete device');
     }
+  };
+
+  const handleStatusClick = (device: DeviceSettings) => {
+    setSelectedDeviceForStatus(device);
+    setStatusPopupOpen(true);
+  };
+
+  const handleStatusPopupClose = () => {
+    setStatusPopupOpen(false);
+    setSelectedDeviceForStatus(null);
   };
 
   const generateDeviceId = async () => {
@@ -875,10 +890,7 @@ const DeviceSettings: React.FC = () => {
                       <Badge 
                         variant={device.device_id ? "default" : "secondary"}
                         className="cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => {
-                          console.log('Status clicked for device:', device);
-                          // TODO: Add popup functionality here
-                        }}
+                        onClick={() => handleStatusClick(device)}
                       >
                         Status Device
                       </Badge>
@@ -910,6 +922,13 @@ const DeviceSettings: React.FC = () => {
           )}
         </CardContent>
       </Card>
+      
+      <DeviceStatusPopup
+        isOpen={statusPopupOpen}
+        onClose={handleStatusPopupClose}
+        deviceId={selectedDeviceForStatus?.id || ''}
+        deviceName={selectedDeviceForStatus?.device_id}
+      />
     </div>
   );
 };
