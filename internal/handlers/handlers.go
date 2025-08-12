@@ -92,12 +92,15 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	deviceSettings := api.Group("/device-settings")
 	deviceSettings.Get("/", h.GetDeviceSettings)
 	deviceSettings.Post("/", h.CreateDeviceSettings)
-	deviceSettings.Get("/:id", h.GetDeviceSettingsById)
-	deviceSettings.Put("/:id", h.UpdateDeviceSettings)
-	deviceSettings.Delete("/:id", h.DeleteDeviceSettings)
+	// Debug route to check device data (must be before parameterized routes)
+	deviceSettings.Get("/debug", h.DebugDevices)
 	// Device generation routes
 	deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
 	deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
+	// Parameterized routes (must be after specific routes)
+	deviceSettings.Get("/:id", h.GetDeviceSettingsById)
+	deviceSettings.Put("/:id", h.UpdateDeviceSettings)
+	deviceSettings.Delete("/:id", h.DeleteDeviceSettings)
 	// Device status route
 	deviceSettings.Get("/:id/status", h.GetDeviceStatus)
 

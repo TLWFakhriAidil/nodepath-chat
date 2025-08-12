@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
 )
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 // GetDeviceSettings retrieves all device settings
 func (h *Handlers) GetDeviceSettings(c *fiber.Ctx) error {
@@ -760,16 +769,25 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 // GetDeviceStatus checks the connection status of a device
 func (h *Handlers) GetDeviceStatus(c *fiber.Ctx) error {
 	deviceID := c.Params("id")
+	logrus.WithField("device_id", deviceID).Info("[STATUS] Starting device status check")
+	
 	if deviceID == "" {
+		logrus.Error("[STATUS] Device ID is empty")
 		return h.errorResponse(c, 400, "Device ID is required")
 	}
 
 	// Get device settings
 	device, err := h.deviceSettingsService.GetByID(deviceID)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get device settings")
+		logrus.WithError(err).WithField("device_id", deviceID).Error("[STATUS] Failed to get device settings")
 		return h.errorResponse(c, 404, "Device not found")
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"provider":  device.Provider,
+		"instance":  device.Instance.String,
+	}).Info("[STATUS] Device found, checking status")
 
 	// Initialize status response
 	status := map[string]interface{}{
@@ -784,22 +802,33 @@ func (h *Handlers) GetDeviceStatus(c *fiber.Ctx) error {
 	// Check status based on provider
 	switch device.Provider {
 	case "whacenter":
+		logrus.Info("[STATUS] Checking Whacenter status")
 		status = h.checkWhacenterStatus(device, status)
 	case "wablas":
+		logrus.Info("[STATUS] Checking Wablas status")
 		status = h.checkWablasStatus(device, status)
 	default:
+		logrus.WithField("provider", device.Provider).Warn("[STATUS] Unsupported provider")
 		status["status"] = "unsupported_provider"
 		status["details"] = map[string]interface{}{
 			"error": "Provider not supported for status checking",
 		}
 	}
 
+	logrus.WithField("final_status", status).Info("[STATUS] Returning final status")
 	return h.successResponse(c, status)
 }
 
 // checkWhacenterStatus checks the status of a Whacenter device
 func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status map[string]interface{}) map[string]interface{} {
+	logrus.WithFields(logrus.Fields{
+		"device_id": device.ID,
+		"instance_valid": device.Instance.Valid,
+		"instance_value": device.Instance.String,
+	}).Info("[WHACENTER] Starting Whacenter status check")
+	
 	if !device.Instance.Valid || device.Instance.String == "" {
+		logrus.Error("[WHACENTER] Device instance not configured")
 		status["status"] = "not_configured"
 		status["details"] = map[string]interface{}{
 			"error": "Device instance not configured",
@@ -807,59 +836,203 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 		return status
 	}
 
-	// Make API call to check Whacenter device status
+	// Make API call to check Whacenter device status using the correct endpoint
 	client := &http.Client{Timeout: 10 * time.Second}
-	apiKey := "abebe840-156c-441c-8252-da0342c5a07c" // Use the same hardcoded API key
+	// Use the correct statusDevice API endpoint with device_id parameter
+	apiURL := fmt.Sprintf("https://api.whacenter.com/api/statusDevice?device_id=%s", url.QueryEscape(device.Instance.String))
+	
+	logrus.WithFields(logrus.Fields{
+		"api_url": apiURL,
+	}).Info("[WHACENTER] Making API request")
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.whacenter.com/api/device/%s/status", device.Instance.String), nil)
+	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
+		logrus.WithError(err).Error("[WHACENTER] Failed to create HTTP request")
 		status["status"] = "error"
 		status["details"] = map[string]interface{}{
 			"error": "Failed to create status request",
+			"details": err.Error(),
 		}
 		return status
 	}
 
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	// No authorization header needed for statusDevice endpoint
 	req.Header.Set("Accept", "application/json")
+
+	logrus.WithFields(logrus.Fields{
+		"headers": req.Header,
+	}).Info("[WHACENTER] Request headers set")
 
 	resp, err := client.Do(req)
 	if err != nil {
+		logrus.WithError(err).Error("[WHACENTER] HTTP request failed")
 		status["status"] = "connection_error"
 		status["details"] = map[string]interface{}{
 			"error": "Failed to connect to Whacenter API",
+			"details": err.Error(),
 		}
 		return status
 	}
 	defer resp.Body.Close()
 
+	logrus.WithFields(logrus.Fields{
+		"status_code": resp.StatusCode,
+		"headers": resp.Header,
+	}).Info("[WHACENTER] Received API response")
+
+	// Read response body for logging
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("[WHACENTER] Failed to read response body")
+		status["status"] = "error"
+		status["details"] = map[string]interface{}{
+			"error": "Failed to read API response",
+			"details": err.Error(),
+		}
+		return status
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"response_body": string(bodyBytes),
+		"body_length": len(bodyBytes),
+	}).Info("[WHACENTER] Response body received")
+
 	if resp.StatusCode == 200 {
 		var apiResponse map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err == nil {
-			if connected, ok := apiResponse["connected"].(bool); ok {
-				status["connected"] = connected
-				if connected {
-					status["status"] = "connected"
+		if err := json.Unmarshal(bodyBytes, &apiResponse); err == nil {
+			logrus.WithField("parsed_response", apiResponse).Info("[WHACENTER] Successfully parsed JSON response")
+			
+			// Parse the response according to statusDevice API format
+			if data, ok := apiResponse["data"].(map[string]interface{}); ok {
+				if deviceStatus, ok := data["status"].(string); ok {
+					logrus.WithField("device_status", deviceStatus).Info("[WHACENTER] Found device status")
+					
+					if deviceStatus == "NOT CONNECTED" {
+						status["connected"] = false
+						status["status"] = "disconnected"
+						
+						// Fetch QR code when device is not connected
+						qrCode := h.getWhacenterQRCode(device.Instance.String)
+						if qrCode != "" {
+							status["qr_code"] = qrCode
+						}
+					} else {
+						status["connected"] = true
+						status["status"] = "connected"
+					}
+					status["device_status"] = deviceStatus
 				} else {
-					status["status"] = "disconnected"
+					logrus.Warn("[WHACENTER] No 'status' field found in data")
+					status["status"] = "unknown"
 				}
+				status["details"] = data
+			} else {
+				logrus.Warn("[WHACENTER] No 'data' field found in response")
+				status["status"] = "invalid_response"
+				status["details"] = apiResponse
 			}
-			status["details"] = apiResponse
+		} else {
+			logrus.WithError(err).Error("[WHACENTER] Failed to parse JSON response")
+			status["status"] = "parse_error"
+			status["details"] = map[string]interface{}{
+				"error": "Failed to parse API response",
+				"raw_response": string(bodyBytes),
+				"parse_error": err.Error(),
+			}
+		}
+	} else if resp.StatusCode == 404 {
+		// Handle 404 specifically - device not found in Whacenter
+		logrus.WithFields(logrus.Fields{
+			"device_instance": device.Instance.String,
+			"api_url": apiURL,
+		}).Warn("[WHACENTER] Device not found in Whacenter system")
+		
+		status["status"] = "device_not_found"
+		status["connected"] = false
+		status["details"] = map[string]interface{}{
+			"error": "Device not found in Whacenter system",
+			"message": "The device may have been deleted from Whacenter or the device ID is incorrect",
+			"device_instance": device.Instance.String,
+			"http_status": 404,
+			"response_body": string(bodyBytes),
+			"suggestion": "Please regenerate the device or check if it exists in your Whacenter dashboard",
 		}
 	} else {
+		logrus.WithFields(logrus.Fields{
+			"status_code": resp.StatusCode,
+			"response_body": string(bodyBytes),
+		}).Error("[WHACENTER] API returned non-200 status")
+		
 		status["status"] = "api_error"
 		status["details"] = map[string]interface{}{
 			"http_status": resp.StatusCode,
 			"error":       "API returned error status",
+			"response_body": string(bodyBytes),
 		}
 	}
 
+	logrus.WithField("final_status", status).Info("[WHACENTER] Returning status")
 	return status
+}
+
+// getWhacenterQRCode fetches QR code for Whacenter device when not connected
+func (h *Handlers) getWhacenterQRCode(deviceID string) string {
+	logrus.WithField("device_id", deviceID).Info("[WHACENTER] Fetching QR code")
+	
+	client := &http.Client{Timeout: 10 * time.Second}
+	qrURL := fmt.Sprintf("https://api.whacenter.com/api/qr?device_id=%s", url.QueryEscape(deviceID))
+	
+	req, err := http.NewRequest("GET", qrURL, nil)
+	if err != nil {
+		logrus.WithError(err).Error("[WHACENTER] Failed to create QR request")
+		return ""
+	}
+	
+	req.Header.Set("Accept", "application/json")
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("[WHACENTER] QR request failed")
+		return ""
+	}
+	defer resp.Body.Close()
+	
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("[WHACENTER] Failed to read QR response")
+		return ""
+	}
+	
+	if resp.StatusCode == 200 {
+		var qrResponse map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &qrResponse); err == nil {
+			if data, ok := qrResponse["data"].(map[string]interface{}); ok {
+				if qrCode, ok := data["qr"].(string); ok {
+					logrus.Info("[WHACENTER] Successfully fetched QR code")
+					return qrCode
+				}
+			}
+		}
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"status_code": resp.StatusCode,
+		"response": string(bodyBytes),
+	}).Warn("[WHACENTER] Failed to fetch QR code")
+	
+	return ""
 }
 
 // checkWablasStatus checks the status of a Wablas device
 func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[string]interface{}) map[string]interface{} {
+	logrus.WithFields(logrus.Fields{
+		"device_id": device.ID,
+		"instance_valid": device.Instance.Valid,
+		"instance_value": device.Instance.String,
+	}).Info("[WABLAS] Starting Wablas status check")
+	
 	if !device.Instance.Valid || device.Instance.String == "" {
+		logrus.Error("[WABLAS] Device instance not configured")
 		status["status"] = "not_configured"
 		status["details"] = map[string]interface{}{
 			"error": "Device instance not configured",
@@ -867,15 +1040,24 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 		return status
 	}
 
-	// Make API call to check Wablas device status
+	// Make API call to check Wablas device status using the correct endpoint
 	client := &http.Client{Timeout: 10 * time.Second}
 	token := device.Instance.String // The instance contains the auth token for Wablas
+	// Use the correct device/info endpoint with token parameter
+	apiURL := fmt.Sprintf("https://my.wablas.com/api/device/info?token=%s", url.QueryEscape(token))
+	
+	logrus.WithFields(logrus.Fields{
+		"api_url": apiURL,
+		"token_prefix": token[:min(8, len(token))] + "...",
+	}).Info("[WABLAS] Making API request")
 
-	req, err := http.NewRequest("GET", "https://my.wablas.com/api/device/status", nil)
+	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
+		logrus.WithError(err).Error("[WABLAS] Failed to create HTTP request")
 		status["status"] = "error"
 		status["details"] = map[string]interface{}{
 			"error": "Failed to create status request",
+			"details": err.Error(),
 		}
 		return status
 	}
@@ -883,36 +1065,198 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 	req.Header.Set("Authorization", token)
 	req.Header.Set("Accept", "application/json")
 
+	logrus.WithFields(logrus.Fields{
+		"headers": req.Header,
+	}).Info("[WABLAS] Request headers set")
+
 	resp, err := client.Do(req)
 	if err != nil {
+		logrus.WithError(err).Error("[WABLAS] HTTP request failed")
 		status["status"] = "connection_error"
 		status["details"] = map[string]interface{}{
 			"error": "Failed to connect to Wablas API",
+			"details": err.Error(),
 		}
 		return status
 	}
 	defer resp.Body.Close()
 
+	logrus.WithFields(logrus.Fields{
+		"status_code": resp.StatusCode,
+		"headers": resp.Header,
+	}).Info("[WABLAS] Received API response")
+
+	// Read response body for logging
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("[WABLAS] Failed to read response body")
+		status["status"] = "error"
+		status["details"] = map[string]interface{}{
+			"error": "Failed to read API response",
+			"details": err.Error(),
+		}
+		return status
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"response_body": string(bodyBytes),
+		"body_length": len(bodyBytes),
+	}).Info("[WABLAS] Response body received")
+
 	if resp.StatusCode == 200 {
 		var apiResponse map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err == nil {
-			if statusField, ok := apiResponse["status"].(bool); ok {
-				status["connected"] = statusField
-				if statusField {
-					status["status"] = "connected"
+		if err := json.Unmarshal(bodyBytes, &apiResponse); err == nil {
+			logrus.WithField("parsed_response", apiResponse).Info("[WABLAS] Successfully parsed JSON response")
+			
+			// Check if the API response has the expected structure
+			if apiStatus, ok := apiResponse["status"].(bool); ok && apiStatus {
+				// Parse the response according to device/info API format
+				if data, ok := apiResponse["data"].(map[string]interface{}); ok {
+					if deviceStatus, ok := data["status"].(string); ok {
+						logrus.WithField("device_status", deviceStatus).Info("[WABLAS] Found device status")
+						
+						if deviceStatus == "disconnected" {
+							status["connected"] = false
+							status["status"] = "disconnected"
+							
+							// Fetch QR code when device is disconnected
+							if deviceSerial, ok := data["serial"].(string); ok && deviceSerial != "" {
+								qrURL := h.getWablasQRCode(token)
+								if qrURL != "" {
+									status["qr_code"] = qrURL
+								}
+							}
+						} else {
+							status["connected"] = true
+							status["status"] = "connected"
+						}
+						status["device_status"] = deviceStatus
+						if serial, ok := data["serial"].(string); ok {
+							status["device_serial"] = serial
+						}
+					} else {
+						logrus.Warn("[WABLAS] No 'status' field found in data")
+						status["status"] = "unknown"
+					}
+					status["details"] = data
 				} else {
-					status["status"] = "disconnected"
+					logrus.Warn("[WABLAS] No 'data' field found in response")
+					status["status"] = "invalid_response"
+					status["details"] = apiResponse
 				}
+			} else {
+				logrus.Warn("[WABLAS] API response status is false or missing")
+				status["status"] = "api_failed"
+				status["details"] = apiResponse
 			}
-			status["details"] = apiResponse
+		} else {
+			logrus.WithError(err).Error("[WABLAS] Failed to parse JSON response")
+			status["status"] = "parse_error"
+			status["details"] = map[string]interface{}{
+				"error": "Failed to parse API response",
+				"raw_response": string(bodyBytes),
+				"parse_error": err.Error(),
+			}
 		}
 	} else {
+		logrus.WithFields(logrus.Fields{
+			"status_code": resp.StatusCode,
+			"response_body": string(bodyBytes),
+		}).Error("[WABLAS] API returned non-200 status")
+		
 		status["status"] = "api_error"
 		status["details"] = map[string]interface{}{
 			"http_status": resp.StatusCode,
 			"error":       "API returned error status",
+			"response_body": string(bodyBytes),
 		}
 	}
 
+	logrus.WithField("final_status", status).Info("[WABLAS] Returning status")
 	return status
+}
+
+// getWablasQRCode fetches QR code from Wablas API when device is disconnected
+func (h *Handlers) getWablasQRCode(token string) string {
+	client := &http.Client{Timeout: 10 * time.Second}
+	qrURL := fmt.Sprintf("https://my.wablas.com/api/device/scan?token=%s", url.QueryEscape(token))
+	
+	logrus.WithField("qr_url", qrURL).Info("[WABLAS] Fetching QR code")
+	
+	req, err := http.NewRequest("GET", qrURL, nil)
+	if err != nil {
+		logrus.WithError(err).Error("[WABLAS] Failed to create QR request")
+		return ""
+	}
+	
+	req.Header.Set("Authorization", token)
+	req.Header.Set("Accept", "application/json")
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("[WABLAS] Failed to fetch QR code")
+		return ""
+	}
+	defer resp.Body.Close()
+	
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("[WABLAS] Failed to read QR response body")
+		return ""
+	}
+	
+	if resp.StatusCode == 200 {
+		var qrResponse map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &qrResponse); err == nil {
+			if data, ok := qrResponse["data"].(map[string]interface{}); ok {
+				if qrCode, ok := data["qr"].(string); ok {
+					logrus.WithField("qr_code_length", len(qrCode)).Info("[WABLAS] QR code fetched successfully")
+					return qrCode
+				}
+			}
+		}
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"status_code": resp.StatusCode,
+		"response_body": string(bodyBytes),
+	}).Warn("[WABLAS] Failed to get QR code")
+	
+	return ""
+}
+
+// DebugDevices returns all device settings for debugging
+func (h *Handlers) DebugDevices(c *fiber.Ctx) error {
+	devices, err := h.deviceSettingsService.GetAll()
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to get device settings")
+	}
+
+	// Create a simplified view for debugging
+	var debugData []map[string]interface{}
+	for _, device := range devices {
+		data := map[string]interface{}{
+				"id":          device.ID,
+				"provider":    device.Provider,
+				"id_device":   getStringFromNullString(device.IDDevice),
+				"instance":    getStringFromNullString(device.Instance),
+				"device_id":   getStringFromNullString(device.DeviceID),
+				"phone_number": getStringFromNullString(device.PhoneNumber),
+				"created_at":  device.CreatedAt,
+			}
+		debugData = append(debugData, data)
+	}
+
+	return h.successResponse(c, map[string]interface{}{
+		"total_devices": len(devices),
+		"devices":       debugData,
+	})
+}
+
+// Helper function to convert sql.NullString to string
+func getStringFromNullString(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
 }

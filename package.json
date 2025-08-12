@@ -13,7 +13,9 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:db": "node test-db-connection.js"
+    "test:db": "node test-db-connection.js",
+    "serve:production": "npm run build && go run cmd/server/main.go",
+    "railway:local": "npm run build && go run cmd/server/main.go"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
