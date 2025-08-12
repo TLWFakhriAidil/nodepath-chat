@@ -843,6 +843,7 @@ const DeviceSettings: React.FC = () => {
                   <TableHead>ID ERP</TableHead>
                   <TableHead>ID Admin</TableHead>
                   <TableHead>Instance</TableHead>
+                  <TableHead className="text-center">Status Device</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
