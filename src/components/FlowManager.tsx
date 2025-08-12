@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,7 +56,7 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
     
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [loadFlows]);
+  }, []);
 
   useEffect(() => {
     if (selectedFlowId) {
@@ -67,7 +67,7 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
     }
   }, [selectedFlowId, flows]);
 
-  const loadFlows = useCallback(async () => {
+  const loadFlows = async () => {
     console.log('Loading flows in FlowManager...')
     const savedFlows = await getFlows();
     console.log('Loaded flows:', savedFlows)
@@ -77,7 +77,7 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
     if (selectedFlowId && !savedFlows.find(f => f.id === selectedFlowId)) {
       setSelectedFlowId(null);
     }
-  }, [selectedFlowId]);
+  };
 
   const handleDeleteFlow = async (flowId: string) => {
     await deleteFlow(flowId);

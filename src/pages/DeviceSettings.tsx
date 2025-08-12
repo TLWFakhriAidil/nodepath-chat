@@ -24,6 +24,7 @@ interface DeviceSettings {
   id_admin: string;
 }
 
+// DeviceForm component moved outside to prevent re-creation on every render
 const DeviceForm: React.FC<{
   settings: DeviceSettings;
   handleInputChange: (field: keyof DeviceSettings, value: string) => void;
@@ -37,6 +38,7 @@ const DeviceForm: React.FC<{
   setSettings: React.Dispatch<React.SetStateAction<DeviceSettings>>;
 }> = ({ settings, handleInputChange, generateDeviceId, generateWebhookId, handleSave, handleClose, isSaving, apiKeyOptions, providerOptions, setSettings }) => (
   <div className="space-y-6">
+    {/* Device ID Section */}
     <div className="space-y-4">
       <div>
         <Label className="text-slate-700 dark:text-slate-300 font-medium">Device ID (VIEW ONLY)</Label>
@@ -50,6 +52,8 @@ const DeviceForm: React.FC<{
           <div className="flex gap-2">
             <Button
               onClick={() => {
+                console.log('🔘 GENERATE DEVICE BUTTON CLICKED');
+                console.log('📊 Button click timestamp:', new Date().toISOString());
                 generateDeviceId();
               }}
               disabled={isSaving}
@@ -57,6 +61,7 @@ const DeviceForm: React.FC<{
             >
               {isSaving ? 'GENERATING...' : 'GENERATE DEVICE'}
             </Button>
+
           </div>
         </div>
       </div>
@@ -81,6 +86,7 @@ const DeviceForm: React.FC<{
       </div>
     </div>
 
+    {/* API Key Options */}
     <div>
       <Label className="text-slate-700 dark:text-slate-300 font-medium mb-3 block">API Key Option</Label>
       <RadioGroup
@@ -103,6 +109,7 @@ const DeviceForm: React.FC<{
       </RadioGroup>
     </div>
 
+    {/* Provider Options */}
     <div>
       <Label className="text-slate-700 dark:text-slate-300 font-medium mb-3 block">Provider</Label>
       <RadioGroup
@@ -125,11 +132,13 @@ const DeviceForm: React.FC<{
       </RadioGroup>
     </div>
 
+    {/* Phone Number */}
     <div>
       <Label className="text-slate-700 dark:text-slate-300 font-medium">Phone Number</Label>
       <Input
         value={settings.phone_number}
         onChange={(e) => {
+          // Only allow numbers, spaces, hyphens, parentheses, and plus sign
           const value = e.target.value.replace(/[^0-9\s\-\(\)\+]/g, '');
           handleInputChange('phone_number', value);
         }}
@@ -140,6 +149,7 @@ const DeviceForm: React.FC<{
       />
     </div>
 
+    {/* API Key */}
     <div>
       <Label className="text-slate-700 dark:text-slate-300 font-medium">API Key https://openrouter.ai</Label>
       <Textarea
@@ -150,6 +160,7 @@ const DeviceForm: React.FC<{
       />
     </div>
 
+    {/* Required Input Fields */}
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div>
         <Label className="text-slate-700 dark:text-slate-300 font-medium">ID Device</Label>
@@ -183,6 +194,7 @@ const DeviceForm: React.FC<{
       </div>
     </div>
 
+    {/* Action Buttons */}
     <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
       <Button
         onClick={handleClose}
@@ -209,141 +221,155 @@ const DeviceForm: React.FC<{
 
 const DeviceSettings: React.FC = () => {
   const [devices, setDevices] = useState<DeviceSettings[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingDevice, setEditingDevice] = useState<DeviceSettings | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [currentSettings, setCurrentSettings] = useState<DeviceSettings>({
+  const [settings, setSettings] = useState<DeviceSettings>({
     id: '',
     device_id: '',
-    api_key_option: 'default',
+    api_key_option: 'chat_gpt_4_1_new',
     webhook_id: '',
-    provider: 'whatsapp',
+    provider: 'wablas',
     phone_number: '',
     api_key: '',
     id_device: '',
     id_erp: '',
     id_admin: ''
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingDevice, setEditingDevice] = useState<DeviceSettings | null>(null);
 
   const apiKeyOptions = [
-    { value: 'default', label: 'Use Default API Key' },
-    { value: 'custom', label: 'Use Custom API Key' }
+    { value: 'chat_gpt_so', label: 'Chat GPT So' },
+    { value: 'chat_gpt_5_mini', label: 'Chat GPT 5 Mini' },
+    { value: 'chat_gpt_4o', label: 'Chat GPT 4o' },
+    { value: 'chat_gpt_4_1_new', label: 'Chat GPT 4.1 (NEW)' },
+    { value: 'gemini_pro_25', label: 'GEMINI PRO 2.5' },
+    { value: 'gemini_pro_15', label: 'GEMINI PRO 1.5' }
   ];
 
   const providerOptions = [
-    { value: 'whatsapp', label: 'WhatsApp' },
-    { value: 'telegram', label: 'Telegram' },
-    { value: 'sms', label: 'SMS' }
+    { value: 'whacenter', label: 'Whacenter' },
+    { value: 'wablas', label: 'Wablas' },
+    { value: 'rvsb_wasap', label: 'RVSB WASAP' }
   ];
 
   useEffect(() => {
-    fetchDevices();
+    loadDeviceSettings();
   }, []);
 
-  const fetchDevices = async () => {
+  const loadDeviceSettings = async () => {
+    setIsLoading(true);
     try {
-      setLoading(true);
       const response = await fetch('/api/device-settings');
       if (response.ok) {
         const data = await response.json();
-        setDevices(data);
+        // Ensure data is an array, handle different response formats
+        if (Array.isArray(data)) {
+          setDevices(data);
+        } else if (data && Array.isArray(data.data)) {
+          setDevices(data.data);
+        } else if (data && data.success && Array.isArray(data.data)) {
+          setDevices(data.data);
+        } else {
+          console.warn('Unexpected API response format:', data);
+          setDevices([]);
+        }
       } else {
-        toast.error('Failed to fetch devices');
+        console.error('API response not ok:', response.status, response.statusText);
+        setDevices([]);
       }
     } catch (error) {
-      console.error('Error fetching devices:', error);
-      toast.error('Failed to fetch devices');
+      console.error('Error loading device settings:', error);
+      toast.error('Failed to load device settings');
+      setDevices([]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
-
-  const generateDeviceId = () => {
-    const timestamp = Date.now().toString();
-    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const deviceId = `DEV-${timestamp.slice(-6)}-${random}`;
-    setCurrentSettings(prev => ({ ...prev, device_id: deviceId }));
-  };
-
-  const generateWebhookId = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    const webhookUrl = `https://chatbot.growweb.com/chatgpt/SCVTC-S2/${result}`;
-    setCurrentSettings(prev => ({ ...prev, webhook_id: webhookUrl }));
-  };
-
-  const handleInputChange = (field: keyof DeviceSettings, value: string) => {
-    setCurrentSettings(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
+    setIsSaving(true);
     try {
-      setIsSaving(true);
-      const url = editingDevice ? `/api/device-settings/${editingDevice.id}` : '/api/device-settings';
-      const method = editingDevice ? 'PUT' : 'POST';
+      const method = settings.id ? 'PUT' : 'POST';
+      const url = settings.id ? `/api/device-settings/${settings.id}` : '/api/device-settings';
       
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(currentSettings),
+        body: JSON.stringify(settings),
       });
 
       if (response.ok) {
-        toast.success(editingDevice ? 'Device updated successfully!' : 'Device created successfully!');
-        setIsDialogOpen(false);
-        setEditingDevice(null);
-        setCurrentSettings({
-          id: '',
-          device_id: '',
-          api_key_option: 'default',
-          webhook_id: '',
-          provider: 'whatsapp',
-          phone_number: '',
-          api_key: '',
-          id_device: '',
-          id_erp: '',
-          id_admin: ''
-        });
-        fetchDevices();
+        const savedSettings = await response.json();
+        toast.success('Device settings saved successfully!');
+        setIsModalOpen(false);
+        resetForm();
+        loadDeviceSettings(); // Reload the table
       } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to save device');
+        throw new Error('Failed to save settings');
       }
     } catch (error) {
-      console.error('Error saving device:', error);
-      toast.error('Failed to save device');
+      console.error('Error saving device settings:', error);
+      toast.error('Failed to save device settings');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleEdit = (device: DeviceSettings) => {
-    setEditingDevice(device);
-    setCurrentSettings({ ...device });
-    setIsDialogOpen(true);
+  const handleInputChange = (field: keyof DeviceSettings, value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
-  const handleDelete = async (deviceId: string) => {
-    if (!confirm('Are you sure you want to delete this device?')) {
-      return;
-    }
+  const handleClose = () => {
+    setIsModalOpen(false);
+    resetForm();
+  };
 
+  const resetForm = () => {
+    setSettings({
+      id: '',
+      device_id: '',
+      api_key_option: 'chat_gpt_4_1_new',
+      webhook_id: '',
+      provider: 'wablas',
+      phone_number: '',
+      api_key: '',
+      id_device: '',
+      id_erp: '',
+      id_admin: ''
+    });
+    setEditingDevice(null);
+  };
+
+  const handleNewDevice = () => {
+    resetForm();
+    setIsModalOpen(true);
+  };
+
+  const handleEditDevice = (device: DeviceSettings) => {
+    setSettings(device);
+    setEditingDevice(device);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteDevice = async (deviceId: string) => {
+    if (!confirm('Are you sure you want to delete this device?')) return;
+    
     try {
       const response = await fetch(`/api/device-settings/${deviceId}`, {
         method: 'DELETE',
       });
-
+      
       if (response.ok) {
         toast.success('Device deleted successfully!');
-        fetchDevices();
+        loadDeviceSettings();
       } else {
-        toast.error('Failed to delete device');
+        throw new Error('Failed to delete device');
       }
     } catch (error) {
       console.error('Error deleting device:', error);
@@ -351,151 +377,518 @@ const DeviceSettings: React.FC = () => {
     }
   };
 
-  const handleClose = () => {
-    setIsDialogOpen(false);
-    setEditingDevice(null);
-    setCurrentSettings({
-      id: '',
-      device_id: '',
-      api_key_option: 'default',
-      webhook_id: '',
-      provider: 'whatsapp',
-      phone_number: '',
-      api_key: '',
-      id_device: '',
-      id_erp: '',
-      id_admin: ''
+  const generateDeviceId = async () => {
+    console.log('=== DEVICE GENERATION STARTED ===');
+    console.log('🚀 generateDeviceId function called');
+    console.log('📋 Current settings state:', JSON.stringify(settings, null, 2));
+    
+    // Enhanced validation with detailed logging
+    console.log('🔍 Starting validation checks...');
+    const validationErrors = [];
+    
+    console.log('📞 Checking phone_number:', {
+      value: settings.phone_number,
+      type: typeof settings.phone_number,
+      trimmed: settings.phone_number?.trim(),
+      isEmpty: !settings.phone_number?.trim()
     });
+    if (!settings.phone_number?.trim()) {
+      console.log('❌ Phone number validation failed');
+      validationErrors.push('Phone number is required');
+    } else {
+      console.log('✅ Phone number validation passed');
+    }
+    
+    console.log('📱 Checking id_device:', {
+      value: settings.id_device,
+      type: typeof settings.id_device,
+      trimmed: settings.id_device?.trim(),
+      isEmpty: !settings.id_device?.trim()
+    });
+    if (!settings.id_device?.trim()) {
+      console.log('❌ ID Device validation failed');
+      validationErrors.push('ID Device is required');
+    } else {
+      console.log('✅ ID Device validation passed');
+    }
+    
+    console.log('🏢 Checking provider:', {
+      value: settings.provider,
+      type: typeof settings.provider,
+      trimmed: settings.provider?.trim(),
+      isEmpty: !settings.provider?.trim()
+    });
+    if (!settings.provider?.trim()) {
+      console.log('❌ Provider validation failed');
+      validationErrors.push('Provider is required');
+    } else {
+      console.log('✅ Provider validation passed');
+    }
+    
+    console.log('🔑 Checking api_key:', {
+      value: settings.api_key ? '[HIDDEN]' : settings.api_key,
+      type: typeof settings.api_key,
+      length: settings.api_key?.length || 0,
+      trimmed_length: settings.api_key?.trim()?.length || 0,
+      isEmpty: !settings.api_key?.trim()
+    });
+    if (!settings.api_key?.trim()) {
+      console.log('❌ API Key validation failed');
+      validationErrors.push('API Key is required');
+    } else {
+      console.log('✅ API Key validation passed');
+    }
+    
+    console.log('📊 Validation summary:', {
+      totalErrors: validationErrors.length,
+      errors: validationErrors
+    });
+    
+    if (validationErrors.length > 0) {
+      console.log('🚫 VALIDATION FAILED - Stopping execution');
+      console.log('❌ Validation errors:', validationErrors);
+      const errorMessage = validationErrors.join(', ');
+      console.log('🔔 Showing toast error:', errorMessage);
+      
+      // Force toast to show
+      try {
+        toast.error(`Validation Error: ${errorMessage}`);
+        console.log('✅ Toast error displayed successfully');
+      } catch (toastError) {
+        console.error('❌ Failed to show toast:', toastError);
+        // Fallback: show browser alert
+        alert(`Validation Error: ${errorMessage}`);
+      }
+      
+      return;
+    }
+    
+    console.log('✅ ALL VALIDATIONS PASSED - Proceeding with device generation');
+
+    console.log('Validation passed, starting device generation');
+    setIsSaving(true);
+    toast.info('Generating device... Please wait');
+
+    try {
+      // Get Railway deployment URL from window.location or use environment
+      const baseUrl = window.location.origin;
+      const webhookUrl = `${baseUrl}/api/webhook/${settings.id_device}`;
+      
+      let apiResponse;
+      
+      if (settings.provider === 'whacenter') {
+        console.log('🔵 Using Whacenter provider');
+        console.log('📡 Preparing Whacenter API request...');
+        
+        // Whacenter API integration
+        const whacenterData = {
+          device_name: settings.id_device,
+          webhook_url: webhookUrl
+        };
+        
+        const requestBody = {
+          ...settings,
+          webhook_url: webhookUrl,
+          device_data: whacenterData
+        };
+        
+        console.log('📤 Whacenter Request Details:');
+        console.log('  - Endpoint: /api/device-settings/generate-whacenter');
+        console.log('  - Method: POST');
+        console.log('  - Headers: Content-Type: application/json');
+        console.log('  - Body:', JSON.stringify(requestBody, null, 2));
+        
+        const startTime = Date.now();
+        
+        try {
+          console.log('🌐 Making network request to Whacenter API...');
+          
+          apiResponse = await fetch('/api/device-settings/generate-whacenter', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          
+          console.log(`📥 Whacenter API Response (${duration}ms):`);
+          console.log('  - Status:', apiResponse.status, apiResponse.statusText);
+          console.log('  - OK:', apiResponse.ok);
+          console.log('  - Headers:', Object.fromEntries(apiResponse.headers.entries()));
+          
+          // Clone response to read body without consuming it
+          const responseClone = apiResponse.clone();
+          const responseText = await responseClone.text();
+          console.log('  - Body Length:', responseText.length);
+          console.log('  - Body:', responseText);
+          
+          // Log network timing
+          console.log('⏱️ Network Timing:', {
+            duration: `${duration}ms`,
+            url: '/api/device-settings/generate-whacenter',
+            method: 'POST',
+            status: apiResponse.status,
+            ok: apiResponse.ok
+          });
+          
+        } catch (fetchError) {
+          console.error('💥 NETWORK ERROR - Whacenter API Request Failed');
+          console.error('❌ Fetch Error Details:', {
+            name: fetchError.name,
+            message: fetchError.message,
+            stack: fetchError.stack,
+            cause: fetchError.cause
+          });
+          console.error('🌐 Network Request Info:', {
+            url: '/api/device-settings/generate-whacenter',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            bodyLength: JSON.stringify(requestBody).length
+          });
+          throw new Error(`Network Error: ${fetchError.message}`);
+        }
+      } else if (settings.provider === 'wablas') {
+        console.log('🟢 Using Wablas provider');
+        console.log('📡 Preparing Wablas API request...');
+        
+        // Wablas API integration
+        const wablasData = {
+          device_name: settings.id_device,
+          webhook_url: webhookUrl
+        };
+        
+        const requestBody = {
+          ...settings,
+          webhook_url: webhookUrl,
+          device_data: wablasData
+        };
+        
+        console.log('📤 Wablas Request Details:');
+        console.log('  - Endpoint: /api/device-settings/generate-wablas');
+        console.log('  - Method: POST');
+        console.log('  - Headers: Content-Type: application/json');
+        console.log('  - Body:', JSON.stringify(requestBody, null, 2));
+        
+        const startTime = Date.now();
+        
+        try {
+          console.log('🌐 Making network request to Wablas API...');
+          
+          apiResponse = await fetch('/api/device-settings/generate-wablas', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          
+          console.log(`📥 Wablas API Response (${duration}ms):`);
+          console.log('  - Status:', apiResponse.status, apiResponse.statusText);
+          console.log('  - OK:', apiResponse.ok);
+          console.log('  - Headers:', Object.fromEntries(apiResponse.headers.entries()));
+          
+          // Clone response to read body without consuming it
+          const responseClone = apiResponse.clone();
+          const responseText = await responseClone.text();
+          console.log('  - Body Length:', responseText.length);
+          console.log('  - Body:', responseText);
+          
+          // Log network timing
+          console.log('⏱️ Network Timing:', {
+            duration: `${duration}ms`,
+            url: '/api/device-settings/generate-wablas',
+            method: 'POST',
+            status: apiResponse.status,
+            ok: apiResponse.ok
+          });
+          
+        } catch (fetchError) {
+          console.error('💥 NETWORK ERROR - Wablas API Request Failed');
+          console.error('❌ Fetch Error Details:', {
+            name: fetchError.name,
+            message: fetchError.message,
+            stack: fetchError.stack,
+            cause: fetchError.cause
+          });
+          console.error('🌐 Network Request Info:', {
+            url: '/api/device-settings/generate-wablas',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            bodyLength: JSON.stringify(requestBody).length
+          });
+          throw new Error(`Network Error: ${fetchError.message}`);
+        }
+      } else {
+        // Fallback: Generate local device ID
+        const deviceId = `C${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}H`;
+        handleInputChange('device_id', deviceId);
+        handleInputChange('webhook_id', webhookUrl);
+        toast.success('Device ID generated successfully!');
+        setIsSaving(false);
+        return;
+      }
+
+      console.log('🔍 Processing API response...');
+      
+      if (apiResponse && apiResponse.ok) {
+        console.log('✅ API response is OK, parsing JSON...');
+        try {
+          const result = await apiResponse.json();
+          console.log('📋 Parsed API result:', JSON.stringify(result, null, 2));
+          
+          if (result.success) {
+            console.log('🎉 API call successful! Updating form data...');
+            
+            // Track what data was received
+            const receivedData = {
+              device_id: result.data?.device_id,
+              webhook_url: result.data?.webhook_url,
+              api_key: result.data?.api_key,
+              provider: result.data?.provider
+            };
+            console.log('📊 Received data from provider:', receivedData);
+            
+            // Update form with generated data
+            if (result.data?.device_id) {
+              console.log('✏️ Setting device_id:', result.data.device_id);
+              handleInputChange('device_id', result.data.device_id);
+            }
+            if (result.data?.webhook_url) {
+              console.log('✏️ Setting webhook_id:', result.data.webhook_url);
+              handleInputChange('webhook_id', result.data.webhook_url);
+            }
+            if (result.data?.api_key) {
+              console.log('✏️ Setting api_key:', result.data.api_key);
+              handleInputChange('api_key', result.data.api_key);
+            }
+            
+            console.log('🎊 Showing success toast');
+            toast.success(`Device generated successfully via ${settings.provider}!`);
+            
+            // Close modal and reset form after successful generation
+            console.log('🔄 Closing modal and resetting form...');
+            setIsModalOpen(false);
+            resetForm();
+            
+            // Refresh the device settings table to show the new data
+            console.log('🔄 Refreshing device settings table...');
+            loadDeviceSettings();
+            
+            console.log('=== DEVICE GENERATION COMPLETED SUCCESSFULLY ===');
+          } else {
+            console.error('❌ API call failed with message:', result.message);
+            console.error('❌ Full error response:', result);
+            toast.error(`Provider Error: ${result.message || 'Unknown error from provider'}`);
+            throw new Error(result.message || 'Failed to generate device');
+          }
+        } catch (jsonError) {
+          console.error('❌ Failed to parse JSON response:', jsonError);
+          const responseText = await apiResponse.text();
+          console.error('❌ Raw response text:', responseText);
+          toast.error('Invalid response format from server');
+          throw new Error('Invalid response format');
+        }
+      } else {
+        console.error('❌ API response not OK');
+        console.error('❌ Status:', apiResponse?.status, apiResponse?.statusText);
+        
+        try {
+          const errorText = await apiResponse?.text();
+          console.error('❌ Error response body:', errorText);
+          
+          // Try to parse error as JSON for better error messages
+          try {
+            const errorJson = JSON.parse(errorText);
+            const errorMessage = errorJson.message || errorJson.error || 'Unknown server error';
+            toast.error(`Server Error (${apiResponse?.status}): ${errorMessage}`);
+          } catch {
+            toast.error(`Server Error (${apiResponse?.status}): ${errorText || 'Unknown error'}`);
+          }
+        } catch (readError) {
+          console.error('❌ Failed to read error response:', readError);
+          toast.error(`Network Error: Failed to communicate with server (${apiResponse?.status})`);
+        }
+        
+        throw new Error(`HTTP ${apiResponse?.status}: Failed to communicate with device provider`);
+      }
+    } catch (error) {
+      console.error('💥 DEVICE GENERATION FAILED');
+      console.error('❌ Error generating device:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        provider: settings.provider,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Show user-friendly error message
+      const userErrorMessage = error.message || 'Unknown error occurred';
+      toast.error(`Device Generation Failed: ${userErrorMessage}`);
+      
+      // Fallback: Generate local device ID
+      console.log('🔄 Generating fallback local device ID...');
+      const deviceId = `C${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}H`;
+      console.log('🆔 Generated fallback device ID:', deviceId);
+      handleInputChange('device_id', deviceId);
+      toast.info('Generated local device ID as fallback');
+      console.log('=== FALLBACK DEVICE GENERATION COMPLETED ===');
+    } finally {
+      console.log('🏁 Device generation process completed, setting isSaving to false');
+      setIsSaving(false);
+    }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard!');
+  const generateWebhookId = () => {
+    if (!settings.id_device.trim()) {
+      toast.error('Please enter ID Device first before generating webhook');
+      return;
+    }
+    
+    // Get Railway deployment URL from window.location
+    const baseUrl = window.location.origin;
+    const webhookId = `${baseUrl}/api/webhook/${settings.id_device}`;
+    handleInputChange('webhook_id', webhookId);
+    toast.success('Webhook ID generated successfully!');
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
+
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <Card className="border-slate-200 dark:border-slate-700 shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Settings className="h-6 w-6" />
-                Device Settings
-              </CardTitle>
-            </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button 
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 flex items-center gap-2"
-                  onClick={() => {
-                    setEditingDevice(null);
-                    setCurrentSettings({
-                      id: '',
-                      device_id: '',
-                      api_key_option: 'default',
-                      webhook_id: '',
-                      provider: 'whatsapp',
-                      phone_number: '',
-                      api_key: '',
-                      id_device: '',
-                      id_erp: '',
-                      id_admin: ''
-                    });
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add New Device
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Smartphone className="h-5 w-5" />
-                    {editingDevice ? 'Edit Device' : 'Add New Device'}
-                  </DialogTitle>
-                </DialogHeader>
-                <DeviceForm
-                  settings={currentSettings}
-                  handleInputChange={handleInputChange}
-                  generateDeviceId={generateDeviceId}
-                  generateWebhookId={generateWebhookId}
-                  handleSave={handleSave}
-                  handleClose={handleClose}
-                  isSaving={isSaving}
-                  apiKeyOptions={apiKeyOptions}
-                  providerOptions={providerOptions}
-                  setSettings={setCurrentSettings}
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+            Device Settings
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400">
+            Manage all your device configurations and webhook integrations
+          </p>
+        </div>
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogTrigger asChild>
+            <Button 
+              onClick={handleNewDevice}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New Device
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Smartphone className="h-5 w-5" />
+                {editingDevice ? 'Edit Device' : 'Add New Device'}
+              </DialogTitle>
+            </DialogHeader>
+            <DeviceForm 
+              settings={settings}
+              handleInputChange={handleInputChange}
+              generateDeviceId={generateDeviceId}
+              generateWebhookId={generateWebhookId}
+              handleSave={handleSave}
+              handleClose={handleClose}
+              isSaving={isSaving}
+              apiKeyOptions={apiKeyOptions}
+              providerOptions={providerOptions}
+              setSettings={setSettings}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Devices Table */}
+      <Card className="border-0 shadow-xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            All Devices
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           {devices.length === 0 ? (
-            <div className="text-center py-12">
-              <Smartphone className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-slate-600 dark:text-slate-300 mb-2">No devices configured</h3>
-              <p className="text-slate-500 dark:text-slate-400 mb-4">Get started by adding your first device</p>
-            </div>
+             <div className="text-center py-8">
+               <Smartphone className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+               <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">No devices found</h3>
+               <p className="text-slate-600 dark:text-slate-400">Get started by adding your first device configuration using the "New Device" button above.</p>
+             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>ID</TableHead>
                   <TableHead>Device ID</TableHead>
                   <TableHead>Provider</TableHead>
                   <TableHead>Phone Number</TableHead>
                   <TableHead>API Key Option</TableHead>
+                  <TableHead>Webhook ID</TableHead>
+                  <TableHead>API Key</TableHead>
                   <TableHead>ID Device</TableHead>
                   <TableHead>ID ERP</TableHead>
                   <TableHead>ID Admin</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>Instance</TableHead>
+                  <TableHead className="text-center">Status Device</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {devices.map((device) => (
                   <TableRow key={device.id}>
-                    <TableCell className="font-mono text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate max-w-[150px]">{device.device_id}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => copyToClipboard(device.device_id)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
+                    <TableCell className="font-medium">{device.id}</TableCell>
+                    <TableCell>
+                      {device.provider === 'wablas' 
+                        ? (device.device_id || 'Not generated')
+                        : device.provider === 'whacenter'
+                        ? (device.instance || 'Not generated')
+                        : 'Not generated'
+                      }
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {device.provider}
-                      </Badge>
+                      <Badge variant="outline">{device.provider}</Badge>
                     </TableCell>
-                    <TableCell>{device.phone_number}</TableCell>
-                    <TableCell>
-                      <Badge variant={device.api_key_option === 'custom' ? 'default' : 'secondary'}>
-                        {device.api_key_option === 'custom' ? 'Custom' : 'Default'}
-                      </Badge>
-                    </TableCell>
+                    <TableCell>{device.phone_number || 'Not set'}</TableCell>
+                    <TableCell>{apiKeyOptions.find(opt => opt.value === device.api_key_option)?.label}</TableCell>
+                    <TableCell>{device.webhook_id || 'Not set'}</TableCell>
+                    <TableCell>{device.api_key ? '***' : 'Not set'}</TableCell>
                     <TableCell>{device.id_device}</TableCell>
                     <TableCell>{device.id_erp}</TableCell>
                     <TableCell>{device.id_admin}</TableCell>
+                    <TableCell>{device.instance || 'Not set'}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <Badge 
+                        variant={device.device_id ? "default" : "secondary"}
+                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          console.log('Status clicked for device:', device);
+                          // TODO: Add popup functionality here
+                        }}
+                      >
+                        Status Device
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEdit(device)}
+                          onClick={() => handleEditDevice(device)}
                           className="h-8 w-8 p-0"
                         >
                           <Edit className="h-4 w-4" />
@@ -503,7 +896,7 @@ const DeviceSettings: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(device.id)}
+                          onClick={() => handleDeleteDevice(device.id)}
                           className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -520,5 +913,7 @@ const DeviceSettings: React.FC = () => {
     </div>
   );
 };
+
+
 
 export default DeviceSettings;

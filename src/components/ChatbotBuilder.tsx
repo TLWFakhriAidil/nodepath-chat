@@ -214,7 +214,7 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     };
     
     loadFlowData();
-  }, [flowId, setNodes, setEdges, toast, deleteNode, updateNodeData, setFlowName, setCurrentFlowId, setFieldInstance, setOpenRouterApiKey]);
+  }, [flowId, setNodes, setEdges, toast, deleteNode, updateNodeData]);
 
   const saveFlowToStorage = useCallback(async () => {
     if (!flowName.trim()) {

@@ -24,7 +24,7 @@ COPY eslint.config.js ./
 RUN npm run build
 
 # Backend build stage
-FROM golang:1.23-alpine AS backend-builder
+FROM golang:1.24-alpine AS backend-builder
 
 # Install build dependencies
 RUN apk add --no-cache git build-base ca-certificates

@@ -2,6 +2,8 @@ module nodepath-chat
 
 go 1.23.0
 
+toolchain go1.24.6
+
 require (
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/gofiber/fiber/v2 v2.52.0
