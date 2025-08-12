@@ -368,14 +368,123 @@ const DeviceSettings: React.FC = () => {
     }
   };
 
-  const generateDeviceId = () => {
-    const deviceId = `C${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}H`;
-    handleInputChange('device_id', deviceId);
+  const generateDeviceId = async () => {
+    // Validation: Check if phone number and id_device are provided
+    if (!settings.phone_number.trim()) {
+      toast.error('Please enter a phone number before generating device');
+      return;
+    }
+    
+    if (!settings.id_device.trim()) {
+      toast.error('Please enter ID Device before generating device');
+      return;
+    }
+
+    if (!settings.phone_number.trim() && !settings.id_device.trim()) {
+      toast.error('Please enter both phone number and ID Device before generating device');
+      return;
+    }
+
+    setIsSaving(true);
+    toast.info('Generating device... Please wait');
+
+    try {
+      // Get Railway deployment URL from window.location or use environment
+      const baseUrl = window.location.origin;
+      const webhookUrl = `${baseUrl}/api/webhook/${settings.id_device}`;
+      
+      let apiResponse;
+      
+      if (settings.provider === 'whacenter') {
+        // Whacenter API integration
+        const whacenterData = {
+          device_name: settings.id_device,
+          webhook_url: webhookUrl
+        };
+        
+        apiResponse = await fetch('/api/device-settings/generate-whacenter', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...settings,
+            webhook_url: webhookUrl,
+            device_data: whacenterData
+          })
+        });
+      } else if (settings.provider === 'wablas') {
+        // Wablas API integration
+        const wablasData = {
+          device_name: settings.id_device,
+          webhook_url: webhookUrl
+        };
+        
+        apiResponse = await fetch('/api/device-settings/generate-wablas', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...settings,
+            webhook_url: webhookUrl,
+            device_data: wablasData
+          })
+        });
+      } else {
+        // Fallback: Generate local device ID
+        const deviceId = `C${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}H`;
+        handleInputChange('device_id', deviceId);
+        handleInputChange('webhook_id', webhookUrl);
+        toast.success('Device ID generated successfully!');
+        setIsSaving(false);
+        return;
+      }
+
+      if (apiResponse && apiResponse.ok) {
+        const result = await apiResponse.json();
+        
+        if (result.success) {
+          // Update form with generated data
+          if (result.data.device_id) {
+            handleInputChange('device_id', result.data.device_id);
+          }
+          if (result.data.webhook_url) {
+            handleInputChange('webhook_id', result.data.webhook_url);
+          }
+          if (result.data.api_key) {
+            handleInputChange('api_key', result.data.api_key);
+          }
+          
+          toast.success(`Device generated successfully via ${settings.provider}!`);
+        } else {
+          throw new Error(result.message || 'Failed to generate device');
+        }
+      } else {
+        throw new Error('Failed to communicate with device provider');
+      }
+    } catch (error) {
+      console.error('Error generating device:', error);
+      toast.error(`Failed to generate device: ${error.message}`);
+      
+      // Fallback: Generate local device ID
+      const deviceId = `C${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}H`;
+      handleInputChange('device_id', deviceId);
+      toast.info('Generated local device ID as fallback');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const generateWebhookId = () => {
-    const randomString = Math.random().toString(36).substring(2, 15);
-    const webhookId = `https://chatbot.growweb.com/chatgpt/SCVTC-S2/${randomString}`;
+    if (!settings.id_device.trim()) {
+      toast.error('Please enter ID Device first before generating webhook');
+      return;
+    }
+    
+    // Get Railway deployment URL from window.location
+    const baseUrl = window.location.origin;
+    const webhookId = `${baseUrl}/api/webhook/${settings.id_device}`;
     handleInputChange('webhook_id', webhookId);
     toast.success('Webhook ID generated successfully!');
   };
