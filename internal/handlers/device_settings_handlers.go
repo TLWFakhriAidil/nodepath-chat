@@ -174,9 +174,9 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 		whacenterAPIKey = req.DeviceID
 	}
 
-	// Prepare Whacenter API request with GET parameters
-	whacenterURL := fmt.Sprintf("https://api.whacenter.com/api/addDevice?api_key=%s&name=%s&number=%s", 
-		whacenterAPIKey, req.IDDevice, req.WebhookURL)
+	// Prepare Whacenter API request with GET parameters including webhook
+	whacenterURL := fmt.Sprintf("https://api.whacenter.com/api/addDevice?api_key=%s&name=%s&number=%s&webhook=%s", 
+		whacenterAPIKey, req.IDDevice, req.PhoneNumber, url.QueryEscape(req.WebhookURL))
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -254,7 +254,7 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	}
 
 	// Check if API call was successful
-	if status, ok := apiResponse["status"].(bool); !ok || !status {
+	if success, ok := apiResponse["success"].(bool); !ok || !success {
 		message := "Unknown error"
 		if msg, exists := apiResponse["message"].(string); exists {
 			message = msg
@@ -268,8 +268,51 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 		return h.errorResponse(c, 500, "Invalid API response format")
 	}
 
-	deviceID, _ := data["device_id"].(string)
-	apiKey, _ := data["api_key"].(string)
+	// Extract device information from nested device object
+	device, ok := data["device"].(map[string]interface{})
+	if !ok {
+		return h.errorResponse(c, 500, "Invalid device data format")
+	}
+
+	deviceID, _ := device["device_id"].(string)
+	apiKey, _ := device["device_key"].(string)
+	
+	// If device_key is empty, use the whacenterAPIKey as fallback
+	if apiKey == "" {
+		apiKey = whacenterAPIKey
+	}
+
+	// Save device data to database
+	createReq := &models.CreateDeviceSettingsRequest{
+		DeviceID:     deviceID,
+		APIKeyOption: req.APIKeyOption,
+		WebhookID:    req.WebhookURL,
+		Provider:     "whacenter",
+		PhoneNumber:  req.PhoneNumber,
+		APIKey:       req.APIKey, // Preserve the original OpenRouter API key
+		IDDevice:     req.IDDevice,
+		IDERP:        req.IDERP,
+		IDAdmin:      req.IDAdmin,
+		Instance:     apiKey, // Store Whacenter API key as instance
+	}
+
+	// Debug logging for database save
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"webhook_id": req.WebhookURL,
+		"instance": apiKey,
+		"provider": "whacenter",
+		"phone_number": req.PhoneNumber,
+	}).Info("💾 WHACENTER: Saving device data to database")
+
+	// Upsert device setting in database (update if exists, create if not)
+	deviceSetting, err := h.deviceSettingsService.Upsert(createReq)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to save device setting to database")
+		// Continue with success response even if database save fails
+	} else {
+		logrus.WithField("device_setting_id", deviceSetting.ID).Info("Device setting saved to database")
+	}
 
 	// Log successful device generation
 	logrus.WithFields(logrus.Fields{
@@ -508,15 +551,15 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		WebhookID:    webhookURL,
 		Provider:     "wablas",
 		PhoneNumber:  req.PhoneNumber,
-		APIKey:       newAuthHeader,
+		APIKey:       req.APIKey, // Preserve the original OpenRouter API key
 		IDDevice:     req.IDDevice,
 		IDERP:        req.IDERP,
 		IDAdmin:      req.IDAdmin,
-		Instance:     newAuthHeader, // Store API key as instance
+		Instance:     newAuthHeader, // Store Wablas API key as instance
 	}
 
-	// Create device setting in database
-	deviceSetting, err := h.deviceSettingsService.Create(createReq)
+	// Upsert device setting in database (update if exists, create if not)
+	deviceSetting, err := h.deviceSettingsService.Upsert(createReq)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to save device setting to database")
 		// Continue with success response even if database save fails

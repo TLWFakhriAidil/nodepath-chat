@@ -105,6 +105,69 @@ func (s *DeviceSettingsService) GetByID(id string) (*models.DeviceSettings, erro
 	return setting, nil
 }
 
+// GetByIDDevice retrieves a device setting by id_device field
+func (s *DeviceSettingsService) GetByIDDevice(idDevice string) (*models.DeviceSettings, error) {
+	query := `
+		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
+		       id_device, id_erp, id_admin, instance, created_at, updated_at
+		FROM device_setting_nodepath
+		WHERE id_device = ?
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+
+	setting := &models.DeviceSettings{}
+	err := s.db.QueryRow(query, idDevice).Scan(
+		&setting.ID,
+		&setting.DeviceID,
+		&setting.APIKeyOption,
+		&setting.WebhookID,
+		&setting.Provider,
+		&setting.PhoneNumber,
+		&setting.APIKey,
+		&setting.IDDevice,
+		&setting.IDERP,
+		&setting.IDAdmin,
+		&setting.Instance,
+		&setting.CreatedAt,
+		&setting.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("device setting not found")
+		}
+		return nil, fmt.Errorf("failed to get device setting: %w", err)
+	}
+
+	return setting, nil
+}
+
+// Upsert creates a new device setting or updates existing one based on id_device
+func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) (*models.DeviceSettings, error) {
+	// Check if a device setting already exists for this id_device
+	existing, err := s.GetByIDDevice(req.IDDevice)
+	if err == nil {
+		// Device setting exists, update it
+		updateReq := &models.UpdateDeviceSettingsRequest{
+			DeviceID:     req.DeviceID,
+			APIKeyOption: req.APIKeyOption,
+			WebhookID:    req.WebhookID,
+			Provider:     req.Provider,
+			PhoneNumber:  req.PhoneNumber,
+			APIKey:       req.APIKey,
+			IDDevice:     req.IDDevice,
+			IDERP:        req.IDERP,
+			IDAdmin:      req.IDAdmin,
+			Instance:     req.Instance,
+		}
+		return s.Update(existing.ID, updateReq)
+	}
+	
+	// Device setting doesn't exist, create new one
+	return s.Create(req)
+}
+
 // Create creates a new device setting
 func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) (*models.DeviceSettings, error) {
 	id := uuid.New().String()
@@ -121,6 +184,34 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 		provider = "wablas"
 	}
 
+	// Convert strings to sql.NullString for nullable fields
+	var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
+	
+	if req.DeviceID != "" {
+		deviceID = sql.NullString{String: req.DeviceID, Valid: true}
+	}
+	if req.WebhookID != "" {
+		webhookID = sql.NullString{String: req.WebhookID, Valid: true}
+	}
+	if req.PhoneNumber != "" {
+		phoneNumber = sql.NullString{String: req.PhoneNumber, Valid: true}
+	}
+	if req.APIKey != "" {
+		apiKey = sql.NullString{String: req.APIKey, Valid: true}
+	}
+	if req.IDDevice != "" {
+		idDevice = sql.NullString{String: req.IDDevice, Valid: true}
+	}
+	if req.IDERP != "" {
+		idERP = sql.NullString{String: req.IDERP, Valid: true}
+	}
+	if req.IDAdmin != "" {
+		idAdmin = sql.NullString{String: req.IDAdmin, Valid: true}
+	}
+	if req.Instance != "" {
+		instance = sql.NullString{String: req.Instance, Valid: true}
+	}
+
 	query := `
 		INSERT INTO device_setting_nodepath 
 		(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, instance, created_at, updated_at)
@@ -129,16 +220,16 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 
 	_, err := s.db.Exec(query,
 		id,
-		req.DeviceID,
+		deviceID,
 		apiKeyOption,
-		req.WebhookID,
+		webhookID,
 		provider,
-		req.PhoneNumber,
-		req.APIKey,
-		req.IDDevice,
-		req.IDERP,
-		req.IDAdmin,
-		req.Instance,
+		phoneNumber,
+		apiKey,
+		idDevice,
+		idERP,
+		idAdmin,
+		instance,
 		now,
 		now,
 	)
@@ -168,34 +259,34 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 
 	// Update fields if provided
 	if req.DeviceID != "" {
-		existing.DeviceID = req.DeviceID
+		existing.DeviceID = sql.NullString{String: req.DeviceID, Valid: true}
 	}
 	if req.APIKeyOption != "" {
 		existing.APIKeyOption = req.APIKeyOption
 	}
 	if req.WebhookID != "" {
-		existing.WebhookID = req.WebhookID
+		existing.WebhookID = sql.NullString{String: req.WebhookID, Valid: true}
 	}
 	if req.Provider != "" {
 		existing.Provider = req.Provider
 	}
 	if req.PhoneNumber != "" {
-		existing.PhoneNumber = req.PhoneNumber
+		existing.PhoneNumber = sql.NullString{String: req.PhoneNumber, Valid: true}
 	}
 	if req.APIKey != "" {
-		existing.APIKey = req.APIKey
+		existing.APIKey = sql.NullString{String: req.APIKey, Valid: true}
 	}
 	if req.IDDevice != "" {
-		existing.IDDevice = req.IDDevice
+		existing.IDDevice = sql.NullString{String: req.IDDevice, Valid: true}
 	}
 	if req.IDERP != "" {
-		existing.IDERP = req.IDERP
+		existing.IDERP = sql.NullString{String: req.IDERP, Valid: true}
 	}
 	if req.IDAdmin != "" {
-		existing.IDAdmin = req.IDAdmin
+		existing.IDAdmin = sql.NullString{String: req.IDAdmin, Valid: true}
 	}
 	if req.Instance != "" {
-		existing.Instance = req.Instance
+		existing.Instance = sql.NullString{String: req.Instance, Valid: true}
 	}
 
 	existing.UpdatedAt = time.Now()
