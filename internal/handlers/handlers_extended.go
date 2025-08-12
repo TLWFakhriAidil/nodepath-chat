@@ -405,7 +405,7 @@ func (h *Handlers) processTestAIPromptNode(flow *models.ChatbotFlow, execution *
 }
 
 // processTestManualNode processes a manual node in test chat
-func (h *Handlers) processTestManualNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+func (h *Handlers) processTestManualNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, _ string) (string, error) {
 	// Get manual response from node data
 	response := "Thank you for your message."
 	if msg, ok := node.Data["message"].(string); ok && msg != "" {

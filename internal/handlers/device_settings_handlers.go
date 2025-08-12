@@ -168,7 +168,16 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	}
 
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer "+req.APIKey)
+	// Check if user has existing device_id in database for Whacenter
+	var whacenterAPIKey string
+	if req.DeviceID == "" {
+		// Use the provided default Whacenter API key when device_id is empty
+		whacenterAPIKey = "abebe840-156c-441c-8252-da0342c5a07c"
+	} else {
+		// Use user's device_id as API key when device_id is not empty
+		whacenterAPIKey = req.DeviceID
+	}
+	request.Header.Set("Authorization", "Bearer "+whacenterAPIKey)
 
 	// Make request to Whacenter API
 	logrus.WithFields(logrus.Fields{
@@ -322,7 +331,19 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 		return h.errorResponse(c, 500, "Failed to create request")
 	}
 
-	request.Header.Set("Authorization", "Bearer "+req.APIKey)
+	// Check if user has existing device_id in database
+	var authHeader string
+	if req.DeviceID == "" {
+		// Use the provided default Wablas credentials when device_id is empty
+		wablasToken := "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY"
+		wablasSecretKey := "7hDkbW0f"
+		authHeader = fmt.Sprintf("%s.%s", wablasToken, wablasSecretKey)
+	} else {
+		// Use user's device_id as API key when device_id is not empty
+		authHeader = req.DeviceID
+	}
+	
+	request.Header.Set("Authorization", authHeader)
 	request.Header.Set("Content-Type", "application/json")
 
 	// Make request to Wablas API
@@ -401,11 +422,18 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	}
 
 	deviceID, _ := data["device"].(string)
-	deviceToken, _ := data["token"].(string)
-	deviceSecret, _ := data["secret_key"].(string)
 
-	// Combine token and secret for auth header
-	authHeader := fmt.Sprintf("%s.%s", deviceToken, deviceSecret)
+	// Use the same auth header logic for webhook configuration
+	// If device_id was empty, use default credentials, otherwise use device_id
+	var finalAuthHeader string
+	if req.DeviceID == "" {
+		wablasToken := "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY"
+		wablasSecretKey := "7hDkbW0f"
+		finalAuthHeader = fmt.Sprintf("%s.%s", wablasToken, wablasSecretKey)
+	} else {
+		finalAuthHeader = req.DeviceID
+	}
+	authHeader = finalAuthHeader
 
 	// Configure webhook URL with auth header
 	webhookURL := fmt.Sprintf("%s/%s", strings.TrimSuffix(req.WebhookURL, "/"), authHeader)
