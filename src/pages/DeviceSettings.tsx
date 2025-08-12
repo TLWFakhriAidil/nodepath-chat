@@ -832,13 +832,17 @@ const DeviceSettings: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>ID</TableHead>
                   <TableHead>Device ID</TableHead>
                   <TableHead>Provider</TableHead>
                   <TableHead>Phone Number</TableHead>
                   <TableHead>API Key Option</TableHead>
+                  <TableHead>Webhook ID</TableHead>
+                  <TableHead>API Key</TableHead>
                   <TableHead>ID Device</TableHead>
                   <TableHead>ID ERP</TableHead>
                   <TableHead>ID Admin</TableHead>
+                  <TableHead>Instance</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -846,7 +850,8 @@ const DeviceSettings: React.FC = () => {
               <TableBody>
                 {devices.map((device) => (
                   <TableRow key={device.id}>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium">{device.id}</TableCell>
+                    <TableCell>
                       {device.provider === 'wablas' 
                         ? (device.device_id || 'Not generated')
                         : device.provider === 'whacenter'
@@ -859,9 +864,12 @@ const DeviceSettings: React.FC = () => {
                     </TableCell>
                     <TableCell>{device.phone_number || 'Not set'}</TableCell>
                     <TableCell>{apiKeyOptions.find(opt => opt.value === device.api_key_option)?.label}</TableCell>
+                    <TableCell>{device.webhook_id || 'Not set'}</TableCell>
+                    <TableCell>{device.api_key ? '***' : 'Not set'}</TableCell>
                     <TableCell>{device.id_device}</TableCell>
                     <TableCell>{device.id_erp}</TableCell>
                     <TableCell>{device.id_admin}</TableCell>
+                    <TableCell>{device.instance || 'Not set'}</TableCell>
                     <TableCell>
                       <Badge variant={device.device_id ? 'default' : 'secondary'}>
                         {device.device_id ? 'Active' : 'Pending'}
