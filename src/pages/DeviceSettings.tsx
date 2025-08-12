@@ -209,7 +209,7 @@ const DeviceForm: React.FC<{
         className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 flex items-center gap-2"
       >
         {isSaving ? (
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+          <div className="animate-spin rounded-full h-4 w-4"></div>
         ) : (
           <Save className="h-4 w-4" />
         )}
@@ -871,8 +871,15 @@ const DeviceSettings: React.FC = () => {
                     <TableCell>{device.id_admin}</TableCell>
                     <TableCell>{device.instance || 'Not set'}</TableCell>
                     <TableCell>
-                      <Badge variant={device.device_id ? 'default' : 'secondary'}>
-                        {device.device_id ? 'Active' : 'Pending'}
+                      <Badge 
+                        variant={device.device_id ? "default" : "secondary"}
+                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          console.log('Status clicked for device:', device);
+                          // TODO: Add popup functionality here
+                        }}
+                      >
+                        Status Device
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
