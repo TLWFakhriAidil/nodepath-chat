@@ -42,6 +42,7 @@ func RunMigrations(db *sql.DB) error {
 	migrations := []string{
 		createFlowsTable,
 		createExecutionsTable,
+		createDeviceSettingsTable,
 	}
 
 	for i, migration := range migrations {
@@ -54,6 +55,10 @@ func RunMigrations(db *sql.DB) error {
 	// Add missing columns with error handling
 	if err := addMissingColumnsToFlowsTable(db); err != nil {
 		logrus.WithError(err).Warn("Some columns may already exist, continuing...")
+	}
+
+	if err := addMissingColumnsToDeviceSettingsTable(db); err != nil {
+		logrus.WithError(err).Warn("Some device settings columns may already exist, continuing...")
 	}
 
 	logrus.Info("Database migrations completed successfully")
@@ -95,6 +100,23 @@ CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
+const createDeviceSettingsTable = `
+CREATE TABLE IF NOT EXISTS device_setting_nodepath (
+    id VARCHAR(255) PRIMARY KEY,
+    device_id VARCHAR(255) NOT NULL,
+    api_key_option ENUM('chat_gpt_so', 'chat_gpt_5_mini', 'chat_gpt_4o', 'chat_gpt_4_1_new', 'gemini_pro_25', 'gemini_pro_15') DEFAULT 'chat_gpt_4_1_new',
+    webhook_id VARCHAR(500),
+    provider ENUM('whacenter', 'wablas', 'rvsb_wasap') DEFAULT 'wablas',
+    phone_number VARCHAR(20),
+    api_key TEXT,
+    id_device VARCHAR(255),
+    id_erp VARCHAR(255),
+    id_admin VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
 
 
 // addMissingColumnsToFlowsTable adds missing columns to the flows table
@@ -131,6 +153,44 @@ func addMissingColumnsToFlowsTable(db *sql.DB) error {
 			logrus.WithField("column", col.name).Info("Added missing column")
 		} else {
 			logrus.WithField("column", col.name).Debug("Column already exists")
+		}
+	}	
+	return nil
+}
+
+// addMissingColumnsToDeviceSettingsTable adds missing columns to the device settings table
+func addMissingColumnsToDeviceSettingsTable(db *sql.DB) error {
+	columns := []struct {
+		name string
+		definition string
+	}{
+		{"phone_number", "VARCHAR(20)"},
+	}
+
+	for _, col := range columns {
+		// Check if column exists
+		var count int
+		err := db.QueryRow(`
+			SELECT COUNT(*) 
+			FROM INFORMATION_SCHEMA.COLUMNS 
+			WHERE TABLE_SCHEMA = DATABASE() 
+			AND TABLE_NAME = 'device_setting_nodepath' 
+			AND COLUMN_NAME = ?
+		`, col.name).Scan(&count)
+		
+		if err != nil {
+			return fmt.Errorf("failed to check column %s: %w", col.name, err)
+		}
+		
+		if count == 0 {
+			// Column doesn't exist, add it
+			query := fmt.Sprintf("ALTER TABLE device_setting_nodepath ADD COLUMN %s %s", col.name, col.definition)
+			if _, err := db.Exec(query); err != nil {
+				return fmt.Errorf("failed to add column %s: %w", col.name, err)
+			}
+			logrus.WithField("column", col.name).Info("Added missing column to device_setting_nodepath")
+		} else {
+			logrus.WithField("column", col.name).Debug("Column already exists in device_setting_nodepath")
 		}
 	}
 	

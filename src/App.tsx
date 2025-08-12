@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   Home,
-  Zap
+  Zap,
+  Smartphone
 } from 'lucide-react';
 
 // Import pages
@@ -27,6 +28,7 @@ import TestChat from './pages/TestChat';
 import MediaManager from './pages/MediaManager';
 import Analytics from './pages/Analytics';
 import SettingsPage from './pages/SettingsPage';
+import DeviceSettings from './pages/DeviceSettings';
 
 const queryClient = new QueryClient();
 
@@ -40,6 +42,7 @@ const App = () => {
     { name: 'Test Chat', href: '/test-chat', icon: MessageSquare, current: false },
     { name: 'Media Manager', href: '/media', icon: Upload, current: false },
     { name: 'Analytics', href: '/analytics', icon: BarChart3, current: false },
+    { name: 'Device Settings', href: '/device-settings', icon: Smartphone, current: false },
     { name: 'Settings', href: '/settings', icon: Settings, current: false },
   ];
 
@@ -159,6 +162,7 @@ const App = () => {
                   <Route path="/test-chat" element={<TestChat />} />
                   <Route path="/media" element={<MediaManager />} />
                   <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/device-settings" element={<DeviceSettings />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Routes>
               </main>

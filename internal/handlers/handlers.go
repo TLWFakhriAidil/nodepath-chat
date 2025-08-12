@@ -14,11 +14,12 @@ import (
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	flowService     *services.FlowService
-	chatService     *services.ChatService
-	aiService       *services.AIService
-	queueService    *services.QueueService
-	whatsappService *whatsapp.Service
+	flowService           *services.FlowService
+	chatService           *services.ChatService
+	aiService             *services.AIService
+	queueService          *services.QueueService
+	whatsappService       *whatsapp.Service
+	deviceSettingsService *services.DeviceSettingsService
 }
 
 // NewHandlers creates a new handlers instance
@@ -28,13 +29,15 @@ func NewHandlers(
 	aiService *services.AIService,
 	queueService *services.QueueService,
 	whatsappService *whatsapp.Service,
+	deviceSettingsService *services.DeviceSettingsService,
 ) *Handlers {
 	return &Handlers{
-		flowService:     flowService,
-		chatService:     chatService,
-		aiService:       aiService,
-		queueService:    queueService,
-		whatsappService: whatsappService,
+		flowService:           flowService,
+		chatService:           chatService,
+		aiService:             aiService,
+		queueService:          queueService,
+		whatsappService:       whatsappService,
+		deviceSettingsService: deviceSettingsService,
 	}
 }
 
@@ -84,6 +87,14 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	analytics := api.Group("/analytics")
 	analytics.Get("/overview", h.GetAnalyticsOverview)
 	analytics.Get("/flows/:id/stats", h.GetFlowStats)
+
+	// Device settings routes
+	deviceSettings := api.Group("/device-settings")
+	deviceSettings.Get("/", h.GetDeviceSettings)
+	deviceSettings.Post("/", h.CreateDeviceSettings)
+	deviceSettings.Get("/:id", h.GetDeviceSettingsById)
+	deviceSettings.Put("/:id", h.UpdateDeviceSettings)
+	deviceSettings.Delete("/:id", h.DeleteDeviceSettings)
 }
 
 // Response helpers

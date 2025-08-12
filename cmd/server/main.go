@@ -53,6 +53,7 @@ func main() {
 	chatService := services.NewChatService(db, redisClient)
 	aiService := services.NewAIService(cfg)
 	queueService := services.NewQueueService(redisClient)
+	deviceSettingsService := services.NewDeviceSettingsService(db)
 
 	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService)
 	if err != nil {
@@ -66,6 +67,7 @@ func main() {
 		aiService,
 		queueService,
 		whatsappService,
+		deviceSettingsService,
 	)
 
 	// Initialize HTML template engine

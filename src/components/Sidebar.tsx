@@ -17,7 +17,8 @@ import {
   LogOut,
   HelpCircle,
   Zap,
-  List
+  List,
+  Smartphone
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -78,6 +79,12 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       href: '/analytics',
       icon: BarChart3,
       current: location.pathname === '/analytics'
+    },
+    {
+      name: 'Device Settings',
+      href: '/device-settings',
+      icon: Smartphone,
+      current: location.pathname === '/device-settings'
     },
     {
       name: 'Settings',
