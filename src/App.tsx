@@ -10,9 +10,7 @@ import {
   Bot, 
   Workflow, 
   MessageSquare, 
-  Upload, 
   BarChart3, 
-  Settings, 
   Menu,
   X,
   Home,
@@ -25,9 +23,7 @@ import Dashboard from './pages/Dashboard';
 import FlowBuilder from './pages/FlowBuilder';
 import FlowManager from './pages/FlowManager';
 import TestChat from './pages/TestChat';
-import MediaManager from './pages/MediaManager';
 import Analytics from './pages/Analytics';
-import SettingsPage from './pages/SettingsPage';
 import DeviceSettings from './pages/DeviceSettings';
 
 const queryClient = new QueryClient();
@@ -40,10 +36,8 @@ const App = () => {
     { name: 'Flow Builder', href: '/flow-builder', icon: Workflow, current: false },
     { name: 'Flow Manager', href: '/flow-manager', icon: Workflow, current: false },
     { name: 'Test Chat', href: '/test-chat', icon: MessageSquare, current: false },
-    { name: 'Media Manager', href: '/media', icon: Upload, current: false },
     { name: 'Analytics', href: '/analytics', icon: BarChart3, current: false },
     { name: 'Device Settings', href: '/device-settings', icon: Smartphone, current: false },
-    { name: 'Settings', href: '/settings', icon: Settings, current: false },
   ];
 
   return (
@@ -160,10 +154,8 @@ const App = () => {
                   <Route path="/flow-builder" element={<FlowBuilder />} />
                   <Route path="/flow-manager" element={<FlowManager />} />
                   <Route path="/test-chat" element={<TestChat />} />
-                  <Route path="/media" element={<MediaManager />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/device-settings" element={<DeviceSettings />} />
-                  <Route path="/settings" element={<SettingsPage />} />
                 </Routes>
               </main>
             </div>

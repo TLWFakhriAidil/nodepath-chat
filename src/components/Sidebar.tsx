@@ -7,9 +7,7 @@ import {
   LayoutDashboard,
   Workflow,
   MessageSquare,
-  FolderOpen,
   BarChart3,
-  Settings,
   ChevronLeft,
   ChevronRight,
   Bot,
@@ -238,10 +236,6 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
                 Profile
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem>
                 <HelpCircle className="w-4 h-4 mr-2" />
                 Help & Support
               </DropdownMenuItem>
@@ -278,10 +272,6 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               <DropdownMenuItem>
                 <User className="w-4 h-4 mr-2" />
                 Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <HelpCircle className="w-4 h-4 mr-2" />
