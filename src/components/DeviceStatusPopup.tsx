@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import QRCode from 'qrcode';
 
 interface DeviceStatus {
   device_id?: string;
@@ -82,7 +83,19 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
         console.log('📡 API Response received:', data);
         console.log('📡 QR data in response (qr field):', data.details?.qr);
         console.log('📡 QR data in response (qr_code field):', data.details?.qr_code);
+        console.log('📡 QR code field (top level):', data.qr_code);
         console.log('📡 Available details fields:', Object.keys(data.details || {}));
+        console.log('📡 Available top-level fields:', Object.keys(data || {}));
+        
+        // Check if QR data is timeout
+        const qrData = data.qr_code || data.details?.qr_code || data.details?.qr;
+        if (qrData === 'timeout') {
+          console.log('⏰ QR Code has timed out - WhatsApp session expired');
+        } else if (qrData) {
+          console.log('✅ QR Code data available:', qrData.substring(0, 50) + '...');
+        } else {
+          console.log('❌ No QR Code data found in response');
+        }
         setStatus(data);
       } catch (apiError) {
         console.log('⚠️ API failed, using mock data:', apiError);
@@ -266,62 +279,52 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                         {status.details?.device_status && (
                           <p><span className="font-medium">Device Status:</span> {status.details.device_status}</p>
                         )}
-                        {(status.details?.qr_code || status.details?.qr) && (status.details?.qr !== 'timeout' && status.details?.qr_code !== 'timeout') && (
-                          <div>
-                            <p><span className="font-medium">QR:</span> Available</p>
-                            <div className="mt-2 p-2 bg-white border rounded">
-                              {(() => {
-                                const qrData = status.details.qr_code || status.details.qr;
-                                console.log('=== QR CODE DEBUG ===');
-                                console.log('Raw QR data:', qrData);
-                                console.log('QR data type:', typeof qrData);
-                                console.log('QR data length:', qrData?.length);
-                                console.log('Starts with data:', qrData?.startsWith('data:'));
-                                console.log('Available details fields:', Object.keys(status.details || {}));
-                                
-                                // Check if it's a WhatsApp QR code format (starts with numbers and @)
-                                if (qrData.match(/^\d+@/)) {
-                                  console.log('Detected WhatsApp session data format');
-                                  return (
-                                    <div className="text-center">
-                                      <p className="text-sm text-gray-600 mb-2">WhatsApp QR Code Data:</p>
-                                      <div className="bg-gray-100 p-2 rounded text-xs font-mono break-all max-h-20 overflow-y-auto">
-                                        {qrData}
-                                      </div>
-                                      <p className="text-xs text-orange-600 mt-2">
-                                        Note: This is WhatsApp session data. Use WhatsApp Web to scan the actual QR code.
-                                      </p>
-                                    </div>
-                                  );
-                                }
-                                // Handle regular base64 images
-                                const finalSrc = qrData.startsWith('data:') ? qrData : `data:image/png;base64,${qrData}`;
-                                console.log('Final image src:', finalSrc.substring(0, 100) + '...');
-                                console.log('=== END QR DEBUG ===');
-                                
-                                return (
-                                  <img 
-                                    src={finalSrc} 
-                                    alt="QR Code" 
-                                    className="w-32 h-32 mx-auto"
-                                    onLoad={() => {
-                                      console.log('✅ QR Code image loaded successfully');
-                                    }}
-                                    onError={(e) => {
-                                      console.error('❌ QR Code image failed to load');
-                                      console.error('Error event:', e);
-                                      console.error('Failed src:', finalSrc.substring(0, 100) + '...');
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
-                                );
-                              })()} 
-                            </div>
-                          </div>
-                        )}
-                        {(status.details?.qr === 'timeout' || status.details?.qr_code === 'timeout') && (
-                          <p className="text-orange-600"><span className="font-medium">QR:</span> Timeout</p>
-                        )}
+                        {/* QR Code Section */}
+                        {(() => {
+                          const qrData = status.qr_code || status.details?.qr_code || status.details?.qr;
+                          const isTimeout = qrData === 'timeout';
+                          const hasQrData = qrData && !isTimeout;
+                          
+                          if (isTimeout) {
+                            return (
+                              <div className="bg-orange-50 border border-orange-200 p-3 rounded-md mb-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <AlertCircle className="h-4 w-4 text-orange-500" />
+                                  <span className="font-medium text-orange-800">QR Code Status</span>
+                                </div>
+                                <div className="text-orange-700 text-sm">
+                                  <p className="font-medium">Session Timeout</p>
+                                  <p className="mt-1">The WhatsApp session has expired. Please refresh to generate a new QR code.</p>
+                                  <Button 
+                                    onClick={fetchDeviceStatus} 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="mt-2 text-orange-700 border-orange-300 hover:bg-orange-100"
+                                  >
+                                    <RefreshCw className="h-3 w-3 mr-1" />
+                                    Generate New QR
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          }
+                          
+                          if (hasQrData) {
+                            return (
+                              <div className="bg-green-50 border border-green-200 p-3 rounded-md mb-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                  <span className="font-medium text-green-800">QR Code Available</span>
+                                </div>
+                                <div className="mt-2 p-2 bg-white border rounded">
+                                  <QRCodeDisplay qrData={qrData} />
+                                </div>
+                              </div>
+                            );
+                          }
+                          
+                          return null; // No QR data available
+                        })()}
                       </div>
                     </div>
                   )}
@@ -354,6 +357,115 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
         </div>
       </DialogContent>
     </Dialog>
+  );
+};
+
+// QR Code Display Component
+interface QRCodeDisplayProps {
+  qrData: string;
+}
+
+const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ qrData }) => {
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const generateQRCode = async () => {
+      if (!qrData) return;
+      
+      setIsGenerating(true);
+      setError(null);
+      
+      try {
+        console.log('=== QR CODE DEBUG ===');
+        console.log('Raw QR data:', qrData);
+        console.log('QR data type:', typeof qrData);
+        console.log('QR data length:', qrData?.length);
+        console.log('Starts with data:', qrData?.startsWith('data:'));
+        
+        // Check if it's already a base64 image
+        if (qrData.startsWith('data:image/')) {
+          console.log('Using existing base64 image');
+          setQrCodeUrl(qrData);
+        }
+        // Check if it's a WhatsApp session data format (starts with numbers and @)
+        else if (qrData.match(/^\d+@/)) {
+          console.log('Detected WhatsApp session data format - generating QR code');
+          const qrCodeDataUrl = await QRCode.toDataURL(qrData, {
+            width: 256,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF'
+            }
+          });
+          setQrCodeUrl(qrCodeDataUrl);
+          console.log('✅ QR Code generated successfully');
+        }
+        // Handle regular base64 without data prefix
+        else {
+          console.log('Treating as base64 image data');
+          const finalSrc = `data:image/png;base64,${qrData}`;
+          setQrCodeUrl(finalSrc);
+        }
+        
+        console.log('=== END QR DEBUG ===');
+      } catch (err) {
+        console.error('❌ Failed to generate QR code:', err);
+        setError('Failed to generate QR code');
+      } finally {
+        setIsGenerating(false);
+      }
+    };
+
+    generateQRCode();
+  }, [qrData]);
+
+  if (isGenerating) {
+    return (
+      <div className="flex items-center justify-center p-4">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        <span className="text-sm text-gray-600">Generating QR Code...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center p-4">
+        <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+        <p className="text-red-600 text-sm">{error}</p>
+      </div>
+    );
+  }
+
+  if (qrCodeUrl) {
+    return (
+      <div className="text-center">
+        <img 
+          src={qrCodeUrl} 
+          alt="QR Code" 
+          className="w-48 h-48 mx-auto border rounded"
+          onLoad={() => {
+            console.log('✅ QR Code image loaded successfully');
+          }}
+          onError={(e) => {
+            console.error('❌ QR Code image failed to load');
+            setError('Failed to load QR code image');
+          }}
+        />
+        <p className="text-xs text-gray-600 mt-2">
+          Scan this QR code with WhatsApp to connect your device
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-center p-4">
+      <p className="text-gray-500 text-sm">No QR code available</p>
+    </div>
   );
 };
 
