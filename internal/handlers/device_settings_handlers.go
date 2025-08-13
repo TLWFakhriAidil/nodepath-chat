@@ -1013,21 +1013,40 @@ func (h *Handlers) getWhacenterQRCode(deviceID string) string {
 	
 	if resp.StatusCode == 200 {
 		// Check if response is a PNG image (like in the PHP code)
-		if len(bodyBytes) >= 8 && string(bodyBytes[1:4]) == "PNG" {
-			// It's a valid PNG image, convert to base64 data URL
-			logrus.Info("[WHACENTER] Successfully fetched QR code as PNG image")
-			return fmt.Sprintf("data:image/png;base64,%s", base64.StdEncoding.EncodeToString(bodyBytes))
+		// PNG signature: \x89PNG\r\n\x1a\n (first 8 bytes)
+		logrus.WithFields(logrus.Fields{
+			"response_length": len(bodyBytes),
+			"first_8_bytes": fmt.Sprintf("%x", bodyBytes[:min(8, len(bodyBytes))]),
+			"content_type": resp.Header.Get("Content-Type"),
+		}).Info("[WHACENTER] Analyzing QR response format")
+		
+		if len(bodyBytes) >= 8 {
+			// Check for PNG signature: first byte is 0x89, followed by "PNG"
+			if bodyBytes[0] == 0x89 && string(bodyBytes[1:4]) == "PNG" {
+				// It's a valid PNG image, convert to base64 data URL
+				logrus.Info("[WHACENTER] Successfully fetched QR code as PNG image")
+				return fmt.Sprintf("data:image/png;base64,%s", base64.StdEncoding.EncodeToString(bodyBytes))
+			}
 		}
 		
-		// Try to parse as JSON response
+		// If not PNG, try to parse as JSON response
+		logrus.Info("[WHACENTER] Response is not PNG format, trying JSON parsing")
 		var qrResponse map[string]interface{}
 		if err := json.Unmarshal(bodyBytes, &qrResponse); err == nil {
+			logrus.WithField("json_response", qrResponse).Info("[WHACENTER] Successfully parsed JSON response")
 			if data, ok := qrResponse["data"].(map[string]interface{}); ok {
 				if qrCode, ok := data["qr"].(string); ok {
 					logrus.Info("[WHACENTER] Successfully fetched QR code from JSON")
 					return qrCode
 				}
+				logrus.Warn("[WHACENTER] No 'qr' field found in JSON data")
+			} else {
+				logrus.Warn("[WHACENTER] No 'data' field found in JSON response")
 			}
+		} else {
+			logrus.WithError(err).Warn("[WHACENTER] Failed to parse response as JSON")
+			// Log raw response for debugging
+			logrus.WithField("raw_response", string(bodyBytes[:min(200, len(bodyBytes))])).Warn("[WHACENTER] Raw response preview")
 		}
 	}
 	

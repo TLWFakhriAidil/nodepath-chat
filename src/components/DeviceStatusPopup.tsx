@@ -64,10 +64,14 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
         }
       };
       
+      console.log('🎭 Mock data prepared:', mockData);
+      console.log('🎭 Mock QR data:', mockData.details?.qr);
+      
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       try {
+        console.log('🔍 Fetching device status for:', deviceId);
         const response = await fetch(`/api/device-settings/${deviceId}/status`);
         
         if (!response.ok) {
@@ -75,10 +79,17 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
         }
         
         const data = await response.json();
+        console.log('📡 API Response received:', data);
+        console.log('📡 QR data in response (qr field):', data.details?.qr);
+        console.log('📡 QR data in response (qr_code field):', data.details?.qr_code);
+        console.log('📡 Available details fields:', Object.keys(data.details || {}));
         setStatus(data);
       } catch (apiError) {
+        console.log('⚠️ API failed, using mock data:', apiError);
         // Use mock data when API fails
         console.log('API not available, using mock data for demonstration');
+        console.log('🎭 Setting mock data as status:', mockData);
+        console.log('🎭 Mock QR being set:', mockData.details?.qr);
         setStatus(mockData);
       }
     } catch (err) {
@@ -255,14 +266,22 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                         {status.details?.device_status && (
                           <p><span className="font-medium">Device Status:</span> {status.details.device_status}</p>
                         )}
-                        {status.details?.qr && status.details?.qr !== 'timeout' && (
+                        {(status.details?.qr_code || status.details?.qr) && (status.details?.qr !== 'timeout' && status.details?.qr_code !== 'timeout') && (
                           <div>
                             <p><span className="font-medium">QR:</span> Available</p>
                             <div className="mt-2 p-2 bg-white border rounded">
                               {(() => {
-                                const qrData = status.details.qr;
+                                const qrData = status.details.qr_code || status.details.qr;
+                                console.log('=== QR CODE DEBUG ===');
+                                console.log('Raw QR data:', qrData);
+                                console.log('QR data type:', typeof qrData);
+                                console.log('QR data length:', qrData?.length);
+                                console.log('Starts with data:', qrData?.startsWith('data:'));
+                                console.log('Available details fields:', Object.keys(status.details || {}));
+                                
                                 // Check if it's a WhatsApp QR code format (starts with numbers and @)
                                 if (qrData.match(/^\d+@/)) {
+                                  console.log('Detected WhatsApp session data format');
                                   return (
                                     <div className="text-center">
                                       <p className="text-sm text-gray-600 mb-2">WhatsApp QR Code Data:</p>
@@ -276,22 +295,31 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                                   );
                                 }
                                 // Handle regular base64 images
+                                const finalSrc = qrData.startsWith('data:') ? qrData : `data:image/png;base64,${qrData}`;
+                                console.log('Final image src:', finalSrc.substring(0, 100) + '...');
+                                console.log('=== END QR DEBUG ===');
+                                
                                 return (
                                   <img 
-                                    src={qrData.startsWith('data:') ? qrData : `data:image/png;base64,${qrData}`} 
+                                    src={finalSrc} 
                                     alt="QR Code" 
                                     className="w-32 h-32 mx-auto"
+                                    onLoad={() => {
+                                      console.log('✅ QR Code image loaded successfully');
+                                    }}
                                     onError={(e) => {
-                                      console.error('QR Code image failed to load:', qrData);
+                                      console.error('❌ QR Code image failed to load');
+                                      console.error('Error event:', e);
+                                      console.error('Failed src:', finalSrc.substring(0, 100) + '...');
                                       e.currentTarget.style.display = 'none';
                                     }}
                                   />
                                 );
-                              })()}
+                              })()} 
                             </div>
                           </div>
                         )}
-                        {status.details?.qr === 'timeout' && (
+                        {(status.details?.qr === 'timeout' || status.details?.qr_code === 'timeout') && (
                           <p className="text-orange-600"><span className="font-medium">QR:</span> Timeout</p>
                         )}
                       </div>
