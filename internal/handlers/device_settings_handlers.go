@@ -1067,20 +1067,36 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 		"instance_value": device.Instance.String,
 	}).Info("[WABLAS] Starting Wablas status check")
 	
+	// Check if instance (API key) is configured
 	if !device.Instance.Valid || device.Instance.String == "" {
 		logrus.Error("[WABLAS] Device instance not configured")
-		status["status"] = "not_configured"
+		status["status"] = "NOT CONNECTED"
+		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
 			"error": "Device instance not configured",
 		}
 		return status
 	}
 
-	// Make API call to check Wablas device status using the correct endpoint
+	// Extract token from instance - following PHP pattern: $token = explode('.', $auth_header)[0];
+	authHeader := device.Instance.String
+	var token string
+	if strings.Contains(authHeader, ".") {
+		parts := strings.Split(authHeader, ".")
+		token = parts[0]
+	} else {
+		token = authHeader // Use full string if no dot found
+	}
+
+	// **STEP 1: CHECK DEVICE STATUS** - following PHP pattern
 	client := &http.Client{Timeout: 10 * time.Second}
-	token := device.Instance.String // The instance contains the auth token for Wablas
-	// Use the correct device/info endpoint with token parameter
 	apiURL := fmt.Sprintf("https://my.wablas.com/api/device/info?token=%s", url.QueryEscape(token))
+	
+	// Log API request (without sensitive token details)
+	logrus.WithFields(logrus.Fields{
+		"api_url": "https://my.wablas.com/api/device/info",
+		"token_prefix": token[:min(8, len(token))] + "...",
+	}).Info("[WABLAS] Making API request")
 	
 	logrus.WithFields(logrus.Fields{
 		"api_url": apiURL,
@@ -1090,7 +1106,8 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		logrus.WithError(err).Error("[WABLAS] Failed to create HTTP request")
-		status["status"] = "error"
+		status["status"] = "NOT CONNECTED"
+		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
 			"error": "Failed to create status request",
 			"details": err.Error(),
@@ -1098,17 +1115,14 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 		return status
 	}
 
-	req.Header.Set("Authorization", token)
+	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Accept", "application/json")
-
-	logrus.WithFields(logrus.Fields{
-		"headers": req.Header,
-	}).Info("[WABLAS] Request headers set")
 
 	resp, err := client.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("[WABLAS] HTTP request failed")
-		status["status"] = "connection_error"
+		status["status"] = "NOT CONNECTED"
+		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
 			"error": "Failed to connect to Wablas API",
 			"details": err.Error(),
@@ -1117,16 +1131,12 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 	}
 	defer resp.Body.Close()
 
-	logrus.WithFields(logrus.Fields{
-		"status_code": resp.StatusCode,
-		"headers": resp.Header,
-	}).Info("[WABLAS] Received API response")
-
-	// Read response body for logging
+	// Read response body
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logrus.WithError(err).Error("[WABLAS] Failed to read response body")
-		status["status"] = "error"
+		status["status"] = "NOT CONNECTED"
+		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
 			"error": "Failed to read API response",
 			"details": err.Error(),
@@ -1135,77 +1145,88 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 	}
 	
 	logrus.WithFields(logrus.Fields{
+		"status_code": resp.StatusCode,
 		"response_body": string(bodyBytes),
-		"body_length": len(bodyBytes),
-	}).Info("[WABLAS] Response body received")
+	}).Info("[WABLAS] Received API response")
 
-	if resp.StatusCode == 200 {
-		var apiResponse map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &apiResponse); err == nil {
-			logrus.WithField("parsed_response", apiResponse).Info("[WABLAS] Successfully parsed JSON response")
-			
-			// Check if the API response has the expected structure
-			if apiStatus, ok := apiResponse["status"].(bool); ok && apiStatus {
-				// Parse the response according to device/info API format
-				if data, ok := apiResponse["data"].(map[string]interface{}); ok {
-					if deviceStatus, ok := data["status"].(string); ok {
-						logrus.WithField("device_status", deviceStatus).Info("[WABLAS] Found device status")
-						
-						if deviceStatus == "disconnected" {
-							status["connected"] = false
-							status["status"] = "disconnected"
-							
-							// Fetch QR code when device is disconnected
-							if deviceSerial, ok := data["serial"].(string); ok && deviceSerial != "" {
-								qrURL := h.getWablasQRCode(token)
-								if qrURL != "" {
-									status["qr_code"] = qrURL
-								}
-							}
-						} else {
-							status["connected"] = true
-							status["status"] = "connected"
-						}
-						status["device_status"] = deviceStatus
-						if serial, ok := data["serial"].(string); ok {
-							status["device_serial"] = serial
-						}
-					} else {
-						logrus.Warn("[WABLAS] No 'status' field found in data")
-						status["status"] = "unknown"
-					}
-					status["details"] = data
-				} else {
-					logrus.Warn("[WABLAS] No 'data' field found in response")
-					status["status"] = "invalid_response"
-					status["details"] = apiResponse
-				}
-			} else {
-				logrus.Warn("[WABLAS] API response status is false or missing")
-				status["status"] = "api_failed"
-				status["details"] = apiResponse
-			}
-		} else {
-			logrus.WithError(err).Error("[WABLAS] Failed to parse JSON response")
-			status["status"] = "parse_error"
-			status["details"] = map[string]interface{}{
-				"error": "Failed to parse API response",
-				"raw_response": string(bodyBytes),
-				"parse_error": err.Error(),
-			}
-		}
-	} else {
+	if resp.StatusCode != 200 {
 		logrus.WithFields(logrus.Fields{
 			"status_code": resp.StatusCode,
 			"response_body": string(bodyBytes),
 		}).Error("[WABLAS] API returned non-200 status")
 		
-		status["status"] = "api_error"
+		status["status"] = "NOT CONNECTED"
+		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
 			"http_status": resp.StatusCode,
 			"error":       "API returned error status",
 			"response_body": string(bodyBytes),
 		}
+		return status
+	}
+
+	// **Decode JSON Response** - following PHP pattern
+	var data map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &data); err != nil {
+		logrus.WithError(err).Error("[WABLAS] Failed to parse JSON response")
+		status["status"] = "NOT CONNECTED"
+		status["qr"] = "timeout"
+		status["details"] = map[string]interface{}{
+			"error": "Failed to parse API response",
+			"raw_response": string(bodyBytes),
+			"parse_error": err.Error(),
+		}
+		return status
+	}
+
+	// Check API response status - following PHP pattern
+	if apiStatus, ok := data["status"].(bool); !ok || !apiStatus {
+		logrus.Warn("[WABLAS] API response status is false or missing")
+		status["status"] = "NOT CONNECTED"
+		status["qr"] = "timeout"
+		status["details"] = data
+		return status
+	}
+
+	// **Extract Device Status** - following PHP pattern
+	var deviceStatus string = "UNKNOWN"
+	var deviceID string
+	var image interface{} = nil
+
+	if dataObj, ok := data["data"].(map[string]interface{}); ok {
+		if ds, ok := dataObj["status"].(string); ok {
+			deviceStatus = ds
+		}
+		if serial, ok := dataObj["serial"].(string); ok {
+			deviceID = serial
+		}
+	}
+
+	// **STEP 2: FETCH QR CODE IF NOT CONNECTED** - following PHP pattern
+	if deviceStatus == "disconnected" && deviceID != "" {
+		qrURL := fmt.Sprintf("https://my.wablas.com/api/device/scan?token=%s", url.QueryEscape(token))
+		image = qrURL
+	}
+
+	// **Return Final Response** - following PHP pattern
+	status["status"] = deviceStatus
+	status["provider"] = "wablas"
+	if dataObj, ok := data["data"].(map[string]interface{}); ok {
+		status["data"] = dataObj
+	} else {
+		status["data"] = map[string]interface{}{}
+	}
+	if image != nil {
+		status["image"] = image
+		status["qr"] = image // Also set qr field for compatibility
+	} else {
+		status["image"] = nil
+		status["qr"] = nil
+	}
+	if message, ok := data["message"].(string); ok {
+		status["message"] = message
+	} else {
+		status["message"] = "No message returned"
 	}
 
 	logrus.WithField("final_status", status).Info("[WABLAS] Returning status")
