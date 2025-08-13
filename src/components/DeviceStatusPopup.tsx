@@ -287,48 +287,12 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                                     }}
                                   />
                                 );
-                              })()} 
+                              })()}
                             </div>
                           </div>
                         )}
                         {status.details?.qr === 'timeout' && (
                           <p className="text-orange-600"><span className="font-medium">QR:</span> Timeout</p>
-                        )}
-                        {(status.qr_code || status.details?.qr_code) && (
-                          <div>
-                            <p><span className="font-medium">QR Code:</span> Available</p>
-                            <div className="mt-2 p-2 bg-white border rounded">
-                              {(() => {
-                                const qrData = status.qr_code || status.details?.qr_code;
-                                // Check if it's a WhatsApp QR code format (starts with numbers and @)
-                                if (qrData.match(/^\d+@/)) {
-                                  return (
-                                    <div className="text-center">
-                                      <p className="text-sm text-gray-600 mb-2">WhatsApp QR Code Data:</p>
-                                      <div className="bg-gray-100 p-2 rounded text-xs font-mono break-all max-h-20 overflow-y-auto">
-                                        {qrData}
-                                      </div>
-                                      <p className="text-xs text-orange-600 mt-2">
-                                        Note: This is WhatsApp session data. Use WhatsApp Web to scan the actual QR code.
-                                      </p>
-                                    </div>
-                                  );
-                                }
-                                // Handle regular base64 images
-                                return (
-                                  <img 
-                                    src={qrData.startsWith('data:') ? qrData : `data:image/png;base64,${qrData}`} 
-                                    alt="QR Code" 
-                                    className="w-32 h-32 mx-auto"
-                                    onError={(e) => {
-                                      console.error('QR Code image failed to load:', qrData);
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
-                                );
-                               })()
-                            </div>
-                          </div>
                         )}
                       </div>
                     </div>
