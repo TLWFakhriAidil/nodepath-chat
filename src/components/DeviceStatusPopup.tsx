@@ -369,6 +369,7 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ qrData }) => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isWablasUrl, setIsWablasUrl] = useState(false);
 
   useEffect(() => {
     const generateQRCode = async () => {
@@ -384,10 +385,17 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ qrData }) => {
         console.log('QR data length:', qrData?.length);
         console.log('Starts with data:', qrData?.startsWith('data:'));
         
+        // Check if it's a Wablas scan URL
+        if (qrData.includes('my.wablas.com/api/device/scan')) {
+          console.log('Detected Wablas scan URL - will show as clickable link');
+          setIsWablasUrl(true);
+          setQrCodeUrl(null);
+        }
         // Check if it's already a base64 image
-        if (qrData.startsWith('data:image/')) {
+        else if (qrData.startsWith('data:image/')) {
           console.log('Using existing base64 image');
           setQrCodeUrl(qrData);
+          setIsWablasUrl(false);
         }
         // Check if it's a WhatsApp session data format (starts with numbers and @)
         else if (qrData.match(/^\d+@/)) {
@@ -401,6 +409,7 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ qrData }) => {
             }
           });
           setQrCodeUrl(qrCodeDataUrl);
+          setIsWablasUrl(false);
           console.log('✅ QR Code generated successfully');
         }
         // Handle regular base64 without data prefix
@@ -408,6 +417,7 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ qrData }) => {
           console.log('Treating as base64 image data');
           const finalSrc = `data:image/png;base64,${qrData}`;
           setQrCodeUrl(finalSrc);
+          setIsWablasUrl(false);
         }
         
         console.log('=== END QR DEBUG ===');
@@ -436,6 +446,34 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ qrData }) => {
       <div className="text-center p-4">
         <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
         <p className="text-red-600 text-sm">{error}</p>
+      </div>
+    );
+  }
+
+  // Handle Wablas URL as clickable link
+  if (isWablasUrl && qrData) {
+    return (
+      <div className="text-center p-4">
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+          <div className="flex items-center justify-center mb-3">
+            <svg className="w-8 h-8 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <span className="font-medium text-blue-800">Generate QR Code</span>
+          </div>
+          <p className="text-sm text-blue-700 mb-4">
+            Click the link below to generate your WhatsApp QR code:
+          </p>
+          <Button 
+            onClick={() => window.open(qrData, '_blank')}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            Open QR Generator
+          </Button>
+          <p className="text-xs text-blue-600 mt-3">
+            This will open the Wablas QR code generator in a new tab
+          </p>
+        </div>
       </div>
     );
   }
