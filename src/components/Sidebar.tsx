@@ -69,12 +69,6 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       badge: notifications.messages
     },
     {
-      name: 'Media Manager',
-      href: '/media',
-      icon: FolderOpen,
-      current: location.pathname === '/media'
-    },
-    {
       name: 'Analytics',
       href: '/analytics',
       icon: BarChart3,
@@ -85,12 +79,6 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       href: '/device-settings',
       icon: Smartphone,
       current: location.pathname === '/device-settings'
-    },
-    {
-      name: 'Settings',
-      href: '/settings',
-      icon: Settings,
-      current: location.pathname === '/settings'
     }
   ];
 

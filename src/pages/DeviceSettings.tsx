@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Smartphone, Settings, Save, X, Link, Copy, Plus, Edit, Trash2, Eye } from 'lucide-react';
-import DeviceStatusPopup from '@/components/DeviceStatusPopup';
+import WablasStatusModal from '@/components/WablasStatusModal';
+import WhacenterStatusModal from '@/components/WhacenterStatusModal';
 
 interface DeviceSettings {
   id: string;
@@ -38,7 +39,8 @@ const DeviceForm: React.FC<{
   apiKeyOptions: Array<{value: string; label: string}>;
   providerOptions: Array<{value: string; label: string}>;
   setSettings: React.Dispatch<React.SetStateAction<DeviceSettings>>;
-}> = ({ settings, handleInputChange, generateDeviceId, generateWebhookId, handleSave, handleClose, isSaving, apiKeyOptions, providerOptions, setSettings }) => (
+  isDuplicateIdDevice: boolean;
+}> = ({ settings, handleInputChange, generateDeviceId, generateWebhookId, handleSave, handleClose, isSaving, apiKeyOptions, providerOptions, setSettings, isDuplicateIdDevice }) => (
   <div className="space-y-6">
     {/* Device ID Section */}
     <div className="space-y-4">
@@ -70,21 +72,12 @@ const DeviceForm: React.FC<{
 
       <div>
         <Label className="text-slate-700 dark:text-slate-300 font-medium">Webhook ID</Label>
-        <div className="flex gap-2 mt-1">
-          <Input
-            value={settings.webhook_id}
-            onChange={(e) => handleInputChange('webhook_id', e.target.value)}
-            placeholder="https://chatbot.growweb.com/chatgpt/SCVTC-S2/FGcaTDgH"
-            className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
-          />
-          <Button
-            onClick={generateWebhookId}
-            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 flex items-center gap-2"
-          >
-            <Link className="h-4 w-4" />
-            GENERATE WEBHOOK
-          </Button>
-        </div>
+        <Input
+          value={settings.webhook_id}
+          onChange={(e) => handleInputChange('webhook_id', e.target.value)}
+          placeholder="https://chatbot.growweb.com/chatgpt/SCVTC-S2/FGcaTDgH"
+          className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 mt-1"
+        />
       </div>
     </div>
 
@@ -170,9 +163,14 @@ const DeviceForm: React.FC<{
           value={settings.id_device}
           onChange={(e) => handleInputChange('id_device', e.target.value)}
           placeholder="Enter ID Device"
-          className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 mt-1"
+          className={`bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 mt-1 ${
+            isDuplicateIdDevice ? 'border-red-500 focus:border-red-500' : ''
+          }`}
           required
         />
+        {isDuplicateIdDevice && (
+          <p className="text-red-500 text-sm mt-1">ID Device already exists! Please enter a unique ID Device.</p>
+        )}
       </div>
       <div>
         <Label className="text-slate-700 dark:text-slate-300 font-medium">ID ERP</Label>
@@ -207,7 +205,7 @@ const DeviceForm: React.FC<{
       </Button>
       <Button
         onClick={handleSave}
-        disabled={isSaving || !settings.id_device || !settings.id_erp || !settings.id_admin}
+        disabled={isSaving || !settings.id_device || !settings.id_erp || !settings.id_admin || isDuplicateIdDevice}
         className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 flex items-center gap-2"
       >
         {isSaving ? (
@@ -242,6 +240,7 @@ const DeviceSettings: React.FC = () => {
   const [editingDevice, setEditingDevice] = useState<DeviceSettings | null>(null);
   const [statusPopupOpen, setStatusPopupOpen] = useState(false);
   const [selectedDeviceForStatus, setSelectedDeviceForStatus] = useState<DeviceSettings | null>(null);
+  const [isDuplicateIdDevice, setIsDuplicateIdDevice] = useState(false);
 
   const apiKeyOptions = [
     { value: 'chat_gpt_so', label: 'Chat GPT So' },
@@ -328,6 +327,19 @@ const DeviceSettings: React.FC = () => {
       ...prev,
       [field]: value
     }));
+    
+    // Check for duplicate ID Device
+    if (field === 'id_device') {
+      const isDuplicate = devices.some(device => 
+        device.id_device === value && 
+        device.id !== settings.id // Exclude current device when editing
+      );
+      setIsDuplicateIdDevice(isDuplicate);
+      
+      if (isDuplicate) {
+        toast.error('ID Device already exists! Please enter a unique ID Device.');
+      }
+    }
   };
 
   const handleClose = () => {
@@ -349,6 +361,7 @@ const DeviceSettings: React.FC = () => {
       id_admin: ''
     });
     setEditingDevice(null);
+    setIsDuplicateIdDevice(false);
   };
 
   const handleNewDevice = () => {
@@ -823,6 +836,7 @@ const DeviceSettings: React.FC = () => {
               apiKeyOptions={apiKeyOptions}
               providerOptions={providerOptions}
               setSettings={setSettings}
+              isDuplicateIdDevice={isDuplicateIdDevice}
             />
           </DialogContent>
         </Dialog>
@@ -847,45 +861,37 @@ const DeviceSettings: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>NO</TableHead>
                   <TableHead>ID</TableHead>
-                  <TableHead>Device ID</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Phone Number</TableHead>
-                  <TableHead>API Key Option</TableHead>
-                  <TableHead>Webhook ID</TableHead>
-                  <TableHead>API Key</TableHead>
-                  <TableHead>ID Device</TableHead>
+                  <TableHead>ID DEVICE</TableHead>
+                  <TableHead>PHONE NUMBER</TableHead>
                   <TableHead>ID ERP</TableHead>
-                  <TableHead>ID Admin</TableHead>
-                  <TableHead>Instance</TableHead>
-                  <TableHead className="text-center">Status Device</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>ID ADMIN</TableHead>
+                  <TableHead>PROVIDER</TableHead>
+                  <TableHead>INSTANCE</TableHead>
+                  <TableHead>WEBHOOK ID</TableHead>
+                  <TableHead>API KEY OPTION</TableHead>
+                  <TableHead>API KEY</TableHead>
+                  <TableHead className="text-center">STATUS DEVICE</TableHead>
+                  <TableHead className="text-right">ACTIONS</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {devices.map((device) => (
+                {devices.map((device, index) => (
                   <TableRow key={device.id}>
+                    <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell className="font-medium">{device.id}</TableCell>
-                    <TableCell>
-                      {device.provider === 'wablas' 
-                        ? (device.device_id || 'Not generated')
-                        : device.provider === 'whacenter'
-                        ? (device.instance || 'Not generated')
-                        : 'Not generated'
-                      }
-                    </TableCell>
+                    <TableCell>{device.id_device}</TableCell>
+                    <TableCell>{device.phone_number || 'Not set'}</TableCell>
+                    <TableCell>{device.id_erp}</TableCell>
+                    <TableCell>{device.id_admin}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{device.provider}</Badge>
                     </TableCell>
-                    <TableCell>{device.phone_number || 'Not set'}</TableCell>
-                    <TableCell>{apiKeyOptions.find(opt => opt.value === device.api_key_option)?.label}</TableCell>
-                    <TableCell>{device.webhook_id || 'Not set'}</TableCell>
-                    <TableCell>{device.api_key ? '***' : 'Not set'}</TableCell>
-                    <TableCell>{device.id_device}</TableCell>
-                    <TableCell>{device.id_erp}</TableCell>
-                    <TableCell>{device.id_admin}</TableCell>
                     <TableCell>{device.instance || 'Not set'}</TableCell>
+                    <TableCell>{device.webhook_id || 'Not set'}</TableCell>
+                    <TableCell>{apiKeyOptions.find(opt => opt.value === device.api_key_option)?.label}</TableCell>
+                    <TableCell>{device.api_key ? '***' : 'Not set'}</TableCell>
                     <TableCell>
                       <Badge 
                         variant={device.device_id ? "default" : "secondary"}
@@ -923,12 +929,24 @@ const DeviceSettings: React.FC = () => {
         </CardContent>
       </Card>
       
-      <DeviceStatusPopup
-        isOpen={statusPopupOpen}
-        onClose={handleStatusPopupClose}
-        deviceId={selectedDeviceForStatus?.id || ''}
-        deviceName={selectedDeviceForStatus?.device_id}
-      />
+      {/* Provider-specific status modals */}
+      {selectedDeviceForStatus?.provider === 'wablas' && (
+        <WablasStatusModal
+          isOpen={statusPopupOpen}
+          onClose={handleStatusPopupClose}
+          deviceId={selectedDeviceForStatus?.id || ''}
+          deviceName={selectedDeviceForStatus?.device_id}
+        />
+      )}
+      
+      {selectedDeviceForStatus?.provider === 'whacenter' && (
+        <WhacenterStatusModal
+          isOpen={statusPopupOpen}
+          onClose={handleStatusPopupClose}
+          deviceId={selectedDeviceForStatus?.id || ''}
+          deviceName={selectedDeviceForStatus?.device_id}
+        />
+      )}
     </div>
   );
 };
