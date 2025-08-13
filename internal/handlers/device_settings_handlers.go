@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -838,8 +839,11 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 
 	// Make API call to check Whacenter device status using the correct endpoint
 	client := &http.Client{Timeout: 10 * time.Second}
-	// Use the correct statusDevice API endpoint with device_id parameter
-	apiURL := fmt.Sprintf("https://api.whacenter.com/api/statusDevice?device_id=%s", url.QueryEscape(device.Instance.String))
+	// Use the hardcoded API key for whacenter requests
+	whacenterAPIKey := "abebe840-156c-441c-8252-da0342c5a07c"
+	// Use the correct statusDevice API endpoint with device_id and api_key parameters
+	apiURL := fmt.Sprintf("https://api.whacenter.com/api/statusDevice?api_key=%s&device_id=%s", 
+		whacenterAPIKey, url.QueryEscape(device.Instance.String))
 	
 	logrus.WithFields(logrus.Fields{
 		"api_url": apiURL,
@@ -980,7 +984,10 @@ func (h *Handlers) getWhacenterQRCode(deviceID string) string {
 	logrus.WithField("device_id", deviceID).Info("[WHACENTER] Fetching QR code")
 	
 	client := &http.Client{Timeout: 10 * time.Second}
-	qrURL := fmt.Sprintf("https://api.whacenter.com/api/qr?device_id=%s", url.QueryEscape(deviceID))
+	// Use the hardcoded API key for whacenter requests
+	whacenterAPIKey := "abebe840-156c-441c-8252-da0342c5a07c"
+	qrURL := fmt.Sprintf("https://api.whacenter.com/api/qr?api_key=%s&device_id=%s", 
+		whacenterAPIKey, url.QueryEscape(deviceID))
 	
 	req, err := http.NewRequest("GET", qrURL, nil)
 	if err != nil {
@@ -988,7 +995,8 @@ func (h *Handlers) getWhacenterQRCode(deviceID string) string {
 		return ""
 	}
 	
-	req.Header.Set("Accept", "application/json")
+	// Accept both JSON and image responses
+	req.Header.Set("Accept", "application/json, image/png")
 	
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1004,11 +1012,19 @@ func (h *Handlers) getWhacenterQRCode(deviceID string) string {
 	}
 	
 	if resp.StatusCode == 200 {
+		// Check if response is a PNG image (like in the PHP code)
+		if len(bodyBytes) >= 8 && string(bodyBytes[1:4]) == "PNG" {
+			// It's a valid PNG image, convert to base64 data URL
+			logrus.Info("[WHACENTER] Successfully fetched QR code as PNG image")
+			return fmt.Sprintf("data:image/png;base64,%s", base64.StdEncoding.EncodeToString(bodyBytes))
+		}
+		
+		// Try to parse as JSON response
 		var qrResponse map[string]interface{}
 		if err := json.Unmarshal(bodyBytes, &qrResponse); err == nil {
 			if data, ok := qrResponse["data"].(map[string]interface{}); ok {
 				if qrCode, ok := data["qr"].(string); ok {
-					logrus.Info("[WHACENTER] Successfully fetched QR code")
+					logrus.Info("[WHACENTER] Successfully fetched QR code from JSON")
 					return qrCode
 				}
 			}
@@ -1017,7 +1033,8 @@ func (h *Handlers) getWhacenterQRCode(deviceID string) string {
 	
 	logrus.WithFields(logrus.Fields{
 		"status_code": resp.StatusCode,
-		"response": string(bodyBytes),
+		"response_length": len(bodyBytes),
+		"content_type": resp.Header.Get("Content-Type"),
 	}).Warn("[WHACENTER] Failed to fetch QR code")
 	
 	return ""

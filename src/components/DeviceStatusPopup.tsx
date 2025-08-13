@@ -11,12 +11,12 @@ import { Loader2, RefreshCw, CheckCircle, XCircle, AlertCircle } from 'lucide-re
 import { toast } from 'sonner';
 
 interface DeviceStatus {
-  device_id: string;
-  provider: string;
-  connected: boolean;
-  status: string;
-  last_checked: string;
-  details: any;
+  device_id?: string;
+  provider?: string;
+  connected?: boolean;
+  status?: string;
+  last_checked?: string;
+  details?: any;
 }
 
 interface DeviceStatusPopupProps {
@@ -162,16 +162,16 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-medium">Status:</span>
                 <div className="flex items-center gap-2">
-                  {getStatusIcon(status.status)}
-                  <Badge className={getStatusColor(status.status)}>
-                    {status.status.replace('_', ' ').toUpperCase()}
+                  {getStatusIcon(status.status || '')}
+                  <Badge className={getStatusColor(status.status || '')}>
+                    {status.status?.replace('_', ' ').toUpperCase() || 'UNKNOWN'}
                   </Badge>
                 </div>
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="font-medium">Provider:</span>
-                <Badge variant="outline">{status.provider}</Badge>
+                <Badge variant="outline">{status.provider || 'Unknown'}</Badge>
               </div>
               
               <div className="flex items-center justify-between">
@@ -184,7 +184,7 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-medium">Last Checked:</span>
                 <span className="text-sm text-gray-600">
-                  {formatTimestamp(status.last_checked)}
+                  {formatTimestamp(status.last_checked || '')}
                 </span>
               </div>
               
@@ -194,14 +194,14 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                   <span className="font-medium block mb-2">Details:</span>
                   
                   {/* Show specific error messages prominently */}
-                  {status.details.error && (
+                  {status.details?.error && (
                     <div className="bg-red-50 border border-red-200 p-3 rounded-md mb-3">
                       <div className="flex items-center gap-2 mb-2">
                         <XCircle className="h-4 w-4 text-red-500" />
                         <span className="font-medium text-red-800">Error</span>
                       </div>
                       <p className="text-red-700 text-sm">{status.details.error}</p>
-                      {status.details.http_status && (
+                      {status.details?.http_status && (
                         <p className="text-red-600 text-xs mt-1">
                           HTTP Status: {status.details.http_status}
                         </p>
@@ -210,7 +210,7 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                   )}
                   
                   {/* Show API response body if it contains error info */}
-                  {status.details.response_body && (
+                  {status.details?.response_body && (
                     <div className="bg-orange-50 border border-orange-200 p-3 rounded-md mb-3">
                       <div className="flex items-center gap-2 mb-2">
                         <AlertCircle className="h-4 w-4 text-orange-500" />
@@ -231,7 +231,7 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                               </div>
                             );
                           } catch {
-                            return <p>{status.details.response_body}</p>;
+                            return <p>{status.details?.response_body}</p>;
                           }
                         })()}
                       </div>
@@ -239,26 +239,26 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                   )}
                   
                   {/* Show device-specific information */}
-                  {(status.details.nama || status.details.nomor || status.details.device_status) && (
+                  {(status.details?.nama || status.details?.nomor || status.details?.device_status) && (
                     <div className="bg-blue-50 border border-blue-200 p-3 rounded-md mb-3">
                       <div className="flex items-center gap-2 mb-2">
                         <CheckCircle className="h-4 w-4 text-blue-500" />
                         <span className="font-medium text-blue-800">Device Info</span>
                       </div>
                       <div className="text-blue-700 text-sm space-y-1">
-                        {status.details.nama && (
+                        {status.details?.nama && (
                           <p><span className="font-medium">Name:</span> {status.details.nama}</p>
                         )}
-                        {status.details.nomor && (
+                        {status.details?.nomor && (
                           <p><span className="font-medium">Number:</span> {status.details.nomor}</p>
                         )}
-                        {status.details.device_status && (
+                        {status.details?.device_status && (
                           <p><span className="font-medium">Device Status:</span> {status.details.device_status}</p>
                         )}
-                        {status.details.qr && status.details.qr !== 'timeout' && (
+                        {status.details?.qr && status.details?.qr !== 'timeout' && (
                           <p><span className="font-medium">QR:</span> Available</p>
                         )}
-                        {status.details.qr === 'timeout' && (
+                        {status.details?.qr === 'timeout' && (
                           <p className="text-orange-600"><span className="font-medium">QR:</span> Timeout</p>
                         )}
                       </div>
