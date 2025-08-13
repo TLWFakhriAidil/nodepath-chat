@@ -161,14 +161,94 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                 </span>
               </div>
               
+              {/* Error Details Section */}
               {status.details && Object.keys(status.details).length > 0 && (
                 <div className="mt-4">
                   <span className="font-medium block mb-2">Details:</span>
-                  <div className="bg-gray-50 p-3 rounded-md text-sm">
-                    <pre className="whitespace-pre-wrap">
-                      {JSON.stringify(status.details, null, 2)}
-                    </pre>
-                  </div>
+                  
+                  {/* Show specific error messages prominently */}
+                  {status.details.error && (
+                    <div className="bg-red-50 border border-red-200 p-3 rounded-md mb-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <XCircle className="h-4 w-4 text-red-500" />
+                        <span className="font-medium text-red-800">Error</span>
+                      </div>
+                      <p className="text-red-700 text-sm">{status.details.error}</p>
+                      {status.details.http_status && (
+                        <p className="text-red-600 text-xs mt-1">
+                          HTTP Status: {status.details.http_status}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Show API response body if it contains error info */}
+                  {status.details.response_body && (
+                    <div className="bg-orange-50 border border-orange-200 p-3 rounded-md mb-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                        <span className="font-medium text-orange-800">API Response</span>
+                      </div>
+                      <div className="text-orange-700 text-sm">
+                        {(() => {
+                          try {
+                            const parsed = JSON.parse(status.details.response_body);
+                            return (
+                              <div>
+                                {parsed.message && (
+                                  <p className="font-medium">{parsed.message}</p>
+                                )}
+                                {parsed.status !== undefined && (
+                                  <p className="text-xs mt-1">Status: {parsed.status.toString()}</p>
+                                )}
+                              </div>
+                            );
+                          } catch {
+                            return <p>{status.details.response_body}</p>;
+                          }
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show device-specific information */}
+                  {(status.details.nama || status.details.nomor || status.details.device_status) && (
+                    <div className="bg-blue-50 border border-blue-200 p-3 rounded-md mb-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CheckCircle className="h-4 w-4 text-blue-500" />
+                        <span className="font-medium text-blue-800">Device Info</span>
+                      </div>
+                      <div className="text-blue-700 text-sm space-y-1">
+                        {status.details.nama && (
+                          <p><span className="font-medium">Name:</span> {status.details.nama}</p>
+                        )}
+                        {status.details.nomor && (
+                          <p><span className="font-medium">Number:</span> {status.details.nomor}</p>
+                        )}
+                        {status.details.device_status && (
+                          <p><span className="font-medium">Device Status:</span> {status.details.device_status}</p>
+                        )}
+                        {status.details.qr && status.details.qr !== 'timeout' && (
+                          <p><span className="font-medium">QR:</span> Available</p>
+                        )}
+                        {status.details.qr === 'timeout' && (
+                          <p className="text-orange-600"><span className="font-medium">QR:</span> Timeout</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Raw details as fallback */}
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
+                      Show Raw Details
+                    </summary>
+                    <div className="bg-gray-50 p-3 rounded-md text-sm mt-2">
+                      <pre className="whitespace-pre-wrap">
+                        {JSON.stringify(status.details, null, 2)}
+                      </pre>
+                    </div>
+                  </details>
                 </div>
               )}
               
