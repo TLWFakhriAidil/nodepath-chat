@@ -4,19 +4,24 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  plugins: [react()],
   server: {
     host: "::",
     port: 8080,
-    allowedHosts: ["nodepath-chat-production.up.railway.app"]
+    allowedHosts: ["nodepath-chat-production.up.railway.app"],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   preview: {
     host: "0.0.0.0",
     port: 4173,
     allowedHosts: ["nodepath-chat-production.up.railway.app"]
   },
-  plugins: [
-    react(),
-  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
