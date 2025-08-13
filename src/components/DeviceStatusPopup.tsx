@@ -256,10 +256,42 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                           <p><span className="font-medium">Device Status:</span> {status.details.device_status}</p>
                         )}
                         {status.details?.qr && status.details?.qr !== 'timeout' && (
-                          <p><span className="font-medium">QR:</span> Available</p>
+                          <div>
+                            <p><span className="font-medium">QR:</span> Available</p>
+                            <div className="mt-2 p-2 bg-white border rounded">
+                              <img 
+                                src={status.details.qr.startsWith('data:') ? status.details.qr : `data:image/png;base64,${status.details.qr}`} 
+                                alt="QR Code" 
+                                className="w-32 h-32 mx-auto"
+                                onError={(e) => {
+                                  console.error('QR Code image failed to load:', status.details.qr);
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          </div>
                         )}
                         {status.details?.qr === 'timeout' && (
                           <p className="text-orange-600"><span className="font-medium">QR:</span> Timeout</p>
+                        )}
+                        {(status.qr_code || status.details?.qr_code) && (
+                          <div>
+                            <p><span className="font-medium">QR Code:</span> Available</p>
+                            <div className="mt-2 p-2 bg-white border rounded">
+                              <img 
+                                src={(() => {
+                                  const qrData = status.qr_code || status.details?.qr_code;
+                                  return qrData.startsWith('data:') ? qrData : `data:image/png;base64,${qrData}`;
+                                })()} 
+                                alt="QR Code" 
+                                className="w-32 h-32 mx-auto"
+                                onError={(e) => {
+                                  console.error('QR Code image failed to load:', status.qr_code || status.details?.qr_code);
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
