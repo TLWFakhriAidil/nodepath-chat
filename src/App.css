@@ -197,3 +197,48 @@
   border-radius: 8px !important;
   backdrop-filter: blur(12px) !important;
 }
+
+/* ReactFlow Panning Cursor Styles */
+.react-flow__pane {
+  cursor: grab;
+}
+
+.react-flow__pane:active {
+  cursor: grabbing;
+}
+
+.react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+/* Panning state cursor */
+.react-flow.panning .react-flow__pane {
+  cursor: grabbing;
+}
+
+/* Ensure nodes still show pointer cursor */
+.react-flow__node {
+  cursor: pointer;
+}
+
+.react-flow__node:hover {
+  cursor: pointer;
+}
+
+/* Handle cursor for node dragging */
+.react-flow__node.dragging {
+  cursor: grabbing;
+}
+
+/* Smooth panning transitions */
+.react-flow__viewport {
+  transition: none;
+}
+
+/* Disable text selection during panning */
+.react-flow.panning {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}

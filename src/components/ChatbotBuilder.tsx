@@ -70,7 +70,34 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
   const [niche, setNiche] = useState('');
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [deviceOptions, setDeviceOptions] = useState<Array<{value: string; label: string}>>([]);
+  const [isPanning, setIsPanning] = useState(false);
+  const [isNodeDragging, setIsNodeDragging] = useState(false);
   const { toast } = useToast();
+
+  // Panning event handlers
+  const onPaneMouseDown = useCallback(() => {
+    if (!isNodeDragging) {
+      setIsPanning(true);
+    }
+  }, [isNodeDragging]);
+
+  const onPaneMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  const onPaneMouseLeave = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Node drag handlers
+  const onNodeDragStart = useCallback(() => {
+    setIsNodeDragging(true);
+    setIsPanning(false);
+  }, []);
+
+  const onNodeDragStop = useCallback(() => {
+    setIsNodeDragging(false);
+  }, []);
 
   const deleteNode = useCallback(
     (nodeId: string) => {
@@ -583,14 +610,14 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
               maxZoom={4}
               defaultZoom={0.8}
               deleteKeyCode="Delete"
-              className="bg-transparent"
+              className={`bg-transparent ${isPanning ? 'panning' : ''}`}
               defaultEdgeOptions={{
                 style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
                 markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
               }}
               panOnScroll={true}
-              selectionOnDrag={true}
-              panOnDrag={[1, 2]}
+              selectionOnDrag={false}
+              panOnDrag={true}
               selectNodesOnDrag={false}
               nodesDraggable={true}
               nodesConnectable={true}
@@ -603,6 +630,11 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
               zoomOnPinch={true}
               zoomOnDoubleClick={true}
               preventScrolling={false}
+              onPaneMouseDown={onPaneMouseDown}
+              onPaneMouseUp={onPaneMouseUp}
+              onPaneMouseLeave={onPaneMouseLeave}
+              onNodeDragStart={onNodeDragStart}
+              onNodeDragStop={onNodeDragStop}
             >
               <Controls 
                 className="!bg-background/95 !border-border/50 backdrop-blur rounded-lg shadow-xl"

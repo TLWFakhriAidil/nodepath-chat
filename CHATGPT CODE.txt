@@ -1,0 +1,4043 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Invoice;
+use App\InvoiceItems;
+use App\InvoiceSetting;
+use App\OfflinePaymentMethod;
+use App\PaymentGatewayCredentials;
+use App\Project;
+use App\Task;
+use App\ZSales;
+use App\ZCustomer;
+use App\ZHarga;
+use App\ZPnl;
+use App\ZUser;
+use App\ZUse;
+use App\Role;
+use App\ZLevel;
+use App\RoleUser;
+use App\ZWschatbot;
+use App\ZWhatsapp;
+use App\ZBotquran;
+use App\AIWschatbot;
+use App\AIWhatsapp;
+use App\AIFollowup;
+use App\ZSalesAdmin;
+use App\AITrackerFollowup;
+use Auth;
+use App\ZReturn;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use App\Helper\Reply;
+use App\PusherSetting;
+use App\Setting;
+use App\TaskboardColumn;
+use App\TaskFile;
+use App\User;
+use App\ZWallet;
+use Carbon\Carbon;
+use Illuminate\Contracts\Encryption\DecryptException;
+use App\Jobs\ProcessChatGPT;
+use GuzzleHttp\Client;
+use App\Events\ConversationUpdated;
+use Illuminate\Support\Facades\Log;
+use App\ZWspTemplate;
+use App\AIAds;
+use App\ZUserSchedule;
+
+
+
+
+class HomeController extends Controller
+{
+    /**
+     * Create a new controller instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        // $this->middleware('auth');
+    }
+
+    /**
+     * Show the application dashboard.
+     *
+     * @return \Illuminate\Http\Response
+     */
+     
+     function sendGroupMessage($group_name, $wa_text, $instance) {
+        $url = 'https://app.whacenter.com/api/sendGroup'; // Group message endpoint
+    
+        $ch = curl_init($url);
+    
+        // Prepare the data for the group message
+        $data = array(
+            'device_id' => $instance,
+            'group' => $group_name, // The name of the group
+            'message' => $wa_text   // The message to send
+        );
+    
+        // Set cURL options
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+        // Execute the request
+        $result = curl_exec($ch);
+        curl_close($ch);
+    
+        // Return the result
+        return $result;
+    }
+   
+  function sendMessagepAll($wa_no, $wa_text, $button, $file, $instance) {
+    $url = '';
+    $ch = null;
+    $data = '';
+
+  $type = 6;
+     
+     if (!empty($file)) {
+                if (strpos($file, 'https://drive.google.com/') !== false) {
+                    $type = 0;
+                }
+     }
+     
+     
+    // Check if a poll question and options are provided
+    if (!empty(trim($button)) && $button != ',,') {
+        // Prepare the options array using a regular function instead of shorthand arrow syntax
+        $options = array_filter(explode(',', $button), function($option) {
+            return !empty(trim($option));
+        });
+        
+        if (!empty($options)) {
+            // If options are provided, treat it as a poll
+            $url = 'https://gate.whapi.cloud/messages/poll';
+            $ch = curl_init($url);
+            
+            // Prepare the data structure for the poll
+            $data = json_encode(array(
+                'typing_time' => $type,
+                'to' => $wa_no,
+                'title' => $wa_text, // Use wa_text as the poll question
+                'options' => $options, // Poll options
+                'count' => 1, // Single selection
+                'view_once' => true
+            ));
+        } else if (!empty($file)) {
+            // Check if $file is a video or image based on URL
+            if (strpos($file, 'https://drive.google.com/') !== false) {
+                // Send as video
+                $url = 'https://gate.whapi.cloud/messages/video';
+            } else {
+                // Send as image
+                $url = 'https://gate.whapi.cloud/messages/image';
+            }
+            $ch = curl_init($url);
+
+
+   if(!isset($wa_text)){
+       
+       $wa_text = "Download Gambar Diatas";
+   }
+            // Prepare the data structure for image or video messages
+            $data = json_encode(array(
+                'media' => $file, // The media URL (image or video)
+                'caption' => $wa_text,
+                 'typing_time' => $type,// Optional caption (text)
+                'to' => $wa_no
+            ));
+        } else {
+            // URL for sending text-only messages
+            $url = 'https://gate.whapi.cloud/messages/text';
+            $ch = curl_init($url);
+
+            // Prepare the data structure for text-only messages
+            $data = json_encode(array(
+                'body' => $wa_text,
+                 'typing_time' => $type,
+                'to' => $wa_no
+            ));
+        }
+
+    } else if (!empty($file)) {
+        // Check if $file is a video or image based on URL
+        if (strpos($file, 'https://drive.google.com/') !== false) {
+            // Send as video
+            $url = 'https://gate.whapi.cloud/messages/video';
+        } else {
+            // Send as image
+            $url = 'https://gate.whapi.cloud/messages/image';
+        }
+        $ch = curl_init($url);
+        
+          if(!isset($wa_text)){
+       
+       $wa_text = "Download Gambar Diatas";
+   }
+
+        // Prepare the data structure for image or video messages
+        $data = json_encode(array(
+            'media' => $file,
+             'typing_time' => $type,
+            'caption' => $wa_text,
+            'to' => $wa_no
+        ));
+
+    } else {
+        // If neither buttons nor file exists, send a text-only message
+        $url = 'https://gate.whapi.cloud/messages/text';
+        $ch = curl_init($url);
+        
+        // Prepare the data structure for text-only messages
+        $data = json_encode(array(
+            'body' => $wa_text,
+             'typing_time' => $type,
+            'to' => $wa_no
+        ));
+    }
+
+    // Set the headers
+    $headers = array(
+        'accept: application/json',
+        'authorization: Bearer ' . $instance,
+        'content-type: application/json',
+    );
+    
+    // Set CURL options
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);  // Set timeout for 30 seconds
+    
+    // Execute and capture the result
+    $result = curl_exec($ch);
+
+    // Check for CURL errors
+    if (curl_errno($ch)) {
+        $error_msg = curl_error($ch);
+        curl_close($ch);
+        return "CURL Error: " . $error_msg;
+    }
+    
+    curl_close($ch);
+    
+    return $result;
+}
+
+function sendMessagebAll($wa_no, $wa_text, $button, $file, $instance) {
+    $url = '';
+    $ch = null;
+    $data = '';
+    
+     $type = 6;
+     
+     if (!empty($file)) {
+                if (strpos($file, 'https://drive.google.com/') !== false) {
+                    $type = 0;
+                }
+     }
+
+    if (!empty(trim($button)) && $button != ',,') {
+        // URL for sending button messages
+        $url = 'https://gate.whapi.cloud/messages/interactive';
+        $ch = curl_init($url);
+        
+        // Prepare the buttons array
+        $buttons = [];
+        foreach (explode(',', $button) as $index => $btn_text) {
+            // Skip empty buttons
+            if (!empty(trim($btn_text))) {
+                $buttons[] = array(
+                    'type' => 'quick_reply',
+                    'title' => $btn_text,
+                    'id' => 'button' . ($index + 1)
+                );
+            }
+        }
+        
+        // If there are valid buttons, send the button message
+        if (!empty($buttons)) {
+            // Prepare the data structure for button messages
+            $data = json_encode(array(
+                'body' => array(
+                    'text' => $wa_text
+                ),
+                'action' => array(
+                    'buttons' => $buttons
+                ),
+                'type' => 'button',
+                'to' => $wa_no
+            ));
+        } else {
+            // Check if $file is a video or image based on URL
+            if (!empty($file)) {
+                if (strpos($file, 'https://drive.google.com/') !== false) {
+                    // Send as video
+                    $url = 'https://gate.whapi.cloud/messages/video';
+                } else {
+                    // Send as image
+                    $url = 'https://gate.whapi.cloud/messages/image';
+                }
+                $ch = curl_init($url);
+
+ if(!isset($wa_text)){
+       
+       $wa_text = "Download Gambar Diatas";
+   }
+
+                // Prepare the data structure for image or video messages
+                $data = json_encode(array(
+                    'media' => $file,
+                     'typing_time' => $type,
+                    'caption' => $wa_text,
+                    'to' => $wa_no
+                ));
+            } else {
+                // URL for sending text-only messages
+                $url = 'https://gate.whapi.cloud/messages/text';
+                $ch = curl_init($url);
+
+                // Prepare the data structure for text-only messages
+                $data = json_encode(array(
+                    'body' => $wa_text,
+                     'typing_time' => $type,
+                    'to' => $wa_no
+                ));
+            }
+        }
+
+    } else if (!empty($file)) {
+        // Check if $file is a video or image based on URL
+        if (strpos($file, 'https://drive.google.com/') !== false) {
+            // Send as video
+            $url = 'https://gate.whapi.cloud/messages/video';
+        } else {
+            // Send as image
+            $url = 'https://gate.whapi.cloud/messages/image';
+        }
+        $ch = curl_init($url);
+
+ if(!isset($wa_text)){
+       
+       $wa_text = "Download Gambar Diatas";
+   }
+
+        // Prepare the data structure for image or video messages
+        $data = json_encode(array(
+            'media' => $file,
+             'typing_time' => $type,
+            'caption' => $wa_text,
+            'to' => $wa_no
+        ));
+
+    } else {
+        // If neither buttons nor file exists, send a text-only message
+        $url = 'https://gate.whapi.cloud/messages/text';
+        $ch = curl_init($url);
+        
+        // Prepare the data structure for text-only messages
+        $data = json_encode(array(
+            'body' => $wa_text,
+             'typing_time' => $type,
+            'to' => $wa_no
+        ));
+    }
+
+    // Set the headers
+    $headers = array(
+        'accept: application/json',
+        'authorization: Bearer ' . $instance,
+        'content-type: application/json',
+    );
+    
+    // Set CURL options
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);  // Set timeout for 30 seconds
+    
+    // Execute and capture the result
+    $result = curl_exec($ch);
+
+    // Check for CURL errors
+    if (curl_errno($ch)) {
+        $error_msg = curl_error($ch);
+        curl_close($ch);
+        return "CURL Error: " . $error_msg;
+    }
+    
+    curl_close($ch);
+    
+    return $result;
+}
+
+     
+    public function index()
+    {
+        return view('wasapbotsalepage');
+    }
+    
+    
+    public function checkusername(Request $request) {
+    $response = [];
+
+    // Check if username is provided and exists
+    if ($request->has('username')) {
+        $username = $request->get('username');
+        $response['username'] = ZUser::where('username', $username)->exists() ? 'Existed' : 'Success';
+    }
+
+    // Check if email is provided and exists
+    if ($request->has('email')) {
+        $email = $request->get('email');
+        $response['email'] = ZUser::where('email', $email)->exists() ? 'Existed' : 'Success';
+    }
+
+    // Check if phone is provided and exists
+    if ($request->has('phone')) {
+        $phone = $request->get('phone');
+        $response['phone'] = ZUser::where('no_tel', $phone)->exists() ? 'Existed' : 'Success';
+    }
+
+    return response()->json($response);
+}
+    
+ 
+public function register($id_staff)
+{
+    
+    if(!isset($id_staff)){
+        
+        
+        return 'anda harus berdaftar dengan affliate anda';
+    }
+    
+    return view('auth.register', ['id_staff' => $id_staff]);
+}
+    
+    public function registerpost(Request $request)
+    {
+        $affliate = $request->get('affliatex');
+        $name = $request->get('first_name');
+        $email = $request->get('email');
+        $phone_numk = $request->get('phone');
+        $address = $request->get('address');
+        $negeri = $request->get('negeri');
+        $bisexp = $request->get('bisexp');
+        $password = $request->get('password');
+         $team = $request->get('team');
+        $username = $request->get('username');
+        $team = $request->get('team');
+        $erp = $request->get('erp');
+        $checkbox = $request->get('agree');
+        
+        if(!isset($checkbox)){
+            
+                    return back()->withErrors(['agree' => 'You must agree to the terms and conditions to register.']);
+
+            
+        }
+
+        
+
+        $apo = substr($phone_numk, 0, 1);
+        
+        if($apo == "0"){
+            $phone= "6".$phone_numk;
+        }
+        else{
+            $phone = $phone_numk;
+        }
+        
+        
+        
+        $apox = substr($phone, 0, 1);
+        
+        if($apox != "6"){
+            
+            return false;
+        }
+        
+        $check = ZUser::where('username',$username)->first();
+        
+        if(isset($check)){
+            return 'exist';
+        }
+        
+        
+        $zuser = new ZUser();
+        $user = new User();   
+        
+      
+        $id_staff = $username;
+        $encrypt_password=base64_encode($password);
+	    $new_password = bcrypt($password);
+	 
+	    $zuser->dateregister = date('Y-m-d');
+	    $zuser->name_user = $name;
+		$zuser->no_tel = $phone;
+		$zuser->email = $email;
+		$zuser->alamat = $address;
+		$zuser->bisexp = $bisexp;
+    	$zuser->sponsor = $affliate;
+    	$zuser->status = 'Pending';
+// 		$zuser->no_bank = '';
+// 		$zuser->type_bank = '';
+		$zuser->id_department = '18';
+		$zuser->status_user = 'Usahawan';
+		$zuser->company = 'HQ';
+			$zuser->team = $team;
+		
+		$zuser->available = 'Yes';
+		$zuser->invname = json_encode(["Default"]);
+// 		$zuser->level = null;
+		$zuser->id_staff = $id_staff;
+		$zuser->username = $id_staff;
+		$zuser->team = $team;
+		$zuser->id_erp = $erp;
+		$zuser->password = $encrypt_password;
+		$zuser->date_expired = '2026-01-01';
+// 		$zuser->package = 'Trial';
+// 		$zuser->token = '1';
+		$zuser->save();
+		
+
+
+        
+        $ix = $zuser->user_id;
+        $user->user_id = $ix;
+		$user->name_user = $name;
+		$user->no_tel = $phone;
+		$user->emails = $email;
+		$user->email = $id_staff;
+		$user->name = $name;
+		$user->alamat = $address;
+		$user->sponsor = $affliate;
+		$user->no_bank = '';
+		$user->type_bank = '';
+		$user->id_department = '18';
+		$user->invname = json_encode(["Default"]);
+		$user->username = $id_staff;
+		$user->team = $team;
+		$user->password = $new_password;
+		$user->id_staff = $id_staff;
+		$user->status_user = 'Usahawan';
+     	$user->company = 'HQ';
+		$user->available = 'Yes';
+		$user->date_expired = '2026-01-01';
+// 		$user->package = 'Trial';
+		$user->login = 'enable';
+	    $user->save();
+	    
+	    
+
+		$roleuser = new RoleUser();
+        $roleuser->user_id = $ix;
+        $roleuser->role_id = 4;
+        $roleuser->save();
+	   
+        
+        $wallet = new ZWallet;
+    
+        $wallet->id_staff = $id_staff;
+        $wallet->date = date('Y-m-d');
+        $wallet->amnt_req = 0;
+        $wallet->status = "Trial Version";
+        $wallet->package = "Trial";
+        $wallet->date_expired = date('Y-m-d', strtotime('+5 month'));
+        $wallet->save();
+        
+        
+        $text = "RVSBBOT\n\nPendaftaran baru daripada ".$zuser->name_user." dengan ID : ".$zuser->id_staff;
+        
+        
+        // $this->sendGroupMessage('IT DEV',$text,'a7fceb6258174039d7cc9d373b5a38ff');
+        
+
+	 return redirect(route('login'));
+		
+    }
+    
+    
+    
+//========================================================================OFF TOGGLE CHATBOT==============================================================================================================================================================
+// public function getinfo($idstaff, $datestart, $dateend)
+// {
+//     $start = date("Y-m-d", strtotime($datestart));
+//     $end = date("Y-m-d", strtotime($dateend));
+
+//     $user = ZUser::where('id_staff', $idstaff)->first();
+
+//     if (!$user) {
+//         return response()->json([
+//             'leads' => [],
+//             'total_sale' => 0,
+//             'sales_by_channel' => []
+//         ]);
+//     }
+
+//     $id_erp = $user->id_erp;
+
+//     // 1. Get all leads grouped by ad (including NULL ad_id)
+//     $rawLeads = DB::table('tbl_aiwhatsapp as w')
+//         ->leftJoin('tbl_aiads as a', function ($join) {
+//             $join->on('w.id_staff', '=', 'a.id_staff')
+//                  ->on('w.keywordiklan', '=', 'a.keyword');
+//         })
+//         ->where('w.id_staff', $idstaff)
+//         ->whereBetween('w.date_order', [$start, $end])
+//         ->select(
+//             'a.ad_id',
+//             'a.url',
+//             DB::raw('COUNT(w.prospect_num) as total_lead'),
+//             DB::raw('GROUP_CONCAT(w.prospect_num SEPARATOR ",") as all_numbers')
+//         )
+//         ->groupBy('a.ad_id', 'a.url')
+//         ->get();
+
+//     $leads = [];
+
+//     foreach ($rawLeads as $lead) {
+//         $prospectNumbers = array_filter(explode(',', $lead->all_numbers));
+
+//         // Get ZCustomer records
+//         $customers = ZCustomer::where('registeredBy', $id_erp)
+//             ->whereBetween('date', [$start, $end])
+//             ->whereIn('phone_num', $prospectNumbers)
+//             ->get();
+
+//         // Count converted customers
+//         $totalCustomer = $customers->count();
+
+//         // Sum total_price from related sales
+//         $totalPrice = $customers->sum(function ($cust) {
+//             return optional($cust->salesCust)->total_price ?? 0;
+//         });
+
+//         $leads[] = [
+//             'ad_id' => $lead->ad_id,
+//             'url' => $lead->url,
+//             'total_lead' => count($prospectNumbers),
+//             'total_customer' => $totalCustomer,
+//             'total_price' => $totalPrice,
+//         ];
+//     }
+
+//     // 2. Get sales grouped by channel
+  
+// }
+
+
+
+public function getinfo($idstaff, $datestart, $dateend)
+{
+    $start = date("Y-m-d", strtotime($datestart));
+    $end = date("Y-m-d", strtotime($dateend));
+
+    $user = ZUser::where('id_staff', $idstaff)->first();
+
+    if (!$user) {
+        return response()->json([
+            'leads' => []
+        ]);
+    }
+
+    $id_erp = $user->id_erp;
+    
+  $rawLeads = ZSalesAdmin::select(
+        'ad_id',
+        \DB::raw('COUNT(phone_customer) as total_lead'),
+        \DB::raw('GROUP_CONCAT(phone_customer SEPARATOR ",") as all_numbers')
+    )
+    ->where('id_staff', $id_erp)
+    ->whereBetween('date_order', [$start, $end])
+    ->groupBy('ad_id')
+    ->get();
+    
+
+
+//     // 1. Get all leads grouped by ad (including NULL ad_id)
+//   return  $rawLeads = DB::table('tbl_aiwhatsapp as w')
+//         ->leftJoin('tbl_aiads as a', function ($join) {
+//             $join->on('w.id_staff', '=', 'a.id_staff')
+//                  ->on('w.keywordiklan', '=', 'a.keyword');
+//         })
+//         ->where('w.id_staff', $idstaff)
+//         ->whereBetween('w.date_order', [$start, $end])
+//         ->select(
+//             'a.ad_id',
+//             'a.url',
+//             DB::raw('COUNT(w.prospect_num) as total_lead'),
+//             DB::raw('GROUP_CONCAT(w.prospect_num SEPARATOR ",") as all_numbers')
+//         )
+//         ->groupBy('a.ad_id', 'a.url')
+//         ->get();
+
+    $leads = [];
+
+    foreach ($rawLeads as $lead) {
+        $prospectNumbers = array_filter(explode(',', $lead->all_numbers));
+
+     
+   $salesQuery = ZSales::where('id_staff', $id_erp)
+     ->where('date_order', '>=', $start)->whereNull('tbl_sale.id_staffdelete')
+    ->join('tbl_customer as c', 'tbl_sale.id_cust', '=', 'c.id_cust')
+    ->whereIn('c.phone_num', $prospectNumbers);
+
+// Total sales value
+$totalPrice = $salesQuery->sum('total_price');
+
+// Total distinct customers (count by unique phone_num)
+$totalCustomer = $salesQuery->distinct('tbl_sale.id_cust')->count('tbl_sale.id_cust');
+
+   
+        $leads[] = [
+            'ad_id' => $lead->ad_id,
+            'url' => $lead->url,
+            'total_lead' => count($prospectNumbers),
+            'total_customer' => $totalCustomer,
+            'total_price' => $totalPrice,
+        ];
+    }
+
+    // 2. Return everything in one array
+    return response()->json([
+        'leads' => $leads
+    ]);
+}
+
+
+
+    public function toggleWSAI()
+    {
+        
+        $current = date("Y-m-d");
+
+        $users = Zuser::where('id_department', '=', '18')->get();
+   
+        
+        
+        foreach ($users as $user) {
+            
+            if ($current > $user->date_expired) {
+                
+                $user->toggle = '1';
+                
+                $nows = $user->no_tel;
+                $text = "RVSBBOT anda telah tamat tempoh.\n\nSila renew untuk meneruskan perkhidmatan, terima kasih.";
+       
+                $this->sendMessage($nows, $text, 'a7fceb6258174039d7cc9d373b5a38ff');
+                
+            } else {
+                $user->toggle = null;
+            }
+            $user->save();
+            
+        }
+        
+       
+
+        
+    }
+
+  
+    public function login()
+    {
+        // return 'asdz';
+        return redirect(route('login'));
+    }
+
+    public function invoice($id)
+    {
+        $this->pageTitle = __('app.menu.invoices');
+        $this->pageIcon = 'icon-money';
+
+        $this->invoice = Invoice::with('currency', 'project', 'project.client')->whereRaw('md5(id) = ?', $id)->firstOrFail();
+        $this->paidAmount = $this->invoice->getPaidAmount();
+
+        if ($this->invoice->discount > 0) {
+            if ($this->invoice->discount_type == 'percent') {
+                $this->discount = (($this->invoice->discount / 100) * $this->invoice->sub_total);
+            } else {
+                $this->discount = $this->invoice->discount;
+            }
+        } else {
+            $this->discount = 0;
+        }
+
+        $taxList = array();
+
+        $items = InvoiceItems::whereNotNull('taxes')
+            ->where('invoice_id', $this->invoice->id)
+            ->get();
+
+        foreach ($items as $item) {
+            foreach (json_decode($item->taxes) as $tax) {
+                $this->tax = InvoiceItems::taxbyid($tax)->first();
+                if ($this->tax) {
+                    if (!isset($taxList[$this->tax->tax_name . ': ' . $this->tax->rate_percent . '%'])) {
+                        $taxList[$this->tax->tax_name . ': ' . $this->tax->rate_percent . '%'] = ($this->tax->rate_percent / 100) * $item->amount;
+                    } else {
+                        $taxList[$this->tax->tax_name . ': ' . $this->tax->rate_percent . '%'] = $taxList[$this->tax->tax_name . ': ' . $this->tax->rate_percent . '%'] + (($this->tax->rate_percent / 100) * $item->amount);
+                    }
+                }
+            }
+        }
+
+        $this->taxes = $taxList;
+
+        $this->settings = Setting::organisationSetting();
+        $this->credentials = PaymentGatewayCredentials::first();
+        $this->methods = OfflinePaymentMethod::activeMethod();
+        $this->invoiceSetting = InvoiceSetting::first();
+
+        return view('invoice', [
+            'companyName' => $this->settings->company_name,
+            'pageTitle' => $this->pageTitle,
+            'pageIcon' => $this->pageIcon,
+            'global' => $this->settings,
+            'setting' => $this->settings,
+            'settings' => $this->settings,
+            'invoice' => $this->invoice,
+            'paidAmount' => $this->paidAmount,
+            'discount' => $this->discount,
+            'credentials' => $this->credentials,
+            'taxes' => $this->taxes,
+            'methods' => $this->methods,
+            'invoiceSetting' => $this->invoiceSetting,
+        ]);
+    }
+    public function app()
+    {
+        $setting = Setting::select('id', 'company_name')->first();
+
+        return ['data' => $setting];
+    }
+
+    public function gantt($ganttProjectId)
+    {
+        $this->settings = cache()->remember(
+            'global-setting',
+            60 * 60 * 24,
+            function () {
+                return \App\Setting::first();
+            }
+        );
+        $this->ganttProjectId = $ganttProjectId;
+        $this->project = Project::whereRaw('md5(id) = ?', $ganttProjectId)->first();
+
+        return view('gantt', [
+            'ganttProjectId' => $this->ganttProjectId,
+            'global' => $this->settings,
+            'project' => $this->project
+        ]);
+    }
+
+    public function ganttData($ganttProjectId)
+    {
+
+        $data = array();
+        $links = array();
+
+        $projects = Project::select('id', 'project_name', 'start_date', 'deadline', 'completion_percent')
+            ->whereRaw('md5(id) = ?', $ganttProjectId)
+            ->get();
+
+        $id = 0; //count for gantt ids
+        foreach ($projects as $project) {
+            $id = $id + 1;
+            $projectId = $id;
+
+            // TODO::ProjectDeadline to do
+            $projectDuration = 0;
+            if ($project->deadline) {
+                $projectDuration = $project->deadline->diffInDays($project->start_date);
+            }
+
+            $data[] = [
+                'id' => $projectId,
+                'text' => ucwords($project->project_name),
+                'start_date' => $project->start_date->format('Y-m-d H:i:s'),
+                'duration' => $projectDuration,
+                'progress' => $project->completion_percent / 100,
+                'color' => 'grey',
+                'textColor' => 'white',
+                'project_id' => $project->id
+            ];
+
+            $tasks = Task::projectTasks($project->id, null, "0");
+
+            foreach ($tasks as $key => $task) {
+                $id = $id + 1;
+
+                $taskDuration = $task->due_date->diffInDays($task->start_date);
+                $taskDuration = $taskDuration + 1;
+
+                $color = $task->board_column->label_color;
+
+                $data[] = [
+                    'id' => $task->id,
+                    'text' => ucfirst($task->heading),
+                    'start_date' => (!is_null($task->start_date)) ? $task->start_date->format('Y-m-d') : $task->due_date->format('Y-m-d'),
+                    'duration' => $taskDuration,
+                    'parent' => $projectId,
+                    'color' => $color,
+                    'taskid' => $task->id
+                ];
+
+                $links[] = [
+                    'id' => $id,
+                    'source' => $task->dependent_task_id != '' ? $task->dependent_task_id : $projectId,
+                    'target' => $task->id,
+                    'type' => $task->dependent_task_id != '' ? 0 : 1
+                ];
+            }
+        }
+
+        $ganttData = [
+            'data' => $data,
+            'links' => $links
+        ];
+
+        return response()->json($ganttData);
+    }
+
+
+    public function taskDetail($id)
+    {
+        $this->settings = cache()->remember(
+            'global-setting',
+            60 * 60 * 24,
+            function () {
+                return \App\Setting::first();
+            }
+        );
+        $this->task = Task::with('board_column', 'subtasks', 'project', 'users')->findOrFail($id);
+        $view = view('task_detail', [
+            'task' => $this->task,
+            'global' => $this->settings,
+        ])->render();
+        return Reply::dataOnly(['status' => 'success', 'view' => $view]);
+    }
+
+    public function taskFiles($id)
+    {
+        $this->taskFiles = TaskFile::where('task_id', $id)->get();
+        return view('task-files', ['taskFiles' => $this->taskFiles]);
+    }
+
+    public function history($id)
+    {
+        $this->settings = cache()->remember(
+            'global-setting',
+            60 * 60 * 24,
+            function () {
+                return \App\Setting::first();
+            }
+        );
+        $this->task = Task::with('board_column', 'history', 'history.board_column')->findOrFail($id);
+        $view = view('admin.tasks.history', [
+            'task' => $this->task,
+            'global' => $this->settings,
+        ])->render();
+        return Reply::dataOnly(['status' => 'success', 'view' => $view]);
+    }
+
+    public function taskboard(Request $request, $encrypt)
+    {
+        $this->global = cache()->remember(
+            'global-setting',
+            60 * 60 * 24,
+            function () {
+                return \App\Setting::first();
+            }
+        );
+
+        try {
+            $companyName = decrypt($encrypt);
+            if ($companyName != $this->global->company_name) {
+                abort(404);
+            }
+        } catch (DecryptException $e) {
+            abort(404);
+        }
+
+        $this->pusherSettings = PusherSetting::first();
+        $this->startDate = Carbon::today()->subDays(15)->format($this->global->date_format);
+        $this->endDate = Carbon::today()->addDays(15)->format($this->global->date_format);
+        $this->projects = Project::allProjects();
+        $this->clients = User::allClients();
+        $this->employees = User::allEmployees();
+
+
+        return view('taskboard', [
+            'startDate' => $this->startDate,
+            'endDate' => $this->endDate,
+            'projects' => $this->projects,
+            'clients' => $this->clients,
+            'employees' => $this->employees,
+            'global' => $this->global,
+            'pusherSettings' => $this->pusherSettings,
+        ]);
+    }
+
+    public function taskBoardData(Request $request)
+    {
+       return $webhookResponse = json_decode(file_get_contents('php://input'), true);
+
+//Retrieve the id from the data object, via the id property
+
+      $tracking =  $webhookResponse['tracking_id'];
+     $messagez = $webhookResponse['status'];
+
+
+        $parcel= ZSales::where('tracking_num','=',$webhookResponse)->first();
+        
+        $parcel->SEO = $messagez;
+        $parcel->save();
+        
+
+      return   'success';
+    }
+
+    public function taskShare($id)
+    {
+        $this->pageTitle = __('app.task');
+
+        $this->settings = cache()->remember(
+            'global-setting',
+            60 * 60 * 24,
+            function () {
+                return \App\Setting::first();
+            }
+        );
+        $this->task = Task::with('board_column', 'subtasks', 'project', 'users')->whereRaw('md5(id) = ?', $id)->firstOrFail();
+
+        return view('task-share', [
+            'task' => $this->task,
+            'global' => $this->settings
+        ]);
+    }
+    
+    
+    public function wstest_webhook(Request $request, $instance, $name, $niche, $page = null){
+        $this->sendMessage('60145360636', 'testexama', '73a51833a2047c7101143e2f74abb89a');
+    }
+    
+    function sendMessage($wa_no, $wa_text, $instance) {
+        
+        $url = 'https://app.whacenter.com/api/send';
+        
+        $ch = curl_init($url);
+        
+        $nohp= $wa_no;
+        $pesan= $wa_text;
+        
+        $data = array(
+            'device_id' => $instance,
+            'number' => $nohp,
+            'message' => $pesan,
+            //'file' => 'https://urlgamba-file',
+           
+        );
+        $payload = $data;
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $result = curl_exec($ch);
+        curl_close($ch);
+        return $result;
+        //echo $result;
+    }
+    
+    
+        
+
+    
+    function sendChatMessage($wa_no, $wa_text, $file, $instance, $delay) {
+        
+        $characterCount = strlen($instance);
+
+        if ($characterCount > 40) {
+         
+        sleep($delay);
+         
+                
+                    if (strpos($file, '.mp4') !== false) {
+                    
+                        $url = 'https://my.wablas.com/api/send-video';
+                        $ch = curl_init($url);
+                        
+                        $data = array(
+                            'phone' => $wa_no,
+                            'video' => $file,
+                            'caption' => $wa_text,
+                        );
+                        
+                        // \Log::info("masuk part my wablas video homecontroller", $data);
+                        
+                    }else if (strpos($file, '.mp3') !== false) {
+                    
+                        $url = 'https://my.wablas.com/api/send-audio';
+                        $ch = curl_init($url);
+                        
+                        $data = array(
+                            'phone' => $wa_no,
+                            'audio' => $file,
+                            'caption' => $wa_text,
+                        );
+                        
+                        // \Log::info("masuk part my wablas audio homecontroller", $data);
+                        
+                    }else{
+                        
+                        $url = 'https://my.wablas.com/api/send-image';
+                        $ch = curl_init($url);
+                        
+                        $data = array(
+                            'phone' => $wa_no,  // Recipient phone number
+                            'image' => $file,  // Image URL
+                            'caption' => $wa_text,
+                              // Image caption (optional)
+                        );
+                    }
+                    
+                    // Set the cURL options
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                        "Authorization: $instance",  // Set the Authorization header
+                        "Content-Type: application/x-www-form-urlencoded"
+                    ]);
+                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));  // Attach data as form data
+                    
+                    $result = curl_exec($ch);
+                    
+                    // \Log::info("masuk part my wablas homecontroller error2 $result");
+                    
+                    if (curl_errno($ch)) {
+                        echo 'Error:' . curl_error($ch);
+                        // \Log::info("masuk part my wablas homecontroller error $result", curl_error($ch));
+                    }
+                    
+                    curl_close($ch);
+                    
+                    return '';
+                
+            
+        }else{
+            
+            sleep($delay);
+            
+            $nohp= $wa_no;
+            $pesan= $wa_text;
+                
+            if (strpos($file, '.mp4') !== false) {
+                    
+                $url = 'https://api.whacenter.com/api/send';
+
+                $data = array(
+                    'device_id' => $instance,
+                    'number' => $nohp,
+                    'message' => $pesan,
+                    'type' => 'video',
+                    'file' => $file,
+                );
+                
+                // \Log::info("masuk part whacenter video homecontroller", $data);
+                
+            }else if (strpos($file, '.mp3') !== false) {
+                    
+                $url = 'https://api.whacenter.com/api/send';
+
+                $data = array(
+                    'device_id' => $instance,
+                    'number' => $nohp,
+                    'message' => $pesan,
+                    'type' => 'audio',
+                    'file' => $file,
+                );
+                
+                // \Log::info("masuk part whacenter audio homecontroller", $data);
+                
+            }else{
+                
+                $url = 'https://api.whacenter.com/api/send';
+                
+                $data = array(
+                    'device_id' => $instance,
+                    'number' => $nohp,
+                    'message' => $pesan,
+                    'file' => $file,
+                );
+                
+                // \Log::info("masuk part whacenter image homecontroller", $data);
+            }
+            
+            $ch = curl_init($url);
+            
+            $payload = $data;
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            $result = curl_exec($ch);
+           
+            // if (curl_errno($ch)) {
+            //     \Log::error("cURL error", ['error' => curl_error($ch)]);
+            // } else {
+            //     \Log::info("masuk part whacenter error homecontroller", ['response' => $result]);
+            // }
+            
+            curl_close($ch);
+            return '';
+            //echo $result;
+        
+        
+//   sleep($delay);
+
+// $api_base = 'http://128.199.173.51:3000';
+// $api_key = 'waha123secure';
+
+// $session = $instance; // e.g. 'user_RV-003'
+// $number = preg_replace('/[^0-9]/', '', $wa_no);
+// $chatId = $number . '@c.us';
+// $text = $wa_text;
+// $fileUrl = $file; // your URL like: https://rvsbbot.com/public/images/chatgpt/2211174301441267e44a0c546e8
+
+// // Default mimetype - adjust if you know it's PDF or PNG
+// $mimetype = 'image/jpeg';
+
+// $data = [
+//     'session' => $session,
+//     'chatId' => $chatId,
+//     'file' => [
+//         'mimetype' => $mimetype,
+//         'url' => $fileUrl,
+//         'filename' => 'file.jpg'
+//     ],
+//     'caption' => $text
+// ];
+
+// $ch = curl_init("$api_base/api/sendImage");
+// curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+// curl_setopt($ch, CURLOPT_POST, true);
+// curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+// curl_setopt($ch, CURLOPT_HTTPHEADER, [
+//     'Content-Type: application/json',
+//     "X-Api-Key: $api_key"
+// ]);
+// $response = curl_exec($ch);
+// curl_close($ch);
+
+// return $response;
+
+        
+        
+        
+           
+       }
+
+
+
+      
+    }
+
+    function sendBhatMessage($wa_no, $wa_text, $instance,$delay) {
+        
+        $characterCount = strlen($instance);
+
+        if ($characterCount > 40) {
+           
+              sleep($delay);
+            
+            $url = 'https://my.wablas.com/api/send-message';
+
+            $ch = curl_init($url);
+            
+            
+            $data = array(
+                'phone' => $wa_no,  // Recipient phone number
+                'message' => $wa_text, 
+                // Message content
+            );
+            
+            
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Authorization: $instance",  // Set the Authorization header
+                "Content-Type: application/x-www-form-urlencoded"
+            ]);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));  // Attach data as form data
+            
+            $result = curl_exec($ch);
+            curl_close($ch);
+             return '';
+        
+
+           
+           
+           
+//           whapi.cloud
+//              $type = 1;
+          
+          
+//           $url = 'https://gate.whapi.cloud/messages/text';
+//         $ch = curl_init($url);
+        
+//         // Prepare the data structure for text-only messages
+//         $data = json_encode(array(
+//             'body' => $wa_text,
+//              'typing_time' => $type,
+//             'to' => $wa_no
+//         ));
+        
+        
+        
+        
+//   $headers = array(
+//         'accept: application/json',
+//         'authorization: Bearer ' . $instance,
+//         'content-type: application/json',
+//     );
+    
+//     // Set CURL options
+//     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+//     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+//     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+//     $result = curl_exec($ch);
+//         curl_close($ch);
+//         return $result;
+           
+           
+        }else{
+           
+            sleep($delay);
+            
+            $url = 'https://api.whacenter.com/api/send';
+            
+            $ch = curl_init($url);
+            $nohp= $wa_no;
+            $pesan= $wa_text;
+            
+            $data = array(
+                'device_id' => $instance,
+                'number' => $nohp,
+                'message' => $pesan,
+            
+            );
+            
+            $payload = $data;
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            $result = curl_exec($ch);
+            curl_close($ch);
+            return '';
+        
+//     sleep($delay);
+
+// $api_base = 'http://128.199.173.51:3000';
+// $api_key = 'waha123secure';
+
+// $session = $instance; // example: 'user_RV-003'
+// $number = preg_replace('/[^0-9]/', '', $wa_no); // clean number
+// $chatId = $number . '@c.us';
+// $text = $wa_text;
+
+// $url = "$api_base/api/sendText"; // ✅ Correct endpoint
+
+// $data = [
+//     'session' => $session,
+//     'chatId' => $chatId,
+//     'text' => $text
+// ];
+
+// $ch = curl_init($url);
+// curl_setopt($ch, CURLOPT_POST, true);
+// curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+// curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+// curl_setopt($ch, CURLOPT_HTTPHEADER, [
+//     'Content-Type: application/json',
+//     "X-Api-Key: $api_key"
+// ]);
+
+// $response = curl_exec($ch);
+// curl_close($ch);
+
+// return $response;
+
+           
+           
+       }
+     
+        //echo $result;
+    }
+    
+    
+    
+    public function whapiChatclientDetails($wa_no, $instance) {
+    // $url = "https://gate.whapi.cloud/messages/list/{$wa_no}@s.whatsapp.net?count=1&from_me=false&sort=desc";
+    
+    $url = "https://gate.whapi.cloud/chats/list/{$wa_no}@s.whatsapp.net?count=100&from_me=true&sort=desc";
+    
+    // Initialize cURL session
+    $ch = curl_init($url);
+    
+    // Set the headers
+    $headers = array(
+        'accept: application/json',
+        'authorization: Bearer ' . $instance,
+    );
+    
+    // Set cURL options
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+    // Execute cURL request and capture the response
+    $result = curl_exec($ch);
+    
+    $result = json_decode($result, true);
+
+    // Close cURL session
+    curl_close($ch);
+    
+    // Return the response
+    return $result;
+}
+
+// Function to get the name of the person who voted based on the vote ID
+function getNameByCount($data, $vote) {
+    // If $data is a JSON string, decode it
+    if (is_string($data)) {
+        $data = json_decode($data, true); // Convert JSON string to array
+    }
+
+    // Check if $data is an array and has a 'messages' key
+    if (is_array($data) && isset($data['messages'])) {
+        // Iterate through the messages in the data
+        foreach ($data['messages'] as $message) {
+            // Check if the message contains a poll with results
+            if (isset($message['poll']['results'])) {
+                // Search for the matching vote ID in the poll results
+                foreach ($message['poll']['results'] as $result) {
+                    if ($result['id'] === $vote) {
+                        return $result['name']; // Return the name if a match is found
+                    }
+                }
+            }
+        }
+    }
+
+    // Return null if no match is found
+    return null;
+}
+    
+    
+    function unboldUnicode($text) {
+    $boldMap = [
+        '𝗔' => 'A', '𝗕' => 'B', '𝗖' => 'C', '𝗗' => 'D', '𝗘' => 'E', '𝗙' => 'F', '𝗚' => 'G', '𝗛' => 'H', '𝗜' => 'I',
+        '𝗝' => 'J', '𝗞' => 'K', '𝗟' => 'L', '𝗠' => 'M', '𝗡' => 'N', '𝗢' => 'O', '𝗣' => 'P', '𝗤' => 'Q', '𝗥' => 'R',
+        '𝗦' => 'S', '𝗧' => 'T', '𝗨' => 'U', '𝗩' => 'V', '𝗪' => 'W', '𝗫' => 'X', '𝗬' => 'Y', '𝗭' => 'Z',
+        '𝗮' => 'a', '𝗯' => 'b', '𝗰' => 'c', '𝗱' => 'd', '𝗲' => 'e', '𝗳' => 'f', '𝗴' => 'g', '𝗵' => 'h', '𝗶' => 'i',
+        '𝗷' => 'j', '𝗸' => 'k', '𝗹' => 'l', '𝗺' => 'm', '𝗻' => 'n', '𝗼' => 'o', '𝗽' => 'p', '𝗾' => 'q', '𝗿' => 'r',
+        '𝘀' => 's', '𝘁' => 't', '𝘂' => 'u', '𝘃' => 'v', '𝘄' => 'w', '𝘅' => 'x', '𝘆' => 'y', '𝘇' => 'z',
+        '𝟬' => '0', '𝟭' => '1', '𝟮' => '2', '𝟯' => '3', '𝟰' => '4', '𝟱' => '5', '𝟲' => '6', '𝟳' => '7', '𝟴' => '8', '𝟵' => '9'
+    ];
+    return strtr($text, $boldMap);
+}
+
+
+function makeBoldUnicode($text) {
+    $boldMap = [
+        'A' => '𝗔', 'B' => '𝗕', 'C' => '𝗖', 'D' => '𝗗', 'E' => '𝗘', 'F' => '𝗙', 'G' => '𝗚', 'H' => '𝗛', 'I' => '𝗜',
+        'J' => '𝗝', 'K' => '𝗞', 'L' => '𝗟', 'M' => '𝗠', 'N' => '𝗡', 'O' => '𝗢', 'P' => '𝗣', 'Q' => '𝗤', 'R' => '𝗥',
+        'S' => '𝗦', 'T' => '𝗧', 'U' => '𝗨', 'V' => '𝗩', 'W' => '𝗪', 'X' => '𝗫', 'Y' => '𝗬', 'Z' => '𝗭',
+        'a' => '𝗮', 'b' => '𝗯', 'c' => '𝗰', 'd' => '𝗱', 'e' => '𝗲', 'f' => '𝗳', 'g' => '𝗴', 'h' => '𝗵', 'i' => '𝗶',
+        'j' => '𝗷', 'k' => '𝗸', 'l' => '𝗹', 'm' => '𝗺', 'n' => '𝗻', 'o' => '𝗼', 'p' => '𝗽', 'q' => '𝗾', 'r' => '𝗿',
+        's' => '𝘀', 't' => '𝘁', 'u' => '𝘂', 'v' => '𝘃', 'w' => '𝘄', 'x' => '𝘅', 'y' => '𝘆', 'z' => '𝘇',
+        '0' => '𝟬', '1' => '𝟭', '2' => '𝟮', '3' => '𝟯', '4' => '𝟰', '5' => '𝟱', '6' => '𝟲', '7' => '𝟳', '8' => '𝟴', '9' => '𝟵'
+    ];
+    return strtr($text, $boldMap);
+}
+
+    
+
+    
+public function chatgpt(Request $request, $id_staff, $instance, $iderp = null)
+{
+
+
+    \DB::listen(function ($query) use ($id_staff) {
+    \Log::info('SQL ' . $id_staff . ' Query Time: ' . $query->time . 'ms; SQL: ' . $query->sql);
+    });
+    
+    $startTime = microtime(true);
+    
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    $userPenting = Zuser::where('id_staff', '=', $id_staff)->first();
+    $divProspek = $userPenting->check_prospek;
+    
+    $checkPercent = 0;
+    
+    if(isset($data['payload'])){
+        
+        return '';
+        
+  $payload = $data['payload'];
+  
+  $wa_text   = $payload['body'];
+
+
+    if (trim($wa_text) === '') {
+        return '';
+    }
+    
+    
+
+$wa_no_raw      = $payload['from'] ?? null;
+
+if (strpos($wa_no_raw, '@g.us') !== false) {
+    return '';
+}
+
+$wa_no = explode('@', $wa_no_raw)[0];
+
+$wa_nama = $payload['_data']['notifyName'] ?? 'Sis';
+
+
+
+if (!is_null($wa_text) && strpos($wa_text, '#') === 0) {
+    
+    
+    $wa_no = substr($wa_text, 1);
+    
+    $wa_text = 'Teruskan';
+    
+}
+
+// $isFromMe  = $payload['fromMe'] ?? false;
+$today     = date("Y-m-d");
+
+
+// ⛔ Ignore messages from yourself unless they start with "%"
+// if ($isFromMe) {
+//     if (strpos($wa_text, '%') !== 0) {
+//       return '';
+//     } else {
+//         // ✅ Overwrite number with the intended recipient (the real user)
+     
+//      $wa_nox = $data['payload']['to'] ?? null;             // "60108924904@c.us"
+     
+//      if (strpos($wa_nox, '@g.us') !== false) {
+//     return '';
+// }
+
+//      $wa_no = explode('@', $wa_nox)[0];    
+
+    
+        
+//     }
+// }
+  
+        
+        
+        
+    }else{
+
+
+        if (!empty($data['isGroup']) && $data['isGroup'] === true) {
+           return '';
+        }
+        
+        
+        $wa_text = $data['message'] ?? null; // Normalize message text
+        $wa_no = $data['from'] ?? $data['phone'] ?? null; // Check both keys
+        $wa_nama = $data["pushName"] ?? "Sis"; // Default name if not provided
+        $device_id = $data['deviceId'] ?? null;
+        $today = date("Y-m-d");
+            
+        $clean_text = ltrim($wa_text); // remove leading spaces or invisible characters
+            
+        if(is_null($clean_text)){
+            return '';
+        }
+            
+        if (!empty($data['isFromMe']) && $data['isFromMe'] === true) {
+            
+             if (!is_null($clean_text) && mb_substr($clean_text, 0, 1) === '%') {   
+                
+                 $wa_text = 'Teruskan';
+                 $checkPercent = 1;
+                 \Log::info("Guna % $id_staff");
+                
+            }
+            else if (!is_null($clean_text) && $clean_text === 'cmd'){
+                
+                // \Log::info("Test human $id_staff $clean_text");
+                
+                $whats = AIWhatsapp::where('id_staff', $id_staff)
+                    ->where('prospect_num', $wa_no)
+                    ->first();
+        
+                if ($whats) {
+                    
+                    // \Log::info("Test human masuk $id_staff $clean_text");
+                    
+                    $whats->human = 1;
+                    $whats->save();
+                    
+                    return '';
+                }
+            }
+            else{
+                
+                return '';
+            }
+        }
+
+        if (!is_null($clean_text) && mb_substr($clean_text, 0, 1) === '&') {
+            
+            $wa_no = substr($wa_text, 1);
+            $whats = AIWhatsapp::where('id_staff', $id_staff)
+                ->where('prospect_num', $wa_no)
+                ->first();
+        
+            if ($whats) {
+                $idpro = $whats->id_prospect;
+            
+                $fox = AITrackerFollowup::where('id_prospect', $idpro)->first();
+            
+                if (!$fox) {
+                    // No followup jobs exist yet, create them
+                    $this->scheduleEasyCronJobs($idpro);
+                    $this->sendBhatMessage($wa_no, "$wa_no Berjaya Mendaftar Followup", $instance, 1);
+                }else{
+                    $this->sendBhatMessage($wa_no, "$wa_no Exist Followup", $instance, 1);
+                } 
+            }else{
+                $this->sendBhatMessage($wa_no, "$wa_no Tidak Mendaftar Welcome Message", $instance, 1);
+            
+            } 
+            return '';
+        }
+
+        if (!is_null($clean_text) && mb_substr($clean_text, 0, 1) === '#') {
+            $wa_no = substr($wa_text, 1);
+            $wa_text = 'Teruskan';
+            $checkPercent = 1;
+            \Log::info("Guna # $id_staff");
+        }
+    }
+    
+    // $lockKey = 'lock_' . $wa_no. '_' . $device_id;
+    // \Log::info("LockKey digunakan oleh staff $id_staff: $lockKey");
+    // $already = Cache::get($lockKey);
+    // if ($already) {
+    //     \Log::warning("Duplicate input blocked for $id_staff - $wa_no - $device_id");
+    //     return;
+    // }
+    // Cache::put($lockKey, true, 3);
+    
+    if($wa_text == 'DELETE'){
+    \Log::info('chatgpt triggered with ' . $id_staff);
+        $AIWhatsapp = AIWhatsapp::where('prospect_num','=',$wa_no)->where('id_staff','=',$id_staff)->first();
+        
+        if(isset($AIWhatsapp)){
+            $idpro = $AIWhatsapp->id_prospect;
+            $this->deletescheduleEasyCronJobs($idpro);
+            
+            $AIWhatsapp->delete();
+        }
+        
+        $this->sendBhatMessage($wa_no, 'Sudah Delete Data Anda' , $instance,1);
+        
+        return '';
+    }
+    
+    if($checkPercent == 1){
+        $placeholders = [
+            '[$wa_nama]' => null, // Replace with sender's name
+            '[$wa_no]'   => $wa_no    // Replace with sender's number
+        ];
+    }else{
+        $placeholders = [
+            '[$wa_nama]' => $wa_nama, // Replace with sender's name
+            '[$wa_no]'   => $wa_no    // Replace with sender's number
+        ];
+    }
+    
+    
+    $current = date("Y-m-d");
+    
+    $user = ZUser::where('id_staff','=',$id_staff)->first();
+    
+    $iderp = $user->id_erp;
+    $markx = $id_staff;
+    $rotate =  $user->rotator;  
+    $team = $user->team;
+    $instanceUser = $user->apikey;
+    $deviceProviderUser = $user->provider;
+    
+    if(isset($user->toggle)){
+        return 'hye';
+    }
+    
+    if(isset($rotate)){
+         
+        $whats = AIWhatsapp::where('id_staff', '=', $id_staff)->where('prospect_num', '=', $wa_no)->first();
+        
+        if(!isset($whats)){
+        
+            // Fastest AIWschatbot Query (Handles null case)
+            $bot = AIWschatbot::where('id_staff', '=', $id_staff)
+                ->where('jenis_keyword','=','Welcome Message')
+                ->first();
+  
+            $delay = isset($bot) && !is_null($bot->delay) ? intval($bot->delay) : 3;
+
+
+        if(isset($bot)){
+        
+ 
+                
+                  if (!empty($bot->prompt)) {
+                
+              
+            
+                   $botPrompt = $bot->prompt;
+                   $reply = str_replace(array_keys($placeholders), array_values($placeholders), $botPrompt);
+                
+
+                $this->sendBhatMessage($wa_no, $reply , $instance,$delay);
+                
+                }
+                
+                
+                
+                  if (!empty($bot->url_image)) {
+            
+            $file = $bot->url_image;
+            // $reply =  $bot->text_image;
+            $reply = null;
+            
+            $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+            
+
+            
+            
+        } 
+        
+        
+        if(!empty($bot->url_image2)) {
+            
+            $file = $bot->url_image2;
+            //   $reply =  $bot->text_image2;
+            $reply = null;
+            
+            $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+            
+            // sleep($delay);
+        } 
+        
+        
+        if (!empty($bot->url_image3)) {
+            
+            
+            $file = $bot->url_image3;
+            // $reply =  $bot->text_image3;
+            $reply = null;
+            
+            $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+            
+            // sleep($delay);
+        } 
+        
+        
+     
+                if (!empty($bot->prompt2)) {
+                
+              
+                 $botPrompt2 = $bot->prompt2;
+                $reply2 = str_replace(array_keys($placeholders), array_values($placeholders), $botPrompt2);
+                
+                $this->sendBhatMessage($wa_no, $reply2 , $instance,$delay);
+
+                }
+                
+                  
+                  
+                }
+                
+                
+            
+        
+        
+        }
+        
+
+         
+$adminArray = explode(',', $user->id_admin);
+$adminArray = array_map('trim', $adminArray); // Remove spaces
+
+// Get last assigned admin (if any)
+$lastAssignedAdmin = AIWhatsapp::whereIn('id_staff', $adminArray)->where('marketer', $user->id_staff)
+    ->latest('id_prospect')
+    ->value('id_staff');
+
+// Track lead count for each admin (ensure new ones enter rotation normally)
+$assignmentCounts = AIWhatsapp::whereIn('id_staff', $adminArray)->where('marketer', $user->id_staff)
+    ->selectRaw('id_staff, COUNT(*) as count')
+    ->groupBy('id_staff')
+    ->pluck('count', 'id_staff')
+    ->toArray();
+
+// Ensure all admins exist in count tracking (initialize new admins)
+foreach ($adminArray as $admin) {
+    if (!isset($assignmentCounts[$admin])) {
+        $assignmentCounts[$admin] = 0; // New admins get 0 count initially
+    }
+}
+
+// ✅ If no last assigned admin, start with first admin
+if ($lastAssignedAdmin === null || !in_array($lastAssignedAdmin, $adminArray)) {
+    $nextAdmin = $adminArray[0]; // Start with the first admin
+} else {
+    // ✅ Find the next admin in the correct order
+    $lastIndex = array_search($lastAssignedAdmin, $adminArray);
+
+    if ($lastIndex === false || $lastIndex === count($adminArray) - 1) {
+        $nextAdmin = $adminArray[0]; // Restart from the first admin
+    } else {
+        $nextAdmin = $adminArray[$lastIndex + 1]; // Move to next admin
+    }
+}
+
+// ✅ Final check: Ensure selected admin exists in array (failsafe)
+if (!in_array($nextAdmin, $adminArray)) {
+    $nextAdmin = $adminArray[0];
+}
+
+
+ 
+    
+       $id_staff = $nextAdmin;
+       
+       $instances = ZUser::where('id_staff','=',$nextAdmin)->first();
+       
+       if($instances->provider == 'Wablas'){
+           
+            $instance =  $instances->apikey;
+            
+       }else{
+           
+           
+       $instance =  $instances->instance;
+       }
+
+     }
+    
+    $whats = AIWhatsapp::where('id_staff', '=', $id_staff)->where('prospect_num', '=', $wa_no)->first();
+
+    if(!isset($whats)){
+    
+        // Fetch keywords and masalah in a single query
+        $keywordData = AIAds::where('id_staff', '=', $id_staff)
+            ->whereNotNull('keyword') // Laravel 5.8-compatible null check
+            ->get(['keyword', 'masalah','ad_id']) // Get both columns
+            ->toArray(); 
+            
+        // \Log::info("Checkpoint data $id_staff ". json_encode($keywordData));
+        
+        // Initialize variables
+        $foundKeyword = null;
+        $foundad_id = null;
+        $foundMasalah = null;
+        $foundAngles = null;
+        $foundPlatform = null;
+        $foundObjective = null;
+        
+         \Log::info("Checkpoint Masalah keyword wa_text $id_staff $wa_text");
+         
+        // Optimize keyword search using regex (ensures full word matching)
+        foreach ($keywordData as $data) {
+            $pattern = '/(?<![a-zA-Z0-9])' . preg_quote($data['keyword'], '/') . '(?![a-zA-Z0-9])/i';
+            // (?<![a-zA-Z0-9]) ensures there's no letter/number before keyword
+            // (?![a-zA-Z0-9]) ensures there's no letter/number after keyword
+        
+            if (preg_match($pattern, $wa_text)) {
+                $foundKeyword = $data['keyword'];
+                $foundad_id = $data['ad_id'] ?? null;
+                $foundMasalah = $data['masalah'] ?? null;
+                $foundPlatform = $data['jenis_platform'] ?? null;
+                $foundObjective = $data['jenis_objective'] ?? null;
+                break; // Stop after first match for performance
+            }
+        }
+        
+        \Log::info("Checkpoint Masalah keyword $id_staff $foundMasalah");
+
+        // Fastest AIWschatbot Query (Handles null case)
+        // $bot = AIWschatbot::where('id_staff', '=', $id_staff)
+        //     ->whereNotNull('jenis_keyword')
+        //     ->where(function ($query) use ($foundMasalah) {
+        //         if ($foundMasalah) {
+        //             $query->where('iklan', '=', $foundMasalah); // If match found
+        //         } else {
+        //             $query->whereNull('iklan'); // If no match, look for NULL
+        //         }
+        //     })
+        //     ->first();
+
+        // Fastest AIWschatbot Query (Handles null case)
+        $botQuery = AIWschatbot::where('id_staff', $id_staff)
+            ->whereNotNull('jenis_keyword');
+        
+        if ($foundMasalah) {
+            $botQuery->where('iklan', $foundMasalah);
+        } 
+        
+        $bot = $botQuery->first();
+        
+        \Log::info("Checkpoint reached before jenis_keyword condition $id_staff $bot");
+        
+        $keywords = []; // Initialize as an empty array
+        if (isset($bot->keyword) && !empty($bot->keyword)) {
+            $keyword = $bot->keyword;
+            $keywords = explode(',', $keyword); // Convert the keyword string into an array
+        }
+        
+       $delay = isset($bot) && !is_null($bot->delay) ? intval($bot->delay) : 3;
+    
+        $niche =  $bot->niche;
+        $jenis_keyword = $bot->jenis_keyword;
+    
+        // \Log::info("Checkpoint reached before jenis_keyword condition $id_staff $bot");
+
+        if($jenis_keyword == 'Welcome Message'){
+                
+                // \Log::info("LockKey digunakan oleh staff $id_staff: masuk sini test");
+                
+                $whats = new AIWhatsapp();
+                $whats->prospect_num = $wa_no;
+                $whats->prospect_nama = $wa_nama;
+                $whats->instance = $instance;
+                $whats->date_order = $today;
+                
+                if(isset($rotate)){
+                    $whats->marketer = $markx; 
+                }  
+                
+                $whats->id_staff = $id_staff;
+                $whats->niche = $niche;
+                $whats->category = 'intro';
+                $whats->keywordiklan = $foundKeyword;
+                $whats->save();
+                
+                // \Log::info("LockKey digunakan oleh staff $id_staff: " . json_encode($whats->toArray()));
+                
+                $idpro = $whats->id_prospect;
+                $this->scheduleEasyCronJobs($idpro);
+                
+                
+                //                  $followupx = AIFollowup::where('id_staff','=',$id_staff)->orderBy('masa', 'asc')->get();
+                
+                // foreach($followupx as $followup){
+                
+                //      $track = new AITrackerFollowup();
+                // $track->id_prospect = $whats->id_prospect; // Link to prospect
+                // $track->id_followup = $followup->id;       // Link to template
+                // $track->status = 'pending';                // Set initial status
+                // $track->sent_at = null;                    // Set sent_at to null
+                //  $track->prospect_num = $wa_no;   
+                //   $track->instance = $instance;   
+                // $track->save();    
+                
+                
+                // }
+                
+                $znewBotEntry = "USER: $wa_text";
+                
+                $balas = date('Y-m-d H:i:s');
+    
+                $whats->balas = $balas;
+                $whats->conv_last = $znewBotEntry;
+                $whats->save();
+                
+                if (!empty($bot->prompt)) {
+         
+                    $botPrompt = $bot->prompt;
+                    $reply = str_replace(array_keys($placeholders), array_values($placeholders), $botPrompt);
+                    
+                    $newBotEntry = "BOT: $reply";
+                    $finalConversation = $whats->conv_last . "\n" . $newBotEntry;
+                    $whats->conv_last = $finalConversation;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendBhatMessage($wa_no, $reply , $instance,$delay);
+                    //  sleep($delay);
+                }
+                
+                if (!empty($bot->url_image)) {
+            
+                    $file = $bot->url_image;
+                    // $reply =  $bot->text_image;
+                    $reply = null;
+                    
+                    $newBotEntry2 = "BOT: $file";
+                    $finalConversation2 = $whats->conv_last . "\n" . $newBotEntry2;
+                    $whats->conv_last = $finalConversation2;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+                    //  sleep($delay);
+                } 
+                
+                if(!empty($bot->url_image2)) {
+                    
+                    $file = $bot->url_image2;
+                    //   $reply =  $bot->text_image2;
+                    $reply = null;
+                    $newBotEntry2 = "BOT: $file";
+                    $finalConversation2 = $whats->conv_last . "\n" . $newBotEntry2;
+                    $whats->conv_last = $finalConversation2;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+                    // sleep($delay);
+                } 
+                
+                if (!empty($bot->url_image3)) {
+                    
+                    $file = $bot->url_image3;
+                    // $reply =  $bot->text_image3;
+                    $reply = null;
+                    
+                    $newBotEntry2 = "BOT: $file";
+                    $finalConversation2 = $whats->conv_last . "\n" . $newBotEntry2;
+                    $whats->conv_last = $finalConversation2;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+                    // sleep($delay);
+                } 
+                
+                if (!empty($bot->prompt2)) {
+              
+                    $botPrompt2 = $bot->prompt2;
+                    $reply2 = str_replace(array_keys($placeholders), array_values($placeholders), $botPrompt2);
+                    
+                    $newBotEntry2 = "BOT: $reply2";
+                    $finalConversation2 = $whats->conv_last . "\n" . $newBotEntry2;
+                    $whats->conv_last = $finalConversation2;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendBhatMessage($wa_no, $reply2 , $instance,$delay);
+                }
+                
+                $admin = null;
+                if(isset($iderp)){
+                    
+                    $startz = microtime(true);
+                    
+                    if(isset($rotate)){
+                        $adminid  =  $id_staff;    
+                    }else{
+                        $adminid = $user->id_admin;
+                    }  
+                    
+                    if(isset($adminid)){
+                        $dataAdminid = $adminid;
+                    }else{
+                        $dataAdminid = $admin;
+                    }
+                    
+                    $url = 'https://growrvsb.com/prospectchatbot';
+     
+                    // Fallback to main if needed
+                    $params = array(
+                        'prospect_num' => $wa_no,
+                        'name' => $wa_nama,
+                        'niche' => $niche,
+                        'instance' => $instance,
+                        'idstaff' => $iderp,
+                        'admin' => $dataAdminid,
+                        'keyword' => $foundKeyword,
+                        'ad_id' => $foundad_id,
+                        'device_user' => $instanceUser,
+                        'platform_provider' => 'Wablas',
+                        'device_idstaff' => $id_staff,
+                        'jenis_platform' => $foundPlatform,
+                        'jenis_objective' => $foundObjective
+                    );
+                    
+                    $data_string = json_encode($params);
+                
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, $url);
+                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                        'Content-Type: application/json'
+                    ));
+                
+                    $out = curl_exec($ch);
+                    $response = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $error = curl_error($ch);
+                    $out = json_decode($out);
+                    curl_close($ch);
+
+                    $endz = microtime(true);
+                    Log::info('Auto Prospek' .$id_staff.' : ' . ($endz - $startz) . ' seconds');
+                    
+                    // if(isset($adminid)){
+                        
+                    //     $params = array(
+                    //         'prospect_num' => $wa_no,
+                    //         'name' => $wa_nama,
+                    //         'niche' => $niche,
+                    //         'instance' => $instance,
+                    //         'idstaff' => $iderp,
+                    //         'admin' => $dataAdminid,
+                    //         'keyword' => $foundKeyword,
+                    //         'ad_id' => $foundad_id,
+                    //     );
+                    //     $data_string = json_encode($params);                                                                                   
+                        
+                    //     $ch = curl_init();
+                    //     curl_setopt($ch, CURLOPT_URL, $url);
+                    //     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST"); 
+                    //     curl_setopt($ch, CURLOPT_POST, true);
+                    //     curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);  
+                    //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    //     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                    //     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                    //     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT ,0);
+                    //     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    //     curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
+                    //         'Content-Type: application/json')                                                                          
+                    //     );                                                                                                                   
+                        
+                    //     $out = curl_exec($ch);
+                        
+                    //     $response = curl_exec($ch);
+                    //     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    //     $error = curl_error($ch);
+    
+                    //     $out = json_decode($out);
+                    //     curl_close($ch);
+                        
+                    // }else{
+    
+                    //     $startz = microtime(true);
+    
+                    //     $params = array(
+                    //     'prospect_num' => $wa_no,
+                    //     'name' => $wa_nama,
+                    //     'niche' => $niche,
+                    //     'instance' => $instance,
+                    //     'idstaff' => $iderp,
+                    //     'admin' => $dataAdminid,
+                    //     'keyword' => $foundKeyword,
+                    //     'ad_id' => $foundad_id,
+                    //     );
+                    //     $data_string = json_encode($params);                                                                                   
+                        
+                    //     $ch = curl_init();
+                    //     curl_setopt($ch, CURLOPT_URL, $url);
+                    //     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST"); 
+                    //     curl_setopt($ch, CURLOPT_POST, true);
+                    //     curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);  
+                    //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    //     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                    //     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                    //     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT ,0);
+                    //     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    //     curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
+                    //         'Content-Type: application/json')                                                                          
+                    //     );                                                                                                                   
+                        
+                    //     $out = curl_exec($ch);
+                        
+                    //     $out = json_decode($out);
+                        
+                    //     $response = curl_exec($ch);
+                    //     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    //     $error = curl_error($ch);
+                    //     curl_close($ch);
+    
+                        
+                    //     $endz = microtime(true);
+                        
+                    //     Log::info('Auto Prospek' .$id_staff.' : ' . ($endz - $startz) . ' seconds');
+                        
+                    // }
+                }
+                
+
+//                 $WE = ZWspTemplate::where('id_staff', '=', $id_staff)->where('status','=','1');
+
+//                     $CHECK = $WE->first();
+                    
+//                     if (isset($CHECK)) {
+//                         $templates = $WE->orderBy('hari', 'asc')->get();
+                    
+//                         foreach ($templates as $template) {
+                            
+//                             $wa_text = $template->description;
+                     
+//                      $current_time = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+// $i = intval($template->hari);
+// $schedule = date('Y-m-d H:i:s', strtotime('+' . $i . ' hours', strtotime($current_time)));
+
+
+                            
+//                               $url = 'https://app.whacenter.com/api/send';
+//                                 $ch = curl_init($url);
+                                
+                                
+//                                   if($file == null){
+//                 $data = array(
+//                     'device_id' => $instance,
+//                     'number' => $wa_no,
+//                     'message' => $wa_text,
+//                     'schedule' => $schedule,
+//                 );
+//             }
+//         else{
+//             $data = array(
+//                 'device_id' => $instance,
+//                 'number' => $wa_no,
+//                 'message' => $wa_text,
+//                 'file' => $file,
+//                 'schedule' => $schedule,
+//             );
+//         }
+        
+                    
+//                      $payload = $data;
+//         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+//         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+//         $result = curl_exec($ch);
+//         curl_close($ch);
+        
+//         $responseData = json_decode($result, true);
+//         $scheduleId = $responseData['data']['id'] ?? null;
+        
+//           if($scheduleId != null){
+            
+//         $prospect =   new ZUserSchedule();
+//              $prospect->id_schedule = $scheduleId;
+//              $prospect->id_staff = $id_staff;
+//              $prospect->phone_number = $wa_no;
+//               $prospect->date_broadcast = $schedule;
+//                 $prospect->save();
+            
+        
+//     }
+    
+// }
+    
+// }                         
+                
+                
+                
+                
+               return '';
+        }
+        
+        if($jenis_keyword == 'Match'){
+            
+            if (in_array($wa_text, $keywords, true)) {
+            
+                $whats = new AIWhatsapp();
+                $whats->prospect_num = $wa_no;
+                $whats->prospect_nama = $wa_nama;
+                $whats->instance = $instance;
+                $whats->date_order = $today;
+                $whats->id_staff = $id_staff;
+                $whats->category = 'intro'; // Initialize stage
+                $whats->niche = $niche;
+                $whats->keywordiklan = $foundKeyword;
+                $whats->save();
+                
+                $idpro = $whats->id_prospect;
+                $this->scheduleEasyCronJobs($idpro);
+                
+                $znewBotEntry = "USER: $wa_text";
+                
+                $balas = date('Y-m-d H:i:s');
+                $whats->balas = $balas;
+                $whats->conv_last = $znewBotEntry;
+                $whats->save();
+                
+                if (!empty($bot->prompt)) {
+                    
+                    $botPrompt = $bot->prompt;
+                    $reply = str_replace(array_keys($placeholders), array_values($placeholders), $botPrompt);
+                    
+                    $newBotEntry = "BOT: $reply";
+                    $finalConversation = $whats->conv_last . "\n" . $newBotEntry;
+                    $whats->conv_last = $finalConversation;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendBhatMessage($wa_no, $reply , $instance,$delay);
+                    
+                    //  sleep($delay);
+                }
+                
+                if (!empty($bot->url_image)) {
+            
+                    $file = $bot->url_image;
+                    // $reply =  $bot->text_image;
+                    $reply = null;
+                    
+                    $newBotEntry2 = "BOT: $file";
+                    $finalConversation2 = $whats->conv_last . "\n" . $newBotEntry2;
+                    $whats->conv_last = $finalConversation2;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+            
+                    //  sleep($delay);
+                } 
+        
+                if(!empty($bot->url_image2)) {
+                    
+                    $file = $bot->url_image2;
+                    //   $reply =  $bot->text_image2;
+                    $reply = null;
+                    
+                    $newBotEntry2 = "BOT: $file";
+                    $finalConversation2 = $whats->conv_last . "\n" . $newBotEntry2;
+                    $whats->conv_last = $finalConversation2;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+                    // sleep($delay);
+                } 
+        
+                if (!empty($bot->url_image3)) {
+                    
+                    $file = $bot->url_image3;
+                    // $reply =  $bot->text_image3;
+                    $reply = null;
+                    
+                    $newBotEntry2 = "BOT: $file";
+                    $finalConversation2 = $whats->conv_last . "\n" . $newBotEntry2;
+                    $whats->conv_last = $finalConversation2;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    
+                    $this->sendChatMessage($wa_no, $reply, $file , $instance,$delay);
+                    // sleep($delay);
+                } 
+     
+                if (!empty($bot->prompt2)) {
+                
+                    $botPrompt2 = $bot->prompt2;
+                    $reply2 = str_replace(array_keys($placeholders), array_values($placeholders), $botPrompt2);
+                    
+                    $newBotEntry2 = "BOT: $reply2";
+                    $finalConversation2 = $whats->conv_last . "\n" . $newBotEntry2;
+                    $whats->conv_last = $finalConversation2;
+                    $jam = date('Y-m-d H:i:s');
+                    $whats->jam = $jam;
+                    $whats->save();
+                    $this->sendBhatMessage($wa_no, $reply2 , $instance,$delay);
+                }
+                
+                $admin = null;
+                if(isset($iderp)){
+                    
+                    $startz = microtime(true);
+                    
+                    if(isset($rotate)){
+                        $adminid  =  $id_staff;    
+                    }else{
+                        $adminid = $user->id_admin;
+                    }  
+                    
+                    if(isset($adminid)){
+                        $dataAdminid = $adminid;
+                    }else{
+                        $dataAdminid = $admin;
+                    }
+
+                    $url = 'https://growrvsb.com/prospectchatbot';
+                    
+                    // Fallback to main if needed
+                    $params = array(
+                        'prospect_num' => $wa_no,
+                        'name' => $wa_nama,
+                        'niche' => $niche,
+                        'instance' => $instance,
+                        'idstaff' => $iderp,
+                        'admin' => $dataAdminid,
+                        'keyword' => $foundKeyword,
+                        'ad_id' => $foundad_id,
+                        'device_user' => $instanceUser,
+                        'platform_provider' => 'Wablas',
+                        'device_idstaff' => $id_staff,
+                        'jenis_platform' => $foundPlatform,
+                        'jenis_objective' => $foundObjective
+                    );
+                    
+                    $data_string = json_encode($params);
+                
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, $url);
+                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                        'Content-Type: application/json'
+                    ));
+                
+                    $out = curl_exec($ch);
+                    $response = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $error = curl_error($ch);
+                    $out = json_decode($out);
+                    curl_close($ch);
+
+                    $endz = microtime(true);
+                    Log::info('Auto Prospek' .$id_staff.' : ' . ($endz - $startz) . ' seconds');
+                    
+                    // if(isset($adminid)){
+                        
+                    //     $params = array(
+                    //         'prospect_num' => $wa_no,
+                    //         'name' => $wa_nama,
+                    //         'niche' => $niche,
+                    //         'instance' => $instance,
+                    //         'idstaff' => $iderp,
+                    //         'admin' => $dataAdminid,
+                    //         'keyword' => $foundKeyword,
+                    //         'ad_id' => $foundad_id,
+                    //     );
+                    //     $data_string = json_encode($params);                                                                                   
+                        
+                    //     $ch = curl_init();
+                    //     curl_setopt($ch, CURLOPT_URL, $url);
+                    //     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST"); 
+                    //     curl_setopt($ch, CURLOPT_POST, true);
+                    //     curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);  
+                    //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    //     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                    //     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                    //     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT ,0);
+                    //     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    //     curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
+                    //         'Content-Type: application/json')                                                                          
+                    //     );                                                                                                                   
+                        
+                    //     $out = curl_exec($ch);
+                        
+                    //     $response = curl_exec($ch);
+                    //     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    //     $error = curl_error($ch);
+    
+                    //     $out = json_decode($out);
+                    //     curl_close($ch);
+                        
+                    // }else{
+    
+                    //     $startz = microtime(true);
+    
+                    //     $params = array(
+                    //     'prospect_num' => $wa_no,
+                    //     'name' => $wa_nama,
+                    //     'niche' => $niche,
+                    //     'instance' => $instance,
+                    //     'idstaff' => $iderp,
+                    //     'admin' => $dataAdminid,
+                    //     'keyword' => $foundKeyword,
+                    //     'ad_id' => $foundad_id,
+                    //     );
+                    //     $data_string = json_encode($params);                                                                                   
+                        
+                    //     $ch = curl_init();
+                    //     curl_setopt($ch, CURLOPT_URL, $url);
+                    //     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST"); 
+                    //     curl_setopt($ch, CURLOPT_POST, true);
+                    //     curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);  
+                    //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    //     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                    //     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                    //     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT ,0);
+                    //     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    //     curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
+                    //         'Content-Type: application/json')                                                                          
+                    //     );                                                                                                                   
+                        
+                    //     $out = curl_exec($ch);
+                        
+                    //     $out = json_decode($out);
+                        
+                    //     $response = curl_exec($ch);
+                    //     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    //     $error = curl_error($ch);
+                    //     curl_close($ch);
+    
+                        
+                    //     $endz = microtime(true);
+                        
+                    //     Log::info('Auto Prospek' .$id_staff.' : ' . ($endz - $startz) . ' seconds');
+                        
+                    // }
+                }
+                
+                
+                
+//      $WE = ZWspTemplate::where('id_staff', '=', $id_staff)->where('status','=','1');
+
+//                     $CHECK = $WE->first();
+                    
+//                     if (isset($CHECK)) {
+//                         $templates = $WE->orderBy('hari', 'asc')->get();
+
+//                         foreach ($templates as $template) {
+                            
+//                             $wa_text = $template->description;
+//                      $current_time = date('Y-m-d H:i:s', strtotime('+1 hour'));
+// $i = intval($template->hari);
+// $schedule = date('Y-m-d H:i:s', strtotime('+' . $i . ' hours', strtotime($current_time)));
+
+
+                            
+//                               $url = 'https://app.whacenter.com/api/send';
+//                                 $ch = curl_init($url);
+                                
+                                
+//                                   if($file == null){
+//                 $data = array(
+//                     'device_id' => $instance,
+//                     'number' => $wa_no,
+//                     'message' => $wa_text,
+//                     'schedule' => $schedule,
+//                 );
+//             }
+//         else{
+//             $data = array(
+//                 'device_id' => $instance,
+//                 'number' => $wa_no,
+//                 'message' => $wa_text,
+//                 'file' => $file,
+//                 'schedule' => $schedule,
+//             );
+//         }
+        
+                    
+//                      $payload = $data;
+//         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+//         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+//         $result = curl_exec($ch);
+//         curl_close($ch);
+        
+//         $responseData = json_decode($result, true);
+//         $scheduleId = $responseData['data']['id'] ?? null;
+        
+//           if($scheduleId != null){
+            
+//         $prospect =   new ZUserSchedule();
+//              $prospect->id_schedule = $scheduleId;
+//              $prospect->id_staff = $id_staff;
+//              $prospect->phone_number = $wa_no;
+//               $prospect->date_broadcast = $schedule;
+//                 $prospect->save();
+            
+        
+//     }
+    
+// }
+    
+// }             
+                                 
+                
+                
+                
+                return '';
+    
+            
+            }
+        
+        
+        }
+        
+        if($jenis_keyword == 'Prompt'){
+            
+            \Log::info("Checkpoint reached AFTER jenis_keyword condition $id_staff");
+            // \Log::info("Prompt welcome message2  $id_staff  $jenis_keyword masuk sudah disini prompt");
+            
+            $whats = new AIWhatsapp();
+            $whats->prospect_num = $wa_no;
+            $whats->prospect_nama = $wa_nama;
+            $whats->instance = $instance;
+            $whats->date_order = $today;
+            
+            if(isset($rotate)){
+                $whats->marketer = $markx;            
+            }  
+            
+            $whats->id_staff = $id_staff;
+            $whats->niche = $niche;
+            $whats->category = 'intro';
+            $whats->keywordiklan = $foundKeyword;
+            $whats->save();
+            
+            $idpro = $whats->id_prospect;
+            $this->scheduleEasyCronJobs($idpro);
+
+            $znewBotEntry = "USER: $wa_text";
+            
+            $balas = date('Y-m-d H:i:s');
+
+            $whats->balas = $balas;
+            $whats->conv_last = $znewBotEntry;
+            $whats->save();
+            
+            $chatbots = $user->wschatbots()
+                ->where(function ($query) {
+                    $query->whereIn('statusx', ['How AI Behavior', 'How AI Closing'])
+                          ->orWhere('jenis_keyword', 'Prompt');
+                })
+                ->get()
+                ->keyBy('statusx');
+                
+            // \Log::info("Checkpoint reached AFTER2 jenis_keyword condition $id_staff $chatbots");
+            
+            // Retrieve the objects
+            $welcomemessage = $chatbots['Permulaan Ayat'] ?? null;
+            $behave = $chatbots['How AI Behavior'] ?? null;
+            $closing = $chatbots['How AI Closing'] ?? null;
+
+            // Keep the rest of your logic
+            $stage      = $whats->stage;
+            $jenisapi   = $user->jenis_api;
+            $apikey = $user->apiprovider;
+            $divProspek = $user->check_prospek;
+            
+            $apiurl = 'https://openrouter.ai/api/v1/chat/completions';
+            $model  = $jenisapi;
+            
+            $lasttext    = $whats->conv_last ?? 'intro';
+            $currenttext = 'Welcome Message';
+            $delax = 3;
+            
+            $welcomePrompt = $welcomemessage ? $welcomemessage->prompt : '';
+            $behavePrompt  = $behave ? $behave->prompt : '';
+            $closingPrompt = $closing ? $closing->prompt : '';
+            
+            $startTimez = microtime(true);
+            
+            $content = $welcomePrompt . "\n\n" . 
+                $behavePrompt . "\n\n" . 
+                $closingPrompt . "\n\n" . 
+                "### Instructions:\n" . 
+                "1. If the current stage is null or undefined, default to the first stage.\n" . 
+                "2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" . 
+                "3. Follow all rules and steps strictly. Do not skip or ignore any rules or instructions.\n\n" . 
+                "4. **Do not repeat the same sentences or phrases that have been used in the recent conversation history.**\n" . 
+                "5. If the input contains the phrase \"I want this section in add response format [onemessage]\":\n" . 
+                "   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" . 
+                "   - The `Jenis` field is only added to `text` types within the `Response` array.\n" . 
+                "   - If the directive is not present, omit the `Jenis` field entirely.\n\n" . 
+                "### Response Format:\n" . 
+                "{\n" . 
+                "  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" . 
+                "  \"Response\": [\n" . 
+                "    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the first response message here.\"},\n" . 
+                "    {\"type\": \"image\", \"content\": \"https://example.com/image1.jpg\"},\n" . 
+                "    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the second response message here.\"}\n" . 
+                "  ]\n" . 
+                "}\n\n" . 
+                "### Example Response:\n" . 
+                "// If the directive is present\n" . 
+                "{\n" . 
+                "  \"Stage\": \"Problem Identification\",\n" . 
+                "  \"Response\": [\n" . 
+                "    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" . 
+                "    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" . 
+                "  ]\n" . 
+                "}\n\n" . 
+                "// If the directive is NOT present\n" . 
+                "{\n" . 
+                "  \"Stage\": \"Problem Identification\",\n" . 
+                "  \"Response\": [\n" . 
+                "    {\"type\": \"text\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" . 
+                "    {\"type\": \"text\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" . 
+                "  ]\n" . 
+                "}\n\n" . 
+                "### Important Rules:\n" . 
+                "1. **Include the `Stage` field in every response**:\n" . 
+                "   - The `Stage` field must explicitly specify the current stage.\n" . 
+                "   - If the stage is unclear or missing, default to first stage.\n\n" . 
+                "2. **Use the Correct Response Format**:\n" . 
+                "   - Divide long responses into multiple short \"text\" segments for better readability.\n" . 
+                "   - Include all relevant images provided in the input, interspersed naturally with text responses.\n" . 
+                "   - If multiple images are provided, create separate `image` entries for each.\n\n" . 
+                "3. **Dynamic Field for [onemessage]**:\n" . 
+                "   - If the input specifies \"I want this section in add response format [onemessage]\":\n" . 
+                "      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" . 
+                "   - If the directive is not present, omit the `Jenis` field entirely.\n" . 
+                "   - Non-text types like `image` never include the `Jenis` field.\n\n";
+            
+            $payload = [
+                'model' => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $content],
+                    ['role' => 'assistant', 'content' => $lasttext],
+                    ['role' => 'user', 'content' => $currenttext]
+                ],
+                'temperature' => 0.67,  // Recommended setting
+                'top_p' => 1,           // Keep responses within natural probability range
+                'repetition_penalty' => 1, // Avoid repetitive responses
+            ];
+            
+            // \Log::info("Checkpoint reached AFTER3 jenis_keyword condition $id_staff $payload");
+            
+            $client = new Client();
+            try {
+                $response = $client->post($apiurl, [
+                    'headers' => [
+                        'Authorization' => "Bearer {$apikey}",
+                        'Content-Type'  => 'application/json',
+                    ],
+                    'json' => $payload,
+                ]);
+                $responseBody = json_decode($response->getBody(), true);
+            } catch (\Exception $e) {
+                Log::error('OpenRouter API error: ' . $e->getMessage());
+                return;
+            }
+            
+            $endTimez = microtime(true);
+            $totalTimez = $endTimez - $startTimez;
+            
+            // The final response from the API
+            if (!isset($responseBody['choices'][0]['message']['content'])) {
+                Log::error("Invalid OpenRouter API response: " . json_encode($responseBody));
+                return;
+            }
+
+            $replyContent = $responseBody['choices'][0]['message']['content'];
+            $sanitizedContent = preg_replace('/^```json|```$/', '', trim($replyContent));
+        
+            // Attempt to decode JSON
+            $data = json_decode($sanitizedContent, true);
+            $last = null;
+            
+            $replyParts = [];
+            if (is_array($data) && isset($data['Stage']) && isset($data['Response'])) {
+                $stage      = $data['Stage'];
+                $replyParts = $data['Response'];
+            } elseif (preg_match('/Stage:\s*(.+?)\nResponse:\s*(\[.*?\])$/s', $replyContent, $matches)) {
+                // Fallback for older format
+                $stage       = trim($matches[1]);
+                $responseJson = $matches[2];
+                $replyParts  = json_decode($responseJson, true);
+            } elseif (preg_match('/^\s*{\s*"Stage":\s*".+?",\s*"Response":\s*\[.*\]\s*}\s*$/s', $sanitizedContent)) {
+                // Detect JSON
+                $data = json_decode($sanitizedContent, true);
+                if (is_array($data) && isset($data['Stage']) && isset($data['Response'])) {
+                    $stage      = $data['Stage'];
+                    $replyParts = $data['Response'];
+                } else {
+                    Log::error("Failed to parse specified JSON format: " . $sanitizedContent);
+                    return;
+                }
+            } elseif (isset($replyParts[0]['content']) && preg_match('/^```json.*```$/s', $replyParts[0]['content'])) {
+                // Encapsulated JSON within triple backticks
+                $jsonContent    = preg_replace('/^```json|```$/', '', trim($replyParts[0]['content']));
+                $decodedContent = json_decode($jsonContent, true);
+        
+                if (is_array($decodedContent) && isset($decodedContent['Stage']) && isset($decodedContent['Response'])) {
+                    $stage      = $decodedContent['Stage'];
+                    $replyParts = $decodedContent['Response'];
+                } else {
+                    Log::error("Failed to parse encapsulated JSON: " . $replyParts[0]['content']);
+                    return;
+                }
+            } else {
+                // Plain text fallback
+                Log::warning("Plain text response detected. Defaulting to fallback handling.");
+                $stage      = $stage ?? 'Problem Identification';
+                $replyParts = [
+                    ['type' => 'text', 'content' => trim($replyContent)]
+                ];
+            }
+            
+            if (!is_array($replyParts)) {
+                Log::error("Failed to decode the response JSON properly.");
+                return;
+            }
+            
+            // Update stage in AIWhatsapp
+            if(isset($stage)){
+                $whats->stage = $stage;
+            }
+    
+            if(isset($last)){
+                $whats->conv_current = null;
+                $whats->conv_last = $last;
+                $whats->save();
+            }
+            
+            $textParts = [];
+            $isOnemessageActive = false;
+            
+            $idx = $whats->id_prospect;
+    
+            foreach ($replyParts as $index => $part) {
+                if (!isset($part['type'], $part['content'])) {
+                    Log::warning("Invalid response part structure: " . json_encode($part));
+                    continue;
+                }
+        
+                // if type=text and "Jenis"=onemessage
+                if ($part['type'] === 'text' && isset($part['Jenis']) && $part['Jenis'] === 'onemessage') {
+                    // Start collecting
+                    $textParts[] = $part['content'];
+                    $isOnemessageActive = true;
+        
+                    // If next part isn’t also onemessage, send combined
+                    if (!isset($replyParts[$index + 1]) ||
+                        !isset($replyParts[$index + 1]['Jenis']) ||
+                        $replyParts[$index + 1]['Jenis'] !== 'onemessage') {
+                            $combinedMessage = implode("\n", $textParts);
+                            $this->sendBhatMessage($wa_no, $combinedMessage, $instance,$delax);
+                            
+                            // Update conversation log
+                            
+                            if(!isset($last)){
+                                $newBotEntry = "BOT_COMBINED: " . json_encode($combinedMessage);
+                                $whats->conv_last .= "\n" . $newBotEntry;
+                                $whats->conv_current = null;
+                                $whats->save();
+                            }
+                            
+                            // Reset temporary
+                            $textParts          = [];
+                            $isOnemessageActive = false;
+                            
+                            //   sleep($delax);
+                        }
+                } else {
+                    // If we just finished onemessage
+                    if ($isOnemessageActive) {
+                        $combinedMessage = implode("\n", $textParts);
+                        $this->sendBhatMessage($wa_no, $combinedMessage, $instance,$delax);
+        
+                        // Update log
+                        if(!isset($last)){
+                            $newBotEntry = "BOT_COMBINED: " . json_encode($combinedMessage);
+                            $whats->conv_last .= "\n" . $newBotEntry;
+                            $whats->conv_current = null;
+                            $whats->save();
+                        }
+                        $textParts = [];
+                        $isOnemessageActive = false;
+                        // sleep($delax);
+                    }
+        
+                    // Now handle normal text or image
+                    if ($part['type'] === 'text') {
+                        $this->sendBhatMessage($wa_no, $part['content'], $instance,$delax);
+        
+                        if(!isset($last)){
+                            $newBotEntry = "BOT: " . json_encode($part['content']);
+                            $whats->conv_last .= "\n" . $newBotEntry;
+                            $whats->conv_current = null;
+                            $whats->save();
+                        }
+                        
+                        //  sleep($delax);
+        
+                    } elseif ($part['type'] === 'image') {
+                        $currentImageUrl = trim(urldecode($part['content']));
+                        $caption = $part['caption'] ?? null;
+                        $this->sendChatMessage($wa_no, $caption, $currentImageUrl, $instance,$delax);
+                        
+                        if($caption != null){
+                            $newBotEntry = "BOT: " . $currentImageUrl."\n" .$caption;
+                        }else{
+                            $newBotEntry = "BOT: " . $currentImageUrl;
+                        }
+                        
+                        $whats->conv_last .= "\n" . $newBotEntry;
+                        $whats->conv_current = null;
+                        $whats->save();
+                        
+                        //  sleep($delax);
+                    }
+                }
+                
+            }
+
+            \Log::info("meow2 Prompt welcome message $id_staff  RUNNING $idx");
+            
+            $admin = null;
+            if(isset($iderp)){
+                
+                $startz = microtime(true);
+                
+                if(isset($rotate)){
+                    $adminid  =  $id_staff;    
+                }else{
+                    $adminid = $user->id_admin;
+                }  
+                
+                if(isset($adminid)){
+                    $dataAdminid = $adminid;
+                }else{
+                    $dataAdminid = $admin;
+                }
+                
+                $url = 'https://growrvsb.com/prospectchatbot';
+                
+                // Fallback to main if needed
+                $params = array(
+                    'prospect_num' => $wa_no,
+                    'name' => $wa_nama,
+                    'niche' => $niche,
+                    'instance' => $instance,
+                    'idstaff' => $iderp,
+                    'admin' => $dataAdminid,
+                    'keyword' => $foundKeyword,
+                    'ad_id' => $foundad_id,
+                    'device_user' => $instanceUser,
+                    'platform_provider' => 'Wablas',
+                    'device_idstaff' => $id_staff,
+                    'jenis_platform' => $foundPlatform,
+                    'jenis_objective' => $foundObjective
+                );
+                
+                $data_string = json_encode($params);
+            
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $url);
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                    'Content-Type: application/json'
+                ));
+            
+                $out = curl_exec($ch);
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = curl_error($ch);
+                $out = json_decode($out);
+                curl_close($ch);
+
+                $endz = microtime(true);
+                Log::info('Auto Prospek' .$id_staff.' : ' . ($endz - $startz) . ' seconds');
+                
+                // if(isset($adminid)){
+                    
+                //     $params = array(
+                //         'prospect_num' => $wa_no,
+                //         'name' => $wa_nama,
+                //         'niche' => $niche,
+                //         'instance' => $instance,
+                //         'idstaff' => $iderp,
+                //         'admin' => $dataAdminid,
+                //         'keyword' => $foundKeyword,
+                //         'ad_id' => $foundad_id,
+                //     );
+                //     $data_string = json_encode($params);                                                                                   
+                    
+                //     $ch = curl_init();
+                //     curl_setopt($ch, CURLOPT_URL, $url);
+                //     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST"); 
+                //     curl_setopt($ch, CURLOPT_POST, true);
+                //     curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);  
+                //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                //     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                //     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                //     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT ,0);
+                //     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                //     curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
+                //         'Content-Type: application/json')                                                                          
+                //     );                                                                                                                   
+                    
+                //     $out = curl_exec($ch);
+                    
+                //     $response = curl_exec($ch);
+                //     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                //     $error = curl_error($ch);
+
+                //     $out = json_decode($out);
+                //     curl_close($ch);
+                    
+                // }else{
+
+                //     $startz = microtime(true);
+
+                //     $params = array(
+                //     'prospect_num' => $wa_no,
+                //     'name' => $wa_nama,
+                //     'niche' => $niche,
+                //     'instance' => $instance,
+                //     'idstaff' => $iderp,
+                //     'admin' => $dataAdminid,
+                //     'keyword' => $foundKeyword,
+                //     'ad_id' => $foundad_id,
+                //     );
+                //     $data_string = json_encode($params);                                                                                   
+                    
+                //     $ch = curl_init();
+                //     curl_setopt($ch, CURLOPT_URL, $url);
+                //     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST"); 
+                //     curl_setopt($ch, CURLOPT_POST, true);
+                //     curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);  
+                //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                //     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                //     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                //     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT ,0);
+                //     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                //     curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
+                //         'Content-Type: application/json')                                                                          
+                //     );                                                                                                                   
+                    
+                //     $out = curl_exec($ch);
+                    
+                //     $out = json_decode($out);
+                    
+                //     $response = curl_exec($ch);
+                //     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                //     $error = curl_error($ch);
+                //     curl_close($ch);
+
+                    
+                //     $endz = microtime(true);
+                    
+                //     Log::info('Auto Prospek' .$id_staff.' : ' . ($endz - $startz) . ' seconds');
+                    
+                // }
+            }
+            
+            return '';
+        }
+        
+        return '';
+    }
+    
+    if(isset($whats->human)){
+        return '';
+    }
+    
+    $botc = AIWschatbot::where('id_staff', '=', $id_staff)
+        ->where('statusx','=','How AI Closing')
+        ->first();
+    
+    $delax = isset($botc) && !is_null($botc->delay) ? intval($botc->delay) : 3;
+
+    if(!isset($botc)){
+        return '';
+    }
+    
+    $xxznewBotEntry = "USER: $wa_text";
+    
+    $whats->intro = 1;
+    $whats->conv_current = trim(($whats->conv_current ?? '') . "\n$wa_text");
+    $whats->conv_last .= "\n" . $xxznewBotEntry;
+    $whats->save();
+    
+    $idz = $whats->id_prospect;
+    // Dispatch the processing job
+    
+    // Log::warning("tembak $id_staff, $idz, $instance");
+    
+    $endTime = microtime(true);
+    $totalTime = $endTime - $startTime;
+    
+    Log::info('Home - Total job processing time: ' . $totalTime . ' seconds');
+    
+    ProcessChatGPT::dispatchNow($id_staff, $idz, $instance,$delax);
+    
+    // dispatch(new ProcessChatGPT($id_staff, $idz, $instance))->delay(Carbon::now()->addSeconds(5));
+    // ProcessChatGPT::dispatch($id_staff, $idz, $instance)->delay(now()->addSeconds(3));
+    
+    // ProcessChatGPT::dispatchNow($id_staff, $idz, $instance);
+    // ProcessChatGPT::dispatch($id_staff, $idz, $instance)->delay(now()->addSeconds(7));
+        
+        
+
+    
+}
+
+public function followupbot($iderp,$fu){
+    
+    $whats = AIWhatsapp::with('user')->find($iderp);
+    $wa_no   = $whats->prospect_num;
+    $id_staff = $whats->id_staff;
+    $idz = $whats->id_prospect;
+    
+    $user = $whats->user;
+    if($user->user_stage == '1'){
+        
+             \Log::info("$id_staff no meow");
+
+        return 'success';
+    }
+ 
+    // Keep the rest of your logic
+    $stage      = $whats->stage;
+    if($stage == 'Order Booking & Confirmation'){
+        
+        
+        // $this->deleteFollowupJobsFromEasyCron($iderp,$fu);
+        
+               return 'success';
+
+    }
+    
+      
+    
+    
+    $instance   = $whats->instance;
+//     $jenisapi   = $user->jenis_api;
+    
+//             $apikey = $user->apiprovider;
+            
+//             $id_staffx = $user->id_staff;
+            $divProspek = $user->check_prospek;
+            
+
+ 
+ 
+
+    if (!$whats) {
+        return;
+    }
+    
+    
+    
+    $wa_nama = $whats->prospect_nama;
+
+    // Check time difference
+    $jam          = $whats->balas;
+   
+    if($fu == '1'){
+        
+             $currenttext = 'saya nak tahu tentang produk ni';
+
+        
+    }else{
+        
+             $currenttext = 'saya nak tahu tentang harga';
+
+        
+    }
+    
+     
+
+    $divProspek = $user->check_prospek;
+    $delax = 3;
+   
+
+    $chatbots = $user->wschatbots()
+        ->whereIn('statusx', ['How AI Behavior', 'How AI Closing'])
+        ->get()
+        ->keyBy('statusx');
+
+
+    // Retrieve the objects
+    $behave  = $chatbots['How AI Behavior'] ?? null;
+    $closing = $chatbots['How AI Closing'] ?? null;
+
+    // Keep the rest of your logic
+    $stage      = $whats->stage;
+    $jenisapi   = $user->jenis_api;
+    
+    
+            
+            $apikey = $user->apiprovider;
+            
+       $apiurl = 'https://openrouter.ai/api/v1/chat/completions';
+        $model  = $jenisapi;
+
+
+
+    $lasttext    = $whats->conv_last ?? 'intro';
+   
+
+   
+
+    $behavePrompt  = $behave ? $behave->prompt : '';
+    $closingPrompt = $closing ? $closing->prompt : '';
+
+
+$startTimez = microtime(true);
+
+
+
+  $content = $behavePrompt . "\n\n" . 
+           $closingPrompt . "\n\n" . 
+           "### Instructions:\n" . 
+           "1. If the current stage is null or undefined, default to the first stage.\n" . 
+           "2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" . 
+           "3. Follow all rules and steps strictly. Do not skip or ignore any rules or instructions.\n\n" . 
+           "4. **Do not repeat the same sentences or phrases that have been used in the recent conversation history.**\n" . 
+           "5. If the input contains the phrase \"I want this section in add response format [onemessage]\":\n" . 
+           "   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" . 
+           "   - The `Jenis` field is only added to `text` types within the `Response` array.\n" . 
+           "   - If the directive is not present, omit the `Jenis` field entirely.\n\n" . 
+           "### Response Format:\n" . 
+           "{\n" . 
+           "  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" . 
+           "  \"Response\": [\n" . 
+           "    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the first response message here.\"},\n" . 
+           "    {\"type\": \"image\", \"content\": \"https://example.com/image1.jpg\"},\n" . 
+           "    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the second response message here.\"}\n" . 
+           "  ]\n" . 
+           "}\n\n" . 
+           "### Example Response:\n" . 
+           "// If the directive is present\n" . 
+           "{\n" . 
+           "  \"Stage\": \"Problem Identification\",\n" . 
+           "  \"Response\": [\n" . 
+           "    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" . 
+           "    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" . 
+           "  ]\n" . 
+           "}\n\n" . 
+           "// If the directive is NOT present\n" . 
+           "{\n" . 
+           "  \"Stage\": \"Problem Identification\",\n" . 
+           "  \"Response\": [\n" . 
+           "    {\"type\": \"text\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" . 
+           "    {\"type\": \"text\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" . 
+           "  ]\n" . 
+           "}\n\n" . 
+           "### Important Rules:\n" . 
+           "1. **Include the `Stage` field in every response**:\n" . 
+           "   - The `Stage` field must explicitly specify the current stage.\n" . 
+           "   - If the stage is unclear or missing, default to first stage.\n\n" . 
+           "2. **Use the Correct Response Format**:\n" . 
+           "   - Divide long responses into multiple short \"text\" segments for better readability.\n" . 
+           "   - Include all relevant images provided in the input, interspersed naturally with text responses.\n" . 
+           "   - If multiple images are provided, create separate `image` entries for each.\n\n" . 
+           "3. **Dynamic Field for [onemessage]**:\n" . 
+           "   - If the input specifies \"I want this section in add response format [onemessage]\":\n" . 
+           "      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" . 
+           "   - If the directive is not present, omit the `Jenis` field entirely.\n" . 
+           "   - Non-text types like `image` never include the `Jenis` field.\n\n";
+            
+      
+
+    
+        $payload = [
+    'model' => $model,
+    'messages' => [
+        ['role' => 'system', 'content' => $content],
+        ['role' => 'assistant', 'content' => $lasttext],
+        ['role' => 'user', 'content' => $currenttext]
+    ],
+    'temperature' => 0.67,  // Recommended setting
+    'top_p' => 1,           // Keep responses within natural probability range
+    'repetition_penalty' => 1, // Avoid repetitive responses
+];
+    
+    
+
+      $client         = new Client();
+      
+
+try {
+    
+    $response = $client->post($apiurl, [
+        'headers' => [
+            'Authorization' => "Bearer {$apikey}",
+            'Content-Type'  => 'application/json',
+        ],
+        'json' => $payload,
+    ]);
+
+    $responseBody = json_decode($response->getBody(), true);
+    
+    
+} catch (\Exception $e) {
+    Log::error('OpenRouter API error: ' . $e->getMessage());
+    return;
+}
+
+
+
+
+$endTimez = microtime(true);
+$totalTimez = $endTimez - $startTimez;
+
+
+  
+    // The final response from the API
+    
+    if (!isset($responseBody['choices'][0]['message']['content'])) {
+    Log::error("Invalid OpenRouter API response: " . json_encode($responseBody));
+    return;
+}
+
+    $replyContent = $responseBody['choices'][0]['message']['content'];
+    $sanitizedContent = preg_replace('/^```json|```$/', '', trim($replyContent));
+
+    // Attempt to decode JSON
+    $data = json_decode($sanitizedContent, true);
+    
+
+    $last = null;
+// }
+
+    $replyParts = [];
+    if (is_array($data) && isset($data['Stage']) && isset($data['Response'])) {
+        $stage      = $data['Stage'];
+        $replyParts = $data['Response'];
+    } elseif (preg_match('/Stage:\s*(.+?)\nResponse:\s*(\[.*?\])$/s', $replyContent, $matches)) {
+        // Fallback for older format
+        $stage       = trim($matches[1]);
+        $responseJson = $matches[2];
+        $replyParts  = json_decode($responseJson, true);
+    } elseif (preg_match('/^\s*{\s*"Stage":\s*".+?",\s*"Response":\s*\[.*\]\s*}\s*$/s', $sanitizedContent)) {
+        // Detect JSON
+        $data = json_decode($sanitizedContent, true);
+        if (is_array($data) && isset($data['Stage']) && isset($data['Response'])) {
+            $stage      = $data['Stage'];
+            $replyParts = $data['Response'];
+        } else {
+            Log::error("Failed to parse specified JSON format: " . $sanitizedContent);
+            return;
+        }
+    } elseif (isset($replyParts[0]['content']) && preg_match('/^```json.*```$/s', $replyParts[0]['content'])) {
+        // Encapsulated JSON within triple backticks
+        $jsonContent    = preg_replace('/^```json|```$/', '', trim($replyParts[0]['content']));
+        $decodedContent = json_decode($jsonContent, true);
+
+        if (is_array($decodedContent) && isset($decodedContent['Stage']) && isset($decodedContent['Response'])) {
+            $stage      = $decodedContent['Stage'];
+            $replyParts = $decodedContent['Response'];
+        } else {
+            Log::error("Failed to parse encapsulated JSON: " . $replyParts[0]['content']);
+            return;
+        }
+    } else {
+        // Plain text fallback
+        Log::warning("Plain text response detected. Defaulting to fallback handling.");
+        $stage      = $stage ?? 'Problem Identification';
+        $replyParts = [
+            ['type' => 'text', 'content' => trim($replyContent)]
+        ];
+    }
+
+    if (!is_array($replyParts)) {
+        Log::error("Failed to decode the response JSON properly.");
+        return;
+    }
+
+    // Update stage in AIWhatsapp
+    if(isset($stage)){
+    
+    $whats->stage = $stage;
+    
+    }
+    
+                    if(isset($last)){
+                        $whats->conv_current = null;
+
+                        $whats->conv_last = $last;
+                        $whats->save();
+                        
+                    }
+
+
+   
+    $textParts           = [];
+    $isOnemessageActive  = false;
+
+
+
+    $idx = $whats->id_prospect;
+    
+    foreach ($replyParts as $index => $part) {
+        if (!isset($part['type'], $part['content'])) {
+            Log::warning("Invalid response part structure: " . json_encode($part));
+            continue;
+        }
+
+        // if type=text and "Jenis"=onemessage
+        if ($part['type'] === 'text' && isset($part['Jenis']) && $part['Jenis'] === 'onemessage') {
+            // Start collecting
+            $textParts[] = $part['content'];
+            $isOnemessageActive = true;
+
+            // If next part isn’t also onemessage, send combined
+            if (!isset($replyParts[$index + 1]) ||
+                !isset($replyParts[$index + 1]['Jenis']) ||
+                $replyParts[$index + 1]['Jenis'] !== 'onemessage') {
+                $combinedMessage = implode("\n", $textParts);
+                $this->sendBhatMessage($wa_no, $combinedMessage, $instance,$delax);
+                
+           
+                
+
+                // Update conversation log
+                
+                if(!isset($last)){
+                $newBotEntry = "BOT_COMBINED: " . json_encode($combinedMessage);
+                $whats->conv_last .= "\n" . $newBotEntry;
+                $whats->conv_current = null;
+                $whats->save();
+                
+                }
+
+
+                // Reset temporary
+                $textParts          = [];
+                $isOnemessageActive = false;
+                
+                    //   sleep($delax);
+            }
+        } else {
+            // If we just finished onemessage
+            if ($isOnemessageActive) {
+                $combinedMessage = implode("\n", $textParts);
+                $this->sendBhatMessage($wa_no, $combinedMessage, $instance,$delax);
+
+                // Update log
+                
+                                if(!isset($last)){
+
+                $newBotEntry = "BOT_COMBINED: " . json_encode($combinedMessage);
+                $whats->conv_last .= "\n" . $newBotEntry;
+                $whats->conv_current = null;
+                $whats->save();
+                
+                }
+
+
+                $textParts          = [];
+                $isOnemessageActive = false;
+                
+                    // sleep($delax);
+            }
+
+            // Now handle normal text or image
+            if ($part['type'] === 'text') {
+                $this->sendBhatMessage($wa_no, $part['content'], $instance,$delax);
+
+
+                if(!isset($last)){
+
+                $newBotEntry = "BOT: " . json_encode($part['content']);
+                $whats->conv_last .= "\n" . $newBotEntry;
+                $whats->conv_current = null;
+                $whats->save();
+                
+                }
+                
+                //  sleep($delax);
+
+            } elseif ($part['type'] === 'image') {
+                $currentImageUrl = trim(urldecode($part['content']));
+                $this->sendChatMessage($wa_no, null, $currentImageUrl, $instance,$delax);
+                
+                $newBotEntry = "BOT: " . $currentImageUrl;
+                $whats->conv_last .= "\n" . $newBotEntry;
+                $whats->conv_current = null;
+                $whats->save();
+                
+                                //  sleep($delax);
+
+
+            }
+        }
+        
+    }
+
+
+     \Log::info("✅meow Follow  $id_staff  RUNNING $idz");
+
+    
+   return 'success';
+
+
+}
+
+    /**
+     * Process the follow-up message and update records.
+     *
+     * @param AITrackerFollowup $followUp
+     * @param Carbon $currentTime
+     * @return void
+     */
+    private function processFollowUp(AITrackerFollowup $followUp, Carbon $currentTime)
+    {
+        $whaxp =  AIWhatsapp::where('id_prospect','=',$followUp->id_prospect)->first();
+        $id_staff = $whaxp->id_staff;
+        $user = Zuser::where('id_staff', '=', $id_staff)->first();
+        $divProspek = $user->check_prospek;
+        try {
+            // Send the follow-up message
+            $this->sendBhatMessage(
+                $followUp->prospect_num,
+                $followUp->followup->mesej,
+                $followUp->instance,
+                1
+                
+            );
+            
+            $currentTime = Carbon::now();
+          $trck =  AITrackerFollowup::where('id','=',$followUp->id)->first();
+         $trck->delete();
+            
+          $whax =  AIWhatsapp::where('id_prospect','=',$followUp->id_prospect)->first();
+          $whax->jam = $currentTime;
+          $whax->save();
+          
+
+         
+
+            // Log::info("Follow-up sent successfully for Prospect ID: {$followUp->id_prospect}");
+        } catch (\Exception $e) {
+            // Log::error("Failed to send follow-up for Prospect ID: {$followUp->id_prospect}. Error: " . $e->getMessage());
+        }
+    }
+    
+    
+    private function deleteFollowupJobsFromEasyCron($iderp,$fu)
+{
+    
+    $jobId = AITrackerFollowup::where('id_prospect', $iderp)
+    ->where('followup_number', $fu)
+    ->value('id_job');
+    
+    $apiKey = "MG5P+ik72SYYbXWFz/wawPCjaD+XNwk8Ff/NHGQiMVU=";
+
+
+    if ($jobId) {
+    $ch = curl_init("https://api.cron-job.org/jobs/$jobId");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => 'DELETE',
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+        ],
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+}
+
+return 'success';
+
+}
+
+
+
+
+    private function deletescheduleEasyCronJobs($iderp)
+{
+    
+    $jobIds = AITrackerFollowup::where('id_prospect', $iderp)->get();
+    
+        $apiKey = "MG5P+ik72SYYbXWFz/wawPCjaD+XNwk8Ff/NHGQiMVU=";
+
+
+    foreach($jobIds as $job){
+        
+        $jobId = $job->id_job;
+        
+        $ch = curl_init("https://api.cron-job.org/jobs/$jobId");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => 'DELETE',
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+        ],
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+        
+        
+    }
+
+
+
+
+return 'success';
+
+}
+
+
+private function scheduleEasyCronJobs($id)
+{
+    
+    $apiKeys = [
+    "MG5P+ik72SYYbXWFz/wawPCjaD+XNwk8Ff/NHGQiMVU=", // Primary
+    "rUPO3eqWTtjk4Nasc0kvnc6w2sbATQTx93ZBlICGLcc=",
+    "tydonEVA6D+in5pY0/TRM/9QaSMlu64ZLu1/q3HGJmc=",
+    "iwMGVBz4ZtqM0o84wMoXGxBmheFlyb6cPK9XLNSoxcY=",
+    "H7fU27yIbN3YkbyHgLWkwLAvgPi1bkouU3hA+e3dtyU=",
+    "0JIqEJbU4OSO21xgZM1PlBE3sS59hChaPKJfSCHHlqk=",
+    "8ptSyPrsYz5qvYqfL1qulLKdxXpY4C6PaTPQBSt6XMA=",
+    "Vr5rMDEynNr8OGReJkRwkyMLTaDv7hkPrJu/VPd7KiY=",
+    "lB8s6slz64dOW8KjV1mX7EiCK3eiPGpVOyYsWIWgs4I=",
+    "+Vlc4IugbV+8Dg2WJatC0bDyAoBmBoJi8CCzb5tv1D8=",
+    "wQpRZLtHLlorPvaIKSmUhqjuFbF8yNXoTcdd5NoPM9E="
+];
+
+
+    
+    $timezone = "Asia/Kuala_Lumpur";
+    $currentTime = time();
+
+    // for ($i = 1; $i < 6; $i++) {
+        for ($i = 1; $i < 3; $i++) {
+        $apiKey = $apiKeys[array_rand($apiKeys)];
+
+
+        $targetUrl = "https://rvsbbot.com/followupbot/$id/$i";
+        $jobTime = strtotime("+$i hour", $currentTime);
+
+        $minute = (int)date('i', $jobTime);
+        $hour = (int)date('H', $jobTime);
+        $day = (int)date('d', $jobTime);
+        $month = (int)date('m', $jobTime);
+        $weekday = -1;
+
+        $payload = json_encode([
+            "job" => [
+                "url" => $targetUrl,
+                "enabled" => true,
+                "title" => "$id/$i",
+                "schedule" => [
+                    "timezone" => $timezone,
+                    "expiresAt" => 0,
+                    "hours" => [$hour],
+                    "mdays" => [$day],
+                    "minutes" => [$minute],
+                    "months" => [$month],
+                    "wdays" => [$weekday]
+                ]
+            ]
+        ]);
+
+        $ch = curl_init('https://api.cron-job.org/jobs');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => 'PUT',
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apiKey
+            ],
+            CURLOPT_POSTFIELDS => $payload
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $responseArray = json_decode($response, true);
+
+        if ($httpCode === 200 && isset($responseArray['jobId'])) {
+            $jobId = $responseArray['jobId'];
+
+            AITrackerFollowup::create([
+                'id_prospect' => $id,
+                'followup_number' => $i,
+                'id_job' => $jobId
+            ]);
+
+            \Log::info("✅ Cron created: Job ID = $jobId | Prospect ID = $id | FU #$i");
+        } else {
+            \Log::warning("❌  $apiKey  Failed to create cron job #$i | HTTP: $httpCode | Response: $response");
+        }
+
+        sleep(1); // 🔒 Respect 1 request/second rule
+    }
+}
+
+    
+//   private function scheduleEasyCronJobs($id)
+// {
+    
+//      $apiKey = "30082a82048b865e3cc3b745b4ecd864";
+
+// $timezone = "Asia/Kuala_Lumpur";
+
+
+// $groupName = date('Ymd');
+
+
+//     $multiHandle = curl_multi_init();
+//     $handles = [];
+
+//     $currentTime = time();
+//     $baseTime = strtotime($currentTime);
+
+//     for ($i = 1; $i < 6; $i++) {
+        
+//         $targetUrl = "https://rvsbbot.com/followupbot/$id/$i";
+
+
+//         $jobTime = strtotime("+$i hour", $baseTime);
+//         $minute = (int)date('i', $jobTime);
+//         $hour = (int)date('H', $jobTime);
+//         $day = (int)date('d', $jobTime);
+//         $month = (int)date('m', $jobTime);
+//         $dow = '*';
+
+//         $cronExp = "$minute $hour $day $month $dow";
+
+    
+        
+//         $payload = json_encode([
+//     'url' => $targetUrl,
+//     'cron_expression' => $cronExp,
+//     'cron_job_name' => $id.'/'.$i,
+//     'description' => "Run at ".date('Y-m-d H:i:s', $jobTime),
+//     'timezone_from' => 2,
+//     'timezone' => $timezone,
+//     'status' => 1,
+//     'cron_job_group_id' => $groupId // ✅ Add this line
+// ]);
+
+//         $ch = curl_init('https://api.easycron.com/v1/cron-jobs');
+//         curl_setopt_array($ch, [
+//             CURLOPT_RETURNTRANSFER => true,
+//             CURLOPT_POST => true,
+//             CURLOPT_HTTPHEADER => [
+//                 'Content-Type: application/json',
+//                 'X-API-Key: ' . $apiKey
+//             ],
+//             CURLOPT_POSTFIELDS => $payload
+//         ]);
+
+//         curl_multi_add_handle($multiHandle, $ch);
+//         $handles[] = $ch;
+//     }
+
+//     do {
+//         curl_multi_exec($multiHandle, $running);
+//         curl_multi_select($multiHandle);
+//     } while ($running > 0);
+
+//     foreach ($handles as $index => $ch) {
+//         $response = curl_multi_getcontent($ch);
+//         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+//         curl_multi_remove_handle($multiHandle, $ch);
+//         curl_close($ch);
+        
+//           $responseArray = json_decode($response, true);
+
+//     }
+
+//     curl_multi_close($multiHandle);
+// }
+
+
+private function getOrCreateCronGroup($groupName)
+{
+    $apiKey = "30082a82048b865e3cc3b745b4ecd864";
+
+    // Step 1: Check if group exists
+    $ch = curl_init("https://api.easycron.com/v1/cron-job-groups");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            "Content-Type: application/json",
+            "X-API-Key: $apiKey"
+        ]
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    $data = json_decode($response, true);
+
+    if (!empty($data['cron_job_groups'])) {
+        foreach ($data['cron_job_groups'] as $group) {
+            if ($group['cron_job_group_name'] === $groupName) {
+                // ✅ Group exists
+                return $group['cron_job_group_id'];
+            }
+        }
+    }
+
+    // Step 2: Create group if not found
+    $payload = json_encode(['cron_job_group_name' => $groupName]);
+
+    $ch = curl_init("https://api.easycron.com/v1/cron-job-groups");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => [
+            "Content-Type: application/json",
+            "X-API-Key: $apiKey"
+        ],
+        CURLOPT_POSTFIELDS => $payload
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $data = json_decode($response, true);
+
+    if ($httpCode === 201 && isset($data['cron_job_group_id'])) {
+        return $data['cron_job_group_id'];
+    }
+
+    \Log::warning("❌ Failed to create or fetch group: $groupName");
+    return null;
+}
+
+public function deletefu()
+{
+    $apiKey = "30082a82048b865e3cc3b745b4ecd864";
+    $threshold = now()->subHours(7);
+
+    $records = AITrackerFollowup::where('created_at', '<', $threshold)->get();
+
+    foreach ($records as $record) {
+        $jobId = $record->id_job;
+
+        if (!$jobId) continue;
+
+        $deleteUrl = "https://api.easycron.com/v1/cron-jobs/{$jobId}";
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $deleteUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => 'DELETE',
+            CURLOPT_HTTPHEADER => [
+                "Content-Type: application/json",
+                "X-API-Key: $apiKey"
+            ]
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode === 204) { // 204 = success delete
+            $record->delete();
+            \Log::info("✅ Deleted EasyCron Job: $jobId & Tracker Row");
+        } else {
+            \Log::warning("❌ Failed to delete EasyCron Job: $jobId | HTTP: $httpCode | Response: $response");
+        }
+    }
+
+    return 'success';
+}
+
+// public function deletefu()
+// {
+// $apiKey = "30082a82048b865e3cc3b745b4ecd864";
+// $page   = 1;
+
+// $fetchUrl = "https://api.easycron.com/v1/cron-jobs?sort_by=total_successes&order=desc&page=$page&page_size=100";
+
+// $ch = curl_init();
+// curl_setopt_array($ch, [
+//     CURLOPT_URL => $fetchUrl,
+//     CURLOPT_RETURNTRANSFER => true,
+//     CURLOPT_HTTPHEADER => [
+//         "Content-Type: application/json",
+//         "X-API-Key: $apiKey"
+//     ],
+// ]);
+// $response = curl_exec($ch);
+// curl_close($ch);
+
+// $data = json_decode($response, true);
+// $jobs = $data['cron_jobs'] ?? [];
+
+// $deleted = [];
+
+// foreach ($jobs as $job) {
+//     $jobId = $job['cron_job_id'] ?? null;
+//     $url   = $job['url'] ?? '';
+  
+// if (!str_contains($url, 'rvsbbot.com/followupbot')) {
+//     continue;
+// }
+
+
+//  $success = $job['total_successes'] ?? 0;
+
+//     if ($jobId && $success >= 1) {
+//         // Proceed to delete this job
+//   $deleteUrl = "https://api.easycron.com/v1/cron-jobs/{$jobId}";
+
+// $ch = curl_init();
+// curl_setopt_array($ch, [
+//     CURLOPT_URL => $deleteUrl,
+//     CURLOPT_RETURNTRANSFER => true,
+//     CURLOPT_CUSTOMREQUEST => 'DELETE',
+//     CURLOPT_HTTPHEADER => [
+//         "Content-Type: application/json",
+//         "X-API-Key: $apiKey"
+//     ]
+// ]);
+
+// $response = curl_exec($ch);
+// $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+// curl_close($ch);
+
+
+    
+//     }
+    
+// }
+
+
+// return 'success';
+
+
+// }
+
+  public function deletedevice($device)
+{
+   $curl = curl_init();
+
+
+// Set the headers with proper format
+curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+    "Authorization: $device",
+));
+
+// DELETE request to the correct URL
+curl_setopt($curl, CURLOPT_URL, "https://mx.wablas.com/api/device/delete");
+curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+
+// Optional: if you expect a response
+curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+
+// Optional: to skip SSL check (use only in dev)
+curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0);
+curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
+
+$response = curl_exec($curl);
+
+if (curl_errno($curl)) {
+    echo 'Curl error: ' . curl_error($curl);
+} else {
+    echo "<pre>";
+    print_r($response);
+}
+
+curl_close($curl);
+    
+    
+}
+    
+
+public function testSend()
+{
+    $wa_no = '60179645043';
+    $wa_nama = 'Ali Test';
+    $niche = 'Kursus Online';
+    $instance = 'instance001';
+    $iderp = 'SCHQ-S52';
+    $dataAdminid = 'SCHQ-S52';
+    $foundKeyword = 'Test';
+    $foundad_id = '7823595235';
+    $id_staff = 'SCHQ-S52';
+    $instanceUser = 'sWNgEIC1kJ7vtZt10RRqEGpObrqUPNu8nxUGmjrYYGpM2ULbNqJnRxs.iNSZQXPO';
+    $deviceProviderUser = 'Wablas';
+    // First attempt: try webhook.lead.create
+
+    $url = 'https://growrvsb.com/prospectchatbot';
+
+    
+
+        // \Log::info("Error lead url railway $id_staff -- Error $error");
+        
+        $params = array(
+            'prospect_num' => $wa_no,
+            'name' => $wa_nama,
+            'niche' => $niche,
+            'instance' => $instance,
+            'idstaff' => $iderp,
+            'admin' => $dataAdminid,
+            'keyword' => $foundKeyword,
+            'ad_id' => $foundad_id,
+            'device_user' => $instanceUser,
+            'platform_provider' => $deviceProviderUser,
+            'device_idstaff' => 'FakhriAidilTLW-001'
+        );
+        
+        $data_string = json_encode($params);
+    
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+            'Content-Type: application/json'
+        ));
+    
+        $out = curl_exec($ch);
+        $response = curl_exec($ch);
+        return $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        $out = json_decode($out);
+        curl_close($ch);
+
+}
+
+
+
+}
