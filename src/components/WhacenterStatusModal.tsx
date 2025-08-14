@@ -152,7 +152,7 @@ const WhacenterStatusModal: React.FC<WhacenterStatusModalProps> = ({
     setError(null);
     
     try {
-      const response = await fetch(`http://localhost:8081/api/device-settings/${deviceId}/status`);
+      const response = await fetch(`/api/device-settings/${deviceId}/status`);
       const data = await response.json();
       
       if (data.success) {
