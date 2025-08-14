@@ -537,13 +537,7 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                      <Upload className="w-3 h-3" />
                    </Button>
                    
-                   <Button
-                     onClick={testFlow}
-                     size="sm"
-                     className="h-7 text-xs bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white border-0 shadow-lg"
-                   >
-                     <Play className="w-3 h-3" />
-                   </Button>
+
                  </div>
                </div>
 
