@@ -69,6 +69,8 @@ export interface ChatbotFlow {
   description: string
   niche?: string
   selectedDeviceId?: string
+  id_device?: string
+  idDevice?: string
   nodes: FlowNode[]
   edges: FlowEdge[]
   createdAt: string
