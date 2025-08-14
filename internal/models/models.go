@@ -174,3 +174,70 @@ type TestChatMessage struct {
 	Timestamp     time.Time `json:"timestamp"`
 	NodeReference string    `json:"node_reference,omitempty"`
 }
+
+// User represents a user in the system
+type User struct {
+	ID        string    `json:"id" db:"id"`
+	Username  string    `json:"username" db:"username"`
+	Email     string    `json:"email" db:"email"`
+	Password  string    `json:"-" db:"password"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Device represents a WhatsApp device
+type Device struct {
+	ID          string    `json:"id" db:"id"`
+	UserID      string    `json:"user_id" db:"user_id"`
+	DeviceName  string    `json:"device_name" db:"device_name"`
+	PhoneNumber string    `json:"phone_number" db:"phone_number"`
+	Status      string    `json:"status" db:"status"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Message represents a WhatsApp message
+type Message struct {
+	ID          string    `json:"id" db:"id"`
+	DeviceID    string    `json:"device_id" db:"device_id"`
+	PhoneNumber string    `json:"phone_number" db:"phone_number"`
+	Message     string    `json:"message" db:"message"`
+	Type        string    `json:"type" db:"type"`
+	Status      string    `json:"status" db:"status"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// BroadcastMessage represents a message in the broadcast queue
+type BroadcastMessage struct {
+	ID             string     `json:"id" db:"id"`
+	UserID         string     `json:"user_id" db:"user_id"`
+	DeviceID       string     `json:"device_id" db:"device_id"`
+	CampaignID     *int       `json:"campaign_id,omitempty" db:"campaign_id"`
+	SequenceID     *string    `json:"sequence_id,omitempty" db:"sequence_id"`
+	SequenceStepID *string    `json:"sequence_stepid,omitempty" db:"sequence_stepid"`
+	RecipientPhone string     `json:"recipient_phone" db:"recipient_phone"`
+	RecipientName  string     `json:"recipient_name" db:"recipient_name"`
+	Type           string     `json:"message_type" db:"message_type"`
+	Content        string     `json:"content" db:"content"`
+	MediaURL       string     `json:"media_url,omitempty" db:"media_url"`
+	Status         string     `json:"status" db:"status"`
+	ScheduledAt    time.Time  `json:"scheduled_at" db:"scheduled_at"`
+	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
+	GroupID        *string    `json:"group_id,omitempty" db:"group_id"`
+	GroupOrder     *int       `json:"group_order,omitempty" db:"group_order"`
+	MinDelay       int        `json:"min_delay" db:"min_delay"`
+	MaxDelay       int        `json:"max_delay" db:"max_delay"`
+	ErrorMessage   string     `json:"error_message,omitempty" db:"error_message"`
+}
+
+// WorkerStatus represents the status of a device worker
+type WorkerStatus struct {
+	DeviceID       string    `json:"device_id"`
+	Status         string    `json:"status"`
+	QueueSize      int       `json:"queue_size"`
+	ProcessedCount int64     `json:"processed_count"`
+	FailedCount    int64     `json:"failed_count"`
+	LastActivity   time.Time `json:"last_activity"`
+}
