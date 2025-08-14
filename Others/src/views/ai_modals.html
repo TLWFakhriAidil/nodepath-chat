@@ -1,0 +1,143 @@
+
+    <!-- AI Lead Modal -->
+    <div class="modal fade" id="aiLeadModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="aiLeadModalTitle">Add AI Lead</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="aiLeadForm">
+                        <input type="hidden" id="aiLeadId">
+                        <div class="mb-3">
+                            <label class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="aiLeadName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Phone *</label>
+                            <input type="text" class="form-control" id="aiLeadPhone" required>
+                            <small class="text-muted">Enter phone number without country code</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="aiLeadEmail">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Niche</label>
+                            <input type="text" class="form-control" id="aiLeadNiche">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Target Status</label>
+                            <select class="form-select" id="aiLeadTargetStatus">
+                                <option value="prospect">Prospect</option>
+                                <option value="customer">Customer</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-control" id="aiLeadNotes" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAILead()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- AI Campaign Modal -->
+    <div class="modal fade" id="aiCampaignModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create AI Campaign</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="aiCampaignForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Campaign Date *</label>
+                                    <input type="date" class="form-control" id="aiCampaignDate" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Scheduled Time</label>
+                                    <input type="time" class="form-control" id="aiCampaignTime">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Campaign Title *</label>
+                            <input type="text" class="form-control" id="aiCampaignTitle" required>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Niche *</label>
+                                    <input type="text" class="form-control" id="aiCampaignNiche" required>
+                                    <small class="text-muted">Must match AI lead niches</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Target Status *</label>
+                                    <select class="form-select" id="aiCampaignTargetStatus">
+                                        <option value="all">All</option>
+                                        <option value="prospect">Prospect</option>
+                                        <option value="customer">Customer</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>                        
+                        <div class="mb-3">
+                            <label class="form-label">Device Limit per Device *</label>
+                            <input type="number" class="form-control" id="aiDeviceLimit" min="1" required>
+                            <small class="text-muted">Maximum leads each device can send</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Message *</label>
+                            <textarea class="form-control" id="aiCampaignMessage" rows="4" required></textarea>
+                            <small class="text-muted d-block mt-1">
+                                <strong>WhatsApp Formatting:</strong> 
+                                *bold* | _italic_ | ~strikethrough~ | ```monospace``` | 😊 Emojis supported
+                            </small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Image URL (Optional)</label>
+                            <input type="text" class="form-control" id="aiCampaignImageUrl">
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Min Delay (seconds)</label>
+                                    <input type="number" class="form-control" id="aiMinDelay" min="5" value="10">
+                                    <small class="text-muted">Minimum delay between messages</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Max Delay (seconds)</label>
+                                    <input type="number" class="form-control" id="aiMaxDelay" min="5" value="30">
+                                    <small class="text-muted">Maximum delay between messages</small>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAICampaign()">Create Campaign</button>
+                </div>
+            </div>
+        </div>
+    </div>

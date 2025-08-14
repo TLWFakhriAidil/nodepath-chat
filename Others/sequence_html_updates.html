@@ -1,0 +1,98 @@
+<!-- UPDATED HTML for Sequence Summary Box -->
+<!-- Add new box for Total Leads in the summary section -->
+
+<!-- Find the summary boxes section and add this new box after "Contacts Remaining Send Message" -->
+
+<div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+    <div class="card stat-card">
+        <div class="card-body text-center">
+            <h3 class="mb-2" id="totalLeads">0</h3>
+            <p class="text-muted mb-0">Total Leads</p>
+            <small class="text-muted">(Unique Phone + Device)</small>
+        </div>
+    </div>
+</div>
+
+<!-- Update JavaScript to handle the new total_leads field -->
+<script>
+// In the loadSequenceSummary function, add:
+function loadSequenceSummary() {
+    fetch('/api/sequences/summary' + buildDateQuery())
+        .then(response => response.json())
+        .then(data => {
+            if (data.code === 'SUCCESS') {
+                const results = data.results;
+                
+                // Existing updates...
+                document.getElementById('totalSequences').textContent = results.sequences.total || 0;
+                document.getElementById('totalFlows').textContent = results.total_flows || 0;
+                document.getElementById('totalShouldSend').textContent = results.total_should_send || 0;
+                document.getElementById('totalDoneSend').textContent = results.total_done_send || 0;
+                document.getElementById('totalFailedSend').textContent = results.total_failed_send || 0;
+                document.getElementById('totalRemainingSend').textContent = results.total_remaining_send || 0;
+                
+                // NEW: Add total leads
+                document.getElementById('totalLeads').textContent = results.total_leads || 0;
+                
+                // Update the detail sequences table
+                updateDetailSequencesTable(results.recent_sequences);
+            }
+        });
+}
+
+// Update the detail sequences table to show total_leads column
+function updateDetailSequencesTable(sequences) {
+    const tbody = document.querySelector('#detailSequencesTable tbody');
+    tbody.innerHTML = '';
+    
+    sequences.forEach(seq => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td>${seq.name || '-'}</td>
+            <td>${seq.niche || '-'}</td>
+            <td>${seq.trigger || '-'}</td>
+            <td>${seq.total_flows || 0}</td>
+            <td>${seq.should_send || 0}</td>
+            <td>${seq.done_send || 0}</td>
+            <td>${seq.failed_send || 0}</td>
+            <td>${seq.remaining_send || 0}</td>
+            <td>${seq.total_leads || 0}</td>  <!-- NEW column -->
+            <td>
+                <span class="badge ${getStatusBadgeClass(seq.status)}">
+                    ${seq.status || 'draft'}
+                </span>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="viewSequence('${seq.id}')">
+                    <i class="bi bi-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-info" onclick="generateReport('${seq.id}')">
+                    <i class="bi bi-file-earmark-text"></i> Report
+                </button>
+            </td>
+        `;
+    });
+}
+</script>
+
+<!-- Update the Detail Sequences table header to include Total Leads column -->
+<table class="table table-hover" id="detailSequencesTable">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Niche</th>
+            <th>Trigger</th>
+            <th>Total Flows</th>
+            <th>Total Contacts Should Send</th>
+            <th>Contacts Done Send Message</th>
+            <th>Contacts Failed Send Message</th>
+            <th>Contacts Remaining Send Message</th>
+            <th>Total Leads</th>  <!-- NEW column -->
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Rows will be populated by JavaScript -->
+    </tbody>
+</table>

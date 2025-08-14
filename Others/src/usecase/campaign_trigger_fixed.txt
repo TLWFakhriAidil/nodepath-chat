@@ -1,0 +1,17 @@
+			if err := cts.ProcessCampaignTriggers(); err != nil {
+				logrus.Errorf("Error processing campaign triggers: %v", err)
+			}
+			
+			// REMOVED: ProcessSequenceTriggers - now handled by dedicated processor
+			// This was causing duplicate message creation!
+			// if err := cts.ProcessSequenceTriggers(); err != nil {
+			//     logrus.Errorf("Error processing sequence triggers: %v", err)
+			// }
+			
+			// Process daily sequence messages
+			if err := cts.ProcessDailySequenceMessages(); err != nil {
+				logrus.Errorf("Error processing daily sequence messages: %v", err)
+			}
+		}
+	}
+}

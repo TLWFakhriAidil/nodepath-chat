@@ -1,0 +1,61 @@
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Niche *</label>
+                                    <input type="text" class="form-control" id="aiCampaignNiche" required>
+                                    <small class="text-muted">Must match AI lead niches</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Target Status *</label>
+                                    <select class="form-select" id="aiCampaignTargetStatus">
+                                        <option value="all">All</option>
+                                        <option value="prospect">Prospect</option>
+                                        <option value="customer">Customer</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Device Limit per Device *</label>
+                            <input type="number" class="form-control" id="aiDeviceLimit" min="1" required>
+                            <small class="text-muted">Maximum leads each device can send</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Message *</label>
+                            <textarea class="form-control" id="aiCampaignMessage" rows="4" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Image URL (Optional)</label>
+                            <input type="text" class="form-control" id="aiCampaignImageUrl">
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Min Delay (seconds)</label>
+                                    <input type="number" class="form-control" id="aiMinDelay" min="5" value="10">
+                                    <small class="text-muted">Minimum delay between messages</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Max Delay (seconds)</label>
+                                    <input type="number" class="form-control" id="aiMaxDelay" min="5" value="30">
+                                    <small class="text-muted">Maximum delay between messages</small>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAICampaign()">Create Campaign</button>
+                </div>
+            </div>
+        </div>
+    </div>

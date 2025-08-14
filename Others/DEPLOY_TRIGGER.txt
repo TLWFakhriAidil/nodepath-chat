@@ -1,0 +1,14 @@
+RAILWAY DEPLOYMENT TRIGGER
+==========================
+
+Last Updated: 2025-07-02 22:30:00 +0800
+Version: 1.2.0
+
+Changes in this deployment:
+- Added WhatsApp Web interface with send functionality
+- Fixed template rendering path
+- Added check-connection endpoint
+- Force rebuild with updated embedded files
+
+This file triggers Railway deployment when changed.
+REM Deployment trigger: Wed 09/07/2025 11:26:04.19 

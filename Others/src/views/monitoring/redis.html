@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis Queue Monitoring</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .metric-card {
+            border-radius: 10px;
+            transition: transform 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+        .queue-item {
+            border-left: 4px solid #007bff;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .queue-item.sequence {
+            border-left-color: #28a745;
+        }
+        .success-rate {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .status-badge {
+            font-size: 0.875rem;
+            padding: 0.25rem 0.5rem;
+        }
+        #refreshIndicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-database text-danger"></i> Redis Queue Monitoring</h1>
+            <div>
+                <button class="btn btn-primary" onclick="refreshData()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+                <button class="btn btn-warning" onclick="showExpireDialog()">
+                    <i class="fas fa-clock"></i> Expire Old Messages
+                </button>
+            </div>
+        </div>
+
+        <div id="refreshIndicator" class="badge bg-success" style="display: none;">
+            <i class="fas fa-sync-alt fa-spin"></i> Refreshing...
+        </div>
+
+        <!-- Connection Status -->
+        <div id="connectionAlert" class="alert alert-info" role="alert">
+            <i class="fas fa-info-circle"></i> Checking Redis connection...
+        </div>
+
+        <!-- Main Metrics Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card metric-card bg-primary text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Queues</h5>
+                        <h2 id="totalQueues">-</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card bg-success text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Messages</h5>
+                        <h2 id="totalMessages">-</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card bg-warning text-dark">
+                    <div class="card-body">
+                        <h5 class="card-title">Memory Usage</h5>
+                        <h2 id="memoryUsage">-</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card bg-info text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Connected Clients</h5>
+                        <h2 id="connectedClients">-</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Queue Details -->
+        <div class="row">
+            <div class="col-md-6">
+                <h3><i class="fas fa-list"></i> Queue Details</h3>
+                <div id="queueList" class="mt-3">
+                    <p class="text-muted">Loading queues...</p>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <h3><i class="fas fa-chart-line"></i> Worker Metrics</h3>
+                <div id="workerMetrics" class="mt-3">
+                    <p class="text-muted">Loading metrics...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Real-time Status -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <h3><i class="fas fa-info-circle"></i> Real-time Status</h3>
+                <div id="realtimeStatus" class="mt-3">
+                    <div class="alert alert-info">
+                        <strong>Last Update:</strong> <span id="lastUpdate">-</span><br>
+                        <strong>WhatsApp Clients:</strong> <span id="whatsappClients">Checking...</span><br>
+                        <strong>Active Workers:</strong> <span id="activeWorkers">0</span><br>
+                        <strong>Queue Processing:</strong> <span id="queueStatus">Checking...</span>
+                    </div>
+                    <button class="btn btn-sm btn-warning" onclick="debugWhatsApp()">
+                        <i class="fas fa-bug"></i> Debug WhatsApp Clients
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expire Messages Modal -->
+    <div class="modal fade" id="expireModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Expire Old Messages</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Expire messages older than:</p>
+                    <select id="expireHours" class="form-select">
+                        <option value="24">24 hours</option>
+                        <option value="48">48 hours</option>
+                        <option value="72">72 hours</option>
+                        <option value="168">1 week</option>
+                    </select>
+                    <p class="text-warning mt-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        This will mark all pending/queued messages older than the selected time as expired.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" onclick="expireMessages()">Expire Messages</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let refreshInterval;
+        const adminToken = 'your-secure-admin-token'; // Should be from config/env
+
+        function refreshData() {
+            document.getElementById('refreshIndicator').style.display = 'block';
+            
+            fetch('/api/monitoring/redis')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showError(data.message);
+                        return;
+                    }
+                    
+                    updateMetrics(data.data);
+                    updateRealtimeStatus();
+                    document.getElementById('refreshIndicator').style.display = 'none';
+                })
+                .catch(error => {
+                    showError('Failed to fetch metrics: ' + error);
+                    document.getElementById('refreshIndicator').style.display = 'none';
+                });
+        }
+
+        function updateMetrics(metrics) {
+            // Update connection status
+            const connAlert = document.getElementById('connectionAlert');
+            if (metrics.connected) {
+                connAlert.className = 'alert alert-success';
+                connAlert.innerHTML = '<i class="fas fa-check-circle"></i> Redis is connected and operational';
+            } else {
+                connAlert.className = 'alert alert-danger';
+                connAlert.innerHTML = '<i class="fas fa-times-circle"></i> Redis is not connected';
+                return;
+            }
+
+            // Update main metrics
+            document.getElementById('totalQueues').textContent = metrics.total_queues || 0;
+            document.getElementById('totalMessages').textContent = metrics.total_messages || 0;
+            document.getElementById('memoryUsage').textContent = metrics.memory_usage || 'N/A';
+            document.getElementById('connectedClients').textContent = metrics.connected_clients || 0;
+
+            // Update queue list
+            updateQueueList(metrics.queue_details || []);
+
+            // Update worker metrics
+            updateWorkerMetrics(metrics.worker_metrics || {});
+        }
+
+        function updateQueueList(queues) {
+            const container = document.getElementById('queueList');
+            
+            if (queues.length === 0) {
+                container.innerHTML = '<p class="text-muted">No active queues</p>';
+                return;
+            }
+
+            let html = '';
+            queues.forEach(queue => {
+                const typeClass = queue.type === 'sequence' ? 'sequence' : '';
+                const typeIcon = queue.type === 'sequence' ? 'fa-clock' : 'fa-bullhorn';
+                
+                html += `
+                    <div class="queue-item ${typeClass}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas ${typeIcon}"></i>
+                                <strong>${queue.device_id}</strong>
+                                <span class="badge bg-secondary">${queue.type}</span>
+                            </div>
+                            <div>
+                                <span class="badge bg-primary">${queue.message_count} messages</span>
+                                <button class="btn btn-sm btn-danger ms-2" onclick="clearQueue('${queue.queue_name}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function updateWorkerMetrics(metrics) {
+            const container = document.getElementById('workerMetrics');
+            
+            const deviceIds = Object.keys(metrics);
+            if (deviceIds.length === 0) {
+                container.innerHTML = '<p class="text-muted">No worker metrics available</p>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table class="table table-sm">';
+            html += '<thead><tr><th>Device</th><th>Success</th><th>Failed</th><th>Rate</th><th>Last Activity</th></tr></thead><tbody>';
+            
+            deviceIds.forEach(deviceId => {
+                const metric = metrics[deviceId];
+                const successRate = metric.success_rate ? metric.success_rate.toFixed(1) : '0';
+                const rateColor = metric.success_rate >= 90 ? 'success' : metric.success_rate >= 70 ? 'warning' : 'danger';
+                
+                html += `
+                    <tr>
+                        <td><small>${deviceId.substring(0, 8)}...</small></td>
+                        <td><span class="badge bg-success">${metric.success_count || 0}</span></td>
+                        <td><span class="badge bg-danger">${metric.failed_count || 0}</span></td>
+                        <td><span class="badge bg-${rateColor}">${successRate}%</span></td>
+                        <td><small>${metric.last_success || 'N/A'}</small></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        function clearQueue(queueName) {
+            if (!confirm(`Clear all messages from queue ${queueName}?`)) {
+                return;
+            }
+
+            fetch(`/api/monitoring/queue/${encodeURIComponent(queueName)}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Admin-Token': adminToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.message);
+                } else {
+                    alert('Queue cleared successfully');
+                    refreshData();
+                }
+            })
+            .catch(error => {
+                alert('Failed to clear queue: ' + error);
+            });
+        }
+
+        function showExpireDialog() {
+            const modal = new bootstrap.Modal(document.getElementById('expireModal'));
+            modal.show();
+        }
+
+        function expireMessages() {
+            const hours = document.getElementById('expireHours').value;
+            
+            fetch(`/api/monitoring/expire-messages?hours=${hours}`, {
+                method: 'POST',
+                headers: {
+                    'X-Admin-Token': adminToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('expireModal'));
+                modal.hide();
+                
+                if (data.error) {
+                    alert('Error: ' + data.message);
+                } else {
+                    alert(data.message);
+                    refreshData();
+                }
+            })
+            .catch(error => {
+                alert('Failed to expire messages: ' + error);
+            });
+        }
+
+        function showError(message) {
+            const connAlert = document.getElementById('connectionAlert');
+            connAlert.className = 'alert alert-danger';
+            connAlert.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+        }
+        
+        function updateRealtimeStatus() {
+            // Update last update time
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            
+            // Check WhatsApp clients
+            fetch('/api/debug/whatsapp-clients')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('whatsappClients').textContent = 
+                        `${data.total_clients} registered`;
+                })
+                .catch(() => {
+                    document.getElementById('whatsappClients').textContent = 'Error checking';
+                });
+                
+            // Update queue status
+            const totalMessages = parseInt(document.getElementById('totalMessages').textContent) || 0;
+            const queueStatus = totalMessages > 0 ? 
+                `${totalMessages} messages waiting` : 
+                'No messages in queue';
+            document.getElementById('queueStatus').textContent = queueStatus;
+        }
+        
+        function debugWhatsApp() {
+            fetch('/api/debug/whatsapp-clients')
+                .then(response => response.json())
+                .then(data => {
+                    let message = `Total Clients: ${data.total_clients}\n\n`;
+                    if (data.clients && data.clients.length > 0) {
+                        data.clients.forEach(client => {
+                            message += `Device: ${client.device_id}\n`;
+                            message += `Connected: ${client.connected}\n`;
+                            message += `Logged In: ${client.logged_in}\n\n`;
+                        });
+                    } else {
+                        message += 'No WhatsApp clients registered!';
+                    }
+                    alert(message);
+                })
+                .catch(error => {
+                    alert('Failed to debug: ' + error);
+                });
+        }
+
+        // Auto-refresh every 5 seconds
+        refreshData();
+        refreshInterval = setInterval(refreshData, 5000);
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

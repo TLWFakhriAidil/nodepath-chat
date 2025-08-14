@@ -1,0 +1,40 @@
+// processContact handles a single contact's message
+func (s *SequenceTriggerProcessor) processContact(job contactJob, deviceLoads map[string]DeviceLoad) bool {
+	// Select best device for this contact
+	deviceID := s.selectDeviceForContact(job.preferredDevice.String, deviceLoads)
+	if deviceID == "" {
+		logrus.Warnf("No available device for contact %s", job.phone)
+		return false
+	}
+
+	// Claim the contact for processing
+	claimQuery := `
+		UPDATE sequence_contacts 
+		SET processing_device_id = $1, processing_started_at = $2
+		WHERE id = $3 AND processing_device_id IS NULL
+	`
+	
+	result, err := s.db.Exec(claimQuery, deviceID, time.Now(), job.contactID)
+	if err != nil {
+		logrus.Errorf("Failed to claim contact %s: %v", job.contactID, err)
+		return false
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		// Already claimed by another worker
+		return false
+	}
+
+	// Queue message to broadcast system with anti-pattern protection
+	// Create broadcast message
+	broadcastMsg := domainBroadcast.BroadcastMessage{
+		DeviceID:       deviceID,
+		RecipientPhone: job.phone,
+		RecipientName:  job.name,             // ADDED for greeting processor
+		Message:        job.messageText,
+		Content:        job.messageText,
+		Type:           job.messageType,
+		MinDelay:       job.minDelaySeconds,
+		MaxDelay:       job.maxDelaySeconds,
+	}

@@ -1,0 +1,32 @@
+--- Fix for Device Creation Issue ---
+
+The problem is in src/repository/user_repository.go
+
+In the AddUserDevice function (around line 240), the SQL query has a syntax error:
+WRONG:
+```
+INSERT INTO user_devices(id, user_id, device_name, status, last_seen, created_at)
+VALUES (?, ?, ?, ?, ?, ?), last_seen
+```
+
+CORRECT:
+```
+INSERT INTO user_devices(id, user_id, device_name, status, last_seen, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+```
+
+In the AddUserDeviceWithPhone function (around line 265), same issue:
+WRONG:
+```
+INSERT INTO user_devices(id, user_id, device_name, phone, status, last_seen, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?), last_seen
+```
+
+CORRECT:
+```
+INSERT INTO user_devices(id, user_id, device_name, phone, status, last_seen, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+```
+
+Also, both functions are trying to use QueryRow with Scan which is incorrect for INSERT statements.
+They should use Exec instead.

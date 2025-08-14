@@ -1,0 +1,46 @@
+ANSWERS TO YOUR QUESTIONS
+=========================
+
+1. WHAT IS "DISTINCT RECIPIENTS" BASED ON?
+------------------------------------------
+
+DISTINCT recipient_phone means each unique phone number is counted ONLY ONCE per status category.
+
+Example:
+If phone number 60173079245 received 3 messages in a sequence:
+- 2 messages with status='sent'
+- 1 message with status='failed'
+
+This phone counts as:
+- 1 in done_send (NOT 2, even though there are 2 sent messages)
+- 1 in failed_send  
+- 1 in total unique recipients
+
+The DISTINCT prevents double-counting when a recipient receives multiple sequence steps.
+
+SQL Example:
+COUNT(DISTINCT CASE WHEN status = 'sent' THEN recipient_phone END)
+This counts each unique phone number only once for sent status.
+
+
+2. IS IT TALLIED BASED ON MYSQL FOR SCHEDULED_AT 3/08/2025?
+-----------------------------------------------------------
+
+YES ✓ - The sequence summary is PERFECTLY TALLIED with MySQL data for scheduled_at = '2025-08-03'
+
+Proof from our database query:
+- UI Shows: Done=918, Failed=471, Remaining=0, Should=1389
+- DB Query: Done=918, Failed=471, Remaining=0, Should=1389
+
+The UI uses this exact query logic:
+```sql
+SELECT 
+    COUNT(DISTINCT CASE WHEN status = 'sent' AND (error_message IS NULL OR error_message = '') THEN recipient_phone END) AS done_send,
+    COUNT(DISTINCT CASE WHEN status = 'failed' THEN recipient_phone END) AS failed_send,
+    COUNT(DISTINCT CASE WHEN status IN ('pending', 'queued') THEN recipient_phone END) AS remaining_send
+FROM broadcast_messages
+WHERE sequence_id = ?
+AND DATE(scheduled_at) = '2025-08-03'
+```
+
+All numbers match exactly when filtered by scheduled_at date = '2025-08-03'.

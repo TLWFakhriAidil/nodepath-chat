@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .Sequence.Name }} - WhatsApp Multi-Device</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #128c7e;
+            --primary-dark: #075e54;
+            --success: #25d366;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --light-bg: #f0f2f5;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        body {
+            background-color: var(--light-bg);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .navbar {
+            background-color: white !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        .navbar-brand {
+            color: var(--primary) !important;
+            font-weight: 600;
+        }
+
+        .page-header {
+            background: white;
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: var(--card-shadow);
+            border: none;
+            text-align: center;
+            height: 100%;
+            transition: transform 0.2s;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+
+        .metric-label {
+            color: #667781;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .btn-back {
+            background-color: #f0f2f5;
+            border: none;
+            color: #333;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-back:hover {
+            background-color: #e4e6eb;
+            color: #333;
+        }
+
+        .flow-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--card-shadow);
+            border: none;
+            margin-bottom: 20px;
+            height: 100%;
+        }
+
+        .flow-header {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+
+        .flow-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            row-gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .stat-label {
+            color: #667781;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        .sequence-timeline {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: var(--card-shadow);
+            border: none;
+            margin-top: 30px;
+        }
+
+        .timeline-header {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 25px;
+            color: #333;
+        }
+
+        .timeline-flow {
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #fafbfc;
+        }
+
+        .timeline-flow-header {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .timeline-content {
+            margin-bottom: 15px;
+        }
+
+        .timeline-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .timeline-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        @media (min-width: 768px) {
+            .timeline-stats {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        .timeline-stat {
+            text-align: center;
+        }
+
+        .timeline-stat-label {
+            color: #667781;
+            font-size: 12px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .timeline-stat-value {
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,.1);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .filter-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 20px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-label {
+            font-weight: 500;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="bi bi-whatsapp"></i> WhatsApp Analytics
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">{{ .User.Email }}</span>
+                <a href="/logout" class="nav-link text-danger">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h2 class="mb-0">{{ .Sequence.Name }}</h2>
+                    <p class="text-muted mb-0">Sequence Progress Overview</p>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-back" onclick="window.location.href='/sequences'">
+                        <i class="bi bi-arrow-left"></i> Back to Sequences
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container-fluid">
+        <!-- Date Filter Section -->
+        <div class="filter-section">
+            <div class="filter-controls">
+                <span class="filter-label">Filter by Date:</span>
+                <input type="date" id="filterStartDate" class="form-control" style="width: auto;">
+                <span>to</span>
+                <input type="date" id="filterEndDate" class="form-control" style="width: auto;">
+                <button class="btn btn-primary btn-sm" onclick="applyDateFilter()">
+                    <i class="bi bi-funnel"></i> Apply Filter
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="clearDateFilter()">
+                    <i class="bi bi-x-circle"></i> Clear
+                </button>
+            </div>
+        </div>
+
+        <!-- Metric Cards Row -->
+        <div class="row mb-4">
+            <!-- Total Flow Box -->
+            <div class="col-6 col-md-3 col-lg-2 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-primary" id="totalFlows">0</div>
+                    <div class="metric-label">Total Flows</div>
+                </div>
+            </div>
+            
+            <!-- Total Contacts (Should Send) Box -->
+            <div class="col-6 col-md-3 col-lg-2 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-info" id="totalShouldSend">
+                        <div class="loading-spinner"></div>
+                    </div>
+                    <div class="metric-label">Total Contacts Should Send</div>
+                </div>
+            </div>
+            
+            <!-- Contacts Done Send Message Box -->
+            <div class="col-6 col-md-3 col-lg-2 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-success" id="totalDoneSend">0</div>
+                    <div class="metric-label">Contacts Done Send Message</div>
+                </div>
+            </div>
+            
+            <!-- Contacts Failed Send Message Box -->
+            <div class="col-6 col-md-3 col-lg-2 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-danger" id="totalFailedSend">0</div>
+                    <div class="metric-label">Contacts Failed Send Message</div>
+                </div>
+            </div>
+            
+            <!-- Contacts Remaining Send Message Box -->
+            <div class="col-6 col-md-3 col-lg-2 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-warning" id="totalRemainingSend">0</div>
+                    <div class="metric-label">Contacts Remaining Send Message</div>
+                </div>
+            </div>
+            
+            <!-- Total Leads Box -->
+            <div class="col-6 col-md-3 col-lg-2 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-info" id="totalLeads">0</div>
+                    <div class="metric-label">Total Leads</div>
+                    <small class="text-muted">Unique Phone + Device</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flow Cards -->
+        <div id="flowCards">
+            <!-- Flow cards will be dynamically generated -->
+        </div>
+
+        <!-- Sequence Timeline -->
+        <div class="sequence-timeline">
+            <h4 class="timeline-header">Sequence Timeline</h4>
+            <div id="sequenceTimeline">
+                <!-- Timeline will be dynamically generated -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const sequenceId = '{{ .Sequence.ID }}';
+        const sequenceTrigger = '{{ .Sequence.Trigger }}';
+        const userId = '{{ .User.ID }}';
+        let sequenceData = null;
+        let contactsData = null;
+        let allContactsData = null; // Store unfiltered data
+        let flowStats = {}; // Store stats per flow
+        let totalFlows = 0;
+        let totalShouldSend = 0;
+        let totalDoneSend = 0;
+        let totalFailedSend = 0;
+        let totalRemainingSend = 0;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set today's date as default end date
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('filterEndDate').value = today;
+            document.getElementById('filterEndDate').max = today;
+            document.getElementById('filterStartDate').max = today;
+            
+            loadSequenceDetails();
+        });
+
+        function applyDateFilter() {
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            
+            if (!allContactsData) {
+                return;
+            }
+            
+            // Filter contacts based on completed_at date
+            if (startDate || endDate) {
+                contactsData = allContactsData.filter(contact => {
+                    if (!contact.completed_at) {
+                        // If no completed_at, don't include in filtered results for done/failed
+                        return false;
+                    }
+                    
+                    const completedDate = contact.completed_at.split('T')[0];
+                    
+                    if (startDate && endDate) {
+                        return completedDate >= startDate && completedDate <= endDate;
+                    } else if (startDate) {
+                        return completedDate >= startDate;
+                    } else if (endDate) {
+                        return completedDate <= endDate;
+                    }
+                    
+                    return true;
+                });
+            } else {
+                contactsData = [...allContactsData];
+            }
+            
+            // Recalculate stats with filtered data
+            calculateContactStats(true); // Pass true to indicate filtering
+            displayFlowCards();
+            displayTimeline();
+        }
+
+        function clearDateFilter() {
+            document.getElementById('filterStartDate').value = '';
+            document.getElementById('filterEndDate').value = '';
+            
+            // Reset to unfiltered data
+            contactsData = allContactsData ? [...allContactsData] : [];
+            calculateContactStats(false);
+            displayFlowCards();
+            displayTimeline();
+        }
+
+        function loadSequenceDetails() {
+            // First load sequence details
+            fetch(`/api/sequences/${sequenceId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 'SUCCESS') {
+                        sequenceData = data.results;
+                        totalFlows = sequenceData.steps ? sequenceData.steps.length : 0;
+                        document.getElementById('totalFlows').textContent = totalFlows;
+                        
+                        // Initialize flow stats
+                        if (sequenceData.steps) {
+                            sequenceData.steps.forEach(step => {
+                                flowStats[step.id] = {
+                                    shouldSend: 0,
+                                    doneSend: 0,
+                                    failedSend: 0,
+                                    remaining: 0
+                                };
+                            });
+                        }
+                        
+                        // Load all data in parallel
+                        Promise.all([
+                            loadLeadsCount(),
+                            loadSequenceContacts()
+                        ]).then(() => {
+                            displayFlowCards();
+                            displayTimeline();
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading sequence details:', error);
+                });
+        }
+
+        function loadLeadsCount() {
+            // We need to get leads that match the sequence trigger
+            // This would require a new API endpoint to get leads by trigger
+            // For now, we'll simulate with a fetch to a hypothetical endpoint
+            
+            // TODO: Replace with actual API endpoint that returns leads matching trigger
+            return fetch(`/api/leads?trigger=${encodeURIComponent(sequenceTrigger)}&user_id=${userId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 'SUCCESS' && data.results) {
+                        totalShouldSend = data.results.length || 0;
+                    } else {
+                        // Fallback to sequence contacts count
+                        totalShouldSend = sequenceData.contacts_count || 0;
+                    }
+                    document.getElementById('totalShouldSend').textContent = totalShouldSend;
+                })
+                .catch(error => {
+                    console.error('Error loading leads count:', error);
+                    // Fallback to sequence contacts count
+                    totalShouldSend = sequenceData.contacts_count || 0;
+                    document.getElementById('totalShouldSend').textContent = totalShouldSend;
+                });
+        }
+
+        function loadSequenceContacts() {
+            return fetch(`/api/sequences/${sequenceId}/contacts`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 'SUCCESS') {
+                        allContactsData = data.results || [];
+                        contactsData = [...allContactsData]; // Create a copy
+                        calculateContactStats(false);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading sequence contacts:', error);
+                });
+        }
+
+        function calculateContactStats(isFiltered) {
+            if (!contactsData) return;
+            
+            // Reset counters
+            totalDoneSend = 0;
+            totalFailedSend = 0;
+            
+            // Reset flow stats
+            Object.keys(flowStats).forEach(stepId => {
+                flowStats[stepId] = {
+                    shouldSend: totalShouldSend, // Each flow should send to all leads
+                    doneSend: 0,
+                    failedSend: 0,
+                    remaining: 0
+                };
+            });
+            
+            // Count by status and group by sequence_stepid
+            // When filtered, only count contacts with completed_at in the date range
+            contactsData.forEach(contact => {
+                if (contact.status === 'sent') {
+                    totalDoneSend++;
+                    if (contact.sequence_stepid && flowStats[contact.sequence_stepid]) {
+                        flowStats[contact.sequence_stepid].doneSend++;
+                    }
+                } else if (contact.status === 'failed') {
+                    totalFailedSend++;
+                    if (contact.sequence_stepid && flowStats[contact.sequence_stepid]) {
+                        flowStats[contact.sequence_stepid].failedSend++;
+                    }
+                }
+            });
+            
+            // When not filtered, calculate remaining normally
+            // When filtered, remaining is based on what's left after filtering
+            if (!isFiltered) {
+                // Normal calculation: total should send minus done and failed from all contacts
+                const allDone = allContactsData.filter(c => c.status === 'sent').length;
+                const allFailed = allContactsData.filter(c => c.status === 'failed').length;
+                totalRemainingSend = totalShouldSend - allDone - allFailed;
+            } else {
+                // When filtered, show remaining as total minus what's shown in the filter
+                totalRemainingSend = totalShouldSend - totalDoneSend - totalFailedSend;
+            }
+            
+            // Calculate remaining for each flow
+            Object.keys(flowStats).forEach(stepId => {
+                if (!isFiltered) {
+                    // Count all done/failed for this step from unfiltered data
+                    const allStepDone = allContactsData.filter(c => 
+                        c.sequence_stepid === stepId && c.status === 'sent'
+                    ).length;
+                    const allStepFailed = allContactsData.filter(c => 
+                        c.sequence_stepid === stepId && c.status === 'failed'
+                    ).length;
+                    flowStats[stepId].remaining = flowStats[stepId].shouldSend - allStepDone - allStepFailed;
+                } else {
+                    // When filtered, use filtered counts
+                    flowStats[stepId].remaining = flowStats[stepId].shouldSend - 
+                                                  flowStats[stepId].doneSend - 
+                                                  flowStats[stepId].failedSend;
+                }
+            });
+            
+            // Update display
+            document.getElementById('totalDoneSend').textContent = totalDoneSend;
+            document.getElementById('totalFailedSend').textContent = totalFailedSend;
+            document.getElementById('totalRemainingSend').textContent = totalRemainingSend;
+        }
+
+        function displayFlowCards() {
+            const container = document.getElementById('flowCards');
+            container.innerHTML = '';
+
+            if (!sequenceData.steps || sequenceData.steps.length === 0) {
+                container.innerHTML = '<div class="alert alert-info">No flows defined for this sequence.</div>';
+                return;
+            }
+
+            // Create a row container
+            const row = document.createElement('div');
+            row.className = 'row';
+
+            // Create a card for each flow
+            sequenceData.steps.forEach((step, index) => {
+                const stats = flowStats[step.id] || {
+                    shouldSend: totalShouldSend,
+                    doneSend: 0,
+                    failedSend: 0,
+                    remaining: totalShouldSend,
+                    totalLeads: 0
+                };
+                
+                const flowCard = document.createElement('div');
+                flowCard.className = 'col-md-6 col-lg-4 mb-3';
+                
+                flowCard.innerHTML = `
+                    <div class="flow-card">
+                        <div class="flow-header">Flow ${index + 1}</div>
+                        <div class="flow-stats">
+                            <div class="stat-item">
+                                <div class="stat-value text-info">${stats.shouldSend}</div>
+                                <div class="stat-label">Should Send</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value text-success">${stats.doneSend}</div>
+                                <div class="stat-label">Done Send</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value text-danger">${stats.failedSend}</div>
+                                <div class="stat-label">Failed Send</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value text-warning">${stats.remaining}</div>
+                                <div class="stat-label">Remaining</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value text-primary">${stats.totalLeads}</div>
+                                <div class="stat-label">Total Leads</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                row.appendChild(flowCard);
+            });
+
+            container.appendChild(row);
+        }
+
+        function displayTimeline() {
+            const container = document.getElementById('sequenceTimeline');
+            container.innerHTML = '';
+
+            if (!sequenceData.steps || sequenceData.steps.length === 0) {
+                container.innerHTML = '<p class="text-muted">No timeline data available.</p>';
+                return;
+            }
+
+            sequenceData.steps.forEach((step, index) => {
+                const stats = flowStats[step.id] || {
+                    shouldSend: totalShouldSend,
+                    doneSend: 0,
+                    failedSend: 0,
+                    remaining: totalShouldSend
+                };
+                
+                const timelineFlow = document.createElement('div');
+                timelineFlow.className = 'timeline-flow';
+                
+                timelineFlow.innerHTML = `
+                    <div class="timeline-flow-header">
+                        Flow ${index + 1} - ${step.trigger || `Day ${step.day_number}`}
+                    </div>
+                    
+                    <div class="timeline-content">
+                        ${step.media_url ? `
+                            <img src="${step.media_url}" class="timeline-image" alt="Flow ${index + 1} Image">
+                        ` : ''}
+                        
+                        <div class="mt-2">
+                            <strong>Description:</strong><br>
+                            ${step.content || 'No description available'}
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-stats">
+                        <div class="timeline-stat">
+                            <span class="timeline-stat-label">Total Lead Should Sent</span>
+                            <span class="timeline-stat-value text-info">${stats.shouldSend}</span>
+                        </div>
+                        <div class="timeline-stat">
+                            <span class="timeline-stat-label">Total Lead Done Sent</span>
+                            <span class="timeline-stat-value text-success">${stats.doneSend}</span>
+                        </div>
+                        <div class="timeline-stat">
+                            <span class="timeline-stat-label">Total Lead Failed Sent</span>
+                            <span class="timeline-stat-value text-danger">${stats.failedSend}</span>
+                        </div>
+                        <div class="timeline-stat">
+                            <span class="timeline-stat-label">Total Lead Remaining</span>
+                            <span class="timeline-stat-value text-warning">${stats.remaining}</span>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(timelineFlow);
+            });
+        }
+    </script>
+</body>
+</html>

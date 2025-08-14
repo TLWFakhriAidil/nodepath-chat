@@ -1,0 +1,84 @@
+
+            <!-- Manage AI Tab -->
+            <div class="tab-pane fade" id="manage-ai" role="tabpanel">
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">AI Lead Management</h5>
+                            <div>
+                                <button class="btn btn-primary" onclick="showAddAILeadModal()">
+                                    <i class="bi bi-plus-lg"></i> Add AI Lead
+                                </button>
+                                <button class="btn btn-success" onclick="showCreateAICampaignModal()">
+                                    <i class="bi bi-broadcast"></i> Create AI Campaign
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Stats Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-icon bg-primary bg-opacity-10 text-primary">
+                                <i class="bi bi-people"></i>
+                            </div>
+                            <div class="metric-value" id="aiTotalLeads">0</div>
+                            <div class="metric-label">Total AI Leads</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-icon bg-warning bg-opacity-10 text-warning">
+                                <i class="bi bi-clock"></i>
+                            </div>
+                            <div class="metric-value" id="aiPendingLeads">0</div>
+                            <div class="metric-label">Pending</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-icon bg-success bg-opacity-10 text-success">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
+                            <div class="metric-value" id="aiSentLeads">0</div>
+                            <div class="metric-label">Sent</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-icon bg-danger bg-opacity-10 text-danger">
+                                <i class="bi bi-x-circle"></i>
+                            </div>
+                            <div class="metric-value" id="aiFailedLeads">0</div>
+                            <div class="metric-label">Failed</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Leads Table -->
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="aiLeadsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Phone</th>
+                                        <th>Niche</th>
+                                        <th>Target</th>
+                                        <th>Status</th>
+                                        <th>Device</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="aiLeadsTableBody">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>

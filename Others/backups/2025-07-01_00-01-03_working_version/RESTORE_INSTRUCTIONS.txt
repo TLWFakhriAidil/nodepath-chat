@@ -1,0 +1,35 @@
+﻿RESTORE INSTRUCTIONS
+===================
+
+This backup was created on: 2025-07-01 00:06:53
+From commit: b73d2ac Fix: Move campaign clone and delete icons to top of div - Repositioned icons from center to top (3px from top) - Icons now appear at the very top of campaign items - Added z-index for proper layering - Maintains all existing functionality
+
+To restore this database:
+
+1. Install PostgreSQL client tools if not already installed:
+   - Download from: https://www.postgresql.org/download/windows/
+   - Or use: choco install postgresql
+
+2. Use one of these methods:
+
+   Method A - Using psql:
+   psql "postgres://postgres:CNFPbgfjsIVirTuqLMoObNMvoYobDDTU@yamanote.proxy.rlwy.net:49914/railway?sslmode=require" < postgresql_backup.sql
+
+   Method B - Using Railway CLI:
+   railway run psql < postgresql_backup.sql
+
+   Method C - Manual restore via Railway dashboard:
+   - Go to your Postgres service
+   - Use the query interface to run the SQL
+
+3. After restore, restart your application:
+   railway restart
+
+IMPORTANT NOTES:
+- This will REPLACE all current data
+- Make sure to backup current data first
+- The application should be stopped during restore
+
+Database Statistics at backup time:
+- Check database_stats.json for table counts
+- Check backup_info.json for system state

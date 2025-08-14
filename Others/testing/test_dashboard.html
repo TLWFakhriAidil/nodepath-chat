@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp System Test Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #25d366, #128c7e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .test-card {
+            background: linear-gradient(135deg, #1a1f3a, #0f1629);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid #25d366;
+            box-shadow: 0 5px 20px rgba(37, 211, 102, 0.2);
+            transition: transform 0.3s;
+        }
+        
+        .test-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(37, 211, 102, 0.3);
+        }
+        
+        .test-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .test-icon {
+            font-size: 2em;
+            margin-right: 15px;
+        }
+        
+        .test-title {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+        
+        .test-metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        
+        .metric-label {
+            color: #8892b0;
+            font-size: 0.9em;
+        }
+        
+        .metric-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #25d366;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+        
+        .status-ready {
+            background: #25d366;
+            color: #000;
+        }
+        
+        .status-testing {
+            background: #ffc107;
+            color: #000;
+        }
+        
+        .status-error {
+            background: #dc3545;
+            color: #fff;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #25d366, #128c7e);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        
+        .system-overview {
+            background: linear-gradient(135deg, #1a1f3a, #0f1629);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+            border: 1px solid #25d366;
+        }
+        
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .overview-item {
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        .overview-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #25d366;
+        }
+        
+        .overview-label {
+            color: #8892b0;
+            margin-top: 5px;
+        }
+        
+        .test-button {
+            background: linear-gradient(45deg, #25d366, #128c7e);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px;
+        }
+        
+        .test-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(37, 211, 102, 0.4);
+        }
+        
+        .alert {
+            background: rgba(37, 211, 102, 0.2);
+            border: 1px solid #25d366;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 WhatsApp Multi-Device Test Dashboard</h1>
+        
+        <div class="system-overview">
+            <h2>System Overview</h2>
+            <div class="overview-grid">
+                <div class="overview-item">
+                    <div class="overview-number">3,000</div>
+                    <div class="overview-label">Total Devices</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-number">2,700</div>
+                    <div class="overview-label">Online Devices</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-number">100K</div>
+                    <div class="overview-label">Test Leads</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-number">200+</div>
+                    <div class="overview-label">Msg/Second</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert">
+            ⚠️ This is a TEST DASHBOARD - No real WhatsApp messages will be sent!
+        </div>
+        
+        <div class="test-grid">
+            <!-- Campaign Test Card -->
+            <div class="test-card">
+                <div class="test-header">
+                    <span class="test-icon">📢</span>
+                    <span class="test-title">Campaign Testing</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Test Campaigns</span>
+                    <span class="metric-value">3</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Active Leads Target</span>
+                    <span class="metric-value">~33,000</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Processing Time</span>
+                    <span class="metric-value">~3 min</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Messages/Second</span>
+                    <span class="metric-value">180</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 0%"></div>
+                </div>
+                
+                <button class="test-button" onclick="testCampaigns()">Test Campaigns</button>
+                <div class="status-badge status-ready">READY</div>
+            </div>
+            
+            <!-- AI Campaign Test Card -->
+            <div class="test-card">
+                <div class="test-header">
+                    <span class="test-icon">🤖</span>
+                    <span class="test-title">AI Campaign Testing</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">AI Campaigns</span>
+                    <span class="metric-value">2</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Daily Limit</span>
+                    <span class="metric-value">15,000</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Device Limit</span>
+                    <span class="metric-value">80/hour</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Smart Distribution</span>
+                    <span class="metric-value">✅ Active</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 0%"></div>
+                </div>
+                
+                <button class="test-button" onclick="testAICampaigns()">Test AI Campaigns</button>
+                <div class="status-badge status-ready">READY</div>
+            </div>
+            
+            <!-- Sequence Test Card -->
+            <div class="test-card">
+                <div class="test-header">
+                    <span class="test-icon">📋</span>
+                    <span class="test-title">7-Day Sequence Testing</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Active Sequences</span>
+                    <span class="metric-value">3</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Messages per Day</span>
+                    <span class="metric-value">33,333</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Total (7 days)</span>
+                    <span class="metric-value">700,000</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Trigger Delay</span>
+                    <span class="metric-value">24 hours</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 0%"></div>
+                </div>
+                
+                <button class="test-button" onclick="testSequences()">Test Sequences</button>
+                <div class="status-badge status-ready">READY</div>
+            </div>
+            
+            <!-- Load Test Card -->
+            <div class="test-card">
+                <div class="test-header">
+                    <span class="test-icon">🔥</span>
+                    <span class="test-title">3000 Device Load Test</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Concurrent Ops</span>
+                    <span class="metric-value">1,000</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">DB Connections</span>
+                    <span class="metric-value">500</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Memory Usage</span>
+                    <span class="metric-value">~1.5GB</span>
+                </div>
+                
+                <div class="test-metric">
+                    <span class="metric-label">Hourly Capacity</span>
+                    <span class="metric-value">972,000</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 0%"></div>
+                </div>
+                
+                <button class="test-button" onclick="testLoad()">Test Load</button>
+                <div class="status-badge status-ready">READY</div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 40px;">
+            <button class="test-button" style="font-size: 1.3em; padding: 15px 40px;" onclick="runAllTests()">
+                🎯 RUN ALL TESTS
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        function updateProgress(cardIndex, percent) {
+            const cards = document.querySelectorAll('.test-card');
+            const progressBar = cards[cardIndex].querySelector('.progress-fill');
+            const badge = cards[cardIndex].querySelector('.status-badge');
+            
+            progressBar.style.width = percent + '%';
+            
+            if (percent > 0 && percent < 100) {
+                badge.className = 'status-badge status-testing';
+                badge.textContent = 'TESTING...';
+            } else if (percent >= 100) {
+                badge.className = 'status-badge status-ready';
+                badge.textContent = 'COMPLETE ✓';
+            }
+        }
+        
+        function simulateTest(cardIndex, duration) {
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 5;
+                updateProgress(cardIndex, progress);
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                }
+            }, duration / 20);
+        }
+        
+        function testCampaigns() {
+            alert('Testing Campaigns:\n\n' +
+                  '• Processing 33,000 active leads\n' +
+                  '• Using 2,700 online devices\n' +
+                  '• Expected time: ~3 minutes\n' +
+                  '• Rate: 180 messages/second\n\n' +
+                  'This is a simulation - no real messages sent!');
+            simulateTest(0, 3000);
+        }
+        
+        function testAICampaigns() {
+            alert('Testing AI Campaigns:\n\n' +
+                  '• Distributing 15,000 leads\n' +
+                  '• Smart device allocation\n' +
+                  '• Respecting 80/hour limit\n' +
+                  '• Load balancing active\n\n' +
+                  'This is a simulation - no real messages sent!');
+            simulateTest(1, 4000);
+        }
+        
+        function testSequences() {
+            alert('Testing 7-Day Sequences:\n\n' +
+                  '• 3 active sequences\n' +
+                  '• 33,333 messages per day\n' +
+                  '• 24-hour trigger delays\n' +
+                  '• Individual flow tracking\n\n' +
+                  'This is a simulation - no real messages sent!');
+            simulateTest(2, 5000);
+        }
+        
+        function testLoad() {
+            alert('Testing 3000 Device Load:\n\n' +
+                  '• 1,000 concurrent operations\n' +
+                  '• 500 database connections\n' +
+                  '• Monitoring memory usage\n' +
+                  '• Checking rate limits\n\n' +
+                  'This is a simulation - no real messages sent!');
+            simulateTest(3, 6000);
+        }
+        
+        function runAllTests() {
+            if (confirm('Run all tests?\n\nThis will simulate:\n• Campaign processing\n• AI distribution\n• 7-day sequences\n• 3000 device load\n\nNo real messages will be sent!')) {
+                simulateTest(0, 3000);
+                setTimeout(() => simulateTest(1, 4000), 1000);
+                setTimeout(() => simulateTest(2, 5000), 2000);
+                setTimeout(() => simulateTest(3, 6000), 3000);
+            }
+        }
+    </script>
+</body>
+</html>

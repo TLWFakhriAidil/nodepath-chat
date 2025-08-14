@@ -1,0 +1,8 @@
+	
+	// 🚨 EMERGENCY FIX: Run sequence steps fix immediately
+	EmergencySequenceStepsFix()
+	
+	// Run auto-migrations for time_schedule and other updates
+	log.Println("Running database migrations...")
+	migrations := GetMigrations() // Use the new migration system
+	

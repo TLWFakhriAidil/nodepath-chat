@@ -1,0 +1,17 @@
+# nixpacks.toml
+[phases.setup]
+nixPkgs = ["go_1_21", "gcc"]
+
+[phases.build]
+cmds = [
+    "cd src",
+    "go mod download",
+    "go build -o ../main ."
+]
+
+[start]
+cmd = "./main"
+
+[staticAssets]
+"src/views" = "views"
+"src/public" = "public"

@@ -1,0 +1,28 @@
+﻿DATABASE STATISTICS
+==================
+Backup Date: 2025-07-01 00:06:53
+
+Git Commit: b73d2ac Fix: Move campaign clone and delete icons to top of div - Repositioned icons from center to top (3px from top) - Icons now appear at the very top of campaign items - Added z-index for proper layering - Maintains all existing functionality
+
+Key Tables:
+- users (user accounts and sessions)
+- devices (WhatsApp device connections)
+- leads (contact information)
+- campaigns (broadcast campaigns)
+- broadcast_messages (message queue)
+- sequences (automated message sequences)
+- whatsapp_chats (chat history)
+- whatsapp_messages (individual messages)
+
+Connection Info:
+Host: yamanote.proxy.rlwy.net
+Port: 49914
+Database: railway
+SSL: required
+
+To get current counts, run these queries in Railway:
+SELECT 'users', COUNT(*) FROM users;
+SELECT 'devices', COUNT(*) FROM devices;
+SELECT 'leads', COUNT(*) FROM leads;
+SELECT 'campaigns', COUNT(*) FROM campaigns;
+SELECT 'broadcast_messages', COUNT(*) FROM broadcast_messages;
