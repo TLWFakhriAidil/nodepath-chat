@@ -5,7 +5,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
 
 	"github.com/sirupsen/logrus"
@@ -201,7 +200,7 @@ func (ms *MetricsService) getQueueStatsFromDB() map[string]int {
 		GROUP BY status
 	`
 	
-	rows, err := ms.repo.DB.Query(query)
+	rows, err := ms.repo.DB().Query(query)
 	if err != nil {
 		logrus.Errorf("Failed to get queue stats: %v", err)
 		return stats

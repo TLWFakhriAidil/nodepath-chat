@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -257,8 +256,26 @@ func (ais *EnhancedAIService) generateResponse(ctx context.Context, request *AIR
 	start := time.Now()
 	
 	// Use the base AI service to generate response
-	// This would integrate with your existing AI service
-	responseContent, err := ais.baseAIService.GenerateResponse(ctx, request.Content, request.Metadata)
+	// Extract API key from metadata if available
+	apiKey := ""
+	if request.Metadata != nil {
+		if key, ok := request.Metadata["api_key"].(string); ok {
+			apiKey = key
+		}
+	}
+	
+	// Extract system prompt from metadata if available
+	systemPrompt := ""
+	if request.Metadata != nil {
+		if prompt, ok := request.Metadata["system_prompt"].(string); ok {
+			systemPrompt = prompt
+		}
+	}
+	if systemPrompt == "" && request.SystemPrompt != "" {
+		systemPrompt = request.SystemPrompt
+	}
+	
+	responseContent, err := ais.baseAIService.GenerateResponse(systemPrompt, request.Content, apiKey, request.Context)
 	if err != nil {
 		return nil, err
 	}

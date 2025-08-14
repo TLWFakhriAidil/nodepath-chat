@@ -3,10 +3,8 @@ package repository
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
-	"nodepath-chat/internal/database"
 	"nodepath-chat/internal/models"
 
 	"github.com/google/uuid"
@@ -19,14 +17,26 @@ type BroadcastRepository struct {
 
 var broadcastRepo *BroadcastRepository
 
-// GetBroadcastRepository returns broadcast repository instance
-func GetBroadcastRepository() *BroadcastRepository {
-	if broadcastRepo == nil {
-		broadcastRepo = &BroadcastRepository{
-			db: database.GetDB(),
-		}
+// NewBroadcastRepository creates a new broadcast repository instance
+func NewBroadcastRepository(db *sql.DB) *BroadcastRepository {
+	return &BroadcastRepository{
+		db: db,
 	}
+}
+
+// GetBroadcastRepository returns a singleton broadcast repository instance
+func GetBroadcastRepository() *BroadcastRepository {
 	return broadcastRepo
+}
+
+// SetBroadcastRepository sets the global broadcast repository instance
+func SetBroadcastRepository(repo *BroadcastRepository) {
+	broadcastRepo = repo
+}
+
+// DB returns the database connection
+func (r *BroadcastRepository) DB() *sql.DB {
+	return r.db
 }
 
 // QueueMessage adds a message to the broadcast queue with duplicate prevention

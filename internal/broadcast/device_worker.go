@@ -10,10 +10,15 @@ import (
 
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
-	"nodepath-chat/internal/whatsapp"
 
 	"github.com/sirupsen/logrus"
 )
+
+// MessageSender interface to avoid circular imports
+type MessageSender interface {
+	SendMessage(phoneNumber, message string) error
+	SendMediaMessage(phoneNumber, caption, mediaURL, mediaType string) error
+}
 
 // DeviceWorker handles message processing for a specific device with high performance
 type DeviceWorker struct {
@@ -27,25 +32,28 @@ type DeviceWorker struct {
 	status         string
 	mu             sync.RWMutex
 	running        bool
-	whatsappSvc    *whatsapp.Service
+	messageSender  MessageSender
 	minDelay       time.Duration
 	maxDelay       time.Duration
+	repo           *repository.BroadcastRepository
 }
 
 // NewDeviceWorker creates a new device worker with optimized settings
-func NewDeviceWorker(deviceID string, parentCtx context.Context) *DeviceWorker {
+func NewDeviceWorker(deviceID string, parentCtx context.Context, messageSender MessageSender, repo *repository.BroadcastRepository) *DeviceWorker {
 	ctx, cancel := context.WithCancel(parentCtx)
 	
 	return &DeviceWorker{
-		deviceID:     deviceID,
-		messageQueue: make(chan models.BroadcastMessage, 1000), // Large buffer for high throughput
-		ctx:          ctx,
-		cancel:       cancel,
-		lastActivity: time.Now(),
-		status:       "idle",
-		running:      false,
-		minDelay:     5 * time.Second,  // Default delays
-		maxDelay:     15 * time.Second,
+		deviceID:      deviceID,
+		messageQueue:  make(chan models.BroadcastMessage, 1000), // Large buffer for high throughput
+		ctx:           ctx,
+		cancel:        cancel,
+		lastActivity:  time.Now(),
+		status:        "idle",
+		running:       false,
+		messageSender: messageSender,
+		minDelay:      5 * time.Second,  // Default delays
+		maxDelay:      15 * time.Second,
+		repo:          repo,
 	}
 }
 
@@ -99,8 +107,7 @@ func (dw *DeviceWorker) QueueMessage(msg models.BroadcastMessage) error {
 	select {
 	case dw.messageQueue <- msg:
 		// Update message status to queued
-		repo := repository.GetBroadcastRepository()
-		repo.UpdateMessageStatus(msg.ID, "queued", "")
+		dw.repo.UpdateMessageStatus(msg.ID, "queued", "")
 		return nil
 	case <-time.After(10 * time.Second): // Increased timeout for high load
 		return fmt.Errorf("queue full for device %s, message timeout", dw.deviceID)
@@ -141,10 +148,8 @@ func (dw *DeviceWorker) processMessages() {
 // processMessage processes a single message with anti-spam delays
 func (dw *DeviceWorker) processMessage(msg models.BroadcastMessage) {
 	start := time.Now()
-	repo := repository.GetBroadcastRepository()
-	
 	// Update status to processing
-	repo.UpdateMessageStatus(msg.ID, "processing", "")
+	dw.repo.UpdateMessageStatus(msg.ID, "processing", "")
 	
 	dw.mu.Lock()
 	dw.status = "processing"
@@ -180,7 +185,7 @@ func (dw *DeviceWorker) processMessage(msg models.BroadcastMessage) {
 			// Continue with sending
 		case <-dw.ctx.Done():
 			// Worker is shutting down
-			repo.UpdateMessageStatus(msg.ID, "failed", "Worker shutdown during delay")
+			dw.repo.UpdateMessageStatus(msg.ID, "failed", "Worker shutdown during delay")
 			return
 		}
 	}
@@ -189,11 +194,11 @@ func (dw *DeviceWorker) processMessage(msg models.BroadcastMessage) {
 	err := dw.sendMessage(msg)
 	if err != nil {
 		logrus.Errorf("Failed to send message %s: %v", msg.ID, err)
-		repo.UpdateMessageStatus(msg.ID, "failed", err.Error())
+		dw.repo.UpdateMessageStatus(msg.ID, "failed", err.Error())
 		atomic.AddInt64(&dw.failedCount, 1)
 	} else {
 		logrus.Debugf("Successfully sent message %s to %s", msg.ID, msg.RecipientPhone)
-		repo.UpdateMessageStatus(msg.ID, "sent", "")
+		dw.repo.UpdateMessageStatus(msg.ID, "sent", "")
 		atomic.AddInt64(&dw.processedCount, 1)
 	}
 	
@@ -208,24 +213,21 @@ func (dw *DeviceWorker) processMessage(msg models.BroadcastMessage) {
 
 // sendMessage sends the actual WhatsApp message
 func (dw *DeviceWorker) sendMessage(msg models.BroadcastMessage) error {
-	// This is a placeholder implementation
-	// In a real implementation, you would:
-	// 1. Get the WhatsApp client for this device
-	// 2. Apply message content processing (spintax, etc.)
-	// 3. Send the message via WhatsApp API
-	// 4. Handle different message types (text, media, etc.)
+	if dw.messageSender == nil {
+		return fmt.Errorf("message sender not configured for device %s", dw.deviceID)
+	}
 	
 	logrus.Debugf("Sending %s message to %s: %s", msg.Type, msg.RecipientPhone, msg.Content)
 	
-	// Simulate message sending with potential failure
-	if rand.Float32() < 0.05 { // 5% failure rate for testing
-		return fmt.Errorf("simulated sending failure")
+	// Send message based on type
+	switch msg.Type {
+	case "text":
+		return dw.messageSender.SendMessage(msg.RecipientPhone, msg.Content)
+	case "media":
+		return dw.messageSender.SendMediaMessage(msg.RecipientPhone, msg.Content, msg.MediaURL, msg.Type)
+	default:
+		return dw.messageSender.SendMessage(msg.RecipientPhone, msg.Content)
 	}
-	
-	// Simulate network delay
-	time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
-	
-	return nil
 }
 
 // IsHealthy checks if the worker is healthy and responsive

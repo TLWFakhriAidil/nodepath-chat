@@ -112,7 +112,7 @@ func (qc *QueueCleaner) resetStuckQueuedMessages(threshold time.Time) (int, erro
 		  AND updated_at < ?
 	`
 	
-	result, err := qc.repo.DB.Exec(query, threshold)
+	result, err := qc.repo.DB().Exec(query, threshold)
 	if err != nil {
 		return 0, err
 	}
@@ -136,7 +136,7 @@ func (qc *QueueCleaner) resetStuckProcessingMessages(threshold time.Time) (int, 
 		  AND updated_at < ?
 	`
 	
-	result, err := qc.repo.DB.Exec(query, threshold)
+	result, err := qc.repo.DB().Exec(query, threshold)
 	if err != nil {
 		return 0, err
 	}
@@ -160,16 +160,16 @@ func (qc *QueueCleaner) markOldMessagesAsFailed(threshold time.Time) (int, error
 		  AND created_at < ?
 	`
 	
-	result, err := qc.repo.DB.Exec(query, threshold)
+	result, err := qc.repo.DB().Exec(query, threshold)
 	if err != nil {
 		return 0, err
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return 0, err
 	}
-	
+
 	return int(rowsAffected), nil
 }
 
@@ -180,8 +180,8 @@ func (qc *QueueCleaner) cleanupOldFailedMessages(threshold time.Time) (int, erro
 		WHERE status = 'failed' 
 		  AND updated_at < ?
 	`
-	
-	result, err := qc.repo.DB.Exec(query, threshold)
+
+	result, err := qc.repo.DB().Exec(query, threshold)
 	if err != nil {
 		return 0, err
 	}
@@ -205,7 +205,7 @@ func (qc *QueueCleaner) GetQueueStats() (map[string]int, error) {
 		GROUP BY status
 	`
 	
-	rows, err := qc.repo.DB.Query(statusQuery)
+	rows, err := qc.repo.DB().Query(statusQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (qc *QueueCleaner) GetQueueStats() (map[string]int, error) {
 	`
 	
 	var stuckQueued int
-	err = qc.repo.DB.QueryRow(stuckQueuedQuery, time.Now().Add(-10*time.Minute)).Scan(&stuckQueued)
+	err = qc.repo.DB().QueryRow(stuckQueuedQuery, time.Now().Add(-10*time.Minute)).Scan(&stuckQueued)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func (qc *QueueCleaner) GetQueueStats() (map[string]int, error) {
 	`
 	
 	var stuckProcessing int
-	err = qc.repo.DB.QueryRow(stuckProcessingQuery, time.Now().Add(-15*time.Minute)).Scan(&stuckProcessing)
+	err = qc.repo.DB().QueryRow(stuckProcessingQuery, time.Now().Add(-15*time.Minute)).Scan(&stuckProcessing)
 	if err != nil {
 		return nil, err
 	}

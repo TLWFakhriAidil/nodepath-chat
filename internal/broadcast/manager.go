@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+
+
 // BroadcastManager manages high-performance message broadcasting
 type BroadcastManager struct {
 	workers        map[string]*DeviceWorker
@@ -25,12 +27,34 @@ type BroadcastManager struct {
 	failedCount    int64
 	running        bool
 	runningMutex   sync.RWMutex
+	messageSender  MessageSender
+	repo           *repository.BroadcastRepository
+}
+
+// SetMessageSender sets the message sender for the broadcast manager
+func (bm *BroadcastManager) SetMessageSender(sender MessageSender) {
+	bm.messageSender = sender
 }
 
 var (
 	managerInstance *BroadcastManager
 	managerOnce     sync.Once
 )
+
+// NewBroadcastManager creates a new broadcast manager with message sender
+func NewBroadcastManager(ctx context.Context, repo *repository.BroadcastRepository) *BroadcastManager {
+	ctx, cancel := context.WithCancel(ctx)
+	return &BroadcastManager{
+		workers:    make(map[string]*DeviceWorker),
+		ctx:        ctx,
+		cancel:     cancel,
+		maxWorkers: 500, // Support for 3000+ devices with worker pooling
+		running:    false,
+		repo:       repo,
+	}
+}
+
+
 
 // GetBroadcastManager returns the singleton broadcast manager instance
 func GetBroadcastManager() *BroadcastManager {
@@ -117,7 +141,7 @@ func (bm *BroadcastManager) processQueueLoop() {
 
 // processQueueBatch processes a batch of queued messages with optimized performance
 func (bm *BroadcastManager) processQueueBatch() {
-	repo := repository.GetBroadcastRepository()
+	repo := bm.repo
 	
 	// Get pending messages with larger batch size for better throughput
 	messages, err := repo.GetAllPendingMessages(100)
@@ -166,8 +190,7 @@ func (bm *BroadcastManager) processDeviceMessages(deviceID string, messages []mo
 			atomic.AddInt64(&bm.failedCount, 1)
 			
 			// Update message status to failed
-			repo := repository.GetBroadcastRepository()
-			repo.UpdateMessageStatus(msg.ID, "failed", err.Error())
+			bm.repo.UpdateMessageStatus(msg.ID, "failed", err.Error())
 		} else {
 			atomic.AddInt64(&bm.processedCount, 1)
 		}
@@ -199,7 +222,7 @@ func (bm *BroadcastManager) getOrCreateWorker(deviceID string) *DeviceWorker {
 	}
 	
 	// Create new worker
-	newWorker := NewDeviceWorker(deviceID, bm.ctx)
+	newWorker := NewDeviceWorker(deviceID, bm.ctx, bm.messageSender, bm.repo)
 	if err := newWorker.Start(); err != nil {
 		logrus.Errorf("Failed to start worker for device %s: %v", deviceID, err)
 		return nil
@@ -310,8 +333,7 @@ func (bm *BroadcastManager) GetStatus() map[string]interface{} {
 
 // QueueMessage queues a message for broadcasting (for direct API usage)
 func (bm *BroadcastManager) QueueMessage(msg models.BroadcastMessage) error {
-	repo := repository.GetBroadcastRepository()
-	return repo.QueueMessage(msg)
+	return bm.repo.QueueMessage(msg)
 }
 
 // GetWorkerStatus returns the status of all workers
@@ -389,7 +411,7 @@ func (bm *BroadcastManager) RestartDevice(deviceID string) error {
 	}
 
 	// Create new worker
-	newWorker := NewDeviceWorker(deviceID, bm.ctx)
+	newWorker := NewDeviceWorker(deviceID, bm.ctx, bm.messageSender, bm.repo)
 	err := newWorker.Start()
 	if err != nil {
 		return fmt.Errorf("failed to restart device %s: %v", deviceID, err)
@@ -412,6 +434,7 @@ func (bm *BroadcastManager) UpdateDeviceSettings(deviceID string, minDelay, maxD
 
 	// Update worker settings (assuming worker has these fields)
 	// Note: This would need to be implemented in the DeviceWorker struct
+	_ = worker // Use the worker variable to avoid unused variable error
 	logrus.Infof("Updated settings for device %s: minDelay=%v, maxDelay=%v", deviceID, minDelay, maxDelay)
 	return nil
 }

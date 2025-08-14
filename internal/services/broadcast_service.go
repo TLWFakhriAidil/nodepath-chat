@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,14 +29,20 @@ type BroadcastService struct {
 }
 
 // NewBroadcastService creates a new broadcast service
-func NewBroadcastService() *BroadcastService {
+func NewBroadcastService(db *sql.DB, messageSender broadcast.MessageSender) *BroadcastService {
 	ctx, cancel := context.WithCancel(context.Background())
 	
+	repo := repository.NewBroadcastRepository(db)
+	manager := broadcast.NewBroadcastManager(ctx, repo)
+	if messageSender != nil {
+		manager.SetMessageSender(messageSender)
+	}
+	
 	return &BroadcastService{
-		manager:      broadcast.NewBroadcastManager(ctx),
+		manager:      manager,
 		queueCleaner: NewQueueCleaner(),
 		metrics:      NewMetricsService(),
-		repo:         repository.GetBroadcastRepository(),
+		repo:         repo,
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -91,24 +99,30 @@ func (bs *BroadcastService) Stop() {
 
 // QueueCampaignMessage queues a campaign message for broadcast
 func (bs *BroadcastService) QueueCampaignMessage(userID, deviceID, campaignID, recipientPhone, messageType, content, mediaURL string, minDelay, maxDelay int) (string, error) {
+	// Convert campaignID string to int
+	campaignIDInt, err := strconv.Atoi(campaignID)
+	if err != nil {
+		return "", fmt.Errorf("invalid campaign ID: %v", err)
+	}
+	
 	message := models.BroadcastMessage{
 		ID:             uuid.New().String(),
 		UserID:         userID,
 		DeviceID:       deviceID,
-		CampaignID:     &campaignID,
+		CampaignID:     &campaignIDInt,
 		RecipientPhone: recipientPhone,
 		Type:           messageType,
 		Content:        content,
 		MediaURL:       mediaURL,
 		Status:         "pending",
-		ScheduledTime:  time.Now(),
+		ScheduledAt:    time.Now(),
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 		MinDelay:       minDelay,
 		MaxDelay:       maxDelay,
 	}
 	
-	err := bs.repo.QueueMessage(message)
+	err = bs.repo.QueueMessage(message)
 	if err != nil {
 		return "", fmt.Errorf("failed to queue campaign message: %v", err)
 	}
@@ -133,7 +147,7 @@ func (bs *BroadcastService) QueueSequenceMessage(userID, deviceID, sequenceID, s
 		Content:        content,
 		MediaURL:       mediaURL,
 		Status:         "pending",
-		ScheduledTime:  time.Now().Add(stepDelay), // Apply sequence step delay
+		ScheduledAt:    time.Now().Add(stepDelay), // Apply sequence step delay
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 		MinDelay:       minDelay,
@@ -167,8 +181,8 @@ func (bs *BroadcastService) QueueBulkMessages(messages []models.BroadcastMessage
 		messages[i].Status = "pending"
 		messages[i].CreatedAt = now
 		messages[i].UpdatedAt = now
-		if messages[i].ScheduledTime.IsZero() {
-			messages[i].ScheduledTime = now
+		if messages[i].ScheduledAt.IsZero() {
+			messages[i].ScheduledAt = now
 		}
 		messageIDs[i] = messages[i].ID
 	}
@@ -295,7 +309,13 @@ func (bs *BroadcastService) CancelMessage(messageID string) error {
 
 // CancelCampaignMessages cancels all pending messages for a campaign
 func (bs *BroadcastService) CancelCampaignMessages(campaignID string) (int, error) {
-	count, err := bs.repo.CancelCampaignMessages(campaignID)
+	// Convert campaignID string to int
+	campaignIDInt, err := strconv.Atoi(campaignID)
+	if err != nil {
+		return 0, fmt.Errorf("invalid campaign ID: %v", err)
+	}
+	
+	count, err := bs.repo.CancelCampaignMessages(campaignIDInt)
 	if err != nil {
 		return 0, fmt.Errorf("failed to cancel campaign messages: %v", err)
 	}

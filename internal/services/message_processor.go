@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"nodepath-chat/internal/models"
-
 	"github.com/sirupsen/logrus"
 )
 
