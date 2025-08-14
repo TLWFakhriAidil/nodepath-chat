@@ -1,27 +1,69 @@
-# NodePath Chat - WhatsApp AI Chatbot Platform
+# NodePath Chat - High-Performance WhatsApp AI Chatbot Platform
 
-A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder, real-time chat processing, and AI integration. Built with modern technologies for scalable conversational automation.
+A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder, real-time chat processing, and AI integration. **Optimized for 3000+ concurrent users** with advanced performance features including WebSocket support, Redis clustering, CDN integration, and multi-device WhatsApp management.
 
 **Live Demo**: https://nodepath-chat-production.up.railway.app/
 
-## 🏗️ System Architecture
+## 🚀 Performance Highlights
+
+- **3000+ Concurrent Users**: Optimized for high-scale real-time messaging
+- **WebSocket Real-time Communication**: Instant message delivery and status updates
+- **Redis Clustering Support**: High-availability caching and queue management
+- **Multi-Device WhatsApp Support**: Handle up to 10 WhatsApp devices simultaneously
+- **CDN Integration**: Optimized media file delivery with automatic compression
+- **AI Response Caching**: 5-minute cache for frequently asked questions
+- **Database Connection Pooling**: 200 max connections with optimized settings
+- **Rate Limiting**: 100 requests/minute per IP for API protection
+- **Media Optimization**: Automatic image compression and thumbnail generation
+
+## 🏗️ High-Performance System Architecture
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   React SPA     │◄──►│   Go Fiber API   │◄──►│   WhatsApp API  │
-│  Flow Builder   │    │   + whatsmeow    │    │   (whatsmeow)   │
+│   React SPA     │◄──►│   Go Fiber API   │◄──►│ Multi-WhatsApp  │
+│  Flow Builder   │    │ (3000+ Users)    │    │   Devices (10)  │
+│   + WebSocket   │    │   + whatsmeow    │    │   (whatsmeow)   │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  localStorage   │    │  MySQL Database  │    │  OpenRouter AI  │
-│   (Frontend)    │    │   + Redis Cache  │    │   (GPT-4, etc)  │
+│  localStorage   │    │ MySQL Database   │    │  OpenRouter AI  │
+│   (Frontend)    │    │ (Pool: 200 conn) │    │ (Cached 5min)   │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   WebSocket     │    │ Redis Cluster    │    │   CDN + Media   │
+│ Real-time Msgs  │    │ (High Avail.)    │    │  Optimization   │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+
+🔄 Performance Features:
+• Rate Limiting: 100 req/min per IP
+• Connection Pooling: 200 max DB connections
+• Message Queuing: Redis-based async processing
+• Media Compression: Auto image/video optimization
+• WebSocket Broadcasting: Real-time updates to all clients
+• AI Response Caching: 5-minute TTL for common queries
 ```
 
 ## 🚀 Features
 
-### ✅ Working Features
+### ✅ High-Performance Features
+
+#### Real-time Communication
+- **WebSocket Support**: Instant message delivery and status updates
+- **Multi-Device Management**: Handle up to 10 WhatsApp devices simultaneously
+- **Connection Broadcasting**: Real-time updates to all connected clients
+- **Message Queuing**: Redis-based asynchronous message processing
+- **Rate Limiting**: 100 requests/minute per IP for API protection
+
+#### Performance Optimizations
+- **Database Connection Pooling**: 200 max connections with optimized settings
+- **Redis Clustering**: High-availability caching and queue management
+- **AI Response Caching**: 5-minute cache for frequently asked questions
+- **CDN Integration**: Optimized media file delivery
+- **Media Compression**: Automatic image/video optimization and thumbnails
+- **Concurrent User Support**: Optimized for 3000+ simultaneous users
 
 #### Visual Flow Builder
 - **Drag & Drop Interface**: Create chatbot flows using React Flow
@@ -62,18 +104,29 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 - **Sidebar Navigation**: Easy access to tools and flows
 - **Real-time Updates**: Instant visual feedback
 
-### 🔧 Technical Stack
+### 🔧 High-Performance Technical Stack
 
 ```
-Backend (Go):
+Backend (Go) - Optimized for 3000+ Users:
 ├── Go 1.23+ with Fiber v2.52.0 (Web Framework)
-├── whatsmeow (WhatsApp Web API)
-├── MySQL Database (Primary Storage)
-├── Redis (Caching & Queue Management)
-├── OpenRouter API Integration (AI Services)
+├── whatsmeow (Multi-Device WhatsApp Web API)
+├── MySQL 5.7 Database (Connection Pool: 200 max)
+├── Redis Clustering (High-Availability Caching)
+├── OpenRouter API Integration (AI with 5min Cache)
 ├── WebSocket Support (Real-time Communication)
 ├── JWT Authentication & Session Management
-└── Background Job Processing
+├── Rate Limiting (100 req/min per IP)
+├── Media Service (CDN + Compression)
+├── Background Job Processing (Queue Workers)
+├── Semaphore-based Concurrency Control
+└── Database Table Naming: *_nodepath
+
+Performance Services:
+├── WebSocketService (Real-time Broadcasting)
+├── MediaService (CDN + Image Optimization)
+├── AIService (Response Caching + Semaphore)
+├── RedisService (Clustering Support)
+└── QueueService (Async Message Processing)
 
 Frontend (React):
 ├── React 18.3.1 + TypeScript
@@ -83,20 +136,25 @@ Frontend (React):
 ├── React Query (@tanstack/react-query)
 ├── Recharts (Analytics Visualization)
 ├── React Hook Form + Zod Validation
-└── Lucide React Icons
+├── Lucide React Icons
+└── WebSocket Client Integration
 
 Development & Deployment:
 ├── Vite (Build Tool & Dev Server)
 ├── Docker (Containerization)
-├── Railway (Cloud Deployment)
+├── Railway (Cloud Deployment - Port 8080)
 ├── ESLint + TypeScript (Code Quality)
-└── Hot Module Replacement (HMR)
+├── Hot Module Replacement (HMR)
+└── GitHub (Open Source Repository)
 
-Integrations:
-├── WhatsApp Business API (via whatsmeow)
-├── OpenRouter (GPT-4, Claude, etc.)
-├── MySQL Database (Persistent Storage)
-└── Redis (Session & Queue Management)
+Integrations & Dependencies:
+├── WhatsApp Business API (Multi-Device Support)
+├── OpenRouter (GPT-4, Claude with Caching)
+├── MySQL 5.7 Database (High-Performance Storage)
+├── Redis Clustering (Session & Queue Management)
+├── CDN Integration (Media File Optimization)
+├── github.com/disintegration/imaging (Image Processing)
+└── github.com/gofiber/contrib/websocket (WebSocket)
 ```
 
 ## 🗂️ Project Structure

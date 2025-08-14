@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"nodepath-chat/internal/config"
@@ -22,31 +23,111 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Service handles WhatsApp integration using whatsmeow
+// QueuedMessage represents a message in the processing queue
+type QueuedMessage struct {
+	DeviceID string
+	Message  *events.Message
+	Retries  int
+	Timestamp time.Time
+}
+
+// Service handles WhatsApp integration using whatsmeow with multi-device support
 type Service struct {
 	cfg          *config.Config
-	client       *whatsmeow.Client
-	chatService  *services.ChatService
-	queueService *services.QueueService
-	flowService  *services.FlowService
-	aiService    *services.AIService
+	
+	// Multi-device support
+	clients      map[string]*whatsmeow.Client // deviceID -> client
+	containers   map[string]*sqlstore.Container // deviceID -> container
+	connections  map[string]bool // deviceID -> connection status
+	clientMutex  sync.RWMutex
+	
+	// Configuration
+	maxDevices     int
+	storageDir     string
+	currentDevices int
+	
+	// Services
+	chatService    *services.ChatService
+	queueService   *services.QueueService
+	flowService    *services.FlowService
+	aiService      *services.AIService
+	websocketService *services.WebSocketService
+	
+	// Performance optimizations
+	messageQueue chan *QueuedMessage
+	processingWG sync.WaitGroup
 	isConnected  bool
 }
 
-// NewService creates a new WhatsApp service
-func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService) (*Service, error) {
-	s := &Service{
-		cfg:          cfg,
-		chatService:  chatService,
-		queueService: queueService,
+// NewService creates a new WhatsApp service with multi-device support and performance optimizations
+func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, websocketService *services.WebSocketService) (*Service, error) {
+	service := &Service{
+		cfg:              cfg,
+		clients:          make(map[string]*whatsmeow.Client),
+		containers:       make(map[string]*sqlstore.Container),
+		connections:      make(map[string]bool),
+		maxDevices:       cfg.WhatsAppMaxDevices,
+		storageDir:       cfg.WhatsAppStoragePath,
+		chatService:      chatService,
+		queueService:     queueService,
+		flowService:      flowService,
+		aiService:        aiService,
+		websocketService: websocketService,
+		messageQueue:     make(chan *QueuedMessage, 1000), // Buffered queue for performance
+		isConnected:      false,
+	}
+	
+	// Start message processing workers
+	for i := 0; i < 5; i++ { // 5 worker goroutines for message processing
+		go service.messageProcessor()
+	}
+	
+	return service, nil
+}
+
+// messageProcessor processes queued messages in background
+func (s *Service) messageProcessor() {
+	for queuedMsg := range s.messageQueue {
+		s.processingWG.Add(1)
+		go func(msg *QueuedMessage) {
+			defer s.processingWG.Done()
+			
+			// Process the message with retry logic
+			for i := 0; i < 3; i++ {
+				if err := s.processQueuedMessageInternal(msg); err != nil {
+					logrus.WithFields(logrus.Fields{
+						"device_id": msg.DeviceID,
+						"retry": i + 1,
+						"error": err,
+					}).Warn("Failed to process queued message, retrying")
+					time.Sleep(time.Duration(i+1) * time.Second)
+					continue
+				}
+				break
+			}
+		}(queuedMsg)
+	}
+}
+
+// processQueuedMessageInternal processes a single queued message
+func (s *Service) processQueuedMessageInternal(msg *QueuedMessage) error {
+	if msg.Message == nil {
+		return fmt.Errorf("message is nil")
 	}
 
-	// Initialize WhatsApp client
-	if err := s.initializeClient(); err != nil {
-		return nil, fmt.Errorf("failed to initialize WhatsApp client: %w", err)
+	// Extract phone number and content from the message
+	phoneNumber := msg.Message.Info.Sender.User
+	content := ""
+	
+	if msg.Message.Message.GetConversation() != "" {
+		content = msg.Message.Message.GetConversation()
+	} else if msg.Message.Message.GetExtendedTextMessage() != nil {
+		content = msg.Message.Message.GetExtendedTextMessage().GetText()
 	}
 
-	return s, nil
+	// Process the message
+	s.processIncomingMessage(phoneNumber, content)
+	return nil
 }
 
 // SetServices sets additional services after initialization
@@ -55,8 +136,16 @@ func (s *Service) SetServices(flowService *services.FlowService, aiService *serv
 	s.aiService = aiService
 }
 
-// initializeClient initializes the whatsmeow client
-func (s *Service) initializeClient() error {
+// initializeClient initializes a whatsmeow client for a specific device
+func (s *Service) initializeClient(deviceID string) error {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	// Check if we've reached the maximum number of devices
+	if len(s.clients) >= s.maxDevices {
+		return fmt.Errorf("maximum number of devices (%d) reached", s.maxDevices)
+	}
+
 	// Ensure storage directory exists
 	storageDir := s.cfg.WhatsAppStoragePath
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
@@ -64,7 +153,7 @@ func (s *Service) initializeClient() error {
 	}
 
 	// Initialize SQLite store for session data
-	dbPath := filepath.Join(storageDir, "whatsapp.db")
+	dbPath := filepath.Join(storageDir, fmt.Sprintf("whatsapp_%s.db", deviceID))
 	container, err := sqlstore.New("sqlite", fmt.Sprintf("%s?_pragma=foreign_keys(1)", dbPath), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create store: %w", err)
@@ -77,20 +166,40 @@ func (s *Service) initializeClient() error {
 	}
 
 	// Create WhatsApp client
-	s.client = whatsmeow.NewClient(deviceStore, nil)
+	client := whatsmeow.NewClient(deviceStore, nil)
 
 	// Add event handlers
-	s.client.AddEventHandler(s.handleEvent)
+	client.AddEventHandler(s.handleEvent)
 
-	logrus.Info("WhatsApp client initialized")
+	// Store client and container
+	s.clients[deviceID] = client
+	s.containers[deviceID] = container
+	s.connections[deviceID] = false
+	s.currentDevices++
+
+	logrus.WithField("device_id", deviceID).Info("WhatsApp client initialized")
 	return nil
 }
 
-// Connect connects to WhatsApp
-func (s *Service) Connect() error {
-	if s.client.Store.ID == nil {
+// Connect connects to WhatsApp for a specific device
+func (s *Service) Connect(deviceID string) error {
+	s.clientMutex.RLock()
+	client, exists := s.clients[deviceID]
+	s.clientMutex.RUnlock()
+
+	if !exists {
+		// Initialize client if it doesn't exist
+		if err := s.initializeClient(deviceID); err != nil {
+			return fmt.Errorf("failed to initialize client: %w", err)
+		}
+		s.clientMutex.RLock()
+		client = s.clients[deviceID]
+		s.clientMutex.RUnlock()
+	}
+
+	if client.Store.ID == nil {
 		// Generate QR code for pairing
-		qrChan, err := s.client.GetQRChannel(context.Background())
+		qrChan, err := client.GetQRChannel(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to get QR channel: %w", err)
 		}
@@ -98,47 +207,116 @@ func (s *Service) Connect() error {
 		go func() {
 			for evt := range qrChan {
 				if evt.Event == "code" {
-					logrus.WithField("qr_code", evt.Code).Info("QR code for WhatsApp pairing")
+					logrus.WithFields(logrus.Fields{
+						"device_id": deviceID,
+						"qr_code": evt.Code,
+					}).Info("QR code for WhatsApp pairing")
 					// In a real implementation, you'd display this QR code in the web interface
 				} else {
-					logrus.WithField("event", evt.Event).Info("QR channel event")
+					logrus.WithFields(logrus.Fields{
+						"device_id": deviceID,
+						"event": evt.Event,
+					}).Info("QR channel event")
 				}
 			}
 		}()
 	}
 
 	// Connect to WhatsApp
-	err := s.client.Connect()
+	err := client.Connect()
 	if err != nil {
 		return fmt.Errorf("failed to connect to WhatsApp: %w", err)
 	}
 
-	s.isConnected = true
-	logrus.Info("Connected to WhatsApp")
+	// Update connection status
+	s.clientMutex.Lock()
+	s.connections[deviceID] = true
+	s.clientMutex.Unlock()
+
+	// Update global connection status if this is the first device
+	if !s.isConnected {
+		s.isConnected = true
+	}
+
+	logrus.WithField("device_id", deviceID).Info("Connected to WhatsApp")
 	return nil
 }
 
-// Disconnect disconnects from WhatsApp
-func (s *Service) Disconnect() {
-	if s.client != nil {
-		s.client.Disconnect()
+// Disconnect disconnects from WhatsApp for a specific device or all devices
+func (s *Service) Disconnect(deviceID ...string) {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	if len(deviceID) == 0 {
+		// Disconnect all devices
+		for id, client := range s.clients {
+			if client != nil {
+				client.Disconnect()
+				s.connections[id] = false
+				logrus.WithField("device_id", id).Info("Disconnected from WhatsApp")
+			}
+		}
 		s.isConnected = false
-		logrus.Info("Disconnected from WhatsApp")
+	} else {
+		// Disconnect specific device
+		id := deviceID[0]
+		if client, exists := s.clients[id]; exists && client != nil {
+			client.Disconnect()
+			s.connections[id] = false
+			logrus.WithField("device_id", id).Info("Disconnected from WhatsApp")
+			
+			// Check if any devices are still connected
+			anyConnected := false
+			for _, connected := range s.connections {
+				if connected {
+					anyConnected = true
+					break
+				}
+			}
+			s.isConnected = anyConnected
+		}
 	}
 }
 
-// IsConnected returns the connection status
-func (s *Service) IsConnected() bool {
-	return s.isConnected && s.client != nil && s.client.IsConnected()
+// IsConnected returns the connection status for a specific device or overall
+func (s *Service) IsConnected(deviceID ...string) bool {
+	s.clientMutex.RLock()
+	defer s.clientMutex.RUnlock()
+
+	if len(deviceID) == 0 {
+		// Check overall connection status
+		return s.isConnected
+	}
+
+	// Check specific device
+	id := deviceID[0]
+	if client, exists := s.clients[id]; exists {
+		return s.connections[id] && client != nil && client.IsConnected()
+	}
+	return false
 }
 
-// GetQRCode returns the QR code for pairing (if needed)
-func (s *Service) GetQRCode() (string, error) {
-	if s.client.Store.ID != nil {
+// GetQRCode returns the QR code for pairing (if needed) for a specific device
+func (s *Service) GetQRCode(deviceID string) (string, error) {
+	s.clientMutex.RLock()
+	client, exists := s.clients[deviceID]
+	s.clientMutex.RUnlock()
+
+	if !exists {
+		// Initialize client if it doesn't exist
+		if err := s.initializeClient(deviceID); err != nil {
+			return "", fmt.Errorf("failed to initialize client: %w", err)
+		}
+		s.clientMutex.RLock()
+		client = s.clients[deviceID]
+		s.clientMutex.RUnlock()
+	}
+
+	if client.Store.ID != nil {
 		return "", fmt.Errorf("device already paired")
 	}
 
-	qrChan, err := s.client.GetQRChannel(context.Background())
+	qrChan, err := client.GetQRChannel(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("failed to get QR channel: %w", err)
 	}
@@ -155,10 +333,41 @@ func (s *Service) GetQRCode() (string, error) {
 	}
 }
 
-// SendMessage sends a message to a phone number
+// SendMessage sends a text message using the first available device
 func (s *Service) SendMessage(phoneNumber, message string) error {
-	if !s.IsConnected() {
-		return fmt.Errorf("WhatsApp not connected")
+	return s.SendMessageFromDevice("", phoneNumber, message)
+}
+
+// SendMessageFromDevice sends a text message from a specific device
+func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) error {
+	s.clientMutex.RLock()
+	defer s.clientMutex.RUnlock()
+
+	// Get client for the specified device or first available
+	var client *whatsmeow.Client
+	var selectedDeviceID string
+	
+	if deviceID != "" {
+		// Use specific device
+		if c, exists := s.clients[deviceID]; exists && s.connections[deviceID] {
+			client = c
+			selectedDeviceID = deviceID
+		} else {
+			return fmt.Errorf("device %s not connected", deviceID)
+		}
+	} else {
+		// Use first available connected device
+		for id, c := range s.clients {
+			if s.connections[id] && c != nil && c.IsConnected() {
+				client = c
+				selectedDeviceID = id
+				break
+			}
+		}
+	}
+
+	if client == nil {
+		return fmt.Errorf("no WhatsApp devices connected")
 	}
 
 	// Parse phone number to JID
@@ -173,12 +382,13 @@ func (s *Service) SendMessage(phoneNumber, message string) error {
 	}
 
 	// Send message
-	_, err = s.client.SendMessage(context.Background(), jid, msg)
+	_, err = client.SendMessage(context.Background(), jid, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
 
 	logrus.WithFields(logrus.Fields{
+		"device_id":    selectedDeviceID,
 		"phone_number": phoneNumber,
 		"message_len":  len(message),
 	}).Info("Message sent via WhatsApp")

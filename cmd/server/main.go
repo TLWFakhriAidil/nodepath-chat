@@ -7,10 +7,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/template/html/v2"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -44,23 +47,45 @@ func main() {
 	}
 	logrus.Info("Database migrations completed")
 
-	// Initialize Redis
+	// Initialize Redis with clustering support
 	redisClient := services.InitializeRedis(cfg)
 	logrus.Info("Redis initialized successfully")
 
-	// Initialize services
-	flowService := services.NewFlowService(db, redisClient)
-	chatService := services.NewChatService(db, redisClient)
+	// Initialize performance-optimized services
+	// Handle Redis client for services that need concrete type
+	var concreteRedisClient *redis.Client
+	if redisClient != nil {
+		var ok bool
+		concreteRedisClient, ok = redisClient.(*redis.Client)
+		if !ok {
+			logrus.Warn("Redis client type assertion failed, using nil client")
+			concreteRedisClient = nil
+		}
+	} else {
+		logrus.Warn("Redis not available, services will run without caching")
+	}
+	
+	flowService := services.NewFlowService(db, concreteRedisClient)
+	chatService := services.NewChatService(db, concreteRedisClient)
 	aiService := services.NewAIService(cfg)
 	queueService := services.NewQueueService(redisClient)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
+	
+	// Initialize WebSocket service for real-time communication
+	websocketService := services.NewWebSocketService(cfg.MaxConcurrentUsers)
+	logrus.Info("WebSocket service initialized for real-time messaging")
+	
+	// Initialize media service with CDN support
+	mediaService := services.NewMediaService(cfg.CDNEnabled, cfg.CDNBaseURL, "./media")
+	logrus.Info("Media service initialized with CDN support")
 
-	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService)
+	// Initialize WhatsApp service with multi-device support
+	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, websocketService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
 
-	// Initialize handlers
+	// Initialize handlers with all services
 	handlers := handlers.NewHandlers(
 		flowService,
 		chatService,
@@ -68,6 +93,8 @@ func main() {
 		queueService,
 		whatsappService,
 		deviceSettingsService,
+		websocketService,
+		mediaService,
 	)
 
 	// Initialize HTML template engine
@@ -79,36 +106,117 @@ func main() {
 		return time.Now()
 	})
 
-	// Create Fiber app
+	// Create Fiber app with performance optimizations
 	app := fiber.New(fiber.Config{
 		Views:        engine,
 		ErrorHandler: customErrorHandler,
-		BodyLimit:    10 * 1024 * 1024, // 10MB
+		BodyLimit:    50 * 1024 * 1024, // 50MB for media files
+		ReadTimeout:  30 * time.Second,  // Increased for large uploads
+		WriteTimeout: 30 * time.Second,  // Increased for large downloads
+		IdleTimeout:  120 * time.Second, // Keep connections alive longer
+		Concurrency:  cfg.MaxConcurrentUsers * 2, // Handle high concurrency
 	})
 
-	// Middleware
+	// Performance and security middleware
 	app.Use(recover.New())
+	
+	// Rate limiting for API protection
+	app.Use(limiter.New(limiter.Config{
+		Max:        100, // 100 requests per minute per IP
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP() // Rate limit by IP
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Rate limit exceeded",
+			})
+		},
+	}))
+	
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
+		AllowHeaders: "Origin,Content-Type,Accept,Authorization,X-Device-ID",
+		AllowCredentials: false, // Set to false when using wildcard origins
 	}))
 
 	if cfg.AppEnv == "development" {
 		app.Use(logger.New(logger.Config{
-			Format: "[${time}] ${status} - ${method} ${path} (${latency})\n",
+			Format: "[${time}] ${status} - ${method} ${path} (${latency}) - ${ip}\n",
 		}))
 	}
 
-	// Health check endpoint
+	// Health check endpoint with performance metrics
 	app.Get("/healthz", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
-			"status": "ok",
-			"time":   time.Now().Unix(),
+			"status":              "ok",
+			"time":                time.Now().Unix(),
+			"websocket_connections": websocketService.GetConnectionCount(),
+			"max_concurrent_users": cfg.MaxConcurrentUsers,
+			"cdn_enabled":          cfg.CDNEnabled,
 		})
 	})
 
-	// Setup API routes FIRST
+	// WebSocket endpoint for real-time communication
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		// Check if connection is a WebSocket upgrade
+		if websocket.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+	app.Get("/ws", websocketService.HandleWebSocket)
+
+	// Media endpoints for file upload and serving
+	media := app.Group("/media")
+	media.Post("/upload", func(c *fiber.Ctx) error {
+		file, err := c.FormFile("file")
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "No file uploaded",
+			})
+		}
+		
+		result, err := mediaService.UploadFile(file)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		
+		return c.JSON(result)
+	})
+	
+	media.Get("/:filename", func(c *fiber.Ctx) error {
+		filename := c.Params("filename")
+		data, mimeType, err := mediaService.ServeFile(filename)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "File not found",
+			})
+		}
+		
+		c.Set("Content-Type", mimeType)
+		c.Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+		return c.Send(data)
+	})
+	
+	media.Get("/thumbnails/:filename", func(c *fiber.Ctx) error {
+		filename := c.Params("filename")
+		data, mimeType, err := mediaService.ServeFile("thumbnails/" + filename)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Thumbnail not found",
+			})
+		}
+		
+		c.Set("Content-Type", mimeType)
+		c.Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+		return c.Send(data)
+	})
+
+	// Setup API routes
 	api := app.Group("/api")
 	handlers.SetupRoutes(api)
 

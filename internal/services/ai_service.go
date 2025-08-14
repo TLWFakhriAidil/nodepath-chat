@@ -2,12 +2,15 @@ package services
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"nodepath-chat/internal/config"
@@ -23,23 +26,38 @@ const (
 	retryDelay       = time.Second * 2
 )
 
-// AIService handles AI/OpenRouter integration
+// CachedResponse represents a cached AI response
+type CachedResponse struct {
+	Response  string
+	Timestamp time.Time
+}
+
+// AIService handles AI/OpenRouter integration with caching and concurrency optimization
 type AIService struct {
 	cfg        *config.Config
 	httpClient *http.Client
+	// Response cache for frequently asked questions
+	cache     map[string]*CachedResponse
+	cacheMux  sync.RWMutex
+	cacheTTL  time.Duration
+	// Rate limiting for concurrent requests
+	semaphore chan struct{}
 }
 
-// NewAIService creates a new AI service
+// NewAIService creates a new AI service with performance optimizations
 func NewAIService(cfg *config.Config) *AIService {
 	return &AIService{
 		cfg: cfg,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		cache:     make(map[string]*CachedResponse),
+		cacheTTL:  5 * time.Minute, // Cache responses for 5 minutes
+		semaphore: make(chan struct{}, 100), // Limit concurrent AI requests
 	}
 }
 
-// GenerateResponse generates an AI response using OpenRouter
+// GenerateResponse generates an AI response using OpenRouter with caching and concurrency control
 func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, conversationHistory []models.ConversationMessage) (string, error) {
 	if apiKey == "" {
 		apiKey = s.cfg.OpenRouterDefaultKey
@@ -47,6 +65,21 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, con
 
 	if apiKey == "" {
 		return "", fmt.Errorf("no API key provided")
+	}
+
+	// Check cache first
+	cacheKey := s.generateCacheKey(systemPrompt, userInput, conversationHistory)
+	if cachedResponse := s.getCachedResponse(cacheKey); cachedResponse != "" {
+		logrus.Debug("Returning cached AI response")
+		return cachedResponse, nil
+	}
+
+	// Acquire semaphore for rate limiting
+	select {
+	case s.semaphore <- struct{}{}:
+		defer func() { <-s.semaphore }()
+	case <-time.After(10 * time.Second):
+		return "", fmt.Errorf("request timeout: too many concurrent AI requests")
 	}
 
 	// Build messages for OpenRouter
@@ -93,6 +126,9 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, con
 	if content == "" {
 		return s.getFallbackResponse(userInput), nil
 	}
+
+	// Cache the response
+	s.setCachedResponse(cacheKey, content)
 
 	logrus.WithFields(logrus.Fields{
 		"model":         response.Model,
@@ -270,6 +306,77 @@ func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiK
 	}
 
 	return &response, nil
+}
+
+// generateCacheKey creates a unique cache key for the request
+func (s *AIService) generateCacheKey(systemPrompt, userInput string, conversationHistory []models.ConversationMessage) string {
+	// Create a hash of the input parameters
+	hasher := md5.New()
+	hasher.Write([]byte(systemPrompt))
+	hasher.Write([]byte(userInput))
+	
+	// Include last few messages from conversation history
+	for i, msg := range conversationHistory {
+		if i >= len(conversationHistory)-3 { // Only last 3 messages for cache key
+			hasher.Write([]byte(msg.Content))
+		}
+	}
+	
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+// getCachedResponse retrieves a cached response if it exists and is still valid
+func (s *AIService) getCachedResponse(cacheKey string) string {
+	s.cacheMux.RLock()
+	defer s.cacheMux.RUnlock()
+	
+	cached, exists := s.cache[cacheKey]
+	if !exists {
+		return ""
+	}
+	
+	// Check if cache entry is still valid
+	if time.Since(cached.Timestamp) > s.cacheTTL {
+		// Cache expired, remove it
+		go s.removeCachedResponse(cacheKey)
+		return ""
+	}
+	
+	return cached.Response
+}
+
+// setCachedResponse stores a response in the cache
+func (s *AIService) setCachedResponse(cacheKey, response string) {
+	s.cacheMux.Lock()
+	defer s.cacheMux.Unlock()
+	
+	s.cache[cacheKey] = &CachedResponse{
+		Response:  response,
+		Timestamp: time.Now(),
+	}
+	
+	// Clean up old cache entries periodically
+	go s.cleanupCache()
+}
+
+// removeCachedResponse removes a specific cache entry
+func (s *AIService) removeCachedResponse(cacheKey string) {
+	s.cacheMux.Lock()
+	defer s.cacheMux.Unlock()
+	delete(s.cache, cacheKey)
+}
+
+// cleanupCache removes expired cache entries
+func (s *AIService) cleanupCache() {
+	s.cacheMux.Lock()
+	defer s.cacheMux.Unlock()
+	
+	now := time.Now()
+	for key, cached := range s.cache {
+		if now.Sub(cached.Timestamp) > s.cacheTTL {
+			delete(s.cache, key)
+		}
+	}
 }
 
 // getFallbackResponse returns a fallback response when AI fails

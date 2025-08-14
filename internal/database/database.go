@@ -21,10 +21,11 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	// Configure connection pool for high concurrency (3000+ users)
+	db.SetMaxOpenConns(200) // Increased for high concurrency
+	db.SetMaxIdleConns(50)  // Increased idle connections
+	db.SetConnMaxLifetime(30 * time.Minute) // Longer lifetime for stability
+	db.SetConnMaxIdleTime(10 * time.Minute) // Maximum idle time before closing
 
 	// Test the connection
 	if err := db.Ping(); err != nil {

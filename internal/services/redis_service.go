@@ -12,8 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// InitializeRedis initializes Redis connection
-func InitializeRedis(cfg *config.Config) *redis.Client {
+// InitializeRedis initializes Redis connection with clustering support
+func InitializeRedis(cfg *config.Config) redis.Cmdable {
 	if cfg.RedisURL == "" {
 		logrus.Warn("Redis URL not provided, Redis features will be disabled")
 		return nil
@@ -25,7 +25,33 @@ func InitializeRedis(cfg *config.Config) *redis.Client {
 		return nil
 	}
 
-	client := redis.NewClient(opt)
+	// Check if cluster addresses are provided in config
+	var client redis.Cmdable
+	if len(cfg.RedisClusterAddrs) > 0 {
+		// Use Redis Cluster for high availability and performance
+		client = redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs:    cfg.RedisClusterAddrs,
+			Password: opt.Password,
+			// Optimized for high concurrency
+			PoolSize:     100, // Increased pool size
+			MinIdleConns: 20,  // Minimum idle connections
+			MaxRetries:   3,   // Retry failed commands
+			DialTimeout:  5 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 3 * time.Second,
+		})
+		logrus.Info("Using Redis Cluster configuration")
+	} else {
+		// Single Redis instance with optimized settings
+		opt.PoolSize = 50 // Increased pool size
+		opt.MinIdleConns = 10 // Minimum idle connections
+		opt.MaxRetries = 3 // Retry failed commands
+		opt.DialTimeout = 5 * time.Second
+		opt.ReadTimeout = 3 * time.Second
+		opt.WriteTimeout = 3 * time.Second
+		client = redis.NewClient(opt)
+		logrus.Info("Using single Redis instance configuration")
+	}
 
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -40,13 +66,13 @@ func InitializeRedis(cfg *config.Config) *redis.Client {
 	return client
 }
 
-// QueueService handles Redis-based job queuing
+// QueueService handles Redis-based job queuing with clustering support
 type QueueService struct {
-	redis *redis.Client
+	redis redis.Cmdable // Interface to support both single and cluster clients
 }
 
 // NewQueueService creates a new queue service
-func NewQueueService(redis *redis.Client) *QueueService {
+func NewQueueService(redis redis.Cmdable) *QueueService {
 	return &QueueService{
 		redis: redis,
 	}

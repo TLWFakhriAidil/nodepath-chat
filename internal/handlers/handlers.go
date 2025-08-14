@@ -20,6 +20,8 @@ type Handlers struct {
 	queueService          *services.QueueService
 	whatsappService       *whatsapp.Service
 	deviceSettingsService *services.DeviceSettingsService
+	websocketService      *services.WebSocketService
+	mediaService          *services.MediaService
 }
 
 // NewHandlers creates a new handlers instance
@@ -30,6 +32,8 @@ func NewHandlers(
 	queueService *services.QueueService,
 	whatsappService *whatsapp.Service,
 	deviceSettingsService *services.DeviceSettingsService,
+	websocketService *services.WebSocketService,
+	mediaService *services.MediaService,
 ) *Handlers {
 	return &Handlers{
 		flowService:           flowService,
@@ -38,6 +42,8 @@ func NewHandlers(
 		queueService:          queueService,
 		whatsappService:       whatsappService,
 		deviceSettingsService: deviceSettingsService,
+		websocketService:      websocketService,
+		mediaService:          mediaService,
 	}
 }
 

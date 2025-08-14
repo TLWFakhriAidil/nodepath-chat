@@ -3,9 +3,10 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
-// Config holds all configuration for the application
+// Config holds all configuration for the application with high-performance settings
 type Config struct {
 	// Server configuration
 	Port   int
@@ -19,21 +20,31 @@ type Config struct {
 	MySQLDatabase string
 
 	// Redis configuration
-	RedisURL string
+	RedisURL          string
+	RedisClusterAddrs []string // Support for Redis clustering
 
 	// WhatsApp configuration
 	WhatsAppStoragePath string
 	WhatsAppSessionDir  string
+	WhatsAppMaxDevices  int // Support for multiple devices
 
 	// OpenRouter configuration
 	OpenRouterDefaultKey string
+	OpenRouterTimeout    int // Configurable timeout
+	OpenRouterMaxRetries int // Max retries for AI requests
 
 	// Security configuration
 	JWTSecret     string
 	SessionSecret string
+
+	// Performance configuration
+	MaxConcurrentUsers int // Maximum concurrent users
+	WebSocketEnabled   bool // Enable WebSocket support
+	CDNEnabled         bool // Enable CDN for media files
+	CDNBaseURL         string // CDN base URL
 }
 
-// Load loads configuration from environment variables
+// Load loads configuration from environment variables with performance optimizations
 func Load() *Config {
 	cfg := &Config{
 		// Server configuration - Railway sets PORT at runtime
@@ -47,19 +58,29 @@ func Load() *Config {
 		MySQLPassword: getEnv("MYSQL_PASSWORD", "admin_aqil"),
 		MySQLDatabase: getEnv("MYSQL_DATABASE", "admin_railway"),
 
-		// Redis configuration
-		RedisURL: getEnv("REDIS_URL", ""),
+		// Redis configuration with clustering support
+		RedisURL:          getEnv("REDIS_URL", ""),
+		RedisClusterAddrs: getEnvAsSlice("REDIS_CLUSTER_ADDRS", ","),
 
-		// WhatsApp configuration
+		// WhatsApp configuration with multi-device support
 		WhatsAppStoragePath: getEnv("WHATSAPP_STORAGE_PATH", "./whatsapp_sessions"),
 		WhatsAppSessionDir:  getEnv("WHATSAPP_SESSION_DIR", "./whatsapp_sessions"),
+		WhatsAppMaxDevices:  getEnvAsInt("WHATSAPP_MAX_DEVICES", 10),
 
-		// OpenRouter configuration
+		// OpenRouter configuration with performance settings
 		OpenRouterDefaultKey: getEnv("OPENROUTER_DEFAULT_KEY", ""),
+		OpenRouterTimeout:    getEnvAsInt("OPENROUTER_TIMEOUT", 15), // Reduced from 30s
+		OpenRouterMaxRetries: getEnvAsInt("OPENROUTER_MAX_RETRIES", 2),
 
 		// Security configuration
 		JWTSecret:     getEnv("JWT_SECRET", "your-jwt-secret-key"),
 		SessionSecret: getEnv("SESSION_SECRET", "your-session-secret-key"),
+
+		// Performance configuration for 3000+ concurrent users
+		MaxConcurrentUsers: getEnvAsInt("MAX_CONCURRENT_USERS", 5000),
+		WebSocketEnabled:   getEnvAsBool("WEBSOCKET_ENABLED", true),
+		CDNEnabled:         getEnvAsBool("CDN_ENABLED", false),
+		CDNBaseURL:         getEnv("CDN_BASE_URL", ""),
 	}
 
 	return cfg
@@ -96,4 +117,22 @@ func getEnvAsInt(key string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// getEnvAsBool gets an environment variable as a boolean with a fallback value
+func getEnvAsBool(key string, fallback bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
+		}
+	}
+	return fallback
+}
+
+// getEnvAsSlice gets an environment variable as a slice with a separator
+func getEnvAsSlice(key, separator string) []string {
+	if value := os.Getenv(key); value != "" {
+		return strings.Split(value, separator)
+	}
+	return []string{}
 }

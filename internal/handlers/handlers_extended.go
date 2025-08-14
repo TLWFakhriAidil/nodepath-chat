@@ -106,13 +106,18 @@ func (h *Handlers) ConnectWhatsApp(c *fiber.Ctx) error {
 		return h.errorResponse(c, 500, "WhatsApp service not available")
 	}
 
-	err := h.whatsappService.Connect()
+	// Get device ID from query parameter or use default
+	deviceID := c.Query("device_id", "default")
+
+	err := h.whatsappService.Connect(deviceID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to connect to WhatsApp")
 		return h.errorResponse(c, 500, "Failed to connect to WhatsApp")
 	}
 
-	return h.successMessageResponse(c, "Connected to WhatsApp successfully", nil)
+	return h.successMessageResponse(c, "Connected to WhatsApp successfully", map[string]interface{}{
+		"device_id": deviceID,
+	})
 }
 
 // DisconnectWhatsApp disconnects from WhatsApp
@@ -131,7 +136,10 @@ func (h *Handlers) GetWhatsAppQR(c *fiber.Ctx) error {
 		return h.errorResponse(c, 500, "WhatsApp service not available")
 	}
 
-	qrCode, err := h.whatsappService.GetQRCode()
+	// Get device ID from query parameter or use default
+	deviceID := c.Query("device_id", "default")
+
+	qrCode, err := h.whatsappService.GetQRCode(deviceID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get QR code")
 		return h.errorResponse(c, 500, "Failed to get QR code")
