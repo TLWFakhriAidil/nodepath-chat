@@ -18,7 +18,6 @@ import (
 	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/database"
 	"nodepath-chat/internal/handlers"
-	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/services"
 	"nodepath-chat/internal/whatsapp"
 )
@@ -49,11 +48,6 @@ func main() {
 	redisClient := services.InitializeRedis(cfg)
 	logrus.Info("Redis initialized successfully")
 
-	// Initialize repositories
-	broadcastRepo := repository.NewBroadcastRepository(db)
-	repository.SetBroadcastRepository(broadcastRepo)
-	logrus.Info("Repositories initialized successfully")
-
 	// Initialize services
 	flowService := services.NewFlowService(db, redisClient)
 	chatService := services.NewChatService(db, redisClient)
@@ -65,10 +59,6 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
-
-	// Initialize broadcast service with WhatsApp service as MessageSender
-	_ = services.NewBroadcastService(db, whatsappService)
-	logrus.Info("Broadcast service initialized successfully")
 
 	// Initialize handlers
 	handlers := handlers.NewHandlers(

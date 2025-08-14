@@ -206,7 +206,7 @@ func (h *Handlers) ClearFailedQueue(c *fiber.Ctx) error {
 		return h.successMessageResponse(c, "Queue service not available", nil)
 	}
 
-	err := h.queueService.ClearQueues()
+	err := h.queueService.ClearFailedMessages()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to clear failed queue")
 		return h.errorResponse(c, 500, "Failed to clear failed queue")
