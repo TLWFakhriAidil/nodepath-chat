@@ -176,7 +176,7 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 	// Set defaults if not provided
 	apiKeyOption := req.APIKeyOption
 	if apiKeyOption == "" {
-		apiKeyOption = "chat_gpt_4_1_new"
+		apiKeyOption = "openai/gpt-4.1"
 	}
 
 	provider := req.Provider

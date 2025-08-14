@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"nodepath-chat/internal/models"
 
@@ -330,6 +332,8 @@ func (h *Handlers) processTestChatMessage(execution *models.ChatbotExecution, us
 	switch currentNode.Type {
 	case models.NodeTypeAIPrompt:
 		return h.processTestAIPromptNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeAdvancedAIPrompt:
+		return h.processTestAdvancedAIPromptNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeManual:
 		return h.processTestManualNode(flow, execution, currentNode, userInput)
 	default:
@@ -430,6 +434,120 @@ func (h *Handlers) processTestManualNode(flow *models.ChatbotFlow, execution *mo
 	}
 
 	return response, nil
+}
+
+// processTestAdvancedAIPromptNode processes an advanced AI prompt node in test chat
+func (h *Handlers) processTestAdvancedAIPromptNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get AI configuration from node data
+	var systemPrompt, instance, apiProvider, closingPrompt string
+
+	// Check node data for configuration
+	if sp, ok := node.Data["system_prompt"].(string); ok {
+		systemPrompt = sp
+	}
+	if inst, ok := node.Data["instance"].(string); ok {
+		instance = inst
+	}
+	if ap, ok := node.Data["apiprovider"].(string); ok {
+		apiProvider = ap
+	}
+	if cp, ok := node.Data["closing_prompt"].(string); ok {
+		closingPrompt = cp
+	}
+
+	// Use global settings as fallback
+	if apiProvider == "" {
+		apiProvider = flow.Niche
+	}
+
+	// Check if we have complete AI configuration
+	if systemPrompt == "" || instance == "" || apiProvider == "" {
+		// Fallback to manual response
+		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
+	}
+
+	// Get conversation history
+	history, err := h.chatService.GetConversationHistory(execution)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get conversation history")
+		history = []models.ConversationMessage{}
+	}
+
+	// Get execution variables for prompt replacement
+	variables, err := h.chatService.GetExecutionVariables(execution)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+
+	// Replace variables in prompts
+	systemPrompt = h.flowService.ReplaceVariables(systemPrompt, variables)
+	if closingPrompt != "" {
+		closingPrompt = h.flowService.ReplaceVariables(closingPrompt, variables)
+	}
+
+	// Generate AI response using advanced method
+	aiResponse, err := h.aiService.GenerateAdvancedResponse(systemPrompt, userInput, apiProvider, history, closingPrompt)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to generate advanced AI response")
+		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
+	}
+
+	// Update execution stage if provided
+	if aiResponse.Stage != "" {
+		if execution.Variables == nil {
+			execution.Variables = json.RawMessage("{}")
+		}
+		
+		var vars map[string]interface{}
+		if err := json.Unmarshal(execution.Variables, &vars); err != nil {
+			vars = make(map[string]interface{})
+		}
+		
+		vars["current_stage"] = aiResponse.Stage
+		
+		updatedVars, err := json.Marshal(vars)
+		if err == nil {
+			execution.Variables = updatedVars
+		}
+	}
+
+	// Build response from parts
+	response := h.buildResponseFromParts(aiResponse.Response)
+
+	// Move to next node
+	nextNode, err := h.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		h.chatService.UpdateExecution(execution)
+	} else {
+		// End of flow
+		h.chatService.CompleteExecution(execution.ID)
+	}
+
+	return response, nil
+}
+
+// buildResponseFromParts constructs the final response string from AI response parts
+func (h *Handlers) buildResponseFromParts(parts []models.AIResponsePart) string {
+	var response strings.Builder
+	
+	for i, part := range parts {
+		switch part.Type {
+		case "text":
+			if i > 0 {
+				response.WriteString("\n")
+			}
+			response.WriteString(part.Content)
+		case "image":
+			if i > 0 {
+				response.WriteString("\n")
+			}
+			response.WriteString("[Image: " + part.URL + "]")
+		}
+	}
+	
+	return response.String()
 }
 
 // processTestDefaultNode processes other node types in test chat

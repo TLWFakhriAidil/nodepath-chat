@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"nodepath-chat/internal/config"
@@ -16,7 +18,7 @@ import (
 
 const (
 	openRouterBaseURL = "https://openrouter.ai/api/v1"
-	defaultModel      = "openai/gpt-4.1"
+	defaultModel      = "openai/gpt-4o"
 	maxRetries        = 3
 	retryDelay       = time.Second * 2
 )
@@ -99,6 +101,82 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, con
 	}).Info("OpenRouter API call successful")
 
 	return content, nil
+}
+
+// GenerateAdvancedResponse generates an AI response with structured JSON output for advanced AI prompt nodes
+func (s *AIService) GenerateAdvancedResponse(systemPrompt, userInput, apiKey string, conversationHistory []models.ConversationMessage, closingPrompt string) (*models.AIPromptResponse, error) {
+	if apiKey == "" {
+		apiKey = s.cfg.OpenRouterDefaultKey
+	}
+
+	if apiKey == "" {
+		return nil, fmt.Errorf("no API key provided")
+	}
+
+	// Build enhanced system prompt with structured response format
+	enhancedSystemPrompt := s.buildEnhancedSystemPrompt(systemPrompt, closingPrompt)
+
+	// Build messages for OpenRouter
+	messages := s.buildMessages(enhancedSystemPrompt, userInput, conversationHistory)
+
+	// Create request
+	request := models.OpenRouterRequest{
+		Model:    defaultModel,
+		Messages: messages,
+		Stream:   false,
+	}
+
+	// Make API call with retries
+	var response *models.OpenRouterResponse
+	var err error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		response, err = s.makeOpenRouterRequest(request, apiKey)
+		if err == nil {
+			break
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"attempt": attempt,
+			"error":   err.Error(),
+		}).Warn("OpenRouter API call failed, retrying")
+
+		if attempt < maxRetries {
+			time.Sleep(retryDelay * time.Duration(attempt))
+		}
+	}
+
+	if err != nil {
+		logrus.WithError(err).Error("All OpenRouter API attempts failed")
+		return s.getFallbackAdvancedResponse(userInput), nil
+	}
+
+	// Extract and parse response content
+	if len(response.Choices) == 0 {
+		return s.getFallbackAdvancedResponse(userInput), nil
+	}
+
+	content := response.Choices[0].Message.Content
+	if content == "" {
+		return s.getFallbackAdvancedResponse(userInput), nil
+	}
+
+	// Parse the structured response
+	parsedResponse, err := s.parseAIResponse(content)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to parse AI response, using fallback")
+		return s.getFallbackAdvancedResponse(userInput), nil
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"model":         response.Model,
+		"prompt_tokens": response.Usage.PromptTokens,
+		"total_tokens":  response.Usage.TotalTokens,
+		"stage":         parsedResponse.Stage,
+		"response_parts": len(parsedResponse.Response),
+	}).Info("Advanced OpenRouter API call successful")
+
+	return parsedResponse, nil
 }
 
 // buildMessages constructs the message array for OpenRouter API
@@ -266,4 +344,150 @@ func (s *AIService) TruncateToTokenLimit(text string, maxTokens int) string {
 	}
 
 	return text[:maxChars] + "..."
+}
+
+// buildEnhancedSystemPrompt creates an enhanced system prompt with structured response format
+func (s *AIService) buildEnhancedSystemPrompt(systemPrompt, closingPrompt string) string {
+	enhancedPrompt := systemPrompt
+
+	// Add structured response format instructions
+	enhancedPrompt += "\n\n=== RESPONSE FORMAT ===\n"
+	enhancedPrompt += "You MUST respond in the following JSON format:\n"
+	enhancedPrompt += `{
+`
+	enhancedPrompt += `  "Stage": "current_conversation_stage",
+`
+	enhancedPrompt += `  "Response": [
+`
+	enhancedPrompt += `    {
+`
+	enhancedPrompt += `      "type": "text",
+`
+	enhancedPrompt += `      "content": "your_text_response",
+`
+	enhancedPrompt += `      "Jenis": "onemessage"
+`
+	enhancedPrompt += `    },
+`
+	enhancedPrompt += `    {
+`
+	enhancedPrompt += `      "type": "image",
+`
+	enhancedPrompt += `      "url": "image_url_if_needed"
+`
+	enhancedPrompt += `    }
+`
+	enhancedPrompt += `  ]
+`
+	enhancedPrompt += `}
+`
+	enhancedPrompt += "\nIMPORTANT RULES:\n"
+	enhancedPrompt += "- Stage: Update based on conversation progress\n"
+	enhancedPrompt += "- Response: Array of response parts (text/image)\n"
+	enhancedPrompt += "- For text responses, use 'Jenis: onemessage' to combine multiple text parts\n"
+	enhancedPrompt += "- Only include image responses when specifically needed\n"
+	enhancedPrompt += "- Always provide valid JSON format\n"
+
+	// Add closing prompt if provided
+	if closingPrompt != "" {
+		enhancedPrompt += "\n\n=== CLOSING INSTRUCTIONS ===\n"
+		enhancedPrompt += closingPrompt
+	}
+
+	return enhancedPrompt
+}
+
+// parseAIResponse parses the AI response JSON into structured format
+func (s *AIService) parseAIResponse(content string) (*models.AIPromptResponse, error) {
+	// Clean the content - remove code block markers if present
+	sanitizedContent := content
+	if strings.HasPrefix(content, "```json") {
+		sanitizedContent = strings.TrimPrefix(content, "```json")
+	}
+	if strings.HasSuffix(sanitizedContent, "```") {
+		sanitizedContent = strings.TrimSuffix(sanitizedContent, "```")
+	}
+	sanitizedContent = strings.TrimSpace(sanitizedContent)
+
+	// Try to parse as JSON first
+	var response models.AIPromptResponse
+	err := json.Unmarshal([]byte(sanitizedContent), &response)
+	if err == nil && response.Stage != "" && len(response.Response) > 0 {
+		return &response, nil
+	}
+
+	// Fallback: try to extract using regex patterns (similar to PHP implementation)
+	if stage, responseParts, ok := s.extractWithRegex(content); ok {
+		return &models.AIPromptResponse{
+			Stage:    stage,
+			Response: responseParts,
+		}, nil
+	}
+
+	// Final fallback: treat as plain text
+	return &models.AIPromptResponse{
+		Stage: "conversation",
+		Response: []models.AIResponsePart{
+			{
+				Type:    "text",
+				Content: content,
+				Jenis:   "onemessage",
+			},
+		},
+	}, nil
+}
+
+// extractWithRegex attempts to extract stage and response using regex patterns
+func (s *AIService) extractWithRegex(content string) (string, []models.AIResponsePart, bool) {
+	// Pattern 1: Stage: ... Response: [...]
+	pattern1 := `Stage:\s*(.+?)\s*Response:\s*(\[.*?\])$`
+	re1 := regexp.MustCompile(pattern1)
+	matches1 := re1.FindStringSubmatch(content)
+	if len(matches1) == 3 {
+		stage := strings.TrimSpace(matches1[1])
+		responseJSON := matches1[2]
+		
+		var responseParts []models.AIResponsePart
+		err := json.Unmarshal([]byte(responseJSON), &responseParts)
+		if err == nil {
+			return stage, responseParts, true
+		}
+	}
+
+	// Pattern 2: JSON-like structure detection
+	pattern2 := `^\s*{\s*"Stage":\s*".+?",\s*"Response":\s*\[.*\]\s*}\s*$`
+	re2 := regexp.MustCompile(pattern2)
+	if re2.MatchString(content) {
+		var response models.AIPromptResponse
+		err := json.Unmarshal([]byte(content), &response)
+		if err == nil {
+			return response.Stage, response.Response, true
+		}
+	}
+
+	return "", nil, false
+}
+
+// getFallbackAdvancedResponse returns a fallback response for advanced AI prompts
+func (s *AIService) getFallbackAdvancedResponse(userInput string) *models.AIPromptResponse {
+	fallbackResponses := []string{
+		"I'm sorry, I'm having trouble processing your request right now. Please try again later.",
+		"I apologize, but I'm experiencing technical difficulties. Can you please rephrase your question?",
+		"Sorry, I'm unable to provide a response at the moment. Please contact support if this continues.",
+		"I'm currently unable to process your message. Please try again in a few moments.",
+	}
+
+	// Simple hash-based selection for consistent fallback
+	index := len(userInput) % len(fallbackResponses)
+	
+	return &models.AIPromptResponse{
+		Stage: "error",
+		Response: []models.AIResponsePart{
+			{
+				Type:    "text",
+				Content: fallbackResponses[index],
+				Jenis:   "onemessage",
+			},
+		},
+	}
 }

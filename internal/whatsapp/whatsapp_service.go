@@ -334,6 +334,8 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, execution *models
 	switch currentNode.Type {
 	case models.NodeTypeAIPrompt:
 		return s.processAIPromptNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeAdvancedAIPrompt:
+		return s.processAdvancedAIPromptNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeManual:
 		return s.processManualNode(flow, execution, currentNode, userInput)
 	default:
@@ -403,6 +405,135 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	}
 
 	return response, nil
+}
+
+// processAdvancedAIPromptNode processes an advanced AI prompt node with structured response
+func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get AI configuration from node data
+	var systemPrompt, instance, apiProvider, closingPrompt string
+
+	// Check node data for configuration
+	if sp, ok := node.Data["system_prompt"].(string); ok {
+		systemPrompt = sp
+	}
+	if inst, ok := node.Data["instance"].(string); ok {
+		instance = inst
+	}
+	if ap, ok := node.Data["apiprovider"].(string); ok {
+		apiProvider = ap
+	}
+	if cp, ok := node.Data["closing_prompt"].(string); ok {
+		closingPrompt = cp
+	}
+
+	// Use global settings as fallback
+	if apiProvider == "" {
+		apiProvider = flow.Niche
+	}
+
+	// Check if we have complete AI configuration
+	if systemPrompt == "" || instance == "" || apiProvider == "" {
+		// Fallback to manual response
+		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
+	}
+
+	// Get conversation history
+	history, err := s.chatService.GetConversationHistory(execution)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get conversation history")
+		history = []models.ConversationMessage{}
+	}
+
+	// Get execution variables for prompt replacement
+	variables, err := s.chatService.GetExecutionVariables(execution)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+
+	// Replace variables in system prompt and closing prompt
+	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
+	if closingPrompt != "" {
+		closingPrompt = s.flowService.ReplaceVariables(closingPrompt, variables)
+	}
+
+	// Generate advanced AI response
+	response, err := s.aiService.GenerateAdvancedResponse(systemPrompt, userInput, apiProvider, history, closingPrompt)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to generate advanced AI response")
+		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
+	}
+
+	// Update execution stage if provided
+	if response.Stage != "" && response.Stage != "error" {
+		// Store the stage in execution variables for future reference
+		err := s.chatService.SetExecutionVariable(execution, "current_stage", response.Stage)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to update execution stage variable")
+		}
+	}
+
+	// Process response parts and build final message
+	finalResponse := s.buildResponseFromParts(response.Response)
+
+	// Move to next node
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+	} else {
+		// End of flow
+		s.chatService.CompleteExecution(execution.ID)
+	}
+
+	return finalResponse, nil
+}
+
+// buildResponseFromParts builds a final response string from AI response parts
+func (s *Service) buildResponseFromParts(responseParts []models.AIResponsePart) string {
+	var finalResponse string
+	var textParts []string
+
+	for _, part := range responseParts {
+		switch part.Type {
+		case "text":
+			if part.Jenis == "onemessage" {
+				// Combine with other text parts
+				textParts = append(textParts, part.Content)
+			} else {
+				// Send as separate message (for now, just add to final response)
+				if finalResponse != "" {
+					finalResponse += "\n\n"
+				}
+				finalResponse += part.Content
+			}
+		case "image":
+			// For now, just mention the image URL in the response
+			// In a full implementation, this would trigger an image send
+			if part.URL != "" {
+				if finalResponse != "" {
+					finalResponse += "\n\n"
+				}
+				finalResponse += "[Image: " + part.URL + "]"
+			}
+		}
+	}
+
+	// Combine all text parts marked as "onemessage"
+	if len(textParts) > 0 {
+		combinedText := strings.Join(textParts, " ")
+		if finalResponse != "" {
+			finalResponse = combinedText + "\n\n" + finalResponse
+		} else {
+			finalResponse = combinedText
+		}
+	}
+
+	if finalResponse == "" {
+		finalResponse = "I'm sorry, I couldn't generate a proper response. Please try again."
+	}
+
+	return finalResponse
 }
 
 // processManualNode processes a manual node

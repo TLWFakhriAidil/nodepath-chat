@@ -109,7 +109,7 @@ const createDeviceSettingsTable = `
 CREATE TABLE IF NOT EXISTS device_setting_nodepath (
     id VARCHAR(255) PRIMARY KEY,
     device_id VARCHAR(255) NOT NULL,
-    api_key_option ENUM('chat_gpt_so', 'chat_gpt_5_mini', 'chat_gpt_4o', 'chat_gpt_4_1_new', 'gemini_pro_25', 'gemini_pro_15') DEFAULT 'chat_gpt_4_1_new',
+    api_key_option ENUM('openai/gpt-5-chat', 'openai/gpt-5-mini', 'openai/chatgpt-4o-latest', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'google/gemini-pro-1.5') DEFAULT 'openai/gpt-4.1',
     webhook_id VARCHAR(500),
     provider ENUM('whacenter', 'wablas', 'rvsb_wasap') DEFAULT 'wablas',
     phone_number VARCHAR(20),

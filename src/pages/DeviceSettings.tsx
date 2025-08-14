@@ -224,7 +224,7 @@ const DeviceSettings: React.FC = () => {
   const [settings, setSettings] = useState<DeviceSettings>({
     id: '',
     device_id: '',
-    api_key_option: 'chat_gpt_4_1_new',
+    api_key_option: 'openai/gpt-4.1',
     webhook_id: '',
     provider: 'wablas',
     phone_number: '',
@@ -243,12 +243,12 @@ const DeviceSettings: React.FC = () => {
   const [isDuplicateIdDevice, setIsDuplicateIdDevice] = useState(false);
 
   const apiKeyOptions = [
-    { value: 'chat_gpt_so', label: 'Chat GPT So' },
-    { value: 'chat_gpt_5_mini', label: 'Chat GPT 5 Mini' },
-    { value: 'chat_gpt_4o', label: 'Chat GPT 4o' },
-    { value: 'chat_gpt_4_1_new', label: 'Chat GPT 4.1 (NEW)' },
-    { value: 'gemini_pro_25', label: 'GEMINI PRO 2.5' },
-    { value: 'gemini_pro_15', label: 'GEMINI PRO 1.5' }
+    { value: 'openai/gpt-5-chat', label: 'Chat GPT 5o' },
+    { value: 'openai/gpt-5-mini', label: 'Chat GPT 5 Mini' },
+    { value: 'openai/chatgpt-4o-latest', label: 'Chat GPT 4o' },
+    { value: 'openai/gpt-4.1', label: 'Chat GPT 4.1 (NEW)' },
+    { value: 'google/gemini-2.5-pro', label: 'GEMINI PRO 2.5' },
+    { value: 'google/gemini-pro-1.5', label: 'GEMINI PRO 1.5' }
   ];
 
   const providerOptions = [
@@ -351,7 +351,7 @@ const DeviceSettings: React.FC = () => {
     setSettings({
       id: '',
       device_id: '',
-      api_key_option: 'chat_gpt_4_1_new',
+      api_key_option: 'openai/gpt-4.1',
       webhook_id: '',
       provider: 'wablas',
       phone_number: '',

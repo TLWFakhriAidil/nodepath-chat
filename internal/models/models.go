@@ -18,14 +18,15 @@ const (
 type NodeType string
 
 const (
-	NodeTypeAIPrompt NodeType = "ai_prompt"
-	NodeTypeManual   NodeType = "manual"
-	NodeTypeMessage  NodeType = "message"
-	NodeTypeImage    NodeType = "image"
-	NodeTypeAudio    NodeType = "audio"
-	NodeTypeVideo    NodeType = "video"
-	NodeTypeDelay    NodeType = "delay"
-	NodeTypeCondition NodeType = "condition"
+	NodeTypeAIPrompt         NodeType = "ai_prompt"
+	NodeTypeAdvancedAIPrompt NodeType = "advanced_ai_prompt"
+	NodeTypeManual           NodeType = "manual"
+	NodeTypeMessage          NodeType = "message"
+	NodeTypeImage            NodeType = "image"
+	NodeTypeAudio            NodeType = "audio"
+	NodeTypeVideo            NodeType = "video"
+	NodeTypeDelay            NodeType = "delay"
+	NodeTypeCondition        NodeType = "condition"
 )
 
 // ExecutionStatus represents the status of a flow execution
@@ -143,6 +144,20 @@ type OpenRouterUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+// AIPromptResponse represents a structured AI response for advanced prompt nodes
+type AIPromptResponse struct {
+	Stage    string            `json:"Stage"`
+	Response []AIResponsePart  `json:"Response"`
+}
+
+// AIResponsePart represents a single part of an AI response
+type AIResponsePart struct {
+	Type    string `json:"type"`     // "text" or "image"
+	Content string `json:"content,omitempty"`  // Text content
+	URL     string `json:"url,omitempty"`      // Image URL
+	Jenis   string `json:"Jenis,omitempty"`    // "onemessage" for combining text parts
 }
 
 // WebSocketMessage represents a WebSocket message
