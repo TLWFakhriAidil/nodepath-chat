@@ -54,8 +54,8 @@ type ChatbotFlow struct {
 	ID                   string          `json:"id" db:"id"`
 	Name                 string          `json:"name" db:"name"`
 	Description          string          `json:"description" db:"description"`
-	GlobalInstance       string          `json:"global_instance" db:"global_instance"`
-	GlobalOpenRouterKey  string          `json:"global_open_router_key" db:"global_open_router_key"`
+	SelectedDeviceId     string          `json:"selected_device_id" db:"selected_device_id"`
+	Niche                string          `json:"niche" db:"niche"`
 	Nodes                *json.RawMessage `json:"nodes" db:"nodes"`
 	Edges                *json.RawMessage `json:"edges" db:"edges"`
 	CreatedAt            time.Time       `json:"created_at" db:"created_at"`

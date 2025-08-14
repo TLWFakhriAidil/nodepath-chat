@@ -67,8 +67,8 @@ export interface ChatbotFlow {
   id: string
   name: string
   description: string
-  globalInstance?: string
-  globalOpenRouterKey?: string
+  selectedDeviceId?: string
+  niche?: string
   nodes: FlowNode[]
   edges: FlowEdge[]
   createdAt: string

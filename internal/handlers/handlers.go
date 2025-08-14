@@ -91,6 +91,7 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Device settings routes
 	deviceSettings := api.Group("/device-settings")
 	deviceSettings.Get("/", h.GetDeviceSettings)
+	deviceSettings.Get("/device-ids", h.GetDeviceIDs)
 	deviceSettings.Post("/", h.CreateDeviceSettings)
 	// Device status route - must be before /:id to avoid conflicts
 	deviceSettings.Get("/:id/status", h.GetDeviceStatus)

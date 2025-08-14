@@ -125,6 +125,37 @@ func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 	return h.successMessageResponse(c, "Device setting deleted successfully", nil)
 }
 
+// GetDeviceIDs retrieves all device IDs for dropdown selection
+func (h *Handlers) GetDeviceIDs(c *fiber.Ctx) error {
+	settings, err := h.deviceSettingsService.GetAll()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get device settings")
+		return h.errorResponse(c, 500, "Failed to retrieve device settings")
+	}
+
+	// Extract device IDs and create dropdown options
+	type DeviceOption struct {
+		Value string `json:"value"`
+		Label string `json:"label"`
+	}
+
+	var options []DeviceOption
+	for _, setting := range settings {
+		if setting.IDDevice.Valid && setting.IDDevice.String != "" {
+			label := setting.IDDevice.String
+			if setting.Provider != "" {
+				label += " (" + setting.Provider + ")"
+			}
+			options = append(options, DeviceOption{
+				Value: setting.IDDevice.String,
+				Label: label,
+			})
+		}
+	}
+
+	return h.successResponse(c, options)
+}
+
 // GenerateWhacenterDevice generates a device using Whacenter API
 func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	var req struct {

@@ -17,6 +17,7 @@ import '@xyflow/react/dist/style.css';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageSquare, GitBranch, Clock, Play, Download, Upload, Image, Mic, Video, Save, Sparkles, X, Send, Bot } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
@@ -65,17 +66,32 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
   const [flowName, setFlowName] = useState('');
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
-  const [fieldInstance, setFieldInstance] = useState('');
-  const [openRouterApiKey, setOpenRouterApiKey] = useState('');
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [niche, setNiche] = useState('');
+  const [deviceOptions, setDeviceOptions] = useState<{value: string, label: string}[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
   
-  // Debug logging for state changes
+  // Fetch device options on component mount
   useEffect(() => {
-    console.log('State change - fieldInstance:', fieldInstance);
-  }, [fieldInstance]);
-  
-  useEffect(() => {
-    console.log('State change - openRouterApiKey:', openRouterApiKey ? '[HIDDEN]' : 'empty');
-  }, [openRouterApiKey]);
+    const fetchDeviceOptions = async () => {
+      setLoadingDevices(true);
+      try {
+        const response = await fetch('/api/device-settings/device-ids');
+        if (response.ok) {
+          const data = await response.json();
+          setDeviceOptions(data.data || []);
+        } else {
+          console.error('Failed to fetch device options');
+        }
+      } catch (error) {
+        console.error('Error fetching device options:', error);
+      } finally {
+        setLoadingDevices(false);
+      }
+    };
+
+    fetchDeviceOptions();
+  }, []);
   const { toast } = useToast();
 
   const deleteNode = useCallback(
@@ -157,8 +173,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
         console.log('New flow mode - Clearing state values');
         setFlowName('');
         setCurrentFlowId(null);
-        setFieldInstance('');
-        setOpenRouterApiKey('');
+        setSelectedDeviceId('');
+        setNiche('');
         setNodes(initialNodes);
         setEdges(initialEdges);
         return;
@@ -170,18 +186,18 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
           console.log('Load flow - Flow data received:', {
             id: flowData.id,
             name: flowData.name,
-            globalInstance: flowData.globalInstance,
-            globalOpenRouterKey: flowData.globalOpenRouterKey
+            selectedDeviceId: flowData.selectedDeviceId,
+            niche: flowData.niche
           });
           
           setFlowName(flowData.name);
           setCurrentFlowId(flowData.id);
-          setFieldInstance(flowData.globalInstance || '');
-          setOpenRouterApiKey(flowData.globalOpenRouterKey || '');
+          setSelectedDeviceId(flowData.selectedDeviceId || '');
+          setNiche(flowData.niche || '');
           
           console.log('Load flow - State values set to:', {
-            fieldInstance: flowData.globalInstance || '',
-            openRouterApiKey: flowData.globalOpenRouterKey || ''
+            selectedDeviceId: flowData.selectedDeviceId || '',
+            niche: flowData.niche || ''
           });
           
           // Load nodes with proper callbacks
@@ -238,8 +254,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
 
     // Debug logging
     console.log('Save flow - Current state values:', {
-      fieldInstance,
-      openRouterApiKey,
+      selectedDeviceId,
+      niche,
       flowName
     });
 
@@ -247,8 +263,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       name: flowName,
       description: `Chatbot flow: ${flowName}`,
-      globalInstance: fieldInstance,
-      globalOpenRouterKey: openRouterApiKey,
+      selectedDeviceId: selectedDeviceId,
+      niche: niche,
       nodes: nodes.map(node => ({
         id: node.id,
         type: node.type as any,
@@ -269,8 +285,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     console.log('Save flow - Flow data being saved:', {
       id: flowData.id,
       name: flowData.name,
-      globalInstance: flowData.globalInstance,
-      globalOpenRouterKey: flowData.globalOpenRouterKey
+      selectedDeviceId: flowData.selectedDeviceId,
+      niche: flowData.niche
     });
     
     try {
@@ -294,7 +310,7 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       // Still set the current flow ID for local editing
       setCurrentFlowId(flowData.id);
     }
-  }, [flowName, currentFlowId, nodes, edges, fieldInstance, openRouterApiKey, toast]);
+  }, [flowName, currentFlowId, nodes, edges, selectedDeviceId, niche, toast]);
 
   const exportFlow = useCallback(() => {
     const flowData = {
@@ -466,30 +482,35 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                     onChange={(e) => setFlowName(e.target.value)}
                     className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
                   />
+                  <Input
+                    placeholder="Enter your niche..."
+                    value={niche}
+                    onChange={(e) => setNiche(e.target.value)}
+                    className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
+                  />
                 </div>
               </div>
 
-              {/* API Configuration */}
+              {/* Device Selection */}
                <div className="space-y-2 mb-4">
                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full pulse-glow"></div>
-                   API Configuration
+                   Device Selection
                  </h3>
                  
                  <div className="space-y-1.5">
-                   <Input
-                     placeholder="Field Instance..."
-                     value={fieldInstance}
-                     onChange={(e) => setFieldInstance(e.target.value)}
-                     className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
-                   />
-                   <Input
-                     placeholder="OpenRouter API Key..."
-                     type="password"
-                     value={openRouterApiKey}
-                     onChange={(e) => setOpenRouterApiKey(e.target.value)}
-                     className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
-                   />
+                   <Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}>
+                     <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50">
+                       <SelectValue placeholder={loadingDevices ? "Loading devices..." : "Select device..."} />
+                     </SelectTrigger>
+                     <SelectContent>
+                       {deviceOptions.map((option) => (
+                         <SelectItem key={option.value} value={option.value}>
+                           {option.label}
+                         </SelectItem>
+                       ))}
+                     </SelectContent>
+                   </Select>
                  </div>
                </div>
 

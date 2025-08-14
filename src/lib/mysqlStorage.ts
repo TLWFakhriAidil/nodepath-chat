@@ -102,8 +102,8 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
       id: flow.id,
       name: flow.name,
       description: flow.description || '',
-      global_instance: flow.globalInstance || '',
-      global_open_router_key: flow.globalOpenRouterKey || '',
+      selected_device_id: flow.selectedDeviceId || '',
+      niche: flow.niche || '',
       nodes: flow.nodes,
       edges: flow.edges || [],
       created_at: flow.createdAt || new Date().toISOString(),
@@ -113,8 +113,8 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
     console.log('Flow data being sent:', {
       id: flowData.id,
       name: flowData.name,
-      global_instance: flowData.global_instance,
-      global_open_router_key: flowData.global_open_router_key,
+      selected_device_id: flowData.selected_device_id,
+      niche: flowData.niche,
       isUpdate: isUpdate
     });
     
@@ -145,8 +145,8 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
     
     const flowForStorage = {
       ...flow,
-      globalInstance: flow.globalInstance,
-      globalOpenRouterKey: flow.globalOpenRouterKey,
+      selectedDeviceId: flow.selectedDeviceId,
+      niche: flow.niche,
       updatedAt: new Date().toISOString()
     };
     
@@ -161,8 +161,8 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
     console.log('Flow saved successfully:', {
       id: flow.id,
       name: flow.name,
-      instance: flow.globalInstance,
-      openRouterKey: flow.globalOpenRouterKey,
+      selectedDeviceId: flow.selectedDeviceId,
+      niche: flow.niche,
       success: result.success
     })
   } catch (error) {

@@ -359,10 +359,10 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 
 	// Use global settings as fallback
 	if instance == "" {
-		instance = flow.GlobalInstance
+		instance = flow.SelectedDeviceId
 	}
 	if apiProvider == "" {
-		apiProvider = flow.GlobalOpenRouterKey
+		apiProvider = flow.Niche
 	}
 
 	// Check if we have complete AI configuration
