@@ -43,7 +43,7 @@ func NewHandlers(
 
 // SetupRoutes sets up all API routes
 func (h *Handlers) SetupRoutes(api fiber.Router) {
-	// Flow management routes
+	// Flow routes
 	flows := api.Group("/flows")
 	flows.Get("/", h.GetFlows)
 	flows.Post("/", h.CreateFlow)
@@ -54,9 +54,9 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Test chat routes
 	testChat := api.Group("/test-chat")
 	testChat.Post("/start", h.StartTestChat)
-	testChat.Post("/message", h.SendTestMessage)
-	testChat.Get("/history/:executionId", h.GetTestChatHistory)
-	testChat.Delete("/reset/:executionId", h.ResetTestChat)
+	testChat.Post("/send", h.SendTestMessage)
+	testChat.Get("/history/:execution_id", h.GetTestChatHistory)
+	testChat.Post("/reset/:execution_id", h.ResetTestChat)
 
 	// Execution routes
 	executions := api.Group("/executions")

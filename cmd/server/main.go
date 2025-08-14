@@ -100,10 +100,6 @@ func main() {
 		}))
 	}
 
-	// Static files for React app
-	app.Static("/", "./dist")
-	app.Static("/static", "./static") // Keep for backward compatibility
-
 	// Health check endpoint
 	app.Get("/healthz", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
@@ -112,9 +108,13 @@ func main() {
 		})
 	})
 
-	// Setup API routes
+	// Setup API routes FIRST
 	api := app.Group("/api")
 	handlers.SetupRoutes(api)
+
+	// Static files for React app (after API routes)
+	app.Static("/", "./dist")
+	app.Static("/static", "./static") // Keep for backward compatibility
 
 	// Catch-all route for React Router (SPA)
 	app.Get("/*", func(c *fiber.Ctx) error {

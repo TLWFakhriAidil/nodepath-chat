@@ -52,6 +52,11 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Remove deprecated columns
+	if err := removeDeprecatedColumnsFromFlowsTable(db); err != nil {
+		logrus.WithError(err).Warn("Some deprecated columns may not exist, continuing...")
+	}
+
 	// Add missing columns with error handling
 	if err := addMissingColumnsToFlowsTable(db); err != nil {
 		logrus.WithError(err).Warn("Some columns may already exist, continuing...")
@@ -71,8 +76,8 @@ CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT COLLATE utf8mb4_unicode_ci,
-    global_instance VARCHAR(255),
-    global_open_router_key VARCHAR(500),
+    niche TEXT COLLATE utf8mb4_unicode_ci,
+    id_device VARCHAR(255),
     nodes JSON,
     edges JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -125,8 +130,8 @@ func addMissingColumnsToFlowsTable(db *sql.DB) error {
 		name string
 		definition string
 	}{
-		{"global_instance", "VARCHAR(255)"},
-		{"global_open_router_key", "VARCHAR(500)"},
+		{"niche", "TEXT COLLATE utf8mb4_unicode_ci"},
+		{"id_device", "VARCHAR(255)"},
 	}
 
 	for _, col := range columns {
@@ -153,6 +158,42 @@ func addMissingColumnsToFlowsTable(db *sql.DB) error {
 			logrus.WithField("column", col.name).Info("Added missing column")
 		} else {
 			logrus.WithField("column", col.name).Debug("Column already exists")
+		}
+	}	
+	return nil
+}
+
+// removeDeprecatedColumnsFromFlowsTable removes deprecated columns from the flows table
+func removeDeprecatedColumnsFromFlowsTable(db *sql.DB) error {
+	columns := []string{
+		"global_instance",
+		"global_open_router_key",
+	}
+
+	for _, col := range columns {
+		// Check if column exists
+		var count int
+		err := db.QueryRow(`
+			SELECT COUNT(*) 
+			FROM INFORMATION_SCHEMA.COLUMNS 
+			WHERE TABLE_SCHEMA = DATABASE() 
+			AND TABLE_NAME = 'chatbot_flows_nodepath' 
+			AND COLUMN_NAME = ?
+		`, col).Scan(&count)
+		
+		if err != nil {
+			return fmt.Errorf("failed to check column %s: %w", col, err)
+		}
+		
+		if count > 0 {
+			// Column exists, drop it
+			query := fmt.Sprintf("ALTER TABLE chatbot_flows_nodepath DROP COLUMN %s", col)
+			if _, err := db.Exec(query); err != nil {
+				return fmt.Errorf("failed to drop column %s: %w", col, err)
+			}
+			logrus.WithField("column", col).Info("Removed deprecated column")
+		} else {
+			logrus.WithField("column", col).Debug("Deprecated column does not exist")
 		}
 	}	
 	return nil

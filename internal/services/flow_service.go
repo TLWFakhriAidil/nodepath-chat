@@ -39,14 +39,13 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 
 	query := `
 		INSERT INTO chatbot_flows_nodepath 
-		(id, name, description, selected_device_id, niche, 
+		(id, name, niche, id_device,
 		 nodes, edges, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.Exec(query,
-		flow.ID, flow.Name, flow.Description, flow.SelectedDeviceId, 
-		flow.Niche, flow.Nodes, flow.Edges, 
+		flow.ID, flow.Name, flow.Niche, flow.IdDevice, flow.Nodes, flow.Edges, 
 		flow.CreatedAt, flow.UpdatedAt,
 	)
 
@@ -65,7 +64,7 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 // GetFlow retrieves a flow by ID
 func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 	query := `
-		SELECT id, name, description, selected_device_id, niche, 
+		SELECT id, name, niche, id_device,
 		       nodes, edges, created_at, updated_at
 		FROM chatbot_flows_nodepath 
 		WHERE id = ?
@@ -74,8 +73,7 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 
 	var flow models.ChatbotFlow
 	err := s.db.QueryRow(query, flowID).Scan(
-		&flow.ID, &flow.Name, &flow.Description, &flow.SelectedDeviceId, 
-		&flow.Niche, &flow.Nodes, &flow.Edges, 
+		&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges, 
 		&flow.CreatedAt, &flow.UpdatedAt,
 	)
 
@@ -92,7 +90,7 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 // GetAllFlows retrieves all flows
 func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 	query := `
-		SELECT id, name, description, selected_device_id, niche, 
+		SELECT id, name, niche, id_device,
 		       nodes, edges, created_at, updated_at
 		FROM chatbot_flows_nodepath 
 		ORDER BY created_at DESC
@@ -108,8 +106,7 @@ func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 	for rows.Next() {
 		var flow models.ChatbotFlow
 		err := rows.Scan(
-			&flow.ID, &flow.Name, &flow.Description, &flow.SelectedDeviceId, 
-			&flow.Niche, &flow.Nodes, &flow.Edges, 
+			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges, 
 			&flow.CreatedAt, &flow.UpdatedAt,
 		)
 		if err != nil {
@@ -127,14 +124,12 @@ func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 
 	query := `
 		UPDATE chatbot_flows_nodepath 
-		SET name = ?, description = ?, selected_device_id = ?, 
-		    niche = ?, nodes = ?, edges = ?, updated_at = ?
+		SET name = ?, niche = ?, id_device = ?, nodes = ?, edges = ?, updated_at = ?
 		WHERE id = ?
 	`
 
 	_, err := s.db.Exec(query,
-		flow.Name, flow.Description, flow.SelectedDeviceId, 
-		flow.Niche, flow.Nodes, flow.Edges, 
+		flow.Name, flow.Niche, flow.IdDevice, flow.Nodes, flow.Edges, 
 		flow.UpdatedAt, flow.ID,
 	)
 

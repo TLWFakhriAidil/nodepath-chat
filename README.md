@@ -407,8 +407,7 @@ CREATE TABLE chatbot_flows_nodepath (
   id VARCHAR(255) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  instance VARCHAR(255),           -- Global instance setting
-  open_router_key VARCHAR(255),    -- AI API key
+  id_device VARCHAR(255),          -- Associated device ID
   nodes LONGTEXT,                  -- JSON array of flow nodes
   edges LONGTEXT,                  -- JSON array of connections
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -429,8 +428,7 @@ CREATE TABLE chatbot_flows_nodepath (
     id: "flow_123",
     name: "Customer Support",
     description: "Main support flow",
-    globalInstance: "support_bot",
-    globalOpenRouterKey: "sk-or-...",
+    selectedDeviceId: "device_123",
     nodes: [...],
     edges: [...],
     createdAt: "2025-01-07T...",

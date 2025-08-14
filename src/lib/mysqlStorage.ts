@@ -102,8 +102,8 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
       id: flow.id,
       name: flow.name,
       description: flow.description || '',
-      selected_device_id: flow.selectedDeviceId || '',
       niche: flow.niche || '',
+      id_device: flow.selectedDeviceId || '',
       nodes: flow.nodes,
       edges: flow.edges || [],
       created_at: flow.createdAt || new Date().toISOString(),
@@ -113,8 +113,9 @@ export const saveFlow = async (flow: ChatbotFlow): Promise<void> => {
     console.log('Flow data being sent:', {
       id: flowData.id,
       name: flowData.name,
-      selected_device_id: flowData.selected_device_id,
       niche: flowData.niche,
+      id_device: flowData.id_device,
+      selectedDeviceId: flow.selectedDeviceId,
       isUpdate: isUpdate
     });
     
@@ -211,6 +212,8 @@ export const getFlows = async (): Promise<ChatbotFlow[]> => {
           id: row.id || row.flow_id,
           name: row.name,
           description: row.description,
+          niche: row.niche || '',
+          selectedDeviceId: row.id_device || '',
           globalInstance: row.global_instance || row.instance,
           globalOpenRouterKey: row.global_open_router_key || row.open_router_key,
           nodes: Array.isArray(row.nodes) ? row.nodes : JSON.parse(row.nodes || '[]'),
@@ -259,6 +262,8 @@ export const getFlow = async (id: string): Promise<ChatbotFlow | null> => {
           id: row.id || row.flow_id,
           name: row.name,
           description: row.description,
+          niche: row.niche || '',
+          selectedDeviceId: row.id_device || '',
           globalInstance: row.global_instance || row.instance,
           globalOpenRouterKey: row.global_open_router_key || row.open_router_key,
           nodes: Array.isArray(row.nodes) ? row.nodes : JSON.parse(row.nodes || '[]'),

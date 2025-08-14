@@ -51,15 +51,14 @@ const (
 
 // ChatbotFlow represents a chatbot flow configuration
 type ChatbotFlow struct {
-	ID                   string          `json:"id" db:"id"`
-	Name                 string          `json:"name" db:"name"`
-	Description          string          `json:"description" db:"description"`
-	SelectedDeviceId     string          `json:"selected_device_id" db:"selected_device_id"`
-	Niche                string          `json:"niche" db:"niche"`
-	Nodes                *json.RawMessage `json:"nodes" db:"nodes"`
-	Edges                *json.RawMessage `json:"edges" db:"edges"`
-	CreatedAt            time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt            time.Time       `json:"updated_at" db:"updated_at"`
+	ID        string          `json:"id" db:"id"`
+	Name      string          `json:"name" db:"name"`
+	Niche     string          `json:"niche" db:"niche"`
+	IdDevice  string          `json:"id_device" db:"id_device"`
+	Nodes     *json.RawMessage `json:"nodes" db:"nodes"`
+	Edges     *json.RawMessage `json:"edges" db:"edges"`
+	CreatedAt time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 // FlowNode represents a single node in a flow

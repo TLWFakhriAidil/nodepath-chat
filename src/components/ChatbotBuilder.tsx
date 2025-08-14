@@ -17,6 +17,7 @@ import '@xyflow/react/dist/style.css';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageSquare, GitBranch, Clock, Play, Download, Upload, Image, Mic, Video, Save, Sparkles, X, Send, Bot } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
@@ -66,32 +67,9 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
   const [flowName, setFlowName] = useState('');
   const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
-  const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [niche, setNiche] = useState('');
-  const [deviceOptions, setDeviceOptions] = useState<{value: string, label: string}[]>([]);
-  const [loadingDevices, setLoadingDevices] = useState(false);
-  
-  // Fetch device options on component mount
-  useEffect(() => {
-    const fetchDeviceOptions = async () => {
-      setLoadingDevices(true);
-      try {
-        const response = await fetch('/api/device-settings/device-ids');
-        if (response.ok) {
-          const data = await response.json();
-          setDeviceOptions(data.data || []);
-        } else {
-          console.error('Failed to fetch device options');
-        }
-      } catch (error) {
-        console.error('Error fetching device options:', error);
-      } finally {
-        setLoadingDevices(false);
-      }
-    };
-
-    fetchDeviceOptions();
-  }, []);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [deviceOptions, setDeviceOptions] = useState<Array<{value: string; label: string}>>([]);
   const { toast } = useToast();
 
   const deleteNode = useCallback(
@@ -165,6 +143,25 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     [setNodes, deleteNode, updateNodeData]
   );
 
+  // Load device options on component mount
+  useEffect(() => {
+    const loadDeviceOptions = async () => {
+      try {
+        const response = await fetch('/api/device-settings/device-ids');
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            setDeviceOptions(result.data || []);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading device options:', error);
+      }
+    };
+    
+    loadDeviceOptions();
+  }, []);
+
   // Load flow data when flowId is provided, or clear state when creating new flow
   useEffect(() => {
     const loadFlowData = async () => {
@@ -173,8 +170,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
         console.log('New flow mode - Clearing state values');
         setFlowName('');
         setCurrentFlowId(null);
-        setSelectedDeviceId('');
         setNiche('');
+        setSelectedDeviceId('');
         setNodes(initialNodes);
         setEdges(initialEdges);
         return;
@@ -186,18 +183,17 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
           console.log('Load flow - Flow data received:', {
             id: flowData.id,
             name: flowData.name,
-            selectedDeviceId: flowData.selectedDeviceId,
             niche: flowData.niche
           });
           
           setFlowName(flowData.name);
           setCurrentFlowId(flowData.id);
-          setSelectedDeviceId(flowData.selectedDeviceId || '');
           setNiche(flowData.niche || '');
+          setSelectedDeviceId(flowData.selectedDeviceId || '');
           
           console.log('Load flow - State values set to:', {
-            selectedDeviceId: flowData.selectedDeviceId || '',
-            niche: flowData.niche || ''
+            niche: flowData.niche || '',
+            selectedDeviceId: flowData.selectedDeviceId || ''
           });
           
           // Load nodes with proper callbacks
@@ -254,17 +250,17 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
 
     // Debug logging
     console.log('Save flow - Current state values:', {
-      selectedDeviceId,
       niche,
-      flowName
+      flowName,
+      selectedDeviceId
     });
 
     const flowData: ChatbotFlow = {
       id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       name: flowName,
       description: `Chatbot flow: ${flowName}`,
-      selectedDeviceId: selectedDeviceId,
       niche: niche,
+      selectedDeviceId: selectedDeviceId,
       nodes: nodes.map(node => ({
         id: node.id,
         type: node.type as any,
@@ -285,8 +281,9 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     console.log('Save flow - Flow data being saved:', {
       id: flowData.id,
       name: flowData.name,
+      niche: flowData.niche,
       selectedDeviceId: flowData.selectedDeviceId,
-      niche: flowData.niche
+      selectedDeviceIdFromState: selectedDeviceId
     });
     
     try {
@@ -310,7 +307,7 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       // Still set the current flow ID for local editing
       setCurrentFlowId(flowData.id);
     }
-  }, [flowName, currentFlowId, nodes, edges, selectedDeviceId, niche, toast]);
+  }, [flowName, currentFlowId, nodes, edges, niche, selectedDeviceId, toast]);
 
   const exportFlow = useCallback(() => {
     const flowData = {
@@ -488,31 +485,22 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                     onChange={(e) => setNiche(e.target.value)}
                     className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
                   />
+                  <Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}>
+                    <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50">
+                      <SelectValue placeholder="Select device..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {deviceOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Device Selection */}
-               <div className="space-y-2 mb-4">
-                 <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                   <div className="w-1.5 h-1.5 bg-orange-500 rounded-full pulse-glow"></div>
-                   Device Selection
-                 </h3>
-                 
-                 <div className="space-y-1.5">
-                   <Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}>
-                     <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50">
-                       <SelectValue placeholder={loadingDevices ? "Loading devices..." : "Select device..."} />
-                     </SelectTrigger>
-                     <SelectContent>
-                       {deviceOptions.map((option) => (
-                         <SelectItem key={option.value} value={option.value}>
-                           {option.label}
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                 </div>
-               </div>
+
 
                {/* Action Buttons */}
                <div className="space-y-2 mb-4">

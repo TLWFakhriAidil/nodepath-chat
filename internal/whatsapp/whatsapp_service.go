@@ -358,9 +358,6 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	}
 
 	// Use global settings as fallback
-	if instance == "" {
-		instance = flow.SelectedDeviceId
-	}
 	if apiProvider == "" {
 		apiProvider = flow.Niche
 	}
