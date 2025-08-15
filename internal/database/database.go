@@ -44,6 +44,8 @@ func RunMigrations(db *sql.DB) error {
 		createFlowsTable,
 		createExecutionsTable,
 		createDeviceSettingsTable,
+		createAIWhatsappTable,
+		createConversationLogTable,
 	}
 
 	for i, migration := range migrations {
@@ -120,6 +122,48 @@ CREATE TABLE IF NOT EXISTS device_setting_nodepath (
     id_admin VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
+// AI WhatsApp conversation table for managing AI-powered WhatsApp conversations
+const createAIWhatsappTable = `
+CREATE TABLE IF NOT EXISTS ai_whatsapp_nodepath (
+    id VARCHAR(255) PRIMARY KEY,
+    id_prospect VARCHAR(255) NOT NULL,
+    id_staff VARCHAR(255) NOT NULL,
+    prospect_num VARCHAR(20) NOT NULL,
+    stage VARCHAR(255) DEFAULT 'initial',
+    conv_last JSON,
+    conv_current TEXT COLLATE utf8mb4_unicode_ci,
+    human TINYINT(1) DEFAULT 0 COMMENT '0=AI active, 1=human takeover',
+    catatan_staff TEXT COLLATE utf8mb4_unicode_ci,
+    bot_balas TINYINT(1) DEFAULT 1 COMMENT '1=bot replies, 0=no bot reply',
+    niche VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_prospect_num (prospect_num),
+    INDEX idx_id_staff (id_staff),
+    INDEX idx_stage (stage),
+    INDEX idx_human (human),
+    UNIQUE KEY unique_prospect_staff (prospect_num, id_staff)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
+// Conversation log table for storing all AI conversation history
+const createConversationLogTable = `
+CREATE TABLE IF NOT EXISTS conversation_log_nodepath (
+    id VARCHAR(255) PRIMARY KEY,
+    prospect_num VARCHAR(20) NOT NULL,
+    sender ENUM('user', 'bot', 'staff') NOT NULL,
+    message TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
+    message_type ENUM('text', 'image', 'document', 'audio', 'video') DEFAULT 'text',
+    stage VARCHAR(255),
+    ai_response JSON COMMENT 'Full AI response with stage and content',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_prospect_num (prospect_num),
+    INDEX idx_sender (sender),
+    INDEX idx_created_at (created_at),
+    INDEX idx_stage (stage)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 

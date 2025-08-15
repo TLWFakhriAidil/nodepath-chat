@@ -200,21 +200,7 @@ type AIWhatsapp struct {
 	UpdatedAt    time.Time       `json:"updated_at" db:"updated_at"`
 }
 
-// DeviceSettings represents device configuration for AI WhatsApp
-type DeviceSettings struct {
-	ID           string    `json:"id" db:"id"`
-	DeviceID     string    `json:"device_id" db:"device_id"`
-	APIKeyOption string    `json:"api_key_option" db:"api_key_option"` // chat_gpt_so, chat_gpt_5_mini, etc.
-	WebhookID    string    `json:"webhook_id" db:"webhook_id"`
-	Provider     string    `json:"provider" db:"provider"` // whacenter, wablas, rvsb_wasap
-	PhoneNumber  string    `json:"phone_number" db:"phone_number"`
-	APIKey       string    `json:"api_key" db:"api_key"`
-	IDDevice     string    `json:"id_device" db:"id_device"`
-	IDERP        string    `json:"id_erp" db:"id_erp"`
-	IDAdmin      string    `json:"id_admin" db:"id_admin"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
-}
+
 
 // ConversationLog represents a log entry for AI conversations
 type ConversationLog struct {

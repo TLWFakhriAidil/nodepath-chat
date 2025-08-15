@@ -30,6 +30,10 @@ func NewFlowService(db *sql.DB, redis *redis.Client) *FlowService {
 
 // CreateFlow creates a new chatbot flow
 func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
+	if s.db == nil {
+		return fmt.Errorf("database not available")
+	}
+	
 	if flow.ID == "" {
 		flow.ID = uuid.New().String()
 	}
@@ -63,6 +67,10 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 
 // GetFlow retrieves a flow by ID
 func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	
 	query := `
 		SELECT id, name, niche, id_device,
 		       nodes, edges, created_at, updated_at
@@ -89,6 +97,10 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 
 // GetAllFlows retrieves all flows
 func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	
 	query := `
 		SELECT id, name, niche, id_device,
 		       nodes, edges, created_at, updated_at

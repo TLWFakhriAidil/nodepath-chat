@@ -1,11 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
@@ -88,7 +85,7 @@ type WhacenterWebhookRequest struct {
 // StartAIConversationRequest represents request to start AI conversation
 type StartAIConversationRequest struct {
 	ProspectNum string `json:"prospect_num"`
-	IDStaff     int    `json:"id_staff"`
+	IDStaff     string `json:"id_staff"`
 	IDDevice    string `json:"id_device"`
 	Niche       string `json:"niche"`
 	Stage       string `json:"stage"`
@@ -200,7 +197,7 @@ func (h *AIWhatsappHandlers) StartAIConversation(c *fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if req.ProspectNum == "" || req.IDStaff == 0 || req.IDDevice == "" {
+	if req.ProspectNum == "" || req.IDStaff == "" || req.IDDevice == "" {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Missing required fields")
 	}
 
@@ -324,9 +321,8 @@ func (h *AIWhatsappHandlers) GetConversationStatus(c *fiber.Ctx) error {
 
 // GetAISettings retrieves AI settings for a staff member
 func (h *AIWhatsappHandlers) GetAISettings(c *fiber.Ctx) error {
-	staffIDStr := c.Params("staff_id")
-	staffID, err := strconv.Atoi(staffIDStr)
-	if err != nil {
+	staffID := c.Params("staff_id")
+	if staffID == "" {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid staff ID")
 	}
 
@@ -351,24 +347,19 @@ func (h *AIWhatsappHandlers) CreateAISettings(c *fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if settings.IDStaff == 0 {
+	if settings.IDStaff == "" {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Staff ID is required")
 	}
 
-	err := h.aiRepo.CreateAISettings(&settings)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create AI settings")
-		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to create AI settings")
-	}
-
-	return h.successResponse(c, settings)
+	// TODO: Implement CreateAISettings method in repository
+	logrus.Info("AI settings creation requested but not implemented yet")
+	return h.errorResponse(c, fiber.StatusNotImplemented, "AI settings creation not implemented yet")
 }
 
 // UpdateAISettings updates existing AI settings
 func (h *AIWhatsappHandlers) UpdateAISettings(c *fiber.Ctx) error {
 	idStr := c.Params("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
+	if idStr == "" {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid settings ID")
 	}
 
@@ -377,31 +368,22 @@ func (h *AIWhatsappHandlers) UpdateAISettings(c *fiber.Ctx) error {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid request format")
 	}
 
-	settings.ID = id
-	err = h.aiRepo.UpdateAISettings(&settings)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to update AI settings")
-		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to update AI settings")
-	}
-
-	return h.successResponse(c, settings)
+	settings.ID = idStr
+	// TODO: Implement UpdateAISettings method in repository
+	logrus.Info("AI settings update requested but not implemented yet")
+	return h.errorResponse(c, fiber.StatusNotImplemented, "AI settings update not implemented yet")
 }
 
 // DeleteAISettings deletes AI settings
 func (h *AIWhatsappHandlers) DeleteAISettings(c *fiber.Ctx) error {
 	idStr := c.Params("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
+	if idStr == "" {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid settings ID")
 	}
 
-	err = h.aiRepo.DeleteAISettings(id)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to delete AI settings")
-		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to delete AI settings")
-	}
-
-	return h.successResponse(c, map[string]string{"status": "deleted"})
+	// TODO: Implement DeleteAISettings method in repository
+	logrus.Info("AI settings deletion requested but not implemented yet")
+	return h.errorResponse(c, fiber.StatusNotImplemented, "AI settings deletion not implemented yet")
 }
 
 // ProcessDeviceCommand processes device-specific commands
@@ -508,12 +490,4 @@ func (h *AIWhatsappHandlers) errorResponse(c *fiber.Ctx, statusCode int, message
 		Success: false,
 		Error:   message,
 	})
-}
-
-// APIResponse represents the standard API response format
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Message string      `json:"message,omitempty"`
 }

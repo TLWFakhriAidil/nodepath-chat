@@ -83,7 +83,7 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	_, err = r.db.Exec(query,
 		ai.IDProspect, ai.IDStaff, ai.ProspectNum, ai.Stage, string(convLastJSON),
 		ai.ConvCurrent, ai.Human, ai.Niche, ai.Jam, ai.Intro,
-		ai.Catatan, ai.Balas, ai.DataImage, ai.ConvStage,
+		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		ai.CreatedAt, ai.UpdatedAt,
 	)
@@ -139,7 +139,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &convLastJSON,
 		&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-		&ai.Catatan, &ai.Balas, &ai.DataImage, &ai.ConvStage,
+		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
@@ -182,7 +182,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &convLastJSON,
 		&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-		&ai.Catatan, &ai.Balas, &ai.DataImage, &ai.ConvStage,
+		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
@@ -233,7 +233,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByStaff(idStaff string) ([]models.AI
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &convLastJSON,
 			&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.Catatan, &ai.Balas, &ai.DataImage, &ai.ConvStage,
+			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
@@ -284,7 +284,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByNiche(niche string) ([]models.AIWh
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &convLastJSON,
 			&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.Catatan, &ai.Balas, &ai.DataImage, &ai.ConvStage,
+			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
@@ -335,7 +335,7 @@ func (r *aiWhatsappRepository) GetActiveAIConversations() ([]models.AIWhatsapp, 
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &convLastJSON,
 			&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.Catatan, &ai.Balas, &ai.DataImage, &ai.ConvStage,
+			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
@@ -456,7 +456,7 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 	_, err = r.db.Exec(query,
 		ai.IDStaff, ai.Stage, string(convLastJSON), ai.ConvCurrent,
 		ai.Human, ai.Niche, ai.Jam, ai.Intro,
-		ai.Catatan, ai.Balas, ai.DataImage, ai.ConvStage,
+		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		ai.UpdatedAt, ai.IDProspect,
 	)
@@ -581,36 +581,44 @@ func (r *aiWhatsappRepository) GetConversationStats(idStaff string) (map[string]
 	stats := make(map[string]int)
 
 	// Total conversations
+	var total int
 	query := `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_staff = ?`
 	row := r.db.QueryRow(query, idStaff)
-	err := row.Scan(&stats["total"])
+	err := row.Scan(&total)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total conversations: %w", err)
 	}
+	stats["total"] = total
 
 	// Active AI conversations
+	var activeAI int
 	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_staff = ? AND human = 0`
 	row = r.db.QueryRow(query, idStaff)
-	err = row.Scan(&stats["active_ai"])
+	err = row.Scan(&activeAI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active AI conversations: %w", err)
 	}
+	stats["active_ai"] = activeAI
 
 	// Human takeover conversations
+	var humanTakeover int
 	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_staff = ? AND human = 1`
 	row = r.db.QueryRow(query, idStaff)
-	err = row.Scan(&stats["human_takeover"])
+	err = row.Scan(&humanTakeover)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get human takeover conversations: %w", err)
 	}
+	stats["human_takeover"] = humanTakeover
 
 	// Today's conversations
+	var today int
 	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_staff = ? AND DATE(created_at) = CURDATE()`
 	row = r.db.QueryRow(query, idStaff)
-	err = row.Scan(&stats["today"])
+	err = row.Scan(&today)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get today's conversations: %w", err)
 	}
+	stats["today"] = today
 
 	return stats, nil
 }
@@ -658,7 +666,7 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &convLastJSON,
 			&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.Catatan, &ai.Balas, &ai.DataImage, &ai.ConvStage,
+			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)

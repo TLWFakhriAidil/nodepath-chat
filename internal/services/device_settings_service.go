@@ -25,6 +25,10 @@ func NewDeviceSettingsService(db *sql.DB) *DeviceSettingsService {
 
 // GetAll retrieves all device settings
 func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
 		       id_device, id_erp, id_admin, instance, created_at, updated_at

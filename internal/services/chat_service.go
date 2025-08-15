@@ -29,6 +29,10 @@ func NewChatService(db *sql.DB, redis *redis.Client) *ChatService {
 
 // StartExecution starts a new flow execution
 func (s *ChatService) StartExecution(flowReference, phoneNumber, staffID string) (*models.ChatbotExecution, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	
 	execution := &models.ChatbotExecution{
 		ID:            uuid.New().String(),
 		FlowReference: flowReference,
