@@ -93,8 +93,14 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 #### AI Integration
 - **OpenRouter API**: GPT-4.1 integration for intelligent responses
+- **OpenAI API**: Direct GPT-4.1 support for specific devices (SCHQ-S94, SCHQ-S12)
 - **Dynamic Mode Detection**: AUTO/SEMI-AUTO/MANUAL based on configuration
 - **Conversation Context**: Maintains chat history for coherent responses
+- **AI Conversation Management**: Complete conversation lifecycle with stage tracking
+- **Human Takeover**: Seamless transition between AI and human agents
+- **Conversation Logging**: Comprehensive message history and analytics
+- **Scheduled Follow-ups**: Automated cron-based message scheduling
+- **Response Caching**: 5-minute cache for frequently asked questions
 - **Fallback Mechanisms**: Graceful degradation when AI unavailable
 
 #### User Interface
@@ -113,6 +119,9 @@ Backend (Go) - Optimized for 3000+ Users:
 ├── MySQL 5.7 Database (Connection Pool: 200 max)
 ├── Redis Clustering (High-Availability Caching)
 ├── OpenRouter API Integration (AI with 5min Cache)
+├── OpenAI API Integration (GPT-4.1 for specific devices)
+├── AI Conversation Management (Complete lifecycle)
+├── Cron Job Processing (Scheduled follow-ups)
 ├── WebSocket Support (Real-time Communication)
 ├── JWT Authentication & Session Management
 ├── Rate Limiting (100 req/min per IP)
@@ -125,6 +134,8 @@ Performance Services:
 ├── WebSocketService (Real-time Broadcasting)
 ├── MediaService (CDN + Image Optimization)
 ├── AIService (Response Caching + Semaphore)
+├── AIWhatsappService (Conversation Management)
+├── AICronService (Scheduled Follow-ups)
 ├── RedisService (Clustering Support)
 └── QueueService (Async Message Processing)
 
@@ -205,6 +216,20 @@ src/
 │   └── use-toast.ts         # Toast notification hook
 └── database/
     └── schema.sql           # Database schema definitions
+
+internal/
+├── models/
+│   ├── ai_whatsapp.go       # AI conversation models
+│   ├── device_settings.go   # Device configuration models
+│   └── conversation_log.go  # Conversation history models
+├── repository/
+│   ├── ai_whatsapp_repository.go     # AI conversation data access
+│   └── device_settings_repository.go # Device settings data access
+├── services/
+│   ├── ai_whatsapp_service.go        # AI conversation business logic
+│   └── ai_cron_service.go            # Scheduled AI processing
+└── handlers/
+    └── ai_whatsapp_handlers.go       # AI conversation API endpoints
 ```
 
 ## 🎯 Current System Status
@@ -959,10 +984,113 @@ For detailed instructions on deploying to Railway, see [RAILWAY_DEPLOYMENT.md](.
 
 #### 📊 **Development Velocity**
 - **Issues Resolved**: 4 major issues fixed in January 2025
-- **New Features**: 6 major features added
+- **New Features**: 8 major features added (including AI conversation system)
 - **Code Quality**: 100% TypeScript coverage maintained
 - **Test Coverage**: Comprehensive manual testing completed
 - **Documentation**: README updated with latest changes
+
+## 🗄️ Database Schema - AI Conversation System
+
+### AI WhatsApp Conversations Table
+```sql
+CREATE TABLE ai_whatsapp_nodepath (
+    id_prospect INT AUTO_INCREMENT PRIMARY KEY,
+    id_staff VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    prospect_num VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    instance VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    prospect_nama VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    stage VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    date_order VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    conv_last TEXT COLLATE latin1_swedish_ci NULL,
+    conv_current TEXT COLLATE latin1_swedish_ci NULL,
+    jam VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    intro VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    human VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    catatan TEXT COLLATE latin1_swedish_ci NULL,
+    balas VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    data_image VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    conv_stage TEXT COLLATE latin1_swedish_ci NULL,
+    niche VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    bot_balas VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    keywordIklan VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    marketer VARCHAR(255) COLLATE latin1_swedish_ci NULL,
+    update_today VARCHAR(225) COLLATE latin1_swedish_ci NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### Device Settings Table
+```sql
+CREATE TABLE device_setting_nodepath (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_device VARCHAR(255) NOT NULL,
+    provider VARCHAR(100) NOT NULL,
+    api_key TEXT NOT NULL,
+    api_key_option VARCHAR(255) NULL,
+    webhook_id VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_device (id_device)
+);
+```
+
+### Conversation Log Table
+```sql
+CREATE TABLE conversation_log_nodepath (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    prospect_num VARCHAR(255) NOT NULL,
+    sender ENUM('user', 'bot') NOT NULL,
+    message TEXT NOT NULL,
+    stage VARCHAR(255) NULL,
+    ai_response JSON NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_prospect_num (prospect_num),
+    INDEX idx_created_at (created_at),
+    INDEX idx_sender (sender)
+);
+```
+
+### AI Conversation Features
+
+#### 🤖 **AI Response Processing**
+- **Multi-Model Support**: OpenRouter (default) and OpenAI (specific devices)
+- **Dynamic API Selection**: 
+  - Default: `https://openrouter.ai/api/v1/chat/completions`
+  - SCHQ-S94 & SCHQ-S12: `https://api.openai.com/v1/chat/completions`
+- **Model Selection**: Based on `api_key_option` field or GPT-4.1 for specific devices
+- **Response Format**: JSON with Stage and Response array structure
+
+#### 📝 **AI Prompt Structure**
+```json
+{
+  "model": "gpt-4.1",
+  "messages": [
+    {"role": "system", "content": "AI PROMPT NODE DATA + Instructions"},
+    {"role": "assistant", "content": "Last bot response"},
+    {"role": "user", "content": "Current user message"}
+  ],
+  "temperature": 0.67,
+  "top_p": 1,
+  "repetition_penalty": 1
+}
+```
+
+#### 🔄 **Conversation Management**
+- **Stage Tracking**: Maintains conversation flow state
+- **Human Takeover**: Toggle between AI (0) and human (1) modes
+- **Message History**: Complete conversation logging with timestamps
+- **Follow-up Scheduling**: Cron-based automated message scheduling
+- **Device Commands**: 
+  - `%` - Wablas provider commands
+  - `#` - Whacenter provider commands
+  - `cmd` - Toggle human takeover mode
+
+#### 📊 **Analytics & Monitoring**
+- **Conversation Statistics**: Total, active, and human takeover counts
+- **Message Tracking**: User vs bot message ratios
+- **Performance Metrics**: Response times and success rates
+- **Cleanup Automation**: 30-day log retention with automated cleanup
 
 ### 🚀 Quick Start
 1. **Visit**: https://nodepath-chat-production.up.railway.app/

@@ -174,3 +174,67 @@ type TestChatMessage struct {
 	Timestamp     time.Time `json:"timestamp"`
 	NodeReference string    `json:"node_reference,omitempty"`
 }
+
+// AIWhatsapp represents an AI WhatsApp conversation record
+type AIWhatsapp struct {
+	IDProspect   int             `json:"id_prospect" db:"id_prospect"`
+	IDStaff      string          `json:"id_staff" db:"id_staff"`
+	ProspectNum  string          `json:"prospect_num" db:"prospect_num"`
+	Stage        string          `json:"stage" db:"stage"`
+	DateOrder    *time.Time      `json:"date_order" db:"date_order"`
+	ConvLast     json.RawMessage `json:"conv_last" db:"conv_last"`
+	ConvCurrent  string          `json:"conv_current" db:"conv_current"`
+	Jam          string          `json:"jam" db:"jam"`
+	Intro        string          `json:"intro" db:"intro"`
+	Human        int             `json:"human" db:"human"` // 0 = AI active, 1 = human takeover
+	CatatanStaff string          `json:"catatan_staff" db:"catatan_staff"`
+	Balas        int             `json:"balas" db:"balas"`
+	DataImage    string          `json:"data_image" db:"data_image"`
+	ConvStage    string          `json:"conv_stage" db:"conv_stage"`
+	Niche        string          `json:"niche" db:"niche"`
+	BotBalas     *time.Time      `json:"bot_balas" db:"bot_balas"`
+	KeywordIklan string          `json:"keywordiklan" db:"keywordiklan"`
+	Marketer     string          `json:"marketer" db:"marketer"`
+	UpdateToday  *time.Time      `json:"update_today" db:"update_today"`
+	CreatedAt    time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at" db:"updated_at"`
+}
+
+// DeviceSettings represents device configuration for AI WhatsApp
+type DeviceSettings struct {
+	ID           string    `json:"id" db:"id"`
+	DeviceID     string    `json:"device_id" db:"device_id"`
+	APIKeyOption string    `json:"api_key_option" db:"api_key_option"` // chat_gpt_so, chat_gpt_5_mini, etc.
+	WebhookID    string    `json:"webhook_id" db:"webhook_id"`
+	Provider     string    `json:"provider" db:"provider"` // whacenter, wablas, rvsb_wasap
+	PhoneNumber  string    `json:"phone_number" db:"phone_number"`
+	APIKey       string    `json:"api_key" db:"api_key"`
+	IDDevice     string    `json:"id_device" db:"id_device"`
+	IDERP        string    `json:"id_erp" db:"id_erp"`
+	IDAdmin      string    `json:"id_admin" db:"id_admin"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// ConversationLog represents a log entry for AI conversations
+type ConversationLog struct {
+	ID          int       `json:"id" db:"id"`
+	ProspectNum string    `json:"prospect_num" db:"prospect_num"`
+	IDStaff     string    `json:"id_staff" db:"id_staff"`
+	Message     string    `json:"message" db:"message"`
+	Sender      string    `json:"sender" db:"sender"` // 'user' or 'bot'
+	Stage       string    `json:"stage" db:"stage"`
+	Timestamp   time.Time `json:"timestamp" db:"timestamp"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+}
+
+// AISettings represents AI prompt configuration
+type AISettings struct {
+	ID             string    `json:"id" db:"id"`
+	IDStaff        string    `json:"id_staff" db:"id_staff"`
+	SystemPrompt   string    `json:"system_prompt" db:"system_prompt"`
+	ClosingPrompt  string    `json:"closing_prompt" db:"closing_prompt"`
+	InstancePrompt string    `json:"instance_prompt" db:"instance_prompt"`
+	CreatedAt      time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at" db:"updated_at"`
+}
