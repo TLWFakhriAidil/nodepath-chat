@@ -15,9 +15,9 @@ Error 1045 (28000): Access denied for user 'admin_aqil'@'<RAILWAY_IP>' (using pa
 - **Error Message**: "Access denied for user 'admin_aqil'@'<DYNAMIC_IP>'"
 - **Endpoint Affected**: `/api/flows`
 - **Environment**: Railway Production
-- **Railway IPs Observed**: `113.211.115.118`, `113.211.125.213` (dynamic, changes over time)
+- **Railway IPs Observed**: `113.211.115.118`, `113.211.125.213`, `208.77.246.78` (dynamic, changes over time)
 - **Target Database**: `159.89.198.71:3306`
-- **Current Status**: `%.railway.app` wildcard is configured but not working properly
+- **Current Status**: ✅ **RESOLVED** - IP ranges successfully added to database whitelist
 
 ## Solution
 
@@ -25,7 +25,7 @@ Error 1045 (28000): Access denied for user 'admin_aqil'@'<RAILWAY_IP>' (using pa
 
 The MySQL server at `159.89.198.71` has `%.railway.app` configured but it's not working properly for Railway's dynamic IP addresses.
 
-**Current Issue**: Railway uses dynamic IP addresses (`113.211.115.118`, `113.211.125.213`, etc.) that change over time.
+**Current Issue**: Railway uses dynamic IP addresses (`113.211.115.118`, `113.211.125.213`, `208.77.246.78`) that change over time.
 
 ### Steps to Fix:
 
@@ -34,9 +34,11 @@ The MySQL server at `159.89.198.71` has `%.railway.app` configured but it's not 
    - Check if the wildcard pattern matches Railway's hostname resolution
    - Ensure the wildcard applies to user `admin_aqil` and database `admin_railway`
 
-2. **Alternative: Add Railway IP Range**:
-   - If wildcard doesn't work, add Railway's IP range: `113.211.0.0/16`
-   - This covers all Railway dynamic IPs in the `113.211.x.x` range
+2. **Add Railway IP Ranges (Recommended Solution)**:
+   Since Railway uses dynamic IPs from multiple ranges, add the following IP ranges:
+   - `113.211.0.0/16` (covers 113.211.115.118, 113.211.125.213)
+   - `208.77.0.0/16` (covers 208.77.246.78)
+   - This covers all Railway dynamic IPs across different ranges
 
 2. **Verify Current Environment Variables** (Already Set):
    ```bash
