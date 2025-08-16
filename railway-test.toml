@@ -1,0 +1,12 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "./bin/server"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[environments.production.variables]
+PORT = "8080"
+DATABASE_URL = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local"
+MYSQL_URI = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local"
