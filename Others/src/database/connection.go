@@ -20,13 +20,16 @@ var (
 	once sync.Once
 )
 
-// GetDB returns the database connection
+// GetDB returns the database connection with retry logic and SSH tunnel support
 func GetDB() *sql.DB {
 	once.Do(func() {
 		var err error
 		
 		// Check for MySQL configuration first
 		mysqlURI := os.Getenv("MYSQL_URI")
+		if mysqlURI == "" {
+			mysqlURI = os.Getenv("DATABASE_URL")
+		}
 		if mysqlURI == "" {
 			mysqlURI = os.Getenv("DB_URI")
 		}
@@ -42,30 +45,32 @@ func GetDB() *sql.DB {
 				if len(parts) == 2 {
 					userPass := parts[0]
 					hostDb := parts[1]
-					mysqlURI = userPass + "@tcp(" + strings.Replace(hostDb, "/", ")/", 1) + "?parseTime=true&charset=utf8mb4"
+					// Enhanced DSN with connection parameters for SSH tunnel support
+					mysqlURI = userPass + "@tcp(" + strings.Replace(hostDb, "/", ")/", 1) + "?parseTime=true&charset=utf8mb4&timeout=30s&readTimeout=30s&writeTimeout=30s&collation=utf8mb4_unicode_ci"
 				}
 			}
 			
-			db, err = sql.Open("mysql", mysqlURI)
+			// Establish connection with retry logic
+			db, err = connectWithRetry("mysql", mysqlURI, 5)
 		} else {
 			// Fallback to PostgreSQL
 			log.Println("Using PostgreSQL for application data")
-			db, err = sql.Open("postgres", config.DBURI)
+			db, err = connectWithRetry("postgres", config.DBURI, 5)
 		}
 		
 		if err != nil {
-			log.Fatalf("Failed to connect to database: %v", err)
+			log.Fatalf("Failed to connect to database after retries: %v", err)
 		}
 		
-		// Configure connection pool for 200+ users
-		// Optimized for 3000 devices
-		db.SetMaxOpenConns(500)     // Increased from 100
-		db.SetMaxIdleConns(100)     // Increased from 10  
-		db.SetConnMaxLifetime(5 * time.Minute)  // Reduced from 1 hour
+		// Configure connection pool for high performance (3000+ devices)
+		db.SetMaxOpenConns(500)                    // Maximum open connections
+		db.SetMaxIdleConns(100)                    // Maximum idle connections
+		db.SetConnMaxLifetime(5 * time.Minute)     // Connection lifetime
+		db.SetConnMaxIdleTime(2 * time.Minute)     // Maximum idle time
 		
-		// Test connection
-		if err := db.Ping(); err != nil {
-			log.Fatalf("Failed to ping database: %v", err)
+		// Test connection with retry
+		if err := pingWithRetry(db, 3); err != nil {
+			log.Fatalf("Failed to ping database after retries: %v", err)
 		}
 		
 		// Initialize schema - SKIP MIGRATIONS
@@ -77,10 +82,64 @@ func GetDB() *sql.DB {
 		*/
 		log.Println("Skipping schema migrations as requested")
 		
-		log.Println("Database connection established")
+		log.Println("Database connection established successfully")
 	})
 	
 	return db
+}
+
+// connectWithRetry attempts to connect to the database with retry logic
+// This is especially useful for SSH tunnel connections that may take time to establish
+func connectWithRetry(driver, dsn string, maxRetries int) (*sql.DB, error) {
+	var db *sql.DB
+	var err error
+	
+	for i := 0; i < maxRetries; i++ {
+		log.Printf("Attempting database connection (attempt %d/%d)...", i+1, maxRetries)
+		
+		db, err = sql.Open(driver, dsn)
+		if err != nil {
+			log.Printf("Failed to open database connection: %v", err)
+			if i < maxRetries-1 {
+				waitTime := time.Duration(i+1) * 2 * time.Second
+				log.Printf("Retrying in %v...", waitTime)
+				time.Sleep(waitTime)
+			}
+			continue
+		}
+		
+		// Test the connection
+		if err = db.Ping(); err != nil {
+			log.Printf("Failed to ping database: %v", err)
+			db.Close()
+			if i < maxRetries-1 {
+				waitTime := time.Duration(i+1) * 2 * time.Second
+				log.Printf("Retrying in %v...", waitTime)
+				time.Sleep(waitTime)
+			}
+			continue
+		}
+		
+		log.Printf("Database connection established on attempt %d", i+1)
+		return db, nil
+	}
+	
+	return nil, fmt.Errorf("failed to connect to database after %d attempts: %v", maxRetries, err)
+}
+
+// pingWithRetry tests database connectivity with retry logic
+func pingWithRetry(db *sql.DB, maxRetries int) error {
+	for i := 0; i < maxRetries; i++ {
+		if err := db.Ping(); err != nil {
+			log.Printf("Database ping failed (attempt %d/%d): %v", i+1, maxRetries, err)
+			if i < maxRetries-1 {
+				time.Sleep(time.Duration(i+1) * time.Second)
+			}
+			continue
+		}
+		return nil
+	}
+	return fmt.Errorf("database ping failed after %d attempts", maxRetries)
 }
 // InitializeSchema creates tables if they don't exist
 func InitializeSchema() error {

@@ -48,7 +48,34 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### Server Stability Improvements
+### 🔒 Secure Database Connection via SSH Tunnel (Latest)
+
+**Problem Solved**: Secure connection to external MySQL database at `159.89.198.71:3306` without exposing static IPs.
+
+**Solution**: Implemented SSH tunnel container on Railway for secure, encrypted database access.
+
+**Benefits**:
+- ✅ No static IP required (avoids Railway Pro plan)
+- ✅ Encrypted SSH tunnel connection
+- ✅ Enhanced security with SSH key authentication
+- ✅ Connection retry logic for reliability
+- ✅ Cost-effective ($5-10/month vs $20+ for Railway Pro)
+
+**Files Added**:
+- `Dockerfile.tunnel` - SSH tunnel container configuration
+- `docker-compose.ssh-tunnel.yml` - Local development setup
+- `railway-deploy.yml` - Railway deployment configuration
+- `ssh-key-setup.ps1` - Windows SSH key generation script
+- `ssh-key-setup.sh` - Linux/Mac SSH key generation script
+- `setup-ssh-tunnel.md` - Comprehensive setup guide
+
+**Database Connection Enhanced**:
+- Added connection retry logic with exponential backoff
+- Enhanced connection pooling for SSH tunnel support
+- Improved error handling and logging
+- Support for both direct and tunneled connections
+
+```### Server Stability Improvements
 - **Enhanced Error Handling**: Added graceful database connection failure handling
 - **Nil Database Protection**: Implemented nil database checks across all services to prevent silent crashes
 - **Service Resilience**: Modified FlowService, ChatService, and DeviceSettingsService to handle database unavailability

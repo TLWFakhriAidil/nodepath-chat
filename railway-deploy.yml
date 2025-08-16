@@ -1,0 +1,184 @@
+# Railway deployment configuration for SSH tunnel setup
+# This file configures both the SSH tunnel service and main application
+
+version: '1'
+
+services:
+  # SSH Tunnel Service for secure MySQL connection
+  ssh-tunnel:
+    name: "mysql-ssh-tunnel"
+    build:
+      dockerfile: "Dockerfile.tunnel"
+    
+    environment:
+      # SSH server configuration (replace with your values)
+      TUNNEL_HOST: "your-jump-server.com"  # Replace with your SSH server
+      TUNNEL_PORT: "22"
+      TUNNEL_USER: "your-ssh-username"     # Replace with your SSH username
+      
+      # Tunnel configuration
+      LOCAL_PORT: "3307"
+      REMOTE_HOST: "159.89.198.71"
+      REMOTE_PORT: "3306"
+      
+      # SSH private key (set this in Railway secrets)
+      SSH_PRIVATE_KEY: "$SSH_PRIVATE_KEY"
+    
+    # Resource allocation
+    resources:
+      memory: "256Mi"
+      cpu: "0.25"
+    
+    # Health check
+    healthcheck:
+      path: "/health"
+      port: 3307
+      interval: 30
+      timeout: 10
+      retries: 3
+    
+    # Networking
+    networking:
+      private: true
+      ports:
+        - 3307
+
+  # Main Application Service
+  app:
+    name: "nodepath-chat-app"
+    build:
+      dockerfile: "Dockerfile"
+    
+    environment:
+      # Database connection through SSH tunnel
+      DATABASE_URL: "mysql://admin_aqil:admin_aqil@mysql-ssh-tunnel.railway.internal:3307/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+      MYSQL_URI: "mysql://admin_aqil:admin_aqil@mysql-ssh-tunnel.railway.internal:3307/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+      
+      # OpenRouter API configuration
+      OPENROUTER_DEFAULT_KEY: "$OPENROUTER_DEFAULT_KEY"
+      
+      # Application settings
+      PORT: "8080"
+      APP_ENV: "production"
+      
+      # High-performance settings for 3000+ devices
+      MAX_CONCURRENT_USERS: "3000"
+      WEBSOCKET_ENABLED: "true"
+      
+      # Database connection settings
+      DB_MAX_OPEN_CONNS: "500"
+      DB_MAX_IDLE_CONNS: "100"
+      DB_CONN_MAX_LIFETIME: "5m"
+    
+    # Resource allocation for high performance
+    resources:
+      memory: "1Gi"
+      cpu: "1"
+    
+    # Dependencies - ensure tunnel starts first
+    depends_on:
+      - ssh-tunnel
+    
+    # Health check
+    healthcheck:
+      path: "/health"
+      port: 8080
+      interval: 30
+      timeout: 10
+      retries: 3
+      start_period: 60  # Give time for tunnel to establish
+    
+    # Networking
+    networking:
+      public: true
+      private: true
+      ports:
+        - 8080
+
+# Global configuration
+config:
+  # Deployment strategy
+  strategy: "rolling"
+  
+  # Environment variables that apply to all services
+  global_env:
+    TZ: "UTC"
+    LOG_LEVEL: "info"
+  
+  # Secrets (set these in Railway dashboard)
+  secrets:
+    - SSH_PRIVATE_KEY      # SSH private key for tunnel authentication
+    - OPENROUTER_DEFAULT_KEY  # OpenRouter API key
+  
+  # Networking
+  networking:
+    # Enable private networking between services
+    private_networking: true
+    
+    # Custom domains (optional)
+    domains:
+      - service: app
+        domain: "your-app-domain.com"  # Replace with your domain
+
+# Deployment hooks
+hooks:
+  # Pre-deployment validation
+  pre_deploy:
+    - name: "validate-ssh-key"
+      command: "echo 'Validating SSH configuration...'"
+    
+    - name: "test-mysql-connectivity"
+      command: "echo 'Testing MySQL connectivity...'"
+  
+  # Post-deployment verification
+  post_deploy:
+    - name: "verify-tunnel"
+      command: "echo 'Verifying SSH tunnel...'"
+    
+    - name: "verify-database"
+      command: "echo 'Verifying database connection...'"
+
+# Monitoring and alerts
+monitoring:
+  # Health checks
+  health_checks:
+    - service: ssh-tunnel
+      endpoint: "/health"
+      interval: 30
+    
+    - service: app
+      endpoint: "/health"
+      interval: 30
+  
+  # Alerts
+  alerts:
+    - name: "tunnel-down"
+      condition: "ssh-tunnel health check fails"
+      action: "restart ssh-tunnel service"
+    
+    - name: "app-down"
+      condition: "app health check fails"
+      action: "restart app service"
+    
+    - name: "high-memory"
+      condition: "memory usage > 80%"
+      action: "scale up resources"
+
+# Scaling configuration
+scaling:
+  # SSH tunnel should have only one instance
+  ssh-tunnel:
+    min_replicas: 1
+    max_replicas: 1
+  
+  # Main app can scale based on load
+  app:
+    min_replicas: 1
+    max_replicas: 3
+    
+    # Auto-scaling rules
+    auto_scaling:
+      cpu_threshold: 70
+      memory_threshold: 80
+      scale_up_cooldown: 300
+      scale_down_cooldown: 600

@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # SSH Tunnel service for secure MySQL connection
+  ssh-tunnel:
+    image: cagataygurturk/docker-ssh-tunnel:latest
+    container_name: mysql-ssh-tunnel
+    environment:
+      # SSH connection details (replace with your SSH server details)
+      TUNNEL_HOST: your-ssh-server.com  # Replace with your SSH server
+      TUNNEL_PORT: 22
+      TUNNEL_USER: your-ssh-user         # Replace with your SSH username
+      
+      # Local port mapping - MySQL will be available on localhost:3307
+      LOCAL_PORT: 3307
+      
+      # Remote MySQL server details
+      REMOTE_HOST: 159.89.198.71
+      REMOTE_PORT: 3306
+      
+      # SSH key will be mounted as volume
+      SSH_KEY: /ssh-keys/id_rsa
+    
+    volumes:
+      # Mount SSH private key (you'll need to create this)
+      - ./ssh-keys:/ssh-keys:ro
+    
+    ports:
+      # Expose MySQL tunnel port
+      - "3307:3307"
+    
+    restart: unless-stopped
+    
+    # Health check to ensure tunnel is working
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "3307"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Main application service
+  app:
+    build: .
+    container_name: nodepath-chat-app
+    environment:
+      # Use tunneled MySQL connection
+      DATABASE_URL: "mysql://admin_aqil:admin_aqil@ssh-tunnel:3307/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+      MYSQL_URI: "mysql://admin_aqil:admin_aqil@ssh-tunnel:3307/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+      
+      # OpenRouter API configuration
+      OPENROUTER_DEFAULT_KEY: "${OPENROUTER_DEFAULT_KEY}"
+      
+      # Application settings
+      PORT: 8080
+      APP_ENV: production
+    
+    ports:
+      - "8080:8080"
+    
+    depends_on:
+      ssh-tunnel:
+        condition: service_healthy
+    
+    restart: unless-stopped
+    
+    # Health check for the application
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  ssh-keys:
+    driver: local

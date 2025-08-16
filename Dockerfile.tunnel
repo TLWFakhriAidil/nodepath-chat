@@ -1,0 +1,113 @@
+# Dockerfile for SSH tunnel service on Railway
+# This creates a secure tunnel to the external MySQL database
+
+FROM cagataygurturk/docker-ssh-tunnel:latest
+
+# Install additional tools for health checks and debugging
+RUN apk add --no-cache \
+    curl \
+    netcat-openbsd \
+    openssh-client \
+    bash
+
+# Create directories for SSH keys and scripts
+RUN mkdir -p /app/ssh-keys /app/scripts
+
+# Copy SSH key setup script
+COPY <<EOF /app/scripts/setup-ssh-key.sh
+#!/bin/bash
+set -e
+
+# Create SSH key from environment variable if provided
+if [ ! -z "\$SSH_PRIVATE_KEY" ]; then
+    echo "Setting up SSH private key from environment..."
+    echo "\$SSH_PRIVATE_KEY" > /app/ssh-keys/id_rsa
+    chmod 600 /app/ssh-keys/id_rsa
+    echo "SSH private key configured successfully"
+else
+    echo "Warning: SSH_PRIVATE_KEY environment variable not set"
+    echo "Please add your SSH private key to Railway secrets"
+fi
+
+# Test SSH connection
+if [ -f "/app/ssh-keys/id_rsa" ]; then
+    echo "Testing SSH connection..."
+    ssh -i /app/ssh-keys/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+        \$TUNNEL_USER@\$TUNNEL_HOST "echo 'SSH connection successful'"
+fi
+EOF
+
+# Copy health check script
+COPY <<EOF /app/scripts/health-check.sh
+#!/bin/bash
+# Health check script for SSH tunnel
+
+# Check if local tunnel port is listening
+if nc -z localhost \${LOCAL_PORT:-3307}; then
+    echo "Tunnel port \${LOCAL_PORT:-3307} is accessible"
+    exit 0
+else
+    echo "Tunnel port \${LOCAL_PORT:-3307} is not accessible"
+    exit 1
+fi
+EOF
+
+# Copy enhanced entrypoint script
+COPY <<EOF /app/entrypoint.sh
+#!/bin/bash
+set -e
+
+echo "Starting SSH tunnel service for MySQL connection..."
+echo "Tunnel: \$TUNNEL_USER@\$TUNNEL_HOST:\$TUNNEL_PORT"
+echo "Local port: \$LOCAL_PORT"
+echo "Remote: \$REMOTE_HOST:\$REMOTE_PORT"
+
+# Setup SSH key
+/app/scripts/setup-ssh-key.sh
+
+# Set default values
+export TUNNEL_PORT=\${TUNNEL_PORT:-22}
+export LOCAL_PORT=\${LOCAL_PORT:-3307}
+export REMOTE_PORT=\${REMOTE_PORT:-3306}
+export SSH_KEY=\${SSH_KEY:-/app/ssh-keys/id_rsa}
+
+# Validate required environment variables
+if [ -z "\$TUNNEL_HOST" ] || [ -z "\$TUNNEL_USER" ] || [ -z "\$REMOTE_HOST" ]; then
+    echo "Error: Missing required environment variables"
+    echo "Required: TUNNEL_HOST, TUNNEL_USER, REMOTE_HOST"
+    exit 1
+fi
+
+# Start SSH tunnel with retry logic
+echo "Starting SSH tunnel..."
+while true; do
+    ssh -i \$SSH_KEY \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o ServerAliveInterval=60 \
+        -o ServerAliveCountMax=3 \
+        -o ExitOnForwardFailure=yes \
+        -N \
+        -L \$LOCAL_PORT:\$REMOTE_HOST:\$REMOTE_PORT \
+        \$TUNNEL_USER@\$TUNNEL_HOST
+    
+    echo "SSH tunnel disconnected. Retrying in 5 seconds..."
+    sleep 5
+done
+EOF
+
+# Make scripts executable
+RUN chmod +x /app/scripts/*.sh /app/entrypoint.sh
+
+# Set working directory
+WORKDIR /app
+
+# Expose the local tunnel port
+EXPOSE 3307
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD /app/scripts/health-check.sh
+
+# Use custom entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
