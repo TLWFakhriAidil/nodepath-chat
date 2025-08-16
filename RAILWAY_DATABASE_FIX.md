@@ -21,24 +21,62 @@ Error 1045 (28000): Access denied for user 'admin_aqil'@'<RAILWAY_IP>' (using pa
 
 ## Solution
 
-### Required Action: Fix Railway Wildcard Access
+### Solution Options
 
-The MySQL server at `159.89.198.71` has `%.railway.app` configured but it's not working properly for Railway's dynamic IP addresses.
+**Current Status**: ✅ **RESOLVED** using IP range whitelisting, but wildcard hostname is a better long-term solution.
+
+#### Option 1: Wildcard Hostname (Recommended for Long-term)
+
+MySQL supports wildcard hostnames using the `%` character. <mcreference link="https://dev.mysql.com/doc/refman/5.7/en/account-names.html" index="1">1</mcreference> This is the cleanest solution as it eliminates the need to manage dynamic IP addresses.
+
+**Implementation**:
+```sql
+-- Grant access using wildcard hostname
+GRANT ALL PRIVILEGES ON admin_railway.* TO 'admin_aqil'@'%.railway.app' IDENTIFIED BY 'admin_aqil';
+FLUSH PRIVILEGES;
+```
+
+**Benefits**:
+- No need to track Railway's changing IP addresses
+- Automatically covers all Railway deployment IPs
+- More maintainable and future-proof
+- Follows MySQL's standard wildcard pattern matching <mcreference link="https://dev.mysql.com/doc/refman/5.7/en/account-names.html" index="1">1</mcreference>
+
+**Requirements**:
+- Railway deployments must resolve to `*.railway.app` hostnames
+- MySQL server must support reverse DNS lookup
+- Ensure no conflicting user entries exist <mcreference link="https://serverfault.com/questions/122472/allowing-wildcard-access-on-mysql-db-getting-error-access-denied-for-use" index="2">2</mcreference>
+
+#### Option 2: IP Range Whitelisting (Current Implementation)
+
+Since Railway uses dynamic IPs from multiple ranges, the following IP ranges have been added:
+- `113.211.0.0/16` (covers 113.211.115.118, 113.211.125.213)
+- `208.77.0.0/16` (covers 208.77.246.78)
+- This covers all Railway dynamic IPs across different ranges
 
 **Current Issue**: Railway uses dynamic IP addresses (`113.211.115.118`, `113.211.125.213`, `208.77.246.78`) that change over time.
 
-### Steps to Fix:
+### Steps to Implement Wildcard Solution:
 
-1. **Verify Wildcard Configuration**:
-   - Confirm `%.railway.app` is properly configured in database access management
-   - Check if the wildcard pattern matches Railway's hostname resolution
-   - Ensure the wildcard applies to user `admin_aqil` and database `admin_railway`
+1. **Remove Current IP-based Entries**:
+   ```sql
+   -- Remove IP-based access entries
+   DELETE FROM mysql.user WHERE User='admin_aqil' AND Host LIKE '113.211.%';
+   DELETE FROM mysql.user WHERE User='admin_aqil' AND Host LIKE '208.77.%';
+   ```
 
-2. **Add Railway IP Ranges (Recommended Solution)**:
-   Since Railway uses dynamic IPs from multiple ranges, add the following IP ranges:
-   - `113.211.0.0/16` (covers 113.211.115.118, 113.211.125.213)
-   - `208.77.0.0/16` (covers 208.77.246.78)
-   - This covers all Railway dynamic IPs across different ranges
+2. **Add Wildcard Hostname Entry**:
+   ```sql
+   -- Add wildcard hostname access
+   GRANT ALL PRIVILEGES ON admin_railway.* TO 'admin_aqil'@'%.railway.app' IDENTIFIED BY 'admin_aqil';
+   FLUSH PRIVILEGES;
+   ```
+
+3. **Verify Configuration**:
+   ```sql
+   -- Check user entries
+   SELECT User, Host FROM mysql.user WHERE User='admin_aqil';
+   ```
 
 2. **Verify Current Environment Variables** (Already Set):
    ```bash
