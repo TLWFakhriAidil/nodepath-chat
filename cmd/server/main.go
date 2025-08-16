@@ -3,169 +3,295 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
-	"net/http"
 	"os"
-	"strings"
+	"os/signal"
+	"syscall"
+	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/redis/go-redis/v9"
+	"github.com/gofiber/contrib/websocket"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/template/html/v2"
+	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
+
+	"nodepath-chat/internal/config"
+	"nodepath-chat/internal/database"
+	"nodepath-chat/internal/handlers"
+	"nodepath-chat/internal/services"
+	"nodepath-chat/internal/whatsapp"
 )
 
-// GetDSN constructs the database connection string from environment variables
-// This replicates the exact logic from internal/config/config.go
-func GetDSN() string {
-	// Priority 1: Use DATABASE_URL if available
-	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
-		// Convert mysql://user:pass@host:port/db to user:pass@tcp(host:port)/db
-		if strings.HasPrefix(databaseURL, "mysql://") {
-			// Remove mysql:// prefix
-			dsn := strings.TrimPrefix(databaseURL, "mysql://")
+func main() {
+	// Load environment variables from .env file if it exists
+	if err := godotenv.Load(); err != nil {
+		logrus.Println("No .env file found, using environment variables")
+	}
+
+	// Load configuration
+	cfg := config.Load()
+
+	// Initialize database (skip if DATABASE_URL is empty or connection fails)
+	var db *sql.DB
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		logrus.Warn("DATABASE_URL is empty, running without database")
+	} else {
+		var err error
+		db, err = database.Initialize(cfg)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to initialize database, continuing without database")
+			db = nil
+		} else {
+			logrus.Info("Database initialized successfully")
 			
-			// Find the @ symbol that separates credentials from host
-			parts := strings.Split(dsn, "@")
-			if len(parts) >= 2 {
-				credentials := parts[0]
-				hostAndDB := parts[1]
-				
-				// Split host:port/database
-				hostParts := strings.Split(hostAndDB, "/")
-				if len(hostParts) >= 2 {
-					hostPort := hostParts[0]
-					database := hostParts[1]
-					
-					// Remove query parameters from database name
-					if queryIndex := strings.Index(database, "?"); queryIndex != -1 {
-						queryParams := database[queryIndex:]
-						database = database[:queryIndex]
-						return fmt.Sprintf("%s@tcp(%s)/%s%s", credentials, hostPort, database, queryParams)
-					} else {
-						return fmt.Sprintf("%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", credentials, hostPort, database)
-					}
-				}
+			// Run migrations
+			if err := database.RunMigrations(db); err != nil {
+				logrus.WithError(err).Warn("Failed to run migrations, continuing anyway")
+			} else {
+				logrus.Info("Database migrations completed")
 			}
 		}
-		return databaseURL
+	}
+
+	// Initialize Redis with clustering support
+	redisClient := services.InitializeRedis(cfg)
+	logrus.Info("Redis initialized successfully")
+
+	// Initialize performance-optimized services
+	// Handle Redis client for services that need concrete type
+	var concreteRedisClient *redis.Client
+	if redisClient != nil {
+		var ok bool
+		concreteRedisClient, ok = redisClient.(*redis.Client)
+		if !ok {
+			logrus.Warn("Redis client type assertion failed, using nil client")
+			concreteRedisClient = nil
+		}
+	} else {
+		logrus.Warn("Redis not available, services will run without caching")
 	}
 	
-	// Priority 2: Fallback to individual environment variables
-	host := getEnvWithDefault("MYSQL_HOST", "159.89.198.71")
-	port := getEnvWithDefault("MYSQL_PORT", "3306")
-	user := getEnvWithDefault("MYSQL_USER", "admin_aqil")
-	password := getEnvWithDefault("MYSQL_PASSWORD", "admin_aqil")
-	database := getEnvWithDefault("MYSQL_DATABASE", "admin_railway")
+	flowService := services.NewFlowService(db, concreteRedisClient)
+	chatService := services.NewChatService(db, concreteRedisClient)
+	aiService := services.NewAIService(cfg)
+	queueService := services.NewQueueService(redisClient)
+	deviceSettingsService := services.NewDeviceSettingsService(db)
 	
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		user, password, host, port, database)
+	// Initialize WebSocket service for real-time communication
+	websocketService := services.NewWebSocketService(cfg.MaxConcurrentUsers)
+	logrus.Info("WebSocket service initialized for real-time messaging")
+	
+	// Initialize media service with CDN support
+	mediaService := services.NewMediaService(cfg.CDNEnabled, cfg.CDNBaseURL, "./media")
+	logrus.Info("Media service initialized with CDN support")
+
+	// Initialize WhatsApp service with multi-device support
+	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, websocketService)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
+	}
+
+	// Initialize handlers with all services
+	handlers := handlers.NewHandlers(
+		flowService,
+		chatService,
+		aiService,
+		queueService,
+		whatsappService,
+		deviceSettingsService,
+		websocketService,
+		mediaService,
+	)
+
+	// Initialize HTML template engine
+	engine := html.New("./templates", ".html")
+	engine.Reload(cfg.AppEnv == "development")
+	
+	// Add template functions
+	engine.AddFunc("now", func() time.Time {
+		return time.Now()
+	})
+
+	// Create Fiber app with performance optimizations
+	app := fiber.New(fiber.Config{
+		Views:        engine,
+		ErrorHandler: customErrorHandler,
+		BodyLimit:    50 * 1024 * 1024, // 50MB for media files
+		ReadTimeout:  30 * time.Second,  // Increased for large uploads
+		WriteTimeout: 30 * time.Second,  // Increased for large downloads
+		IdleTimeout:  120 * time.Second, // Keep connections alive longer
+		Concurrency:  cfg.MaxConcurrentUsers * 2, // Handle high concurrency
+	})
+
+	// Performance and security middleware
+	app.Use(recover.New())
+	
+	// Rate limiting for API protection
+	app.Use(limiter.New(limiter.Config{
+		Max:        100, // 100 requests per minute per IP
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP() // Rate limit by IP
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Rate limit exceeded",
+			})
+		},
+	}))
+	
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders: "Origin,Content-Type,Accept,Authorization,X-Device-ID",
+		AllowCredentials: false, // Set to false when using wildcard origins
+	}))
+
+	if cfg.AppEnv == "development" {
+		app.Use(logger.New(logger.Config{
+			Format: "[${time}] ${status} - ${method} ${path} (${latency}) - ${ip}\n",
+		}))
+	}
+
+	// Health check endpoint with performance metrics
+	app.Get("/healthz", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"status":              "ok",
+			"time":                time.Now().Unix(),
+			"websocket_connections": websocketService.GetConnectionCount(),
+			"max_concurrent_users": cfg.MaxConcurrentUsers,
+			"cdn_enabled":          cfg.CDNEnabled,
+		})
+	})
+
+	// WebSocket endpoint for real-time communication
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		// Check if connection is a WebSocket upgrade
+		if websocket.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+	app.Get("/ws", websocketService.HandleWebSocket)
+
+	// Media endpoints for file upload and serving
+	media := app.Group("/media")
+	media.Post("/upload", func(c *fiber.Ctx) error {
+		file, err := c.FormFile("file")
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "No file uploaded",
+			})
+		}
+		
+		result, err := mediaService.UploadFile(file)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		
+		return c.JSON(result)
+	})
+	
+	media.Get("/:filename", func(c *fiber.Ctx) error {
+		filename := c.Params("filename")
+		data, mimeType, err := mediaService.ServeFile(filename)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "File not found",
+			})
+		}
+		
+		c.Set("Content-Type", mimeType)
+		c.Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+		return c.Send(data)
+	})
+	
+	media.Get("/thumbnails/:filename", func(c *fiber.Ctx) error {
+		filename := c.Params("filename")
+		data, mimeType, err := mediaService.ServeFile("thumbnails/" + filename)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Thumbnail not found",
+			})
+		}
+		
+		c.Set("Content-Type", mimeType)
+		c.Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+		return c.Send(data)
+	})
+
+	// Setup API routes
+	api := app.Group("/api")
+	handlers.SetupRoutes(api)
+
+	// Static files for React app (after API routes)
+	app.Static("/", "./dist")
+	app.Static("/static", "./static") // Keep for backward compatibility
+
+	// Catch-all route for React Router (SPA)
+	app.Get("/*", func(c *fiber.Ctx) error {
+		return c.SendFile("./dist/index.html")
+	})
+
+	// Start background services
+	go whatsappService.StartQueueProcessor()
+	go func() {
+		for {
+			if err := queueService.ProcessDelayedMessages(); err != nil {
+				logrus.WithError(err).Error("Error processing delayed messages")
+			}
+			time.Sleep(30 * time.Second)
+		}
+	}()
+
+	// Graceful shutdown
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		logrus.Info("Shutting down server...")
+		whatsappService.Disconnect()
+		app.Shutdown()
+	}()
+
+	// Start server
+	logrus.Infof("Server starting on port %d", cfg.Port)
+	if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
+		logrus.WithError(err).Fatal("Failed to start server")
+	}
 }
 
-func getEnvWithDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
+func customErrorHandler(c *fiber.Ctx, err error) error {
+	code := fiber.StatusInternalServerError
 
-func main() {
-	// Start HTTP server for Railway deployment testing
-	http.HandleFunc("/test-db", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		
-		// Get DSN
-		dsn := GetDSN()
-		fmt.Fprintf(w, "Railway Database Connection Test\n")
-		fmt.Fprintf(w, "================================\n\n")
-		fmt.Fprintf(w, "DSN: %s\n\n", dsn)
-		
-		// Test database connection
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			fmt.Fprintf(w, "❌ Failed to open database: %v\n", err)
-			return
-		}
-		defer db.Close()
-		
-		err = db.Ping()
-		if err != nil {
-			fmt.Fprintf(w, "❌ Failed to ping database: %v\n", err)
-			fmt.Fprintf(w, "\nThis error indicates Railway's IP is not whitelisted.\n")
-			fmt.Fprintf(w, "Please check your database access management and add Railway's IP range.\n")
-			return
-		}
-		
-		fmt.Fprintf(w, "✅ Database connection successful!\n")
-		
-		// Test a simple query
-		var version string
-		err = db.QueryRow("SELECT VERSION()").Scan(&version)
-		if err != nil {
-			fmt.Fprintf(w, "❌ Failed to query database: %v\n", err)
-			return
-		}
-		
-		fmt.Fprintf(w, "✅ Database query successful!\n")
-		fmt.Fprintf(w, "MySQL Version: %s\n", version)
-		
-		// Test if we can access the admin_railway database
-		var dbName string
-		err = db.QueryRow("SELECT DATABASE()").Scan(&dbName)
-		if err != nil {
-			fmt.Fprintf(w, "❌ Failed to get current database: %v\n", err)
-			return
-		}
-		
-		fmt.Fprintf(w, "✅ Current database: %s\n", dbName)
-		fmt.Fprintf(w, "\n🎉 All database tests passed! Railway can access the database.\n")
-	})
-	
-	http.HandleFunc("/api/flows", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		
-		// Test database connection for flows endpoint
-		dsn := GetDSN()
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, `{"success":false,"error":"Failed to open database: %v"}`, err)
-			return
-		}
-		defer db.Close()
-		
-		err = db.Ping()
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, `{"success":false,"error":"database not available: %v"}`, err)
-			return
-		}
-		
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"success":true,"message":"Database connection successful","flows":[]}`)
-	})
-	
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, `
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<title>Railway Database Test</title>
-		</head>
-		<body>
-			<h1>Railway Database Connection Test</h1>
-			<p><a href="/test-db">Test Database Connection</a></p>
-			<p><a href="/api/flows">Test API Flows Endpoint</a></p>
-		</body>
-		</html>
-		`)
-	})
-	
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	if e, ok := err.(*fiber.Error); ok {
+		code = e.Code
 	}
-	
-	fmt.Printf("🚀 Starting Railway Database Test Server on port %s...\n", port)
-	fmt.Printf("Visit /test-db to test database connection\n")
-	fmt.Printf("Visit /api/flows to test the flows endpoint\n")
-	
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+
+	// Log error
+	logrus.Errorf("Error %d: %v", code, err)
+
+	// Return JSON error for API routes
+	if c.Path() != "" && len(c.Path()) >= 4 && c.Path()[:4] == "/api" {
+		return c.Status(code).JSON(fiber.Map{
+			"error":   true,
+			"message": err.Error(),
+			"code":    code,
+		})
+	}
+
+	// Return error page for web routes
+	return c.Status(code).Render("error", fiber.Map{
+		"Title":   fmt.Sprintf("Error %d", code),
+		"Code":    code,
+		"Message": err.Error(),
+	})
 }
