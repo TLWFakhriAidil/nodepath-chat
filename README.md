@@ -595,10 +595,17 @@ User Action → Flow Builder → Validation → Save Attempt
 
 ## 🗄️ Database Schema & Status
 
+### 🟡 **RAILWAY DEPLOYMENT FIX REQUIRED**
+- **Issue**: Railway deployment configured for non-existent SSH tunnel service
+- **Error**: "database not available" in `/api/flows` endpoint
+- **Solution**: Update Railway environment variables to use direct connection
+- **Fix Guide**: See `RAILWAY_DATABASE_FIX.md` for detailed instructions
+- **Status**: ⚠️ Requires Railway dashboard configuration update
+
 ### 🟢 **PRODUCTION DATABASE STATUS**
 - **Host**: 159.89.198.71:3306
 - **Database**: admin_railway
-- **Connection**: ✅ Stable and operational
+- **Connection**: ✅ Stable and operational (local testing confirmed)
 - **Performance**: 99.9% success rate
 - **Backup**: ✅ Automated daily backups
 - **Migration Status**: ✅ All migrations applied successfully
