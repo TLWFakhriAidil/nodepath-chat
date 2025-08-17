@@ -15,7 +15,7 @@ import (
 // DatabaseStatus represents the database connection status
 type DatabaseStatus struct {
 	Connected    bool   `json:"connected"`
-	DatabaseURL  string `json:"database_url,omitempty"`
+	MySQLURI     string `json:"mysql_uri,omitempty"`
 	DSN          string `json:"dsn,omitempty"`
 	Error        string `json:"error,omitempty"`
 	MySQLVersion string `json:"mysql_version,omitempty"`
@@ -67,18 +67,18 @@ func testDatabaseConnection() DatabaseStatus {
 		Message:   "Database connection test",
 	}
 	
-	// Get DATABASE_URL from environment
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		status.Error = "DATABASE_URL environment variable is not set"
-		status.Message = "DATABASE_URL not found in Railway environment"
+	// Get MYSQL_URI from environment
+	mysqlURI := os.Getenv("MYSQL_URI")
+	if mysqlURI == "" {
+		status.Error = "MYSQL_URI environment variable is not set"
+		status.Message = "MYSQL_URI not found in Railway environment"
 		return status
 	}
 	
-	status.DatabaseURL = databaseURL
+	status.MySQLURI = mysqlURI
 	
 	// Convert to proper DSN format
-	dsn := convertMySQLURL(databaseURL)
+	dsn := convertMySQLURL(mysqlURI)
 	status.DSN = dsn
 	
 	// Test database connection

@@ -12,7 +12,6 @@ services:
     
     environment:
       # Direct database connection using Railway's static outbound IP (208.77.246.15)
-      DATABASE_URL: "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
       MYSQL_URI: "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
       
       # OpenRouter API configuration

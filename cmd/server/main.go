@@ -35,11 +35,11 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
-	// Initialize database (skip if DATABASE_URL is empty or connection fails)
+	// Initialize database (skip if MYSQL_URI is empty or connection fails)
 	var db *sql.DB
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		logrus.Warn("DATABASE_URL is empty, running without database")
+	mysqlURI := os.Getenv("MYSQL_URI")
+	if mysqlURI == "" {
+		logrus.Warn("MYSQL_URI is empty, running without database")
 	} else {
 		var err error
 		db, err = database.Initialize(cfg)

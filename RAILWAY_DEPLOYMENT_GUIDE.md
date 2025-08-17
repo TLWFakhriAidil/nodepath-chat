@@ -115,17 +115,16 @@ powershell -ExecutionPolicy Bypass -File test_with_railway_env.ps1
 
 ### Current Configuration (railway-deploy.yml)
 ```yaml
-DATABASE_URL: mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
 MYSQL_URI: mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
 ```
 
 ### Recommended Configuration
 ```yaml
-# Use only DATABASE_URL (your app already supports this)
-DATABASE_URL: mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
+# Use only MYSQL_URI (exclusive database connection)
+MYSQL_URI: mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
 
-# Remove MYSQL_URI to avoid confusion
-# MYSQL_URI: (remove this line)
+# DATABASE_URL is no longer used
+# DATABASE_URL: (removed for simplicity)
 ```
 
 ## Verification Steps

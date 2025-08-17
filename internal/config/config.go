@@ -12,8 +12,8 @@ type Config struct {
 	Port   int
 	AppEnv string
 
-	// Database configuration - Railway provides DATABASE_URL
-	DatabaseURL string
+	// Database configuration
+	MySQLURI    string // Primary MySQL connection URI
 
 	// Redis configuration
 	RedisURL          string
@@ -47,8 +47,8 @@ func Load() *Config {
 		Port:   getEnvAsInt("PORT", 8080),
 		AppEnv: getEnv("APP_ENV", "development"),
 
-		// Database configuration - Railway provides DATABASE_URL
-		DatabaseURL: getEnv("DATABASE_URL", ""),
+		// Database configuration
+		MySQLURI:    getEnv("MYSQL_URI", ""),    // Primary MySQL connection
 
 		// Redis configuration with clustering support
 		RedisURL:          getEnv("REDIS_URL", ""),
@@ -78,18 +78,17 @@ func Load() *Config {
 	return cfg
 }
 
-// GetDSN returns the MySQL DSN connection string from Railway's DATABASE_URL
-// Railway provides DATABASE_URL in the format: mysql://user:password@host:port/database
+// GetDSN returns the MySQL DSN connection string
+// Format: mysql://user:password@host:port/database
 func (c *Config) GetDSN() string {
-	// Use Railway's DATABASE_URL environment variable
-	if c.DatabaseURL == "" {
-		return "" // Return empty if no DATABASE_URL provided
+	if c.MySQLURI == "" {
+		return "" // Return empty if no database URL provided
 	}
 	
 	// Convert mysql:// to proper DSN format if needed
-	if strings.HasPrefix(c.DatabaseURL, "mysql://") {
+	if strings.HasPrefix(c.MySQLURI, "mysql://") {
 		// Remove mysql:// prefix and add tcp() wrapper
-		dsn := strings.TrimPrefix(c.DatabaseURL, "mysql://")
+		dsn := strings.TrimPrefix(c.MySQLURI, "mysql://")
 		// Parse user:password@host:port/database format
 		parts := strings.Split(dsn, "/")
 		if len(parts) >= 2 {
@@ -113,7 +112,7 @@ func (c *Config) GetDSN() string {
 	}
 	
 	// Return as-is if already in proper format
-	return c.DatabaseURL
+	return c.MySQLURI
 }
 
 // IsProduction returns true if the app is running in production

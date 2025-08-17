@@ -11,13 +11,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Initialize creates and returns a database connection
+// Initialize creates and returns a database connection using MYSQL_URI exclusively
 func Initialize(cfg *config.Config) (*sql.DB, error) {
 	dsn := cfg.GetDSN()
 	if dsn == "" {
-		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
+		return nil, fmt.Errorf("MYSQL_URI environment variable is required")
 	}
-	logrus.Info("Connecting to MySQL database using Railway DATABASE_URL")
+	
+	// Log which database URL is being used
+	logrus.Info("Connecting to MySQL database using MYSQL_URI")
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

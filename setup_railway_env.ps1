@@ -39,7 +39,6 @@ Write-Host "Setting up environment variables..." -ForegroundColor Yellow
 # Define environment variables
 $envVars = @{
     "MYSQL_URI" = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
-    "DATABASE_URL" = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
     "APP_PORT" = "3000"
     "PORT" = "8080"
     "APP_DEBUG" = "false"

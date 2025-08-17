@@ -99,7 +99,6 @@ FLUSH PRIVILEGES;
 
 2. **Verify Current Environment Variables** (Already Set):
    ```bash
-   DATABASE_URL=mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci
    MYSQL_URI=mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci
    ```
 
