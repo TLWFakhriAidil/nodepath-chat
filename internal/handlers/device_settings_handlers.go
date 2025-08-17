@@ -494,9 +494,8 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 		"webhook_data": webhookData,
 	}).Info("✅ WEBHOOK: Successfully processed webhook")
 	
-	// TODO: Process the webhook data based on provider type
-	// This is where you would integrate with your chatbot flow engine
-	// For now, we just acknowledge receipt
+	// Process the webhook data based on provider type and integrate with AI WhatsApp
+	go h.processWebhookMessage(webhookData, idDevice, deviceSettings.Provider)
 	
 	return h.successResponse(c, map[string]interface{}{
 		"success": true,
@@ -1342,6 +1341,423 @@ func (h *Handlers) DebugDevices(c *fiber.Ctx) error {
 }
 
 // Helper function to convert sql.NullString to string
+// processWebhookMessage processes incoming webhook messages and integrates with AI WhatsApp service
+func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idDevice, provider string) {
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"provider": provider,
+		"webhook_data": webhookData,
+	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration")
+
+	// Extract message data based on provider
+	var from, message, messageType string
+	var isGroup bool
+
+	switch provider {
+	case "whacenter":
+		// Extract data for Whacenter provider
+		if fromVal, ok := webhookData["from"].(string); ok {
+			from = fromVal
+		}
+		if msgVal, ok := webhookData["message"].(string); ok {
+			message = msgVal
+		}
+		if msgTypeVal, ok := webhookData["message_type"].(string); ok {
+			messageType = msgTypeVal
+		}
+		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
+			isGroup = isGroupVal
+		}
+
+	case "wablas":
+		// Extract data for Wablas provider
+		if fromVal, ok := webhookData["phone"].(string); ok {
+			from = fromVal
+		}
+		if msgVal, ok := webhookData["message"].(string); ok {
+			message = msgVal
+		}
+		if msgTypeVal, ok := webhookData["type"].(string); ok {
+			messageType = msgTypeVal
+		}
+		// Wablas doesn't have is_group field, default to false
+		isGroup = false
+
+	default:
+		// Generic webhook format
+		if fromVal, ok := webhookData["from"].(string); ok {
+			from = fromVal
+		}
+		if msgVal, ok := webhookData["message"].(string); ok {
+			message = msgVal
+		}
+		if msgTypeVal, ok := webhookData["message_type"].(string); ok {
+			messageType = msgTypeVal
+		} else if msgTypeVal, ok := webhookData["type"].(string); ok {
+			messageType = msgTypeVal
+		}
+		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
+			isGroup = isGroupVal
+		}
+	}
+
+	// Validate required fields
+	if from == "" || message == "" {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"message": message,
+		}).Warn("⚠️ WEBHOOK: Missing required fields (from or message)")
+		return
+	}
+
+	// Skip group messages if configured to do so
+	if isGroup {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+		}).Info("📱 WEBHOOK: Skipping group message")
+		return
+	}
+
+	// Only process text messages
+	if messageType != "text" && messageType != "" {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"message_type": messageType,
+		}).Info("📱 WEBHOOK: Skipping non-text message")
+		return
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"from": from,
+		"message": message,
+		"provider": provider,
+	}).Info("🤖 WEBHOOK: Processing message for AI conversation")
+
+	// Check if this is a device command (%, #, cmd)
+	if strings.HasPrefix(message, "%") || strings.HasPrefix(message, "#") || strings.ToLower(strings.TrimSpace(message)) == "cmd" {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"command": message,
+		}).Info("⚙️ WEBHOOK: Processing device command")
+
+		// Process device command through AI WhatsApp handlers
+		if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIWhatsappService != nil {
+			err := h.aiWhatsappHandlers.AIWhatsappService.ProcessDeviceCommand(from, message, idDevice)
+			if err != nil {
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to process device command")
+			}
+		} else {
+			logrus.Error("❌ WEBHOOK: AI WhatsApp service not available")
+		}
+		return
+	}
+
+	// Get current conversation stage from AI WhatsApp repository
+	var stage string
+	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
+		aiConv, err := h.aiWhatsappHandlers.AIRepo.GetAIWhatsappByProspectNum(from)
+		if err != nil {
+			logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to get AI conversation stage")
+		} else if aiConv != nil {
+			stage = aiConv.Stage
+		}
+	}
+
+	// Process AI conversation through AI WhatsApp service
+	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIWhatsappService != nil {
+		response, err := h.aiWhatsappHandlers.AIWhatsappService.ProcessAIConversation(from, idDevice, message, stage)
+		if err != nil {
+			logrus.WithError(err).Error("❌ WEBHOOK: Failed to process AI conversation")
+			return
+		}
+
+		// Send response back to WhatsApp if we have a response
+		if response != nil {
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"to": from,
+				"provider": provider,
+			}).Info("📤 WEBHOOK: Sending AI response back to WhatsApp")
+
+			// Send response through the appropriate provider
+			h.sendWhatsappResponse(from, idDevice, provider, response)
+		}
+	} else {
+		logrus.Error("❌ WEBHOOK: AI WhatsApp service not available")
+	}
+}
+
+// sendWhatsappResponse sends AI response back to WhatsApp through the appropriate provider
+func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response interface{}) {
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"id_device": idDevice,
+		"provider": provider,
+	}).Info("📤 WHATSAPP: Sending response")
+
+	// Get device settings to retrieve API credentials
+	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHATSAPP: Failed to get device settings")
+		return
+	}
+
+	// Parse response data
+	responseData, ok := response.(map[string]interface{})
+	if !ok {
+		logrus.Error("❌ WHATSAPP: Invalid response format")
+		return
+	}
+
+	// Extract response messages
+	responses, ok := responseData["Response"].([]interface{})
+	if !ok {
+		logrus.Error("❌ WHATSAPP: No response messages found")
+		return
+	}
+
+	// Send each response message
+	for _, resp := range responses {
+		respMsg, ok := resp.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		respType, _ := respMsg["type"].(string)
+		content, _ := respMsg["content"].(string)
+
+		if content == "" {
+			continue
+		}
+
+		switch respType {
+		case "text":
+			h.sendTextMessage(to, content, deviceSettings, provider)
+		case "image":
+			h.sendImageMessage(to, content, deviceSettings, provider)
+		default:
+			// Default to text message
+			h.sendTextMessage(to, content, deviceSettings, provider)
+		}
+
+		// Add small delay between messages to avoid rate limiting
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// sendTextMessage sends a text message through the appropriate provider
+func (h *Handlers) sendTextMessage(to, message string, deviceSettings *models.DeviceSettings, provider string) {
+	switch provider {
+	case "whacenter":
+		h.sendWhacenterTextMessage(to, message, deviceSettings)
+	case "wablas":
+		h.sendWablasTextMessage(to, message, deviceSettings)
+	default:
+		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for text message")
+	}
+}
+
+// sendImageMessage sends an image message through the appropriate provider
+func (h *Handlers) sendImageMessage(to, imageURL string, deviceSettings *models.DeviceSettings, provider string) {
+	switch provider {
+	case "whacenter":
+		h.sendWhacenterImageMessage(to, imageURL, deviceSettings)
+	case "wablas":
+		h.sendWablasImageMessage(to, imageURL, deviceSettings)
+	default:
+		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for image message")
+	}
+}
+
+// sendWhacenterTextMessage sends text message via Whacenter API
+func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *models.DeviceSettings) {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WHACENTER: No instance available")
+		return
+	}
+
+	// Whacenter API endpoint for sending messages
+	apiURL := "https://api.whacenter.com/api/send"
+
+	// Prepare request payload
+	payload := map[string]interface{}{
+		"device_id": deviceSettings.IDDevice,
+		"number": to,
+		"message": message,
+		"type": "text",
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
+		return
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
+		return
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to send message")
+		return
+	}
+	defer resp.Body.Close()
+
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"status_code": resp.StatusCode,
+	}).Info("📤 WHACENTER: Text message sent")
+}
+
+// sendWablasTextMessage sends text message via Wablas API
+func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *models.DeviceSettings) {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WABLAS: No instance available")
+		return
+	}
+
+	// Wablas API endpoint for sending messages
+	apiURL := "https://my.wablas.com/api/send-message"
+
+	// Prepare form data
+	formData := url.Values{}
+	formData.Set("phone", to)
+	formData.Set("message", message)
+	formData.Set("isGroup", "false")
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to create request")
+		return
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Authorization", deviceSettings.Instance.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to send message")
+		return
+	}
+	defer resp.Body.Close()
+
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"status_code": resp.StatusCode,
+	}).Info("📤 WABLAS: Text message sent")
+}
+
+// sendWhacenterImageMessage sends image message via Whacenter API
+func (h *Handlers) sendWhacenterImageMessage(to, imageURL string, deviceSettings *models.DeviceSettings) {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WHACENTER: No instance available")
+		return
+	}
+
+	// Whacenter API endpoint for sending media
+	apiURL := "https://api.whacenter.com/api/send-media"
+
+	// Prepare request payload
+	payload := map[string]interface{}{
+		"device_id": deviceSettings.IDDevice,
+		"number": to,
+		"media_url": imageURL,
+		"type": "image",
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
+		return
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
+		return
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to send image")
+		return
+	}
+	defer resp.Body.Close()
+
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"status_code": resp.StatusCode,
+	}).Info("📤 WHACENTER: Image message sent")
+}
+
+// sendWablasImageMessage sends image message via Wablas API
+func (h *Handlers) sendWablasImageMessage(to, imageURL string, deviceSettings *models.DeviceSettings) {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WABLAS: No instance available")
+		return
+	}
+
+	// Wablas API endpoint for sending media
+	apiURL := "https://my.wablas.com/api/send-image"
+
+	// Prepare form data
+	formData := url.Values{}
+	formData.Set("phone", to)
+	formData.Set("image", imageURL)
+	formData.Set("isGroup", "false")
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to create request")
+		return
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Authorization", deviceSettings.Instance.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to send image")
+		return
+	}
+	defer resp.Body.Close()
+
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"status_code": resp.StatusCode,
+	}).Info("📤 WABLAS: Image message sent")
+}
+
 func getStringFromNullString(ns sql.NullString) string {
 	if ns.Valid {
 		return ns.String

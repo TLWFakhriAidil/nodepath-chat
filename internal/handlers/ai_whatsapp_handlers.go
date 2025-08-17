@@ -14,9 +14,9 @@ import (
 
 // AIWhatsappHandlers contains all AI WhatsApp webhook handlers
 type AIWhatsappHandlers struct {
-	aiWhatsappService services.AIWhatsappService
-	aiRepo            repository.AIWhatsappRepository
-	deviceRepo        repository.DeviceSettingsRepository
+	AIWhatsappService services.AIWhatsappService
+	AIRepo            repository.AIWhatsappRepository
+	DeviceRepo        repository.DeviceSettingsRepository
 }
 
 // NewAIWhatsappHandlers creates a new AI WhatsApp handlers instance
@@ -26,9 +26,9 @@ func NewAIWhatsappHandlers(
 	deviceRepo repository.DeviceSettingsRepository,
 ) *AIWhatsappHandlers {
 	return &AIWhatsappHandlers{
-		aiWhatsappService: aiWhatsappService,
-		aiRepo:            aiRepo,
-		deviceRepo:        deviceRepo,
+		AIWhatsappService: aiWhatsappService,
+		AIRepo:            aiRepo,
+		DeviceRepo:        deviceRepo,
 	}
 }
 
@@ -210,7 +210,7 @@ func (h *AIWhatsappHandlers) StartAIConversation(c *fiber.Ctx) error {
 		Niche:       req.Niche,
 	}
 
-	err := h.aiRepo.CreateAIWhatsapp(aiWhatsapp)
+	err := h.AIRepo.CreateAIWhatsapp(aiWhatsapp)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create AI conversation")
 		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to start AI conversation")
@@ -238,7 +238,7 @@ func (h *AIWhatsappHandlers) ProcessAIMessage(c *fiber.Ctx) error {
 	}
 
 	// Process AI conversation
-	response, err := h.aiWhatsappService.ProcessAIConversation(req.ProspectNum, req.IDDevice, req.Message, req.Stage)
+	response, err := h.AIWhatsappService.ProcessAIConversation(req.ProspectNum, req.IDDevice, req.Message, req.Stage)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process AI conversation")
 		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to process AI message")
@@ -258,7 +258,7 @@ func (h *AIWhatsappHandlers) ToggleHumanTakeover(c *fiber.Ctx) error {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Prospect number is required")
 	}
 
-	err := h.aiWhatsappService.ToggleHumanTakeover(req.ProspectNum, req.Human)
+	err := h.AIWhatsappService.ToggleHumanTakeover(req.ProspectNum, req.Human)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to toggle human takeover")
 		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to toggle human takeover")
@@ -290,7 +290,7 @@ func (h *AIWhatsappHandlers) GetConversationHistory(c *fiber.Ctx) error {
 		limit = 50
 	}
 
-	history, err := h.aiRepo.GetConversationHistory(prospectNum, limit)
+	history, err := h.AIRepo.GetConversationHistory(prospectNum, limit)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get conversation history")
 		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to get conversation history")
@@ -306,7 +306,7 @@ func (h *AIWhatsappHandlers) GetConversationStatus(c *fiber.Ctx) error {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Prospect number is required")
 	}
 
-	aiConv, err := h.aiRepo.GetAIWhatsappByProspectNum(prospectNum)
+	aiConv, err := h.AIRepo.GetAIWhatsappByProspectNum(prospectNum)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get conversation status")
 		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to get conversation status")
@@ -326,7 +326,7 @@ func (h *AIWhatsappHandlers) GetAISettings(c *fiber.Ctx) error {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid staff ID")
 	}
 
-	settings, err := h.aiWhatsappService.GetAISettings(staffID)
+	settings, err := h.AIWhatsappService.GetAISettings(staffID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get AI settings")
 		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to get AI settings")
@@ -397,7 +397,7 @@ func (h *AIWhatsappHandlers) ProcessDeviceCommand(c *fiber.Ctx) error {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Missing required fields")
 	}
 
-	err := h.aiWhatsappService.ProcessDeviceCommand(req.ProspectNum, req.Command, req.IDDevice)
+	err := h.AIWhatsappService.ProcessDeviceCommand(req.ProspectNum, req.Command, req.IDDevice)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process device command")
 		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to process device command")
@@ -417,7 +417,7 @@ func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, device
 
 	// Check if this is a device command
 	if strings.HasPrefix(message, "%") || strings.HasPrefix(message, "#") || strings.ToLower(message) == "cmd" {
-		err := h.aiWhatsappService.ProcessDeviceCommand(prospectNum, message, deviceID)
+		err := h.AIWhatsappService.ProcessDeviceCommand(prospectNum, message, deviceID)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to process device command")
 		}
@@ -425,7 +425,7 @@ func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, device
 	}
 
 	// Get current conversation stage
-	aiConv, err := h.aiRepo.GetAIWhatsappByProspectNum(prospectNum)
+	aiConv, err := h.AIRepo.GetAIWhatsappByProspectNum(prospectNum)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get AI conversation")
 		return
@@ -437,7 +437,7 @@ func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, device
 	}
 
 	// Process AI conversation
-	response, err := h.aiWhatsappService.ProcessAIConversation(prospectNum, deviceID, message, stage)
+	response, err := h.AIWhatsappService.ProcessAIConversation(prospectNum, deviceID, message, stage)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process AI conversation")
 		return

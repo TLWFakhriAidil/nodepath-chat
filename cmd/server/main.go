@@ -106,6 +106,7 @@ func main() {
 		deviceSettingsService,
 		websocketService,
 		mediaService,
+		db,
 	)
 
 	// Initialize HTML template engine

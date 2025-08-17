@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"database/sql"
 	"strconv"
 	"time"
 
 	"nodepath-chat/internal/models"
+	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/services"
 	"nodepath-chat/internal/whatsapp"
 
@@ -22,6 +24,7 @@ type Handlers struct {
 	deviceSettingsService *services.DeviceSettingsService
 	websocketService      *services.WebSocketService
 	mediaService          *services.MediaService
+	aiWhatsappHandlers    *AIWhatsappHandlers
 }
 
 // NewHandlers creates a new handlers instance
@@ -34,7 +37,18 @@ func NewHandlers(
 	deviceSettingsService *services.DeviceSettingsService,
 	websocketService *services.WebSocketService,
 	mediaService *services.MediaService,
+	db *sql.DB,
 ) *Handlers {
+	// Initialize repositories
+	aiRepo := repository.NewAIWhatsappRepository(db)
+	deviceRepo := repository.NewDeviceSettingsRepository(db)
+	
+	// Initialize AI WhatsApp service
+	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo)
+	
+	// Initialize AI WhatsApp handlers
+	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
+	
 	return &Handlers{
 		flowService:           flowService,
 		chatService:           chatService,
@@ -44,6 +58,7 @@ func NewHandlers(
 		deviceSettingsService: deviceSettingsService,
 		websocketService:      websocketService,
 		mediaService:          mediaService,
+		aiWhatsappHandlers:    aiWhatsappHandlers,
 	}
 }
 
@@ -111,6 +126,14 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")
 	webhook.Post("/:id_device/:instance", h.HandleWebhook)
+
+	// AI WhatsApp routes
+	aiWhatsapp := api.Group("/ai-whatsapp")
+	aiWhatsapp.Post("/process-message", h.aiWhatsappHandlers.ProcessMessage)
+	aiWhatsapp.Get("/conversation/:phone_number/:id_device", h.aiWhatsappHandlers.GetConversation)
+	aiWhatsapp.Put("/conversation/:phone_number/:id_device/status", h.aiWhatsappHandlers.UpdateConversationStatus)
+	aiWhatsapp.Get("/prospects/:id_device", h.aiWhatsappHandlers.GetProspects)
+	aiWhatsapp.Post("/prospects", h.aiWhatsappHandlers.CreateProspect)
 }
 
 // Response helpers
