@@ -4,19 +4,21 @@
 version: '1'
 
 services:
-  # SSH Tunnel Service - DISABLED (using direct connection)
-  # ssh-tunnel:
-  #   name: "mysql-ssh-tunnel"
-  #   build:
-  #     dockerfile: "Dockerfile.tunnel"
-  #   environment:
-  #     TUNNEL_HOST: "your-jump-server.com"
-  #     TUNNEL_PORT: "22"
-  #     TUNNEL_USER: "your-ssh-username"
-  #     LOCAL_PORT: "3307"
-  #     REMOTE_HOST: "159.89.198.71"
-  #     REMOTE_PORT: "3306"
-  #     SSH_PRIVATE_KEY: "$SSH_PRIVATE_KEY"
+  # SSH Tunnel Service - ENABLED (secure tunnel to database)
+  ssh-tunnel:
+    name: "mysql-ssh-tunnel"
+    build:
+      dockerfile: "Dockerfile.tunnel"
+    environment:
+      TUNNEL_HOST: "159.89.198.71"
+      TUNNEL_PORT: "22"
+      TUNNEL_USER: "root"
+      LOCAL_PORT: "3306"
+      REMOTE_HOST: "127.0.0.1"
+      REMOTE_PORT: "3306"
+      SSH_PRIVATE_KEY: "$SSH_PRIVATE_KEY"
+    ports:
+      - "3306:3306"
 
   # Main Application Service
   app:
@@ -25,9 +27,9 @@ services:
       dockerfile: "Dockerfile"
     
     environment:
-      # Direct database connection (Railway allows external MySQL connections)
-      DATABASE_URL: "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
-      MYSQL_URI: "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+      # Database connection through SSH tunnel (eliminates IP whitelisting)
+      DATABASE_URL: "mysql://admin_aqil:admin_aqil@ssh-tunnel:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+      MYSQL_URI: "mysql://admin_aqil:admin_aqil@ssh-tunnel:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
       
       # OpenRouter API configuration
       OPENROUTER_DEFAULT_KEY: "$OPENROUTER_DEFAULT_KEY"
