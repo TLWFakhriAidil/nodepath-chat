@@ -1,0 +1,9 @@
+	go websocket.RunHub()
+
+	// REMOVED: Old single-device auto-reconnect functions
+	// These were causing conflicts with multi-device architecture
+	
+	// Start auto flush chat csv
+	if config.WhatsappChatStorage {
+		go helpers.StartAutoFlushChatStorage()
+	}

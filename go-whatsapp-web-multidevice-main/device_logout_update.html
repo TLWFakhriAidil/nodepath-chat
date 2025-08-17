@@ -1,0 +1,161 @@
+<!-- DEVICE LOGOUT UPDATE INSTRUCTIONS -->
+<!-- 
+This file contains the changes needed to:
+1. Remove the "Reset WhatsApp Session" tab from device dropdown
+2. Enhance the Logout function to also remove the WhatsApp session
+-->
+
+<!-- CHANGE 1: Update the device dropdown menu (around line 2007-2019 in dashboard.html) -->
+<!-- Find this section and replace it: -->
+
+<!-- OLD VERSION (REMOVE THIS): -->
+<!--
+<ul class="dropdown-menu dropdown-menu-end">
+    ${device.status === 'online' ? `
+    <li><a class="dropdown-item" href="/devices/actions/${device.id}">
+        <i class="bi bi-send me-2"></i>Send Test
+    </a></li>
+    <li><a class="dropdown-item" href="#" onclick="viewDeviceStats('${device.id}')">
+        <i class="bi bi-graph-up me-2"></i>View Analytics
+    </a></li>
+    <li><a class="dropdown-item text-danger" href="#" onclick="logoutDevice('${device.id}')">
+        <i class="bi bi-box-arrow-right me-2"></i>Logout
+    </a></li>
+    ` : ''}
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item text-warning" href="#" onclick="resetDevice('${device.id}')">
+        Reset WhatsApp Session
+    </a></li>
+    <li><a class="dropdown-item text-danger" href="#" onclick="deleteDevice('${device.id}')">
+        <i class="bi bi-trash me-2"></i>Delete Device
+    </a></li>
+</ul>
+-->
+
+<!-- NEW VERSION (USE THIS): -->
+<ul class="dropdown-menu dropdown-menu-end">
+    ${device.status === 'online' ? `
+    <li><a class="dropdown-item" href="/devices/actions/${device.id}">
+        <i class="bi bi-send me-2"></i>Send Test
+    </a></li>
+    <li><a class="dropdown-item" href="#" onclick="viewDeviceStats('${device.id}')">
+        <i class="bi bi-graph-up me-2"></i>View Analytics
+    </a></li>
+    <li><a class="dropdown-item text-danger" href="#" onclick="logoutDevice('${device.id}')">
+        <i class="bi bi-box-arrow-right me-2"></i>Logout
+    </a></li>
+    ` : ''}
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item text-danger" href="#" onclick="deleteDevice('${device.id}')">
+        <i class="bi bi-trash me-2"></i>Delete Device
+    </a></li>
+</ul>
+
+<!-- CHANGE 2: Replace the logoutDevice function (around line 2270 in dashboard.html) -->
+<!-- Find the existing logoutDevice function and replace it with this enhanced version: -->
+
+<!-- NEW LOGOUT FUNCTION: -->
+<script>
+// Logout Device (now includes session removal)
+function logoutDevice(deviceId) {
+    Swal.fire({
+        title: 'Logout Device?',
+        html: `
+            <div class="text-start">
+                <p>This will disconnect the device from WhatsApp and remove the session.</p>
+                <p class="text-warning mb-0"><i class="bi bi-exclamation-triangle me-2"></i>You will need to scan the QR code again to reconnect.</p>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Logout',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#dc3545'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            showLoading();
+            
+            // First logout the device
+            fetch('/app/logout?deviceId=' + deviceId, {
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Then reset the session to ensure complete removal
+                return fetch(`/api/devices/${deviceId}/reset`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 'SUCCESS') {
+                    // Update device status
+                    const device = devices.find(d => d.id === deviceId);
+                    if (device) {
+                        device.status = 'offline';
+                        device.phone = '';
+                        device.jid = '';
+                        device.lastSeen = new Date().toISOString();
+                    }
+                    renderDevices();
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Device Logged Out!',
+                        text: 'The device has been disconnected and session removed. You can now scan QR code to connect again.',
+                        timer: 3000,
+                        showConfirmButton: false
+                    });
+                    
+                    // Refresh devices after a moment
+                    setTimeout(loadDevices, 2000);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Logout Failed',
+                        text: data.message || 'Failed to logout device'
+                    });
+                }
+                hideLoading();
+            })
+            .catch(error => {
+                console.error('Error logging out device:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Connection Error',
+                    text: 'Failed to logout device. Please try again.'
+                });
+                hideLoading();
+            });
+        }
+    });
+}
+</script>
+
+<!-- CHANGE 3: Remove the resetDevice function (around lines 2409-2461 in dashboard.html) -->
+<!-- Delete the entire resetDevice function as it's no longer needed -->
+
+<!-- The resetDevice function starts like this and should be completely removed: -->
+<!--
+// Reset Device WhatsApp Session
+function resetDevice(deviceId) {
+    Swal.fire({
+        title: 'Reset WhatsApp Session?',
+        ...
+    });
+}
+-->
+
+<!-- SUMMARY OF CHANGES:
+1. Removed "Reset WhatsApp Session" menu item from device dropdown
+2. Enhanced logoutDevice() function to also remove WhatsApp session (combines logout + reset)
+3. Removed the standalone resetDevice() function as it's no longer needed
+4. Updated confirmation dialog to inform users that logout will also remove the session
+
+After these changes:
+- Users will only see a "Logout" option which will completely disconnect and remove the session
+- They can scan QR code again to reconnect with any WhatsApp account
+- The functionality is simplified and more intuitive
+-->

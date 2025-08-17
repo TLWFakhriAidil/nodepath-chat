@@ -1,0 +1,51 @@
+-- SEQUENCE TRIGGER SQL FIX SUMMARY --
+
+IMMEDIATE FIXES NEEDED:
+
+1. UPDATE YOUR LEAD TRIGGER:
+UPDATE leads SET `trigger` = 'meow' WHERE phone = '60108924904';
+
+2. UPDATE YOUR SEQUENCE:
+UPDATE sequences 
+SET `trigger` = 'meow',
+    device_id = '315e4f8e-6868-4808-a3df-f75e9fce331f',
+    min_delay_seconds = 10,
+    max_delay_seconds = 30
+WHERE name = 'meow';
+
+3. GO CODE FILES TO FIX (add backticks around 'trigger'):
+
+File: src/usecase/direct_broadcast_processor.go (Line ~133)
+CHANGE FROM:
+    SELECT id, day_number, trigger, next_trigger, trigger_delay_hours,
+TO:
+    SELECT id, day_number, `trigger`, next_trigger, trigger_delay_hours,
+
+File: src/repository/sequence_repository.go (Check all queries)
+- Line ~157: Add backticks to trigger
+- Line ~226: Add backticks to trigger  
+- Line ~257: Add backticks to trigger
+
+File: src/ui/rest/app.go (Multiple locations)
+- Line ~1996: Add backticks to trigger
+- Line ~2005: Add backticks to trigger
+- Line ~2115: Add backticks to trigger
+- Line ~4227: Add backticks to trigger
+
+File: src/ui/rest/team_member_handlers.go
+- Line ~1043: Add backticks to trigger
+- Line ~1066: Add backticks to trigger
+
+QUICK FIX BATCH SCRIPT:
+Create a file fix_trigger_keyword.bat with:
+
+@echo off
+echo Fixing trigger keyword in Go files...
+powershell -Command "(Get-Content 'src\usecase\direct_broadcast_processor.go') -replace 'day_number, trigger,', 'day_number, `trigger`,' | Set-Content 'src\usecase\direct_broadcast_processor.go'"
+echo Fixed direct_broadcast_processor.go
+echo Please manually check and fix other files!
+
+After fixing the Go code:
+1. Rebuild the application
+2. The sequence will automatically pick up your lead
+3. It will create messages in broadcast_messages table

@@ -1,0 +1,273 @@
+package rest
+
+import (
+	"sync"
+	"time"
+	"github.com/gofiber/fiber/v2"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/repository"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
+	"github.com/sirupsen/logrus"
+	"go.mau.fi/whatsmeow"
+)
+
+// DeviceConnectionChecker handles real-time device connection checking
+type DeviceConnectionChecker struct {
+	userRepo     repository.UserRepositoryInterface
+	clientMgr    *whatsapp.ClientManager
+}
+
+// NewDeviceConnectionChecker creates a new checker instance
+func NewDeviceConnectionChecker() *DeviceConnectionChecker {
+	return &DeviceConnectionChecker{
+		userRepo:  repository.GetUserRepository(),
+		clientMgr: whatsapp.GetClientManager(),
+	}
+}
+
+// CheckDeviceConnection checks real-time connection status for all user devices
+func (dcc *DeviceConnectionChecker) CheckDeviceConnection(c *fiber.Ctx) error {
+	// Get session from cookie
+	sessionToken := c.Cookies("session_token")
+	if sessionToken == "" {
+		return c.Status(401).JSON(utils.ResponseData{
+			Status:  401,
+			Code:    "UNAUTHORIZED",
+			Message: "No session token",
+		})
+	}
+	
+	session, err := dcc.userRepo.GetSession(sessionToken)
+	if err != nil {
+		return c.Status(401).JSON(utils.ResponseData{
+			Status:  401,
+			Code:    "UNAUTHORIZED",
+			Message: "Invalid session",
+		})
+	}
+	
+	// Get all devices for this user
+	devices, err := dcc.userRepo.GetUserDevices(session.UserID)
+	if err != nil {
+		return c.Status(500).JSON(utils.ResponseData{
+			Status:  500,
+			Code:    "ERROR",
+			Message: "Failed to get devices",
+		})
+	}
+	
+	// Check each device in parallel
+	var wg sync.WaitGroup
+	deviceStatuses := make([]map[string]interface{}, 0, len(devices))
+	statusMutex := sync.Mutex{}
+	
+	for _, device := range devices {
+		wg.Add(1)
+		go func(dev *models.UserDevice) {
+			defer wg.Done()
+			
+			status := dcc.checkSingleDevice(dev)
+			
+			statusMutex.Lock()
+			deviceStatuses = append(deviceStatuses, status)
+			statusMutex.Unlock()
+		}(device)
+	}
+	
+	wg.Wait()
+	
+	return c.JSON(utils.ResponseData{
+		Status:  200,
+		Code:    "SUCCESS",
+		Message: "Device connection status checked",
+		Results: deviceStatuses,
+	})
+}
+
+// checkSingleDevice checks connection status for a single device
+func (dcc *DeviceConnectionChecker) checkSingleDevice(device *models.UserDevice) map[string]interface{} {
+	startTime := time.Now()
+	previousStatus := device.Status
+	currentStatus := "offline"
+	isWhatsAppConnected := false
+	connectionDetails := map[string]interface{}{}
+	
+	// Following the broadcast campaign pattern:
+	// 1. Check if device exists in database
+	if device == nil {
+		return map[string]interface{}{
+			"device_id":   "",
+			"device_name": "Unknown",
+			"status":      "not_found",
+			"error":       "Device not found in database",
+		}
+	}
+	
+	// 2. Check if WhatsApp client exists (like broadcast processor does)
+	client, err := dcc.clientMgr.GetClient(device.ID)
+	if err != nil {
+		// No WhatsApp client for this device
+		currentStatus = "not_initialized"
+		connectionDetails["error"] = "WhatsApp client not initialized"
+	} else if client != nil {
+		// 3. Check if client is connected (following broadcast pattern)
+		if client.IsConnected() {
+			currentStatus = "online"
+			isWhatsAppConnected = true
+			
+			// Get additional connection info
+			if client.Store != nil && client.Store.ID != nil {
+				device.JID = client.Store.ID.String()
+				device.Phone = client.Store.ID.User
+				connectionDetails["jid"] = device.JID
+				connectionDetails["phone"] = device.Phone
+			}
+			
+			// Check message send capability
+			connectionDetails["can_send_messages"] = true
+			connectionDetails["last_seen"] = time.Now().Format(time.RFC3339)
+			
+		} else if client.IsLoggedIn() {
+			// Logged in but not connected (needs reconnection)
+			currentStatus = "disconnected"
+			connectionDetails["logged_in"] = true
+			connectionDetails["needs_reconnect"] = true
+		} else {
+			// Not logged in (needs QR scan)
+			currentStatus = "logged_out"
+			connectionDetails["needs_qr_scan"] = true
+		}
+	}
+	
+	// 4. Update database if status changed (like broadcast does)
+	if previousStatus != currentStatus || device.Phone == "" || device.JID == "" {
+		err = dcc.userRepo.UpdateDeviceStatus(device.ID, currentStatus, device.Phone, device.JID)
+		if err != nil {
+			logrus.Errorf("Failed to update device status for %s: %v", device.ID, err)
+		} else {
+			logrus.Infof("Device %s status updated: %s -> %s", device.DeviceName, previousStatus, currentStatus)
+		}
+	}
+	
+	// 5. Check device performance metrics
+	checkDuration := time.Since(startTime).Milliseconds()
+	
+	return map[string]interface{}{
+		"device_id":            device.ID,
+		"device_name":          device.DeviceName,
+		"previous_status":      previousStatus,
+		"current_status":       currentStatus,
+		"is_whatsapp_connected": isWhatsAppConnected,
+		"connection_details":   connectionDetails,
+		"check_duration_ms":    checkDuration,
+		"status_changed":       previousStatus != currentStatus,
+		"can_receive_messages": currentStatus == "online" || currentStatus == "connected",
+		"timestamp":           time.Now().Unix(),
+	}
+}
+
+// CheckAndReconnectDevices attempts to reconnect disconnected devices
+func (dcc *DeviceConnectionChecker) CheckAndReconnectDevices(c *fiber.Ctx) error {
+	// Get session
+	sessionToken := c.Cookies("session_token")
+	if sessionToken == "" {
+		return c.Status(401).JSON(utils.ResponseData{
+			Status:  401,
+			Code:    "UNAUTHORIZED",
+			Message: "No session token",
+		})
+	}
+	
+	session, err := dcc.userRepo.GetSession(sessionToken)
+	if err != nil {
+		return c.Status(401).JSON(utils.ResponseData{
+			Status:  401,
+			Code:    "UNAUTHORIZED",
+			Message: "Invalid session",
+		})
+	}
+	
+	// Get all devices
+	devices, err := dcc.userRepo.GetUserDevices(session.UserID)
+	if err != nil {
+		return c.Status(500).JSON(utils.ResponseData{
+			Status:  500,
+			Code:    "ERROR",
+			Message: "Failed to get devices",
+		})
+	}
+	
+	reconnectResults := make([]map[string]interface{}, 0)
+	
+	for _, device := range devices {
+		// Only try to reconnect devices that are disconnected but logged in
+		if device.Status == "disconnected" || device.Status == "offline" {
+			client, err := dcc.clientMgr.GetClient(device.ID)
+			if err == nil && client != nil && client.IsLoggedIn() && !client.IsConnected() {
+				// Attempt reconnection
+				logrus.Infof("Attempting to reconnect device %s", device.DeviceName)
+				
+				err = client.Connect()
+				if err != nil {
+					reconnectResults = append(reconnectResults, map[string]interface{}{
+						"device_id":   device.ID,
+						"device_name": device.DeviceName,
+						"success":     false,
+						"error":       err.Error(),
+					})
+				} else {
+					// Wait a bit for connection to establish
+					time.Sleep(2 * time.Second)
+					
+					if client.IsConnected() {
+						dcc.userRepo.UpdateDeviceStatus(device.ID, "online", device.Phone, device.JID)
+						reconnectResults = append(reconnectResults, map[string]interface{}{
+							"device_id":   device.ID,
+							"device_name": device.DeviceName,
+							"success":     true,
+							"new_status":  "online",
+						})
+					} else {
+						reconnectResults = append(reconnectResults, map[string]interface{}{
+							"device_id":   device.ID,
+							"device_name": device.DeviceName,
+							"success":     false,
+							"error":       "Connection attempt failed",
+						})
+					}
+				}
+			}
+		}
+	}
+	
+	return c.JSON(utils.ResponseData{
+		Status:  200,
+		Code:    "SUCCESS",
+		Message: "Device reconnection attempted",
+		Results: reconnectResults,
+	})
+}
+
+// Global instance
+var deviceChecker *DeviceConnectionChecker
+var deviceCheckerOnce sync.Once
+
+// GetDeviceConnectionChecker returns singleton instance
+func GetDeviceConnectionChecker() *DeviceConnectionChecker {
+	deviceCheckerOnce.Do(func() {
+		deviceChecker = NewDeviceConnectionChecker()
+	})
+	return deviceChecker
+}
+
+// HandleCheckConnection is the main handler for the endpoint
+func HandleCheckConnection(c *fiber.Ctx) error {
+	checker := GetDeviceConnectionChecker()
+	return checker.CheckDeviceConnection(c)
+}
+
+// HandleReconnectDevices handles reconnection attempts
+func HandleReconnectDevices(c *fiber.Ctx) error {
+	checker := GetDeviceConnectionChecker()
+	return checker.CheckAndReconnectDevices(c)
+}

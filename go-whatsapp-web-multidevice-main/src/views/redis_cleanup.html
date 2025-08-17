@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Redis Cleanup Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .danger {
+            background: #dc3545;
+        }
+        .danger:hover {
+            background: #c82333;
+        }
+        input {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 100%;
+            margin: 10px 0;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Redis Cleanup Tool</h1>
+        
+        <div class="section">
+            <h2>Clean Up Old Device</h2>
+            <p>Remove the old device (3472b8c5-974b-4deb-bab9-792cc5a09c57) from Redis:</p>
+            <button onclick="cleanupOldDevice()" class="danger">Clean Up Old Device</button>
+        </div>
+        
+        <div class="section">
+            <h2>Clean Up Specific Device</h2>
+            <input type="text" id="deviceId" placeholder="Enter device ID to clean up">
+            <button onclick="cleanupSpecificDevice()">Clean Up Device</button>
+        </div>
+        
+        <div id="result" class="result"></div>
+    </div>
+    
+    <script>
+        function showResult(message, isError = false) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = 'result ' + (isError ? 'error' : 'success');
+            resultDiv.textContent = message;
+            resultDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        async function cleanupOldDevice() {
+            try {
+                const response = await fetch('/api/redis/cleanup-device/3472b8c5-974b-4deb-bab9-792cc5a09c57', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('authToken')
+                    }
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    showResult('Old device cleaned up successfully!');
+                } else {
+                    showResult('Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showResult('Error: ' + error.message, true);
+            }
+        }
+        
+        async function cleanupSpecificDevice() {
+            const deviceId = document.getElementById('deviceId').value.trim();
+            if (!deviceId) {
+                showResult('Please enter a device ID', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/redis/cleanup-device/' + deviceId, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('authToken')
+                    }
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    showResult('Device ' + deviceId + ' cleaned up successfully!');
+                    document.getElementById('deviceId').value = '';
+                } else {
+                    showResult('Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showResult('Error: ' + error.message, true);
+            }
+        }
+    </script>
+</body>
+</html>

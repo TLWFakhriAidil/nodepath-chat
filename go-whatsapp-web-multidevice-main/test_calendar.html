@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Campaign Calendar Test</title>
+    <style>
+        .calendar { 
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 5px; 
+            max-width: 800px; 
+            margin: 20px auto;
+        }
+        .calendar-day { 
+            border: 1px solid #ddd; 
+            padding: 10px; 
+            min-height: 80px; 
+            cursor: pointer;
+        }
+        .calendar-day:hover { 
+            background: #f0f0f0; 
+        }
+        .calendar-header { 
+            background: #007bff; 
+            color: white; 
+            padding: 10px; 
+            text-align: center; 
+            font-weight: bold;
+        }
+        .has-campaign { 
+            background: #e3f2fd; 
+            border: 2px solid #2196f3;
+        }
+        .campaign-item {
+            background: #fff;
+            padding: 2px 5px;
+            margin: 2px 0;
+            font-size: 12px;
+            border-radius: 3px;
+        }
+        .debug { 
+            background: #f8f9fa; 
+            padding: 10px; 
+            margin: 10px auto; 
+            max-width: 800px;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">Campaign Calendar Test</h1>
+    
+    <div class="debug">
+        <h3>Test Data</h3>
+        <button onclick="addTestCampaign()">Add Test Campaign</button>
+        <button onclick="clearCampaigns()">Clear All</button>
+        <button onclick="showCampaigns()">Show Campaigns</button>
+        <div id="debugInfo"></div>
+    </div>
+    
+    <div id="calendar" class="calendar"></div>
+    
+    <script>
+        let campaigns = {};
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        
+        function addTestCampaign() {
+            const today = new Date();
+            const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            
+            if (!campaigns[dateStr]) {
+                campaigns[dateStr] = [];
+            }
+            
+            campaigns[dateStr].push({
+                id: Date.now(),
+                title: `Test Campaign ${campaigns[dateStr].length + 1}`,
+                niche: 'Test',
+                scheduled_time: '14:30',
+                status: 'scheduled'
+            });
+            
+            console.log('Added campaign for', dateStr);
+            showCampaigns();
+            renderCalendar();
+        }
+        
+        function clearCampaigns() {
+            campaigns = {};
+            showCampaigns();
+            renderCalendar();
+        }
+        
+        function showCampaigns() {
+            const debugInfo = document.getElementById('debugInfo');
+            debugInfo.innerHTML = '<h4>Current Campaigns:</h4><pre>' + JSON.stringify(campaigns, null, 2) + '</pre>';
+        }
+        
+        function renderCalendar() {
+            const calendar = document.getElementById('calendar');
+            calendar.innerHTML = '';
+            
+            // Add day headers
+            const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            dayHeaders.forEach(day => {
+                const header = document.createElement('div');
+                header.className = 'calendar-header';
+                header.textContent = day;
+                calendar.appendChild(header);
+            });
+            
+            // Get first day and days in month
+            const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            
+            // Add empty cells for days before month starts
+            for (let i = 0; i < firstDay; i++) {
+                const empty = document.createElement('div');
+                calendar.appendChild(empty);
+            }
+            
+            // Add days of the month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayElement = document.createElement('div');
+                const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                dayElement.className = 'calendar-day';
+                
+                // Check for campaigns
+                const dayCampaigns = campaigns[dateStr] || [];
+                if (dayCampaigns.length > 0) {
+                    dayElement.className += ' has-campaign';
+                    console.log(`Day ${day} has ${dayCampaigns.length} campaigns`);
+                }
+                
+                // Add day number
+                let html = `<div style="font-weight: bold;">${day}</div>`;
+                
+                // Add campaigns
+                if (dayCampaigns.length > 0) {
+                    dayCampaigns.forEach(campaign => {
+                        html += `<div class="campaign-item">${campaign.title}</div>`;
+                    });
+                }
+                
+                dayElement.innerHTML = html;
+                dayElement.onclick = () => alert(`Clicked on ${dateStr}\nCampaigns: ${dayCampaigns.length}`);
+                calendar.appendChild(dayElement);
+            }
+        }
+        
+        // Initial render
+        renderCalendar();
+    </script>
+</body>
+</html>

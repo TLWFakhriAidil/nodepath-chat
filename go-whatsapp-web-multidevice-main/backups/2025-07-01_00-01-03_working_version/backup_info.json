@@ -1,0 +1,12 @@
+﻿{
+    "working_features":  [
+                             "Device Management - 6 devices per row layout",
+                             "Campaign Clone and Delete icons at top",
+                             "Lead Management accessible without WhatsApp connection",
+                             "Campaign calendar with status colors",
+                             "Broadcast message processing with human-like delays"
+                         ],
+    "backup_date":  "2025-07-01 00:06:52",
+    "database_url":  "postgres://postgres:CNFPbgfjsIVirTuqLMoObNMvoYobDDTU@yamanote.proxy.rlwy.net:49914/railway?sslmode=require",
+    "git_commit":  "b73d2ac Fix: Move campaign clone and delete icons to top of div - Repositioned icons from center to top (3px from top) - Icons now appear at the very top of campaign items - Added z-index for proper layering - Maintains all existing functionality"
+}

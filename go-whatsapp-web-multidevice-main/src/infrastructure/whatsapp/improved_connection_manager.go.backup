@@ -1,0 +1,242 @@
+package whatsapp
+
+import (
+	"context"
+	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+	
+	"github.com/sirupsen/logrus"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
+)
+
+// ImprovedConnectionManager handles robust connection management for WhatsApp clients
+type ImprovedConnectionManager struct {
+	clients            map[string]*ManagedClient
+	mu                 sync.RWMutex
+	ctx                context.Context
+	cancel             context.CancelFunc
+	presenceThrottle   map[string]time.Time
+	presenceMu         sync.RWMutex
+	reconnectSchedule  map[string]time.Time
+	reconnectMu        sync.RWMutex
+}
+
+// ManagedClient wraps a WhatsApp client with connection management
+type ImprovedManagedClient struct {
+	Client              *whatsmeow.Client
+	DeviceID            string
+	LastConnected       time.Time
+	LastPresenceSent    time.Time
+	ReconnectAttempts   int
+	ConsecutiveFailures int
+	NextReconnectTime   time.Time
+	mu                  sync.RWMutex
+}
+
+// Configuration for better stability
+const (
+	// Presence updates - reduce frequency
+	MinPresenceInterval = 5 * time.Minute  // Only send presence every 5 minutes
+	
+	// Reconnection settings
+	InitialReconnectDelay = 30 * time.Second
+	MaxReconnectDelay     = 10 * time.Minute
+	ReconnectJitter       = 30 * time.Second // Random 0-30s added
+	
+	// Connection monitoring
+	HealthCheckInterval   = 2 * time.Minute  // Check less frequently
+	HealthCheckJitter     = 30 * time.Second // Add randomness
+	
+	// Rate limiting
+	MaxReconnectsPerHour  = 6  // Max 6 reconnection attempts per hour
+	MaxPresencePerHour    = 12 // Max 12 presence updates per hour
+)
+
+// StartImprovedMonitoring begins the improved monitoring routine
+func (cm *ImprovedConnectionManager) StartImprovedMonitoring() {
+	// Stagger health checks for different devices
+	go func() {
+		ticker := time.NewTicker(HealthCheckInterval)
+		defer ticker.Stop()
+		
+		for {
+			select {
+			case <-ticker.C:
+				cm.checkConnectionsWithJitter()
+			case <-cm.ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+// checkConnectionsWithJitter checks connections with randomized timing
+func (cm *ImprovedConnectionManager) checkConnectionsWithJitter() {
+	cm.mu.RLock()
+	deviceCount := len(cm.clients)
+	clients := make([]*ManagedClient, 0, deviceCount)
+	for _, v := range cm.clients {
+		clients = append(clients, v)
+	}
+	cm.mu.RUnlock()
+	
+	// Process in batches to avoid thundering herd
+	batchSize := 50
+	if deviceCount < 50 {
+		batchSize = deviceCount
+	}
+	
+	for i := 0; i < len(clients); i += batchSize {
+		end := i + batchSize
+		if end > len(clients) {
+			end = len(clients)
+		}
+		
+		batch := clients[i:end]
+		go cm.processBatch(batch)
+		
+		// Wait between batches
+		if end < len(clients) {
+			time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
+		}
+	}
+}
+
+// processBatch handles a batch of devices
+func (cm *ImprovedConnectionManager) processBatch(batch []*ManagedClient) {
+	for _, mc := range batch {
+		// Add jitter for each device
+		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+		
+		go cm.checkSingleDevice(mc)
+	}
+}
+
+// checkSingleDevice checks a single device connection
+func (cm *ImprovedConnectionManager) checkSingleDevice(mc *ManagedClient) {
+	if mc.Client == nil {
+		return
+	}
+	
+	mc.mu.RLock()
+	deviceID := mc.DeviceID
+	lastPresence := mc.LastPresenceSent
+	mc.mu.RUnlock()
+	
+	if !mc.Client.IsConnected() {
+		// Check if we should reconnect
+		if cm.shouldReconnect(deviceID) {
+			cm.scheduleReconnect(mc)
+		}
+	} else {
+		// Only send presence if enough time has passed
+		if time.Since(lastPresence) > MinPresenceInterval {
+			if cm.shouldSendPresence(deviceID) {
+				mc.Client.SendPresence(types.PresenceAvailable)
+				
+				mc.mu.Lock()
+				mc.LastPresenceSent = time.Now()
+				mc.mu.Unlock()
+			}
+		}
+	}
+}
+
+// shouldReconnect checks if device should attempt reconnection
+func (cm *ImprovedConnectionManager) shouldReconnect(deviceID string) bool {
+	cm.reconnectMu.RLock()
+	nextTime, exists := cm.reconnectSchedule[deviceID]
+	cm.reconnectMu.RUnlock()
+	
+	if !exists {
+		return true
+	}
+	
+	return time.Now().After(nextTime)
+}
+
+// scheduleReconnect schedules a reconnection attempt with backoff
+func (cm *ImprovedConnectionManager) scheduleReconnect(mc *ManagedClient) {
+	mc.mu.Lock()
+	attempts := mc.ReconnectAttempts
+	mc.ReconnectAttempts++
+	mc.mu.Unlock()
+	
+	// Calculate backoff with jitter
+	delay := InitialReconnectDelay * time.Duration(1<<uint(attempts))
+	if delay > MaxReconnectDelay {
+		delay = MaxReconnectDelay
+	}
+	
+	// Add jitter
+	jitter := time.Duration(rand.Intn(int(ReconnectJitter)))
+	delay += jitter
+	
+	// Schedule the reconnection
+	nextReconnect := time.Now().Add(delay)
+	
+	cm.reconnectMu.Lock()
+	cm.reconnectSchedule[mc.DeviceID] = nextReconnect
+	cm.reconnectMu.Unlock()
+	
+	logrus.Infof("Device %s scheduled for reconnection in %v (attempt %d)", 
+		mc.DeviceID, delay, attempts+1)
+	
+	// Perform the reconnection after delay
+	go func() {
+		time.Sleep(delay)
+		
+		if err := mc.Client.Connect(); err != nil {
+			logrus.Errorf("Failed to reconnect device %s: %v", mc.DeviceID, err)
+			
+			mc.mu.Lock()
+			mc.ConsecutiveFailures++
+			mc.mu.Unlock()
+		} else {
+			logrus.Infof("Successfully reconnected device %s", mc.DeviceID)
+			
+			mc.mu.Lock()
+			mc.LastConnected = time.Now()
+			mc.ConsecutiveFailures = 0
+			mc.ReconnectAttempts = 0
+			mc.mu.Unlock()
+		}
+	}()
+}
+
+// shouldSendPresence implements rate limiting for presence updates
+func (cm *ImprovedConnectionManager) shouldSendPresence(deviceID string) bool {
+	cm.presenceMu.Lock()
+	defer cm.presenceMu.Unlock()
+	
+	// Check rate limit
+	lastSent, exists := cm.presenceThrottle[deviceID]
+	if !exists || time.Since(lastSent) > MinPresenceInterval {
+		cm.presenceThrottle[deviceID] = time.Now()
+		return true
+	}
+	
+	return false
+}
+
+// DisablePresenceForMessage prevents presence updates during message sending
+func DisablePresenceForMessage() bool {
+	// Randomly skip presence 70% of the time
+	return rand.Float32() < 0.7
+}
+
+// GetReconnectDelay returns delay with jitter for reconnection
+func GetReconnectDelay(attemptCount int) time.Duration {
+	baseDelay := time.Duration(attemptCount*attemptCount) * time.Second
+	if baseDelay > MaxReconnectDelay {
+		baseDelay = MaxReconnectDelay
+	}
+	
+	// Add 0-30% jitter
+	jitter := time.Duration(rand.Float64() * 0.3 * float64(baseDelay))
+	return baseDelay + jitter
+}

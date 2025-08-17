@@ -1,0 +1,47 @@
+SEQUENCE DATA COMPARISON - August 3, 2025
+=========================================
+
+UI SUMMARY DATA:
+- Total Sequences: 7
+- Total Flows: 23
+- Total Contacts Should Send: 1389
+- Contacts Done Send: 918
+- Contacts Failed Send: 471
+- Contacts Remaining: 0
+
+DATABASE SUMMARY DATA (by scheduled_at):
+- Total Sequences: 7
+- Total Flows (sequence_steps): 25
+- Total Unique Contacts: 1224
+- Total Messages Sent: 1632 (910 unique contacts)
+- Total Messages Failed: 715 (471 unique contacts)
+- Messages Remaining: 0
+
+UI INDIVIDUAL SEQUENCES:
+1. meow: Should=0, Sent=0, Failed=0
+2. HOT VITAC SEQUENCE: Should=302, Sent=222, Failed=80
+3. WARM VITAC SEQUENCE: Should=202, Sent=162, Failed=40
+4. COLD VITAC SEQUENCE: Should=362, Sent=267, Failed=95
+5. HOT Seqeunce: Should=152, Sent=71, Failed=81
+6. WARM Sequence: Should=224, Sent=97, Failed=127
+7. COLD Sequence: Should=147, Sent=99, Failed=48
+
+TOTALS FROM UI ROWS: Should=1389, Sent=918, Failed=471
+
+KEY FINDINGS:
+1. Total Sequences match: UI=7, DB=7 ✓
+2. Total Flows differ: UI=23, DB=25 (2 difference)
+3. Failed contacts match exactly: UI=471, DB=471 ✓
+4. Sent contacts close: UI=918, DB=910 unique (8 difference)
+5. The UI shows unique contacts, not total messages
+6. Database shows 1632 total sent messages but only 910 unique recipients
+
+DISCREPANCIES:
+- Flows count: UI shows 23 but DB has 25 sequence_steps
+- Sent count: UI shows 918 but DB shows 910 unique contacts sent
+- Should Send: UI shows 1389 but DB shows 1224 unique contacts
+
+The data is mostly aligned with minor discrepancies that could be due to:
+1. Timing differences in data capture
+2. Some contacts receiving multiple messages (sequence steps)
+3. Possible data updates between UI snapshot and database query

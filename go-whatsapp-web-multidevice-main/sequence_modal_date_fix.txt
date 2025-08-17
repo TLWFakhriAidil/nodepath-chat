@@ -1,0 +1,30 @@
+// Fix for GetSequenceStepLeads function - Add date filtering
+// This should be applied to src/ui/rest/app.go
+
+// Find this function: func (handler *App) GetSequenceStepLeads(c *fiber.Ctx) error
+// Around line 4906
+
+// Add these lines after status := c.Query("status", "all") (line 4911):
+
+	// Get date filters from query params
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+// Then after the status filter conditions (around line 4957), add:
+
+	// Add date filter if provided
+	if startDate != "" && endDate != "" {
+		query += ` AND DATE(bm.sent_at) BETWEEN ? AND ?`
+		args = append(args, startDate, endDate)
+	} else if startDate != "" {
+		query += ` AND DATE(bm.sent_at) >= ?`
+		args = append(args, startDate)
+	} else if endDate != "" {
+		query += ` AND DATE(bm.sent_at) <= ?`
+		args = append(args, endDate)
+	}
+
+// Also add logging after args := []interface{}{sequenceId, deviceId, stepId, session.UserID}:
+
+	log.Printf("GetSequenceStepLeads - Sequence: %s, Device: %s, Step: %s, Status: %s, DateRange: %s to %s",
+		sequenceId, deviceId, stepId, status, startDate, endDate)

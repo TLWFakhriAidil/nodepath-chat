@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Management - WhatsApp Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root {
+            --primary: #128c7e;
+            --primary-dark: #075e54;
+            --success: #25d366;
+            --light-bg: #f0f2f5;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        body {
+            background-color: var(--light-bg);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .navbar {
+            background-color: white !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            padding: 1rem 0;
+        }
+
+        .device-info {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .lead-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s;
+            cursor: pointer;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .lead-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .lead-card.selected {
+            background: #f0f8ff;
+            border-left: 4px solid var(--primary);
+        }
+
+        .lead-checkbox {
+            margin-right: 15px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            flex-shrink: 0;
+            /* Always visible - no special positioning */
+            background-color: #5fadad !important;
+            border-color: #5fadad !important;
+        }
+        
+        .lead-checkbox:checked {
+            background-color: #5fadad !important;
+            border-color: #5fadad !important;
+        }
+        
+        .lead-checkbox:focus {
+            box-shadow: 0 0 0 0.25rem rgba(95, 173, 173, 0.25) !important;
+            border-color: #5fadad !important;
+        }
+        
+        /* Style all checkboxes with the same color */
+        input[type="checkbox"].form-check-input:checked {
+            background-color: #5fadad !important;
+            border-color: #5fadad !important;
+        }
+        
+        input[type="checkbox"].form-check-input:focus {
+            box-shadow: 0 0 0 0.25rem rgba(95, 173, 173, 0.25) !important;
+            border-color: #5fadad !important;
+        }
+
+        .lead-card-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+
+        .bulk-actions {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            display: none;
+            align-items: center;
+            gap: 16px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .bulk-actions.show {
+            display: flex;
+        }
+
+        .selected-count {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .lead-target_status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .lead-target_status.new {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .lead-target_status.contacted {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .lead-target_status.qualified {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .lead-target_status.converted {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .lead-target_status.lost {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .add-lead-btn {
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .add-lead-btn:hover {
+            background: var(--primary-dark);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .search-box {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px 16px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .filter-chip {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            background: #f5f5f5;
+            margin: 0 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-chip.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .lead-journey {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 14px;
+        }
+        
+        /* Broadcast History Styles */
+        .broadcast-history {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .history-timeline {
+            position: relative;
+            padding-left: 20px;
+        }
+        
+        .history-timeline::before {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 20px;
+            bottom: 0;
+            width: 2px;
+            background: #dee2e6;
+        }
+        
+        .history-item {
+            position: relative;
+            padding-bottom: 20px;
+        }
+        
+        .history-item:last-child {
+            padding-bottom: 0;
+        }
+        
+        .timeline-dot {
+            position: absolute;
+            left: -14px;
+            top: 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6c757d;
+            border: 2px solid #fff;
+        }
+        
+        .history-item.latest .timeline-dot {
+            background: var(--success);
+            width: 14px;
+            height: 14px;
+            left: -15px;
+        }
+        
+        .history-content {
+            background: white;
+            border-radius: 6px;
+            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .modal-header {
+            background: var(--primary);
+            color: white;
+        }
+
+        .modal-header .btn-close {
+            filter: brightness(0) invert(1);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="bi bi-whatsapp" style="color: var(--success); font-size: 24px;"></i>
+                <span style="color: var(--primary); font-weight: 600; margin-left: 8px;">WhatsApp Analytics</span>
+            </a>
+            <button class="btn btn-outline-secondary" onclick="history.back()">
+                <i class="bi bi-arrow-left"></i> Back
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- Device Info -->
+        <div class="device-info">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-1">
+                        <i class="bi bi-people-fill text-primary"></i>
+                        Lead Management - <span id="deviceName">Loading...</span>
+                    </h4>
+                    <p class="text-muted mb-0">
+                        Device ID: <span id="deviceId"></span> | 
+                        Total Leads: <span id="totalLeads">0</span>
+                    </p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary me-2" onclick="exportLeads()">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                    <button class="btn btn-outline-primary me-2" onclick="document.getElementById('importFile').click()">
+                        <i class="bi bi-upload"></i> Import
+                    </button>
+                    <input type="file" id="importFile" accept=".csv" style="display: none;" onchange="importLeads(this)">
+                    <button class="add-lead-btn" onclick="openAddLeadModal()">
+                        <i class="bi bi-plus-circle"></i> Add Lead
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filters -->
+        <div class="bg-white rounded-3 p-3 mb-4 shadow-sm">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control border-start-0" id="searchInput" 
+                               placeholder="Search by name, phone, niche, or trigger..." onkeyup="searchLeads()">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center">
+                        <span class="me-2">Status:</span>
+                        <div id="statusFilters">
+                            <span class="filter-chip active" data-status="all">All</span>
+                            <span class="filter-chip" data-status="prospect">Prospect</span>
+                            <span class="filter-chip" data-status="customer">Customer</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center">
+                        <span class="me-2">Niche:</span>
+                        <div id="nicheFilters" style="max-width: 300px; overflow-x: auto; white-space: nowrap;">
+                            <span class="filter-chip active" data-niche="all">All</span>
+                            <!-- Dynamic niche filters will be added here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center">
+                        <span class="me-2">Trigger:</span>
+                        <div id="triggerFilters" style="max-width: 300px; overflow-x: auto; white-space: nowrap;">
+                            <span class="filter-chip active" data-trigger="all">All</span>
+                            <span class="filter-chip" data-trigger="has-trigger">Has Trigger</span>
+                            <span class="filter-chip" data-trigger="no-trigger">No Trigger</span>
+                            <!-- Dynamic trigger filters will be added here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                        <label class="form-check-label" for="selectAll">
+                            Select All
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Actions -->
+        <div class="bulk-actions" id="bulkActions" style="display: none;">
+            <span class="selected-count">
+                <span id="selectedCount">0</span> selected
+            </span>
+            <button class="btn btn-sm btn-danger" onclick="bulkDelete()">
+                <i class="bi bi-trash"></i> Delete Selected
+            </button>
+            <button class="btn btn-sm btn-warning ms-2" onclick="bulkUpdate()">
+                <i class="bi bi-pencil"></i> Update Selected
+            </button>
+        </div>
+
+        <!-- Leads List -->
+        <div id="leadsList">
+            <!-- Leads will be loaded here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <i class="bi bi-people" style="font-size: 64px; color: #dee2e6;"></i>
+            <h5 class="mt-3 text-muted">No leads found</h5>
+            <p class="text-muted">No leads available for this device</p>
+        </div>
+    
+    <!-- Add/Edit Lead Modal -->
+    <div class="modal fade" id="leadModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="leadModalTitle">Add New Lead</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="leadForm">
+                        <input type="hidden" id="leadId">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="leadName" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="leadPhone" placeholder="60123456789" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Niche</label>
+                                <input type="text" class="form-control" id="leadNiche" placeholder="EXSTART or EXSTART,ITADRESS">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Status</label>
+                                <select class="form-control" id="leadStatus">
+                                    <option value="prospect">Prospect</option>
+                                    <option value="customer">Customer</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Sequence Triggers</label>
+                            <input type="text" class="form-control" id="leadTrigger" placeholder="fitness_start,crypto_welcome (comma-separated)">
+                            <small class="text-muted">Enter sequence triggers to auto-enroll this lead</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Additional Note</label>
+                            <textarea class="form-control" id="leadJourney" rows="3" placeholder="Enter additional notes about this lead..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveLead()">Save Lead</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Import Leads from CSV</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Upload a CSV file with the following columns:</p>
+                    <ul>
+                        <li><strong>name</strong> (required) - Lead's name</li>
+                        <li><strong>phone</strong> (required) - Phone number in format like 60123456789</li>
+                        <li><strong>niche</strong> (required) - Can be single (EXSTART) or multiple (EXSTART,ITADRESS)</li>
+                        <li><strong>target_status</strong> (required) - Either "prospect" or "customer"</li>
+                        <li><strong>trigger</strong> (optional) - Can be single (EXSTART) or multiple (EXSTART,ITADRESS)</li>
+                    </ul>
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> <strong>Note:</strong> Only these 5 columns are accepted. Any other columns will be ignored.
+                    </div>
+                    <div class="mt-3">
+                        <input type="file" class="form-control" id="importFileInput" accept=".csv">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="processImport()">Import Leads</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Update Modal -->
+    <div class="modal fade" id="bulkUpdateModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Bulk Update Selected Leads</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Update <span id="bulkUpdateCount">0</span> selected leads. Leave fields empty to keep existing values.</p>
+                    <form id="bulkUpdateForm">
+                        <div class="mb-3">
+                            <label class="form-label">Customer Name</label>
+                            <input type="text" class="form-control" id="bulkName" placeholder="Customer name">
+                            <small class="text-muted">Leave empty to keep existing values</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Niche</label>
+                            <input type="text" class="form-control" id="bulkNiche" placeholder="EXSTART or EXSTART,ITADRESS">
+                            <small class="text-muted">Leave empty to keep existing values</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Target Status</label>
+                            <select class="form-control" id="bulkStatus">
+                                <option value="">Keep existing</option>
+                                <option value="prospect">Prospect</option>
+                                <option value="customer">Customer</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Sequence Triggers</label>
+                            <input type="text" class="form-control" id="bulkTrigger" placeholder="fitness_start,crypto_welcome (comma-separated)">
+                            <small class="text-muted">Leave empty to keep existing values</small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveBulkUpdate()">Update Selected</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Get device ID from URL
+        const pathParts = window.location.pathname.split('/');
+        const deviceId = pathParts[pathParts.length - 2];
+        const isPublicView = true; // Always true for public view
+        
+        // Global variables
+        let leads = [];
+        let currentFilter = 'all';
+        let currentNicheFilter = 'all';
+        let currentTriggerFilter = 'all';
+        let leadModal;
+        let importModal;
+        let bulkUpdateModal;
+        let selectedLeads = new Set();
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('deviceId').textContent = deviceId;
+            
+            // Initialize modals
+            leadModal = new bootstrap.Modal(document.getElementById('leadModal'));
+            importModal = new bootstrap.Modal(document.getElementById('importModal'));
+            bulkUpdateModal = new bootstrap.Modal(document.getElementById('bulkUpdateModal'));
+            
+            // Load device info and leads
+            loadDeviceInfo();
+            loadLeads();
+            
+            // Setup status filter handlers
+            document.querySelectorAll('#statusFilters .filter-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    document.querySelector('#statusFilters .filter-chip.active').classList.remove('active');
+                    this.classList.add('active');
+                    currentFilter = this.dataset.status;
+                    filterLeads();
+                });
+            });
+            
+            // Setup trigger filter handlers
+            document.querySelectorAll('#triggerFilters .filter-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    document.querySelector('#triggerFilters .filter-chip.active').classList.remove('active');
+                    this.classList.add('active');
+                    const previousFilter = currentTriggerFilter;
+                    currentTriggerFilter = this.dataset.trigger;
+                    
+                    // If switching to/from history, reload leads
+                    if ((previousFilter === 'history' && currentTriggerFilter !== 'history') ||
+                        (previousFilter !== 'history' && currentTriggerFilter === 'history')) {
+                        loadLeads();
+                    } else {
+                        filterLeads();
+                    }
+                });
+            });
+        });
+        
+        // Load device info
+        function loadDeviceInfo() {
+            fetch(`/api/public/device/${deviceId}/info`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.device) {
+                        document.getElementById('deviceName').textContent = data.device.name || 'Unknown Device';
+                    }
+                })
+                .catch(error => console.error('Error loading device:', error));
+        }
+        
+        // Load leads
+        function loadLeads() {
+            // Load all leads by default
+            const url = `/api/public/device/${deviceId}/leads?per_page=1000`;
+                
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    // Handle the response format from public API
+                    if (data.code === 'SUCCESS' && data.results && data.results.leads && Array.isArray(data.results.leads)) {
+                        leads = data.results.leads;
+                        document.getElementById('totalLeads').textContent = data.results.pagination ? data.results.pagination.total : leads.length;
+                    } else if (data.leads && Array.isArray(data.leads)) {
+                        leads = data.leads;
+                        document.getElementById('totalLeads').textContent = leads.length;
+                    }
+                    buildNicheFilters();
+                    displayLeads();
+                    updateSelectAllCheckbox();
+                })
+                .catch(error => {
+                    console.error('Error loading leads:', error);
+                    leads = [];
+                    displayLeads();
+                });
+        }
+        
+        // Display leads
+        function displayLeads() {
+            const leadsList = document.getElementById('leadsList');
+            const emptyState = document.getElementById('emptyState');
+            
+            const filteredLeads = getFilteredLeads();
+            
+            if (filteredLeads.length === 0) {
+                leadsList.innerHTML = '';
+                emptyState.style.display = 'block';
+            } else {
+                emptyState.style.display = 'none';
+                leadsList.innerHTML = filteredLeads.map(lead => createLeadCard(lead)).join('');
+            }
+        }
+        
+        // Build niche filters from leads
+        function buildNicheFilters() {
+            const nicheSet = new Set();
+            
+            // Collect all unique niches
+            leads.forEach(lead => {
+                if (lead.niche) {
+                    const niches = lead.niche.split(',').map(n => n.trim());
+                    niches.forEach(niche => nicheSet.add(niche));
+                }
+            });
+            
+            // Build filter HTML
+            const nicheFilters = document.getElementById('nicheFilters');
+            nicheFilters.innerHTML = '<span class="filter-chip active" data-niche="all">All</span>';
+            
+            Array.from(nicheSet).sort().forEach(niche => {
+                nicheFilters.innerHTML += `<span class="filter-chip" data-niche="${niche}">${niche}</span>`;
+            });
+            
+            // Add click handlers
+            nicheFilters.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    nicheFilters.querySelector('.filter-chip.active').classList.remove('active');
+                    this.classList.add('active');
+                    currentNicheFilter = this.dataset.niche;
+                    filterLeads();
+                });
+            });
+            
+            // Build trigger filters too
+            buildTriggerFilters();
+        }
+        
+        // Build trigger filters from leads
+        function buildTriggerFilters() {
+            const triggerSet = new Set();
+            
+            // Collect all unique triggers
+            leads.forEach(lead => {
+                if (lead.trigger) {
+                    const triggers = lead.trigger.split(',').map(t => t.trim());
+                    triggers.forEach(trigger => triggerSet.add(trigger));
+                }
+            });
+            
+            // Build filter HTML
+            const triggerFilters = document.getElementById('triggerFilters');
+            triggerFilters.innerHTML = `
+                <span class="filter-chip active" data-trigger="all">All</span>
+                <span class="filter-chip" data-trigger="has-trigger">Has Trigger</span>
+                <span class="filter-chip" data-trigger="no-trigger">No Trigger</span>
+            `;
+            
+            // Add separator if there are triggers
+            if (triggerSet.size > 0) {
+                triggerFilters.innerHTML += '<span style="margin: 0 8px; color: #ccc;">|</span>';
+            }
+            
+            Array.from(triggerSet).sort().forEach(trigger => {
+                triggerFilters.innerHTML += `<span class="filter-chip" data-trigger="${trigger}">${trigger}</span>`;
+            });
+            
+            // Add click handlers
+            triggerFilters.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    triggerFilters.querySelector('.filter-chip.active').classList.remove('active');
+                    this.classList.add('active');
+                    currentTriggerFilter = this.dataset.trigger;
+                    filterLeads();
+                });
+            });
+        }
+        
+        // Create lead card HTML (simplified for public view)
+        function createLeadCard(lead) {
+            const lastInteraction = lead.last_interaction 
+                ? new Date(lead.last_interaction).toLocaleDateString() 
+                : 'Never';
+            
+            return `
+                <div class="lead-card ${selectedLeads.has(lead.id) ? 'selected' : ''}" data-lead-id="${lead.id}">
+                    <div class="d-flex align-items-start">
+                        <input type="checkbox" class="form-check-input lead-checkbox" 
+                               value="${lead.id}" 
+                               ${selectedLeads.has(lead.id) ? 'checked' : ''}
+                               onchange="toggleLeadSelection('${lead.id}')"
+                               onclick="event.stopPropagation()">
+                        <div class="lead-card-content" onclick="editLead('${lead.id}')">
+                            <div class="flex-grow-1">
+                                <h5 class="mb-1" style="cursor: pointer; color: var(--primary);">${lead.name}</h5>
+                                <p class="mb-2">
+                                    <i class="bi bi-telephone text-muted"></i> ${lead.phone}
+                                    ${lead.niche ? `<span class="ms-3"><i class="bi bi-briefcase text-muted"></i> ${lead.niche}</span>` : ''}
+                                </p>
+                                <div class="d-flex align-items-center">
+                                    <span class="lead-target_status ${lead.target_status || lead.status}">${(lead.target_status || lead.status || '').toUpperCase()}</span>
+                                    <span class="text-muted small ms-3">Last interaction: ${lastInteraction}</span>
+                                </div>
+                                ${lead.journey ? `<div class="lead-journey">${lead.journey}</div>` : ''}
+                                ${lead.trigger ? `<div class="mt-2"><span class="badge bg-info"><i class="bi bi-lightning"></i> Trigger: ${lead.trigger}</span></div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Filter leads
+        function getFilteredLeads() {
+            let filtered = leads;
+            
+            // Status filter
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(lead => (lead.target_status || lead.status) === currentFilter);
+            }
+            
+            // Niche filter
+            if (currentNicheFilter !== 'all') {
+                filtered = filtered.filter(lead => {
+                    if (!lead.niche) return false;
+                    const niches = lead.niche.split(',').map(n => n.trim());
+                    return niches.includes(currentNicheFilter);
+                });
+            }
+            
+            // Trigger filter
+            if (currentTriggerFilter === 'has-trigger') {
+                filtered = filtered.filter(lead => lead.trigger && lead.trigger.trim() !== '');
+            } else if (currentTriggerFilter === 'no-trigger') {
+                filtered = filtered.filter(lead => !lead.trigger || lead.trigger.trim() === '');
+            } else if (currentTriggerFilter !== 'all') {
+                filtered = filtered.filter(lead => {
+                    if (!lead.trigger) return false;
+                    const triggers = lead.trigger.split(',').map(t => t.trim());
+                    return triggers.includes(currentTriggerFilter);
+                });
+            }
+            
+            // Search filter
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            if (searchTerm) {
+                filtered = filtered.filter(lead => 
+                    lead.name.toLowerCase().includes(searchTerm) ||
+                    lead.phone.includes(searchTerm) ||
+                    (lead.niche && lead.niche.toLowerCase().includes(searchTerm)) ||
+                    (lead.trigger && lead.trigger.toLowerCase().includes(searchTerm)) ||
+                    (lead.journey && lead.journey.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            return filtered;
+        }
+        
+        // Search leads
+        function searchLeads() {
+            displayLeads();
+        }
+        
+        // Filter leads
+        function filterLeads() {
+            displayLeads();
+        }
+
+        // Toggle select all
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.lead-checkbox');
+            
+            if (selectAll.checked) {
+                checkboxes.forEach(cb => {
+                    cb.checked = true;
+                    selectedLeads.add(cb.value);
+                });
+            } else {
+                checkboxes.forEach(cb => {
+                    cb.checked = false;
+                });
+                selectedLeads.clear();
+            }
+            
+            updateBulkActionsVisibility();
+            updateSelectedCount();
+        }
+        
+        // Toggle individual lead selection
+        function toggleLeadSelection(leadId) {
+            if (selectedLeads.has(leadId)) {
+                selectedLeads.delete(leadId);
+            } else {
+                selectedLeads.add(leadId);
+            }
+            
+            updateBulkActionsVisibility();
+            updateSelectedCount();
+            updateSelectAllCheckbox();
+        }
+        
+        // Update bulk actions visibility
+        function updateBulkActionsVisibility() {
+            const bulkActions = document.getElementById('bulkActions');
+            if (selectedLeads.size > 0) {
+                bulkActions.style.display = 'flex';
+            } else {
+                bulkActions.style.display = 'none';
+            }
+        }
+        
+        // Update selected count
+        function updateSelectedCount() {
+            const element = document.getElementById('selectedCount');
+            if (element) element.textContent = selectedLeads.size;
+            const bulkElement = document.getElementById('bulkUpdateCount');
+            if (bulkElement) bulkElement.textContent = selectedLeads.size;
+        }
+        
+        // Update select all checkbox
+        function updateSelectAllCheckbox() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.lead-checkbox');
+            
+            if (!selectAll) return;
+            
+            if (checkboxes.length === 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            } else if (selectedLeads.size === 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            } else if (selectedLeads.size === checkboxes.length) {
+                selectAll.checked = true;
+                selectAll.indeterminate = false;
+            } else {
+                selectAll.checked = false;
+                selectAll.indeterminate = true;
+            }
+        }
+        
+        // Open add lead modal
+        function openAddLeadModal() {
+            document.getElementById('leadModalTitle').textContent = 'Add New Lead';
+            document.getElementById('leadForm').reset();
+            document.getElementById('leadId').value = '';
+            document.getElementById('leadStatus').value = 'prospect';
+            leadModal.show();
+        }
+        
+        // Edit lead
+        function editLead(leadId) {
+            const lead = leads.find(l => l.id === leadId);
+            if (lead) {
+                document.getElementById('leadModalTitle').textContent = 'Edit Lead';
+                document.getElementById('leadId').value = lead.id;
+                document.getElementById('leadName').value = lead.name;
+                document.getElementById('leadPhone').value = lead.phone;
+                document.getElementById('leadNiche').value = lead.niche || '';
+                document.getElementById('leadStatus').value = lead.target_status || lead.status || 'prospect';
+                document.getElementById('leadTrigger').value = lead.trigger || '';
+                document.getElementById('leadJourney').value = lead.journey || '';
+                leadModal.show();
+            }
+        }
+        
+        // Save lead
+        function saveLead() {
+            const leadId = document.getElementById('leadId').value;
+            const leadData = {
+                device_id: deviceId,
+                name: document.getElementById('leadName').value,
+                phone: document.getElementById('leadPhone').value,
+                niche: document.getElementById('leadNiche').value,
+                target_status: document.getElementById('leadStatus').value,
+                trigger: document.getElementById('leadTrigger').value,
+                journey: document.getElementById('leadJourney').value
+            };
+            
+            const url = leadId 
+                ? `/api/public/device/${deviceId}/lead/${leadId}`
+                : `/api/public/device/${deviceId}/lead`;
+            const method = leadId ? 'PUT' : 'POST';
+            
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(leadData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 'SUCCESS') {
+                    leadModal.hide();
+                    loadLeads();
+                    showAlert('success', leadId ? 'Lead updated successfully!' : 'Lead added successfully!');
+                } else {
+                    showAlert('danger', data.message || 'Failed to save lead');
+                }
+            })
+            .catch(error => {
+                showAlert('danger', 'Error: ' + error.message);
+            });
+        }
+        
+        // Bulk delete
+        function bulkDelete() {
+            if (selectedLeads.size === 0) return;
+            
+            if (confirm(`Are you sure you want to delete ${selectedLeads.size} lead(s)?`)) {
+                const promises = Array.from(selectedLeads).map(leadId => 
+                    fetch(`/api/public/device/${deviceId}/lead/${leadId}`, {
+                        method: 'DELETE'
+                    })
+                );
+                
+                Promise.all(promises)
+                    .then(() => {
+                        selectedLeads.clear();
+                        loadLeads();
+                        showAlert('success', 'Selected leads deleted successfully!');
+                    })
+                    .catch(error => {
+                        showAlert('danger', 'Error deleting leads: ' + error.message);
+                    });
+            }
+        }
+        
+        // Open bulk update modal
+        function bulkUpdate() {
+            if (selectedLeads.size === 0) return;
+            document.getElementById('bulkUpdateForm').reset();
+            bulkUpdateModal.show();
+        }
+        
+        // Save bulk update
+        function saveBulkUpdate() {
+            const updates = {
+                name: document.getElementById('bulkName').value,
+                niche: document.getElementById('bulkNiche').value,
+                target_status: document.getElementById('bulkStatus').value,
+                trigger: document.getElementById('bulkTrigger').value
+            };
+            
+            const promises = Array.from(selectedLeads).map(leadId => {
+                const lead = leads.find(l => l.id === leadId);
+                if (lead) {
+                    const updateData = {
+                        device_id: deviceId,
+                        name: lead.name,
+                        phone: lead.phone,
+                        niche: updates.niche || lead.niche || '',
+                        target_status: updates.target_status || lead.target_status || lead.status || 'prospect',
+                        trigger: updates.trigger || lead.trigger || '',
+                        journey: lead.journey || ''
+                    };
+                    
+                    return fetch(`/api/public/device/${deviceId}/lead/${leadId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updateData)
+                    });
+                }
+            });
+            
+            Promise.all(promises)
+                .then(() => {
+                    bulkUpdateModal.hide();
+                    selectedLeads.clear();
+                    loadLeads();
+                    showAlert('success', 'Selected leads updated successfully!');
+                })
+                .catch(error => {
+                    showAlert('danger', 'Error updating leads: ' + error.message);
+                });
+        }
+        
+        // Export leads
+        function exportLeads() {
+            const csvContent = createCSV(leads);
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `leads_${deviceId}_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // Create CSV content
+        function createCSV(leadsData) {
+            const headers = ['name', 'phone', 'niche', 'target_status', 'trigger'];
+            const rows = leadsData.map(lead => [
+                lead.name || '',
+                lead.phone || '',
+                lead.niche || '',
+                lead.target_status || lead.status || '',
+                lead.trigger || ''
+            ]);
+            
+            const csvContent = [
+                headers.join(','),
+                ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+            ].join('\n');
+            
+            return csvContent;
+        }
+        
+        // Import leads
+        function importLeads(input) {
+            const file = input.files[0];
+            if (file) {
+                importModal.show();
+                document.getElementById('importFileInput').files = input.files;
+            }
+            input.value = ''; // Clear input
+        }
+        
+        // Process import
+        function processImport() {
+            const fileInput = document.getElementById('importFileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showAlert('danger', 'Please select a file');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csv = e.target.result;
+                const lines = csv.split(/\r?\n/);
+                
+                if (lines.length < 2) {
+                    showAlert('danger', 'CSV file is empty or invalid');
+                    return;
+                }
+                
+                const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
+                const newLeads = [];
+                
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    
+                    const values = parseCSVLine(lines[i]);
+                    const lead = {};
+                    
+                    headers.forEach((header, index) => {
+                        if (values[index]) {
+                            lead[header] = values[index].trim();
+                        }
+                    });
+                    
+                    if (lead.phone && lead.name) {
+                        newLeads.push({
+                            device_id: deviceId,
+                            phone: lead.phone,
+                            name: lead.name,
+                            niche: lead.niche || '',
+                            target_status: lead.target_status || lead.status || 'prospect',
+                            trigger: lead.trigger || ''
+                        });
+                    }
+                }
+                
+                if (newLeads.length === 0) {
+                    showAlert('danger', 'No valid leads found in the CSV file');
+                    return;
+                }
+                
+                // Import leads one by one
+                const promises = newLeads.map(lead => 
+                    fetch(`/api/public/device/${deviceId}/lead`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(lead)
+                    })
+                );
+                
+                Promise.all(promises)
+                    .then(() => {
+                        importModal.hide();
+                        loadLeads();
+                        showAlert('success', `Successfully imported ${newLeads.length} leads!`);
+                    })
+                    .catch(error => {
+                        showAlert('danger', 'Error importing leads: ' + error.message);
+                    });
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // Parse CSV line
+        function parseCSVLine(line) {
+            const values = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    values.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            values.push(current.trim());
+            return values;
+        }
+        
+        // Show alert
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+            alertDiv.style.zIndex = '9999';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+    </script>
+</body>
+</html>

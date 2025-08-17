@@ -1,0 +1,41 @@
+// Fix for GetPendingMessagesAndLock in broadcast_repository.go
+// The issue is the scheduled_at comparison - it's looking 8 hours in the future!
+
+// WRONG (current code):
+AND bm.scheduled_at <= DATE_ADD(NOW(), INTERVAL 8 HOUR)
+AND bm.scheduled_at >= DATE_ADD(DATE_SUB(NOW(), INTERVAL 10 MINUTE), INTERVAL 8 HOUR)
+
+// CORRECT (should be):
+AND bm.scheduled_at <= NOW()  // Messages scheduled for now or past
+AND bm.scheduled_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)  // But not too old
+
+// The full corrected query should be:
+query := `
+    SELECT bm.id, bm.user_id, bm.device_id, bm.campaign_id, bm.sequence_id, 
+        bm.recipient_phone, bm.recipient_name, bm.message_type, bm.content AS message, bm.media_url, 
+        bm.scheduled_at, bm.group_id, bm.group_order, bm.sequence_stepid,
+        COALESCE(
+            c.min_delay_seconds, 
+            ss.min_delay_seconds, 
+            s.min_delay_seconds, 
+            10
+        ) AS min_delay,
+        COALESCE(
+            c.max_delay_seconds, 
+            ss.max_delay_seconds, 
+            s.max_delay_seconds, 
+            30
+        ) AS max_delay
+    FROM broadcast_messages bm
+    LEFT JOIN campaigns c ON bm.campaign_id = c.id
+    LEFT JOIN sequences s ON bm.sequence_id = s.id
+    LEFT JOIN sequence_steps ss ON bm.sequence_stepid = ss.id
+    WHERE bm.device_id = ? 
+    AND bm.status = 'pending'
+    AND bm.processing_worker_id IS NULL
+    AND bm.scheduled_at IS NOT NULL
+    AND bm.scheduled_at <= NOW()  -- FIXED: Messages ready to send now
+    ORDER BY bm.scheduled_at ASC, bm.group_id, bm.group_order
+    LIMIT ?
+    FOR UPDATE SKIP LOCKED
+`

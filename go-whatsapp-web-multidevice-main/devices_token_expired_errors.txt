@@ -1,0 +1,42 @@
+DEVICES WITH TOKEN INVALID OR DEVICE EXPIRED ERRORS
+======================================================================
+
+Total Devices Found: 3
+----------------------------------------------------------------------
+
+1. Device Name: SCHQ-S105
+   Platform: Wablas
+   JID: Yoe29qfRgrRJTT5FeP6aNPSRlKa5SBsQ7BUtF104Bzi1gCmkTiW108N.lI8HWxVg
+   Device ID: b2fdd012-8e14-4568-9ccb-c0d89263a8e5
+   Status: online
+   Error Count: 219
+   First Error: 2025-08-02 17:06:26
+   Last Error: 2025-08-02 18:14:25
+   Sample Error: wablas API error: status 500, body: {"status":false,"message":"token invalid or device expired"}
+
+2. Device Name: SCHQ-S02
+   Platform: Wablas
+   JID: DMWyouIr5jW25CHQGTxbvVKjqEetPpyTUBL8EeFuitUeh58h1rXAqL3.ginoWJ0i
+   Device ID: 102a5012-eaf1-456b-a7cf-2a29746e7048
+   Status: online
+   Error Count: 87
+   First Error: 2025-08-02 17:01:28
+   Last Error: 2025-08-02 18:14:24
+   Sample Error: wablas API error: status 500, body: {"status":false,"message":"token invalid or device expired"}
+
+3. Device Name: SCHQ-S09
+   Platform: Wablas
+   JID: HlEn3SJito0fxcbM6I6uNCLQMx6FbAELGBmIWRRl8UBk0dTOAkKNWT5.Sj20EXwm
+   Device ID: 315e4f8e-6868-4808-a3df-f75e9fce331f
+   Status: online
+   Error Count: 17
+   First Error: 2025-08-02 17:01:28
+   Last Error: 2025-08-02 18:04:27
+   Sample Error: wablas API error: status 500, body: {"status":false,"message":"token invalid or device expired"}
+
+
+======================================================================
+SUMMARY BY PLATFORM:
+----------------------------------------------------------------------
+
+Wablas: 3 devices, 323 messages

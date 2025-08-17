@@ -1,0 +1,43 @@
+# MySQL Quick Connection Reference
+
+## Copy-Paste Ready Connection
+
+### phpMyAdmin (Web Browser)
+```
+URL: http://159.89.198.71/phpmyadmin
+Username: admin_aqil
+Password: admin_aqil
+```
+
+### Python One-Liner
+```python
+import pymysql; conn = pymysql.connect(host='159.89.198.71', port=3306, user='admin_aqil', password='admin_aqil', database='admin_railway'); cursor = conn.cursor()
+```
+
+### MySQL Command Line
+```bash
+mysql -h 159.89.198.71 -P 3306 -u admin_aqil -padmin_aqil admin_railway
+```
+
+### Connection String
+```
+mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
+```
+
+## Database Info
+- **Host**: 159.89.198.71
+- **Port**: 3306
+- **Database**: admin_railway
+- **Username**: admin_aqil
+- **Password**: admin_aqil
+- **Timezone**: UTC (app adds +8 for Malaysia)
+
+## Main Tables
+- `broadcast_messages` - Message queue
+- `campaigns` - Campaigns
+- `sequences` - Sequences
+- `leads` - Contacts
+- `user_devices` - Devices
+
+---
+Save this file for quick access!

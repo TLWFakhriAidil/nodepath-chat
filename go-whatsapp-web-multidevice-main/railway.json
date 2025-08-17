@@ -1,0 +1,24 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "cd src && go build -o ../main ."
+  },
+  "deploy": {
+    "startCommand": "./main",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "variables": {
+    "APP_PORT": "3000",
+    "APP_DEBUG": "false",
+    "APP_OS": "WhatsApp Business System",
+    "APP_BASIC_AUTH": "admin:changeme123",
+    "APP_CHAT_FLUSH_INTERVAL": "30",
+    "WHATSAPP_CHAT_STORAGE": "true",
+    "WHATSAPP_ACCOUNT_VALIDATION": "true",
+    "WHATSAPP_AUTO_REPLY": "Thank you for contacting us. We will respond shortly.",
+    "NODE_ENV": "production",
+    "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+  }
+}

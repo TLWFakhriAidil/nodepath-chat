@@ -1,0 +1,31 @@
+-- Optimize database schema for proper timezone handling
+
+-- 1. Add timezone-aware columns to campaigns table
+ALTER TABLE campaigns 
+ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ;
+
+-- 2. Migrate existing data to timezone-aware format
+UPDATE campaigns 
+SET scheduled_at = (campaign_date || ' ' || COALESCE(scheduled_time, '00:00:00'))::timestamp AT TIME ZONE 'Asia/Kuala_Lumpur'
+WHERE scheduled_at IS NULL;
+
+-- 3. Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_campaigns_scheduled_at ON campaigns(scheduled_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_campaigns_status_scheduled ON campaigns(status, scheduled_at);
+
+-- 4. View campaigns with proper timezone conversion
+SELECT 
+    id,
+    title,
+    scheduled_at,
+    scheduled_at AT TIME ZONE 'Asia/Kuala_Lumpur' as malaysia_time,
+    scheduled_at AT TIME ZONE 'UTC' as utc_time,
+    status,
+    CASE 
+        WHEN scheduled_at <= NOW() THEN 'Ready to send'
+        ELSE 'Scheduled for ' || (scheduled_at - NOW())::interval
+    END as send_status
+FROM campaigns
+WHERE status = 'pending'
+ORDER BY scheduled_at;

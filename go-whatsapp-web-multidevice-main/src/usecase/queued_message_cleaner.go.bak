@@ -1,0 +1,62 @@
+package usecase
+
+import (
+	"time"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/database"
+	"github.com/sirupsen/logrus"
+)
+
+// StartQueuedMessageCleaner handles stuck messages in queued state
+func StartQueuedMessageCleaner() {
+	logrus.Info("Starting queued message cleaner...")
+	
+	ticker := time.NewTicker(60 * time.Second) // Check every minute
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ticker.C:
+			cleanStuckMessages()
+		}
+	}
+}
+
+func cleanStuckMessages() {
+	db := database.GetDB()
+	
+	// 12 HOUR TIMEOUT FOR ALL DEVICES
+	// This gives plenty of time for:
+	// - WhatsApp Web: Anti-ban delays (30-60s per message) 
+	// - Platform: API rate limits
+	// - Processing 1000+ messages safely
+	
+	// Clean messages that have been queued for more than 12 hours
+	result, err := db.Exec(`
+		UPDATE broadcast_messages SET ` + "`status`" + ` = 'failed', 
+		    updated_at = CURRENT_TIMESTAMP,
+		    error_message = 'Message timeout - could not be delivered within 12 hours'
+		WHERE ` + "`status`" + ` = 'queued' 
+		AND updated_at < (DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 12 HOUR))
+	`)
+	
+	if err != nil {
+		logrus.Errorf("Failed to clean stuck messages: %v", err)
+		return
+	}
+	
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		logrus.Warnf("Marked %d stuck queued messages as failed after 12 hour timeout", rowsAffected)
+	}
+	
+	// Log current queue status
+	var queuedCount int
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM broadcast_messages 
+		WHERE ` + "`status`" + ` = 'queued'
+	`).Scan(&queuedCount)
+	
+	if err == nil && queuedCount > 0 {
+		logrus.Debugf("Currently %d messages in queue (12 hour timeout applied)", queuedCount)
+	}
+}

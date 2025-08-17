@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Report - WhatsApp Analytics</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #075e54;
+            --primary-dark: #064e46;
+            --success: #25d366;
+            --light-bg: #f0f2f5;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        }
+
+        body {
+            background-color: var(--light-bg);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .navbar {
+            background-color: var(--primary) !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand {
+            color: white !important;
+            font-weight: 600;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .stats-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+
+        .stats-label {
+            color: #6c757d;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .report-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+        }
+
+        .report-table table {
+            margin-bottom: 0;
+        }
+
+        .report-table th {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.875rem;
+            letter-spacing: 0.5px;
+            padding: 1rem;
+        }
+
+        .report-table td {
+            padding: 1rem;
+            vertical-align: middle;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .back-link {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-whatsapp"></i> Device Report
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid mt-4">
+        <!-- Back Link -->
+        <div class="mb-3">
+            <a href="#" onclick="goBack()" class="back-link">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+
+        <!-- Page Header -->
+        <div class="mb-4">
+            <h2 id="sequenceName">Loading...</h2>
+            <p class="text-muted" id="deviceInfo"></p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading device report...</p>
+        </div>
+
+        <!-- Report Content -->
+        <div id="reportContent" style="display: none;">
+            <!-- Overall Statistics -->
+            <div class="row mb-4" id="overallStats">
+                <!-- Stats will be loaded here -->
+            </div>
+
+            <!-- Step-wise Statistics -->
+            <div class="mb-4">
+                <h4>Step-wise Statistics</h4>
+                <div class="row" id="stepStats">
+                    <!-- Step stats will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Device Report Table -->
+            <div class="report-table">
+                <h4 class="p-3 mb-0">Device Performance</h4>
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Step</th>
+                            <th>Day</th>
+                            <th>Should Send</th>
+                            <th>Done</th>
+                            <th>Failed</th>
+                            <th>Remaining</th>
+                            <th>Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deviceReportBody">
+                        <!-- Data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Get parameters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const deviceId = urlParams.get('device');
+        const sequenceId = window.location.pathname.split('/')[2];
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!deviceId || !sequenceId) {
+                showError('Invalid parameters');
+                return;
+            }
+            
+            loadDeviceReport();
+        });
+        
+        // Load device report
+        function loadDeviceReport() {
+            fetch(`/api/sequences/${sequenceId}/device-report`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 'SUCCESS' && data.results) {
+                        // Filter data for specific device
+                        const filteredData = filterDataForDevice(data.results, deviceId);
+                        displayReport(filteredData);
+                    } else {
+                        showError('Failed to load report');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading report:', error);
+                    showError('Error loading report');
+                });
+        }
+        
+        // Filter data for specific device
+        function filterDataForDevice(data, deviceId) {
+            // Filter devices array to only show the specific device
+            const filteredDevices = data.devices.filter(d => d.device_id === deviceId);
+            
+            // Recalculate totals based on filtered device
+            let totalShouldSend = 0;
+            let totalDoneSend = 0;
+            let totalFailedSend = 0;
+            let totalRemainingSend = 0;
+            
+            filteredDevices.forEach(device => {
+                device.steps.forEach(step => {
+                    totalShouldSend += step.should_send;
+                    totalDoneSend += step.done_send;
+                    totalFailedSend += step.failed_send;
+                    totalRemainingSend += step.remaining_send;
+                });
+            });
+            
+            return {
+                ...data,
+                devices: filteredDevices,
+                totalDevices: 1,
+                activeDevices: filteredDevices.length > 0 && filteredDevices[0].status === 'online' ? 1 : 0,
+                disconnectedDevices: filteredDevices.length > 0 && filteredDevices[0].status !== 'online' ? 1 : 0,
+                shouldSend: totalShouldSend,
+                doneSend: totalDoneSend,
+                failedSend: totalFailedSend,
+                remainingSend: totalRemainingSend
+            };
+        }
+        
+        // Display report
+        function displayReport(data) {
+            // Set sequence name
+            document.getElementById('sequenceName').textContent = data.sequenceName || 'Sequence Report';
+            
+            // Set device info
+            if (data.devices.length > 0) {
+                const device = data.devices[0];
+                document.getElementById('deviceInfo').textContent = `Device: ${device.device_name} (${device.platform || 'WhatsApp Web'})`;
+            }
+            
+            // Display overall statistics
+            displayOverallStats(data);
+            
+            // Display step statistics
+            displayStepStats(data.stepTotals);
+            
+            // Display device table
+            displayDeviceTable(data.devices);
+            
+            // Hide loading, show content
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('reportContent').style.display = 'block';
+        }
+        
+        // Display overall statistics
+        function displayOverallStats(data) {
+            const statsHtml = `
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <i class="bi bi-envelope text-primary" style="font-size: 2rem;"></i>
+                        <div class="stats-value text-primary">${data.shouldSend || 0}</div>
+                        <div class="stats-label">Should Send</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                        <div class="stats-value text-success">${data.doneSend || 0}</div>
+                        <div class="stats-label">Done Send</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
+                        <div class="stats-value text-danger">${data.failedSend || 0}</div>
+                        <div class="stats-label">Failed Send</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <i class="bi bi-clock text-warning" style="font-size: 2rem;"></i>
+                        <div class="stats-value text-warning">${data.remainingSend || 0}</div>
+                        <div class="stats-label">Remaining</div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('overallStats').innerHTML = statsHtml;
+        }
+        
+        // Display step statistics
+        function displayStepStats(stepTotals) {
+            if (!stepTotals) return;
+            
+            let stepHtml = '';
+            for (const [stepId, stats] of Object.entries(stepTotals)) {
+                const successRate = stats.should_send > 0 
+                    ? ((stats.done_send / stats.should_send) * 100).toFixed(1) 
+                    : 0;
+                
+                stepHtml += `
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="stats-card">
+                            <h6>${stats.name} (Day ${stats.day})</h6>
+                            <div class="row mt-3">
+                                <div class="col-6">
+                                    <div class="text-primary">${stats.should_send}</div>
+                                    <small>Should Send</small>
+                                </div>
+                                <div class="col-6">
+                                    <div class="text-success">${stats.done_send}</div>
+                                    <small>Done</small>
+                                </div>
+                            </div>
+                            <div class="progress mt-3" style="height: 10px;">
+                                <div class="progress-bar bg-success" style="width: ${successRate}%"></div>
+                            </div>
+                            <small class="text-muted">${successRate}% Success</small>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('stepStats').innerHTML = stepHtml;
+        }
+        
+        // Display device table
+        function displayDeviceTable(devices) {
+            if (!devices || devices.length === 0) {
+                document.getElementById('deviceReportBody').innerHTML = 
+                    '<tr><td colspan="7" class="text-center text-muted">No data available</td></tr>';
+                return;
+            }
+            
+            let tableHtml = '';
+            devices.forEach(device => {
+                device.steps.forEach(step => {
+                    const successRate = step.should_send > 0 
+                        ? ((step.done_send / step.should_send) * 100).toFixed(1) 
+                        : 0;
+                    
+                    tableHtml += `
+                        <tr>
+                            <td>${step.step_name}</td>
+                            <td>Day ${step.day}</td>
+                            <td>${step.should_send}</td>
+                            <td class="text-success">${step.done_send}</td>
+                            <td class="text-danger">${step.failed_send}</td>
+                            <td class="text-warning">${step.remaining_send}</td>
+                            <td>
+                                <div class="progress" style="width: 100px; height: 20px;">
+                                    <div class="progress-bar bg-success" style="width: ${successRate}%">
+                                        ${successRate}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            });
+            
+            document.getElementById('deviceReportBody').innerHTML = tableHtml;
+        }
+        
+        // Show error
+        function showError(message) {
+            document.getElementById('loadingState').innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-triangle"></i> ${message}
+                </div>
+            `;
+        }
+        
+        // Go back
+        function goBack() {
+            // Get device name from previous page or storage
+            window.history.back();
+        }
+    </script>
+</body>
+</html>

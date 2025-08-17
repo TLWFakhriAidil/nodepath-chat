@@ -1,0 +1,379 @@
+package rest
+
+import (
+	"database/sql"
+	"fmt"
+	"time"
+	
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/repository"
+	"github.com/dustin/go-humanize"
+	"github.com/gofiber/fiber/v2"
+	"github.com/sirupsen/logrus"
+)
+
+// InitPublicDeviceRoutes initializes public device view routes
+func InitPublicDeviceRoutes(app *fiber.App, db *sql.DB) {
+	// Public device view - no auth required
+	app.Get("/device/:deviceId", func(c *fiber.Ctx) error {
+		deviceID := c.Params("deviceId")
+		if deviceID == "" {
+			return c.Status(404).SendString("Device not found")
+		}
+		
+		// Verify device exists
+		userRepo := repository.GetUserRepository()
+		device, err := userRepo.GetDeviceByID(deviceID)
+		if err != nil {
+			return c.Status(404).SendString("Device not found")
+		}
+		
+		logrus.Infof("Public view accessed for device: %s (%s)", device.Name, device.ID)
+		
+		// Render public device view
+		return c.Render("views/public_device", fiber.Map{
+			"AppHost":        fmt.Sprintf("%s://%s", c.Protocol(), c.Hostname()),
+			"AppVersion":     config.AppVersion,
+			"DeviceID":       device.ID,
+			"DeviceName":     device.Name,
+			"DevicePhone":    device.Phone,
+			"MaxFileSize":    humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize)),
+			"MaxVideoSize":   humanize.Bytes(uint64(config.WhatsappSettingMaxVideoSize)),
+			"IsPublicView":   true,
+		})
+	})
+}
+
+// PublicDeviceAPI provides API endpoints for public device view
+type PublicDeviceAPI struct {
+	broadcastRepo *repository.BroadcastRepository
+	campaignRepo  *repository.CampaignRepository
+	sequenceRepo  *repository.SequenceRepository
+	leadRepo      *repository.LeadRepository
+}
+
+// InitPublicDeviceAPI initializes public device API endpoints
+func InitPublicDeviceAPI(app *fiber.App) {
+	api := &PublicDeviceAPI{
+		broadcastRepo: repository.GetBroadcastRepository(),
+		campaignRepo:  repository.GetCampaignRepository(),
+		sequenceRepo:  repository.GetSequenceRepository(),
+		leadRepo:      repository.GetLeadRepository(),
+	}
+	
+	// Public API endpoints - no auth required
+	publicAPI := app.Group("/api/public/device/:deviceId")
+	
+	// Get device info
+	publicAPI.Get("/info", api.GetDeviceInfo)
+	
+	// Get campaign summary for device
+	publicAPI.Get("/campaigns", api.GetDeviceCampaigns)
+	
+	// Get sequence summary for device
+	publicAPI.Get("/sequences", api.GetDeviceSequences)
+	
+	// Get recent messages for device
+	publicAPI.Get("/messages", api.GetDeviceMessages)
+}
+
+func (api *PublicDeviceAPI) GetDeviceInfo(c *fiber.Ctx) error {
+	deviceID := c.Params("deviceId")
+	
+	userRepo := repository.GetUserRepository()
+	device, err := userRepo.GetDeviceByID(deviceID)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Device not found"})
+	}
+	
+	// Get device statistics
+	db := repository.GetDB()
+	var stats struct {
+		TotalMessages   int `json:"total_messages"`
+		SentMessages    int `json:"sent_messages"`
+		PendingMessages int `json:"pending_messages"`
+		FailedMessages  int `json:"failed_messages"`
+	}
+	
+	query := `
+		SELECT 
+			COUNT(*) as total_messages,
+			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent_messages,
+			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_messages,
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_messages
+		FROM broadcast_messages 
+		WHERE device_id = ?
+	`
+	
+	err = db.QueryRow(query, deviceID).Scan(
+		&stats.TotalMessages,
+		&stats.SentMessages,
+		&stats.PendingMessages,
+		&stats.FailedMessages,
+	)
+	if err != nil {
+		logrus.Errorf("Failed to get device stats: %v", err)
+	}
+	
+	return c.JSON(fiber.Map{
+		"device": fiber.Map{
+			"id":     device.ID,
+			"name":   device.Name,
+			"phone":  device.Phone,
+			"status": device.Status,
+		},
+		"statistics": stats,
+	})
+}
+
+func (api *PublicDeviceAPI) GetDeviceCampaigns(c *fiber.Ctx) error {
+	deviceID := c.Params("deviceId")
+	startDate := c.Query("start_date", time.Now().AddDate(0, 0, -30).Format("2006-01-02"))
+	endDate := c.Query("end_date", time.Now().Format("2006-01-02"))
+	
+	db := repository.GetDB()
+	query := `
+		SELECT 
+			c.id,
+			c.name,
+			c.status,
+			c.start_time,
+			c.end_time,
+			COUNT(DISTINCT bm.id) as total_messages,
+			COUNT(DISTINCT CASE WHEN bm.status = 'sent' THEN bm.id END) as sent_messages,
+			COUNT(DISTINCT CASE WHEN bm.status = 'failed' THEN bm.id END) as failed_messages,
+			COUNT(DISTINCT bm.recipient_phone) as unique_recipients
+		FROM campaigns c
+		LEFT JOIN broadcast_messages bm ON c.id = bm.campaign_id AND bm.device_id = ?
+		WHERE DATE(bm.created_at) BETWEEN ? AND ?
+		GROUP BY c.id, c.name, c.status, c.start_time, c.end_time
+		ORDER BY c.created_at DESC
+	`
+	
+	rows, err := db.Query(query, deviceID, startDate, endDate)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch campaigns"})
+	}
+	defer rows.Close()
+	
+	var campaigns []fiber.Map
+	for rows.Next() {
+		var campaign struct {
+			ID               int            `json:"id"`
+			Name             string         `json:"name"`
+			Status           string         `json:"status"`
+			StartTime        sql.NullTime   `json:"start_time"`
+			EndTime          sql.NullTime   `json:"end_time"`
+			TotalMessages    int            `json:"total_messages"`
+			SentMessages     int            `json:"sent_messages"`
+			FailedMessages   int            `json:"failed_messages"`
+			UniqueRecipients int            `json:"unique_recipients"`
+		}
+		
+		err := rows.Scan(
+			&campaign.ID,
+			&campaign.Name,
+			&campaign.Status,
+			&campaign.StartTime,
+			&campaign.EndTime,
+			&campaign.TotalMessages,
+			&campaign.SentMessages,
+			&campaign.FailedMessages,
+			&campaign.UniqueRecipients,
+		)
+		if err != nil {
+			continue
+		}
+		
+		campaigns = append(campaigns, fiber.Map{
+			"id":                campaign.ID,
+			"name":              campaign.Name,
+			"status":            campaign.Status,
+			"start_time":        campaign.StartTime.Time,
+			"end_time":          campaign.EndTime.Time,
+			"total_messages":    campaign.TotalMessages,
+			"sent_messages":     campaign.SentMessages,
+			"failed_messages":   campaign.FailedMessages,
+			"unique_recipients": campaign.UniqueRecipients,
+			"success_rate":      calculateSuccessRate(campaign.SentMessages, campaign.TotalMessages),
+		})
+	}
+	
+	return c.JSON(fiber.Map{
+		"campaigns": campaigns,
+		"total":     len(campaigns),
+	})
+}
+
+func (api *PublicDeviceAPI) GetDeviceSequences(c *fiber.Ctx) error {
+	deviceID := c.Params("deviceId")
+	startDate := c.Query("start_date", time.Now().AddDate(0, 0, -30).Format("2006-01-02"))
+	endDate := c.Query("end_date", time.Now().Format("2006-01-02"))
+	
+	db := repository.GetDB()
+	query := `
+		SELECT 
+			s.id,
+			s.name,
+			s.status,
+			COUNT(DISTINCT sc.id) as total_contacts,
+			COUNT(DISTINCT CASE WHEN sc.status = 'active' THEN sc.id END) as active_contacts,
+			COUNT(DISTINCT CASE WHEN sc.status = 'completed' THEN sc.id END) as completed_contacts,
+			COUNT(DISTINCT bm.id) as total_messages,
+			COUNT(DISTINCT CASE WHEN bm.status = 'sent' THEN bm.id END) as sent_messages
+		FROM sequences s
+		LEFT JOIN sequence_contacts sc ON s.id = sc.sequence_id
+		LEFT JOIN broadcast_messages bm ON s.id = bm.sequence_id AND bm.device_id = ?
+		WHERE DATE(bm.created_at) BETWEEN ? AND ?
+		GROUP BY s.id, s.name, s.status
+		ORDER BY s.created_at DESC
+	`
+	
+	rows, err := db.Query(query, deviceID, startDate, endDate)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch sequences"})
+	}
+	defer rows.Close()
+	
+	var sequences []fiber.Map
+	for rows.Next() {
+		var sequence struct {
+			ID                 string `json:"id"`
+			Name               string `json:"name"`
+			Status             string `json:"status"`
+			TotalContacts      int    `json:"total_contacts"`
+			ActiveContacts     int    `json:"active_contacts"`
+			CompletedContacts  int    `json:"completed_contacts"`
+			TotalMessages      int    `json:"total_messages"`
+			SentMessages       int    `json:"sent_messages"`
+		}
+		
+		err := rows.Scan(
+			&sequence.ID,
+			&sequence.Name,
+			&sequence.Status,
+			&sequence.TotalContacts,
+			&sequence.ActiveContacts,
+			&sequence.CompletedContacts,
+			&sequence.TotalMessages,
+			&sequence.SentMessages,
+		)
+		if err != nil {
+			continue
+		}
+		
+		sequences = append(sequences, fiber.Map{
+			"id":                 sequence.ID,
+			"name":               sequence.Name,
+			"status":             sequence.Status,
+			"total_contacts":     sequence.TotalContacts,
+			"active_contacts":    sequence.ActiveContacts,
+			"completed_contacts": sequence.CompletedContacts,
+			"total_messages":     sequence.TotalMessages,
+			"sent_messages":      sequence.SentMessages,
+			"success_rate":       calculateSuccessRate(sequence.SentMessages, sequence.TotalMessages),
+		})
+	}
+	
+	return c.JSON(fiber.Map{
+		"sequences": sequences,
+		"total":     len(sequences),
+	})
+}
+
+func (api *PublicDeviceAPI) GetDeviceMessages(c *fiber.Ctx) error {
+	deviceID := c.Params("deviceId")
+	limit := c.QueryInt("limit", 100)
+	offset := c.QueryInt("offset", 0)
+	
+	db := repository.GetDB()
+	query := `
+		SELECT 
+			bm.id,
+			bm.recipient_phone,
+			bm.recipient_name,
+			bm.message_type,
+			bm.content,
+			bm.status,
+			bm.created_at,
+			bm.sent_at,
+			c.name as campaign_name,
+			s.name as sequence_name
+		FROM broadcast_messages bm
+		LEFT JOIN campaigns c ON bm.campaign_id = c.id
+		LEFT JOIN sequences s ON bm.sequence_id = s.id
+		WHERE bm.device_id = ?
+		ORDER BY bm.created_at DESC
+		LIMIT ? OFFSET ?
+	`
+	
+	rows, err := db.Query(query, deviceID, limit, offset)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch messages"})
+	}
+	defer rows.Close()
+	
+	var messages []fiber.Map
+	for rows.Next() {
+		var msg struct {
+			ID             string         `json:"id"`
+			RecipientPhone string         `json:"recipient_phone"`
+			RecipientName  sql.NullString `json:"recipient_name"`
+			MessageType    string         `json:"message_type"`
+			Content        string         `json:"content"`
+			Status         string         `json:"status"`
+			CreatedAt      time.Time      `json:"created_at"`
+			SentAt         sql.NullTime   `json:"sent_at"`
+			CampaignName   sql.NullString `json:"campaign_name"`
+			SequenceName   sql.NullString `json:"sequence_name"`
+		}
+		
+		err := rows.Scan(
+			&msg.ID,
+			&msg.RecipientPhone,
+			&msg.RecipientName,
+			&msg.MessageType,
+			&msg.Content,
+			&msg.Status,
+			&msg.CreatedAt,
+			&msg.SentAt,
+			&msg.CampaignName,
+			&msg.SequenceName,
+		)
+		if err != nil {
+			continue
+		}
+		
+		messages = append(messages, fiber.Map{
+			"id":               msg.ID,
+			"recipient_phone":  msg.RecipientPhone,
+			"recipient_name":   msg.RecipientName.String,
+			"message_type":     msg.MessageType,
+			"content":          msg.Content,
+			"status":           msg.Status,
+			"created_at":       msg.CreatedAt,
+			"sent_at":          msg.SentAt.Time,
+			"campaign_name":    msg.CampaignName.String,
+			"sequence_name":    msg.SequenceName.String,
+		})
+	}
+	
+	// Get total count
+	var total int
+	countQuery := `SELECT COUNT(*) FROM broadcast_messages WHERE device_id = ?`
+	db.QueryRow(countQuery, deviceID).Scan(&total)
+	
+	return c.JSON(fiber.Map{
+		"messages": messages,
+		"total":    total,
+		"limit":    limit,
+		"offset":   offset,
+	})
+}
+
+func calculateSuccessRate(sent, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(sent) / float64(total) * 100
+}

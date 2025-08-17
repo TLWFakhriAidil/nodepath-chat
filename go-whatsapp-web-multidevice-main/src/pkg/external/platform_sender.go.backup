@@ -1,0 +1,99 @@
+package external
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+	
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/antipattern"
+	"github.com/sirupsen/logrus"
+)
+
+// PlatformSender handles sending messages via external platforms
+type PlatformSender struct {
+	client            *http.Client
+	messageRandomizer *antipattern.MessageRandomizer
+	greetingProcessor *antipattern.GreetingProcessor
+}
+
+// NewPlatformSender creates a new platform sender
+func NewPlatformSender() *PlatformSender {
+	return &PlatformSender{
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		messageRandomizer: antipattern.NewMessageRandomizer(),
+		greetingProcessor: antipattern.NewGreetingProcessor(),
+	}
+}
+
+// SendMessage sends a message via external platform
+// NOTE: Anti-spam is already applied by BroadcastWorker - we just send raw content
+func (ps *PlatformSender) SendMessage(platform, instance, phone, recipientName, message, imageURL, deviceID string) error {
+	// Log initial request
+	logrus.Infof("[PLATFORM] Starting send via %s - Phone: %s, Device: %s, Has Image: %v", 
+		platform, phone, deviceID, imageURL != "")
+	logrus.Debugf("[PLATFORM] Message preview (first 100 chars): %s", truncateString(message, 100))
+	
+	// NO ANTI-SPAM HERE - Already handled by BroadcastWorker
+	
+	startTime := time.Now()
+	var err error
+	
+	switch platform {
+	case "Wablas":
+		logrus.Infof("[WABLAS] Sending to %s with token: %s...", phone, truncateString(instance, 10))
+		err = ps.sendViaWablas(instance, phone, message, imageURL)
+	case "Whacenter":
+		logrus.Infof("[WHACENTER] Sending to %s with device: %s", phone, instance)
+		err = ps.sendViaWhacenter(instance, phone, message, imageURL)
+	default:
+		err = fmt.Errorf("unknown platform: %s", platform)
+	}
+	
+	duration := time.Since(startTime)
+	
+	if err != nil {
+		logrus.Errorf("[PLATFORM] ❌ FAILED sending via %s to %s - Error: %v (took %v)", 
+			platform, phone, err, duration)
+		return err
+	}
+	
+	logrus.Infof("[PLATFORM] ✅ SUCCESS sending via %s to %s (took %v)", 
+		platform, phone, duration)
+	return nil
+}
+
+// sendViaWablas sends message via Wablas API
+func (ps *PlatformSender) sendViaWablas(token, phone, message, imageURL string) error {
+	if imageURL != "" {
+		// Send image with caption
+		return ps.sendWablasImage(token, phone, message, imageURL)
+	}
+	// Send text only
+	return ps.sendWablasText(token, phone, message)
+}
+
+// sendWablasText sends text message via Wablas
+func (ps *PlatformSender) sendWablasText(token, phone, message string) error {
+	apiURL := "https://my.wablas.com/api/send-message"
+	
+	logrus.Infof("[WABLAS-TEXT] Preparing request to %s for phone: %s", apiURL, phone)
+	
+	// Prepare form data
+	data := url.Values{}
+	data.Set("phone", phone)
+	data.Set("message", message)
+	
+	logrus.Debugf("[WABLAS-TEXT] Request data: phone=%s, message_length=%d", phone, len(message))
+	
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		logrus.Errorf("[WABLAS-TEXT] Failed to create request: %v", err)
+		return fmt.Errorf("failed to create request: %w", err)
+	}

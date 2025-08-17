@@ -1,0 +1,95 @@
+SEQUENCE LEADS DISCREPANCY - VISUAL EXPLANATION
+==============================================
+
+THE PROBLEM IN SIMPLE TERMS:
+---------------------------
+
+Imagine you have a sequence "COLD Sequence" with 3 steps sent to 3 people:
+
+STEP 1 (Day 1) - Welcome Message:
+┌─────────────────────────────┐
+│ • John (123) on Device A    │
+│ • Jane (456) on Device A    │
+│ • Bob (789) on Device B     │
+└─────────────────────────────┘
+Step 1 Total Leads: 3
+
+STEP 2 (Day 3) - Follow-up (only sent to those who didn't reply):
+┌─────────────────────────────┐
+│ • John (123) on Device A    │ ← Same person!
+│ • Jane (456) on Device A    │ ← Same person!
+└─────────────────────────────┘
+Step 2 Total Leads: 2
+
+STEP 3 (Day 5) - Final Message (only sent to non-responders):
+┌─────────────────────────────┐
+│ • John (123) on Device A    │ ← Same person again!
+└─────────────────────────────┘
+Step 3 Total Leads: 1
+
+CURRENT CALCULATION (WRONG):
+===========================
+Step 1 Leads: 3
+Step 2 Leads: 2
+Step 3 Leads: 1
+--------------
+TOTAL: 6 leads ❌ (This is wrong! John is counted 3 times)
+
+CORRECT CALCULATION:
+===================
+Unique people across all steps:
+• John (123) on Device A
+• Jane (456) on Device A
+• Bob (789) on Device B
+--------------
+TOTAL: 3 unique leads ✓
+
+WHERE THE CODE GOES WRONG:
+=========================
+
+1. In Sequence Summary (app.go ~line 2320):
+   ```go
+   // This ADDS up leads from each sequence
+   if leads, ok := seq["total_leads"].(int); ok {
+       totalLeadsSum += leads  // 3 + 2 + 1 = 6 ❌
+   }
+   ```
+
+2. In Step Statistics Display:
+   Each step shows its "Total Leads" separately:
+   - Step 1: 3 leads
+   - Step 2: 2 leads  
+   - Step 3: 1 lead
+   
+   Users see these numbers and think: "Oh, 6 total leads!"
+   But it's really just 3 people receiving multiple messages.
+
+THE FIX:
+========
+
+Instead of SUMMING leads from each step/sequence, we need to:
+COUNT(DISTINCT phone+device) across ALL messages in the sequence
+
+SQL Fix:
+```sql
+-- Don't do this (sums overlapping leads):
+SELECT SUM(total_leads) FROM (
+    SELECT COUNT(DISTINCT ...) as total_leads
+    GROUP BY sequence_stepid
+)
+
+-- Do this instead (counts unique leads):
+SELECT COUNT(DISTINCT CONCAT(recipient_phone, '|', device_id))
+FROM broadcast_messages
+WHERE sequence_id = ?
+```
+
+UI Fix:
+Add a note explaining that step totals overlap, or change 
+"Total Leads" to "Step Recipients" to avoid confusion.
+
+REAL-WORLD IMPACT:
+=================
+If you have a 7-step sequence, and most people receive all 7 steps,
+the current code might show "700 total leads" when you really only
+have 100 unique people in the sequence!
