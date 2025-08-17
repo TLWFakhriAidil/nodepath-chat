@@ -127,13 +127,8 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	webhook := api.Group("/webhook")
 	webhook.Post("/:id_device/:instance", h.HandleWebhook)
 
-	// AI WhatsApp routes
-	aiWhatsapp := api.Group("/ai-whatsapp")
-	aiWhatsapp.Post("/process-message", h.aiWhatsappHandlers.ProcessMessage)
-	aiWhatsapp.Get("/conversation/:phone_number/:id_device", h.aiWhatsappHandlers.GetConversation)
-	aiWhatsapp.Put("/conversation/:phone_number/:id_device/status", h.aiWhatsappHandlers.UpdateConversationStatus)
-	aiWhatsapp.Get("/prospects/:id_device", h.aiWhatsappHandlers.GetProspects)
-	aiWhatsapp.Post("/prospects", h.aiWhatsappHandlers.CreateProspect)
+	// AI WhatsApp routes - delegate to AIWhatsappHandlers
+	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
 }
 
 // Response helpers
