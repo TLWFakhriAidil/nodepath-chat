@@ -1,25 +1,9 @@
-# Railway deployment configuration for SSH tunnel setup
-# This file configures both the SSH tunnel service and main application
+# Railway deployment configuration for direct database connection
+# This file configures the main application with direct MySQL connection using Railway's static IP
 
 version: '1'
 
 services:
-  # SSH Tunnel Service - ENABLED (secure tunnel to database)
-  ssh-tunnel:
-    name: "mysql-ssh-tunnel"
-    build:
-      dockerfile: "Dockerfile.tunnel"
-    environment:
-      TUNNEL_HOST: "159.89.198.71"
-      TUNNEL_PORT: "22"
-      TUNNEL_USER: "root"
-      LOCAL_PORT: "3306"
-      REMOTE_HOST: "127.0.0.1"
-      REMOTE_PORT: "3306"
-      SSH_PRIVATE_KEY: "$SSH_PRIVATE_KEY"
-    ports:
-      - "3306:3306"
-
   # Main Application Service
   app:
     name: "nodepath-chat-app"
@@ -27,9 +11,9 @@ services:
       dockerfile: "Dockerfile"
     
     environment:
-      # Database connection through SSH tunnel (eliminates IP whitelisting)
-      DATABASE_URL: "mysql://admin_aqil:admin_aqil@ssh-tunnel:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
-      MYSQL_URI: "mysql://admin_aqil:admin_aqil@ssh-tunnel:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+      # Direct database connection using Railway's static outbound IP (208.77.246.15)
+      DATABASE_URL: "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+      MYSQL_URI: "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
       
       # OpenRouter API configuration
       OPENROUTER_DEFAULT_KEY: "$OPENROUTER_DEFAULT_KEY"
@@ -52,10 +36,6 @@ services:
       memory: "1Gi"
       cpu: "1"
     
-    # Dependencies - ensure tunnel starts first
-    depends_on:
-      - ssh-tunnel
-    
     # Health check
     healthcheck:
       path: "/health"
@@ -63,7 +43,7 @@ services:
       interval: 30
       timeout: 10
       retries: 3
-      start_period: 60  # Give time for tunnel to establish
+      start_period: 30  # Reduced start period for direct connection
     
     # Networking
     networking:
@@ -84,7 +64,6 @@ config:
   
   # Secrets (set these in Railway dashboard)
   secrets:
-    - SSH_PRIVATE_KEY      # SSH private key for tunnel authentication
     - OPENROUTER_DEFAULT_KEY  # OpenRouter API key
   
   # Networking
@@ -100,18 +79,11 @@ config:
 # Deployment hooks
 hooks:
   # Pre-deployment validation
-  pre_deploy:
-    - name: "validate-ssh-key"
-      command: "echo 'Validating SSH configuration...'"
-    
     - name: "test-mysql-connectivity"
       command: "echo 'Testing MySQL connectivity...'"
   
   # Post-deployment verification
   post_deploy:
-    - name: "verify-tunnel"
-      command: "echo 'Verifying SSH tunnel...'"
-    
     - name: "verify-database"
       command: "echo 'Verifying database connection...'"
 
@@ -119,20 +91,12 @@ hooks:
 monitoring:
   # Health checks
   health_checks:
-    - service: ssh-tunnel
-      endpoint: "/health"
-      interval: 30
-    
     - service: app
       endpoint: "/health"
       interval: 30
   
   # Alerts
   alerts:
-    - name: "tunnel-down"
-      condition: "ssh-tunnel health check fails"
-      action: "restart ssh-tunnel service"
-    
     - name: "app-down"
       condition: "app health check fails"
       action: "restart app service"
@@ -143,11 +107,6 @@ monitoring:
 
 # Scaling configuration
 scaling:
-  # SSH tunnel should have only one instance
-  ssh-tunnel:
-    min_replicas: 1
-    max_replicas: 1
-  
   # Main app can scale based on load
   app:
     min_replicas: 1

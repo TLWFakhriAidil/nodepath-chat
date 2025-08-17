@@ -14,7 +14,10 @@ import (
 // Initialize creates and returns a database connection
 func Initialize(cfg *config.Config) (*sql.DB, error) {
 	dsn := cfg.GetDSN()
-	logrus.WithField("host", cfg.MySQLHost).Info("Connecting to MySQL database")
+	if dsn == "" {
+		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
+	}
+	logrus.Info("Connecting to MySQL database using Railway DATABASE_URL")
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

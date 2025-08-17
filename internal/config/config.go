@@ -12,12 +12,8 @@ type Config struct {
 	Port   int
 	AppEnv string
 
-	// Database configuration
-	MySQLHost     string
-	MySQLPort     int
-	MySQLUser     string
-	MySQLPassword string
-	MySQLDatabase string
+	// Database configuration - Railway provides DATABASE_URL
+	DatabaseURL string
 
 	// Redis configuration
 	RedisURL          string
@@ -51,12 +47,8 @@ func Load() *Config {
 		Port:   getEnvAsInt("PORT", 8080),
 		AppEnv: getEnv("APP_ENV", "development"),
 
-		// Database configuration
-		MySQLHost:     getEnv("MYSQL_HOST", "159.89.198.71"),
-		MySQLPort:     getEnvAsInt("MYSQL_PORT", 3306),
-		MySQLUser:     getEnv("MYSQL_USER", "admin_aqil"),
-		MySQLPassword: getEnv("MYSQL_PASSWORD", "admin_aqil"),
-		MySQLDatabase: getEnv("MYSQL_DATABASE", "admin_railway"),
+		// Database configuration - Railway provides DATABASE_URL
+		DatabaseURL: getEnv("DATABASE_URL", ""),
 
 		// Redis configuration with clustering support
 		RedisURL:          getEnv("REDIS_URL", ""),
@@ -86,41 +78,42 @@ func Load() *Config {
 	return cfg
 }
 
-// GetDSN returns the MySQL DSN connection string
-// Prioritizes DATABASE_URL environment variable over individual MySQL config
+// GetDSN returns the MySQL DSN connection string from Railway's DATABASE_URL
+// Railway provides DATABASE_URL in the format: mysql://user:password@host:port/database
 func (c *Config) GetDSN() string {
-	// Check for DATABASE_URL first
-	if databaseURL := getEnv("DATABASE_URL", ""); databaseURL != "" {
-		// Convert mysql:// to proper DSN format if needed
-		if strings.HasPrefix(databaseURL, "mysql://") {
-			// Remove mysql:// prefix and add tcp() wrapper
-			dsn := strings.TrimPrefix(databaseURL, "mysql://")
-			// Parse user:password@host:port/database format
-			parts := strings.Split(dsn, "/")
-			if len(parts) >= 2 {
-				userHostPart := parts[0]
-				databasePart := parts[1]
-				// Split user:password@host:port
-				atIndex := strings.LastIndex(userHostPart, "@")
-				if atIndex > 0 {
-					userPass := userHostPart[:atIndex]
-					hostPort := userHostPart[atIndex+1:]
-					// Reconstruct with tcp() wrapper
-					dsn = userPass + "@tcp(" + hostPort + ")/" + databasePart
-					if !strings.Contains(dsn, "?") {
-						dsn += "?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
-					} else {
-						dsn += "&charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
-					}
-					return dsn
-				}
-			}
-		}
-		return databaseURL
+	// Use Railway's DATABASE_URL environment variable
+	if c.DatabaseURL == "" {
+		return "" // Return empty if no DATABASE_URL provided
 	}
 	
-	// Fallback to individual MySQL environment variables
-	return c.MySQLUser + ":" + c.MySQLPassword + "@tcp(" + c.MySQLHost + ":" + strconv.Itoa(c.MySQLPort) + ")/" + c.MySQLDatabase + "?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+	// Convert mysql:// to proper DSN format if needed
+	if strings.HasPrefix(c.DatabaseURL, "mysql://") {
+		// Remove mysql:// prefix and add tcp() wrapper
+		dsn := strings.TrimPrefix(c.DatabaseURL, "mysql://")
+		// Parse user:password@host:port/database format
+		parts := strings.Split(dsn, "/")
+		if len(parts) >= 2 {
+			userHostPart := parts[0]
+			databasePart := parts[1]
+			// Split user:password@host:port
+			atIndex := strings.LastIndex(userHostPart, "@")
+			if atIndex > 0 {
+				userPass := userHostPart[:atIndex]
+				hostPort := userHostPart[atIndex+1:]
+				// Reconstruct with tcp() wrapper for go-sql-driver/mysql
+				dsn = userPass + "@tcp(" + hostPort + ")/" + databasePart
+				if !strings.Contains(dsn, "?") {
+					dsn += "?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+				} else {
+					dsn += "&charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+				}
+				return dsn
+			}
+		}
+	}
+	
+	// Return as-is if already in proper format
+	return c.DatabaseURL
 }
 
 // IsProduction returns true if the app is running in production

@@ -48,35 +48,33 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### 🔒 SSH Tunnel Solution for Dynamic IP Issues (Latest)
+### 🔒 Direct Database Connection with Railway Static IP (Latest)
 
-**Problem Solved**: Railway's dynamic IP allocation makes IP whitelisting unsustainable for database access.
+**Problem Solved**: Railway's dynamic IP allocation was making IP whitelisting challenging for database access.
 
-**Root Cause**: Railway uses dynamic IPs that change frequently, making IP-based whitelisting unreliable for 3000+ concurrent users.
+**Root Cause**: Railway previously used dynamic IPs that changed frequently, making IP-based whitelisting unreliable for 3000+ concurrent users.
 
-**Solution**: Implemented SSH tunnel approach to eliminate IP whitelisting dependency entirely.
+**Solution**: Configured Railway's static outbound IP (208.77.246.15) for direct database connection.
 
 **Benefits**:
-- ✅ **Eliminates IP whitelisting** - No need to manage dynamic IPs
-- ✅ **Secure connection** - Encrypted SSH tunnel with key authentication
-- ✅ **Scalable** - Handles 3000+ concurrent connections without IP restrictions
-- ✅ **Reliable** - Not affected by Railway's IP allocation changes
-- ✅ **Future-proof** - Works regardless of Railway infrastructure changes
-- ✅ **Cost-effective** - No need for Railway Pro plan ($5-10/month vs $20+)
+- ✅ **Simplified Architecture** - Direct connection without additional services
+- ✅ **Reliable Connection** - Uses Railway's static outbound IP (208.77.246.15)
+- ✅ **High Performance** - No tunnel overhead for 3000+ concurrent connections
+- ✅ **Cost-effective** - No additional infrastructure required
+- ✅ **Easy Maintenance** - Single IP to whitelist on database server
+- ✅ **Secure** - Direct encrypted MySQL connection over TLS
 
-**Files Updated/Added**:
-- `railway-deploy.yml` - Enabled SSH tunnel service configuration
-- `Dockerfile.tunnel` - SSH tunnel container with health checks
-- `DATABASE_SSH_SETUP.md` - Complete database server SSH configuration guide
-- `RAILWAY_DATABASE_FIX.md` - Updated with SSH tunnel recommendation
-- `ssh-key-setup.ps1` / `ssh-key-setup.sh` - SSH key generation scripts
-- `setup-ssh-tunnel.md` - Comprehensive implementation guide
+**Configuration**:
+- Database server whitelist: `208.77.246.15` (Railway's static outbound IP)
+- Direct connection to `159.89.198.71:3306`
+- Railway provides `DATABASE_URL`: `mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway`
+- No individual MySQL environment variables required
 
 **Database Connection Enhanced**:
 - Added connection retry logic with exponential backoff
-- Enhanced connection pooling for SSH tunnel support
+- Enhanced connection pooling for high-performance scenarios
 - Improved error handling and logging
-- Support for both direct and tunneled connections
+- Optimized for direct database connections
 
 ```### Server Stability Improvements
 - **Enhanced Error Handling**: Added graceful database connection failure handling
@@ -85,7 +83,8 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 - **Improved Logging**: Better error messages and warnings for database and Redis connection issues
 - **Development Mode**: Server can now run without database connection for testing purposes
 - **Connection Pooling**: Optimized database connection management for high-performance scenarios
-- **DATABASE_URL Support**: Fixed DSN generation to properly handle `DATABASE_URL` environment variable with correct `tcp()` wrapper format
+- **Railway DATABASE_URL Only**: Simplified database configuration to use only Railway's `DATABASE_URL` environment variable
+- **Removed MySQL Fallback**: Eliminated individual MySQL environment variables (MYSQL_HOST, MYSQL_PORT, etc.) for cleaner configuration
 - **Connection Format Fix**: Resolved MySQL connection string format issue that was causing "default addr unknown" errors
 
 ### Current Status
