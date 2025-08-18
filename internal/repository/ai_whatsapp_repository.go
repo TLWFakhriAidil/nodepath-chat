@@ -80,9 +80,17 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
+	// Handle ConvCurrent as sql.NullString
+	var convCurrentValue interface{}
+	if ai.ConvCurrent.Valid {
+		convCurrentValue = ai.ConvCurrent.String
+	} else {
+		convCurrentValue = nil
+	}
+
 	_, err = r.db.Exec(query,
 		ai.IDProspect, ai.IDStaff, ai.ProspectNum, ai.Stage, ai.DateOrder, string(convLastJSON),
-		ai.ConvCurrent, ai.Human, ai.Niche, ai.Jam, ai.Intro,
+		convCurrentValue, ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		ai.CreatedAt, ai.UpdatedAt,
@@ -136,13 +144,16 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 	ai := &models.AIWhatsapp{}
 	var convLastJSON sql.NullString
 
+	var convCurrentSQL sql.NullString
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-		&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
+		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
+
+	ai.ConvCurrent = convCurrentSQL
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -179,13 +190,16 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 	ai := &models.AIWhatsapp{}
 	var convLastJSON sql.NullString
 
+	var convCurrentSQL sql.NullString
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-		&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
+		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
+
+	ai.ConvCurrent = convCurrentSQL
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -230,13 +244,16 @@ func (r *aiWhatsappRepository) GetAIWhatsappByStaff(idStaff string) ([]models.AI
 		ai := models.AIWhatsapp{}
 		var convLastJSON sql.NullString
 
+		var convCurrentSQL sql.NullString
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
+
+		ai.ConvCurrent = convCurrentSQL
 
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan AI WhatsApp conversation")
@@ -281,13 +298,16 @@ func (r *aiWhatsappRepository) GetAIWhatsappByNiche(niche string) ([]models.AIWh
 		ai := models.AIWhatsapp{}
 		var convLastJSON sql.NullString
 
+		var convCurrentSQL sql.NullString
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
+
+		ai.ConvCurrent = convCurrentSQL
 
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan AI WhatsApp conversation")
@@ -331,14 +351,17 @@ func (r *aiWhatsappRepository) GetActiveAIConversations() ([]models.AIWhatsapp, 
 	for rows.Next() {
 		ai := models.AIWhatsapp{}
 		var convLastJSON sql.NullString
+		var convCurrentSQL sql.NullString
 
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
+
+		ai.ConvCurrent = convCurrentSQL
 
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan AI WhatsApp conversation")
@@ -453,8 +476,16 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		WHERE id_prospect = ?
 	`
 
+	// Handle ConvCurrent as sql.NullString
+	var convCurrentValue interface{}
+	if ai.ConvCurrent.Valid {
+		convCurrentValue = ai.ConvCurrent.String
+	} else {
+		convCurrentValue = nil
+	}
+
 	_, err = r.db.Exec(query,
-		ai.IDStaff, ai.Stage, ai.DateOrder, string(convLastJSON), ai.ConvCurrent,
+		ai.IDStaff, ai.Stage, ai.DateOrder, string(convLastJSON), convCurrentValue,
 		ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
@@ -516,7 +547,15 @@ func (r *aiWhatsappRepository) UpdateConvCurrent(prospectNum string, convCurrent
 		WHERE prospect_num = ?
 	`
 
-	_, err := r.db.Exec(query, convCurrent, time.Now(), prospectNum)
+	// Handle empty string as NULL
+	var convCurrentValue interface{}
+	if convCurrent != "" {
+		convCurrentValue = convCurrent
+	} else {
+		convCurrentValue = nil
+	}
+
+	_, err := r.db.Exec(query, convCurrentValue, time.Now(), prospectNum)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to update conv_current")
 		return fmt.Errorf("failed to update conv_current: %w", err)
@@ -662,14 +701,17 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 	for rows.Next() {
 		ai := models.AIWhatsapp{}
 		var convLastJSON sql.NullString
+		var convCurrentSQL sql.NullString
 
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&ai.ConvCurrent, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
+
+		ai.ConvCurrent = convCurrentSQL
 
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan AI WhatsApp conversation")

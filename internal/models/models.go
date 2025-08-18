@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql"
 	"encoding/json"
 	"time"
 )
@@ -183,7 +184,7 @@ type AIWhatsapp struct {
 	Stage        string          `json:"stage" db:"stage"`
 	DateOrder    *time.Time      `json:"date_order" db:"date_order"`
 	ConvLast     json.RawMessage `json:"conv_last" db:"conv_last"`
-	ConvCurrent  string          `json:"conv_current" db:"conv_current"`
+	ConvCurrent  sql.NullString  `json:"conv_current" db:"conv_current"`
 	Jam          string          `json:"jam" db:"jam"`
 	Intro        string          `json:"intro" db:"intro"`
 	Human        int             `json:"human" db:"human"` // 0 = AI active, 1 = human takeover
