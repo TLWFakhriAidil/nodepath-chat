@@ -91,6 +91,7 @@ Completed comprehensive database schema migration to rename `id_staff` columns t
 - **4/4 Tables Successfully Migrated**
 - **Zero Data Loss**: All existing data preserved during column rename
 - **Schema Consistency**: All tables now use `id_device` exclusively
+- **JSON to TEXT Migration**: Fixed `conv_last` column type from JSON to TEXT in `ai_whatsapp_nodepath` table
 - **Production Deployment Ready**: Migration integrated into production scripts
 
 #### 🎯 Benefits:
@@ -110,6 +111,7 @@ Completed comprehensive database schema migration to rename `id_staff` columns t
 - **Updated Database Schema**: 
   - Modified `ai_whatsapp_nodepath` table to use `id_device` instead of `id_staff`
   - Updated `conversation_log_nodepath` table schema
+  - Fixed `conv_last` column type from JSON to TEXT in `ai_whatsapp_nodepath` table
   - Removed deprecated `ai_settings_nodepath` table
 - **Repository Layer Updates**: Updated all SQL queries and scan operations in `ai_whatsapp_repository.go`
 - **Handler Layer Updates**: Modified `StartAIConversationRequest` struct and validation logic

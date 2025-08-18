@@ -90,7 +90,7 @@ func main() {
 				prospect_num VARCHAR(255) NOT NULL UNIQUE,
 				stage VARCHAR(255) DEFAULT NULL,
 				date_order DATETIME DEFAULT NULL,
-				conv_last JSON DEFAULT NULL,
+				conv_last TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
 				conv_current TEXT DEFAULT NULL,
 				jam VARCHAR(255) DEFAULT NULL,
 				intro VARCHAR(255) DEFAULT NULL,

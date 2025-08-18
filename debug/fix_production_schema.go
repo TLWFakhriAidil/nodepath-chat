@@ -123,6 +123,10 @@ func main() {
 	log.Println("\n🔄 Executing chatbot executions migration...")
 	executeChatbotExecutionsMigration(db)
 
+	// Execute JSON to TEXT column migration
+	log.Println("\n🔄 Executing JSON to TEXT migration...")
+	executeJSONToTextMigration(db)
+
 	log.Println("🎉 Production schema fix completed successfully!")
 
 	// Verify the fix by checking the table structure
@@ -362,6 +366,78 @@ func executeChatbotExecutionsMigration(db *sql.DB) {
 	
 	log.Printf("✅ Successfully migrated %s.id_staff to %s.id_device", tableName, tableName)
 	log.Println("🎉 Chatbot executions migration completed successfully!")
+}
+
+// executeJSONToTextMigration converts JSON columns to TEXT in ai_whatsapp_nodepath table
+func executeJSONToTextMigration(db *sql.DB) {
+	log.Println("Starting JSON to TEXT column migration...")
+	
+	tableName := "ai_whatsapp_nodepath"
+	
+	// Check current JSON columns
+	jsonColumns := checkJSONColumns(db, tableName)
+	if len(jsonColumns) == 0 {
+		log.Println("✅ No JSON columns found - migration not needed.")
+		return
+	}
+
+	log.Printf("Found %d JSON columns to migrate: %v\n", len(jsonColumns), jsonColumns)
+
+	// Migrate each JSON column to TEXT
+	for _, column := range jsonColumns {
+		log.Printf("🔄 Migrating column: %s\n", column)
+		
+		// Alter column from JSON to TEXT
+		alterQuery := fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s TEXT COLLATE utf8mb4_unicode_ci", tableName, column)
+		log.Printf("Executing: %s\n", alterQuery)
+		
+		_, err := db.Exec(alterQuery)
+		if err != nil {
+			log.Printf("❌ Error migrating column %s: %v\n", column, err)
+			continue
+		}
+		
+		log.Printf("✅ Successfully migrated %s from JSON to TEXT\n", column)
+	}
+
+	// Verify migration
+	log.Println("\n🔍 Verifying migration...")
+	remainingJSONColumns := checkJSONColumns(db, tableName)
+	if len(remainingJSONColumns) == 0 {
+		log.Println("✅ All JSON columns successfully migrated to TEXT!")
+	} else {
+		log.Printf("⚠️  Still have %d JSON columns: %v\n", len(remainingJSONColumns), remainingJSONColumns)
+	}
+
+	log.Println("🎉 JSON to TEXT migration completed!")
+}
+
+// checkJSONColumns returns list of columns that are JSON type
+func checkJSONColumns(db *sql.DB, tableName string) []string {
+	query := `SELECT COLUMN_NAME 
+			  FROM information_schema.columns 
+			  WHERE table_schema = DATABASE() 
+			  AND table_name = ? 
+			  AND DATA_TYPE = 'json'`
+
+	rows, err := db.Query(query, tableName)
+	if err != nil {
+		log.Printf("Error checking JSON columns: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var jsonColumns []string
+	for rows.Next() {
+		var columnName string
+		if err := rows.Scan(&columnName); err != nil {
+			log.Printf("Error scanning column name: %v", err)
+			continue
+		}
+		jsonColumns = append(jsonColumns, columnName)
+	}
+
+	return jsonColumns
 }
 
 // min returns the minimum of two integers

@@ -75,4 +75,5 @@
 17. The system will have a remote access into the databse using this mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway.
 18. The system only use the MYSQL_URI to conencted to the database using the enviroment variables in railways for both system deploy in railways and local development.
 19. The systems only used id_device for all process, so there will be no id_staff in the system.
-
+20. The system database type input will not used the json type except the chatbot_flows_nodepath database.
+21. The system database type output will not used the json type except the chatbot_flows_nodepath database.
