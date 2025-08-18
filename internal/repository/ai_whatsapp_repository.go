@@ -809,6 +809,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 
 // SaveConversationHistory saves conversation history to conv_last field as plain text
 // If record exists, it updates the conv_last field; otherwise, it creates a new record
+// Saves NULL instead of empty string when there's no conversation data
 func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error {
 	// Check if record exists
 	existingRecord, err := r.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
@@ -864,6 +865,14 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 		convHistory += "BOT:" + botResponse
 	}
 
+	// Determine conv_last value - use NULL if empty, otherwise use the conversation history
+	var convLastValue interface{}
+	if convHistory == "" {
+		convLastValue = nil // This will be stored as NULL in the database
+	} else {
+		convLastValue = convHistory
+	}
+
 	if existingRecord != nil {
 		// Update existing record
 		query := `
@@ -871,7 +880,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 			SET conv_last = ?, stage = ?, updated_at = ?
 			WHERE prospect_num = ? AND id_device = ?
 		`
-		_, err = r.db.Exec(query, convHistory, stage, time.Now(), prospectNum, idDevice)
+		_, err = r.db.Exec(query, convLastValue, stage, time.Now(), prospectNum, idDevice)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update conversation history")
 			return fmt.Errorf("failed to update conversation history: %w", err)
@@ -889,7 +898,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 				created_at, updated_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?)
 		`
-		_, err = r.db.Exec(query, idDevice, prospectNum, stage, convHistory, 0, now, now)
+		_, err = r.db.Exec(query, idDevice, prospectNum, stage, convLastValue, 0, now, now)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create new conversation record")
 			return fmt.Errorf("failed to create new conversation record: %w", err)

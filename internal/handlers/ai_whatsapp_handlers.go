@@ -516,8 +516,14 @@ func (h *AIWhatsappHandlers) sendWhatsappResponse(prospectNum, deviceID, provide
 func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 	var req AnalyticsRequest
 
-	// Parse query parameters or JSON body
-	if err := c.QueryParser(&req); err != nil {
+	// Parse query parameters with frontend parameter names or JSON body
+	if c.Method() == "GET" {
+		// Handle GET request with query parameters
+		req.StartDate = c.Query("startDate", "")
+		req.EndDate = c.Query("endDate", "")
+		req.DeviceID = c.Query("idDevice", "")
+	} else {
+		// Handle POST request with JSON body
 		if err := c.BodyParser(&req); err != nil {
 			logrus.WithError(err).Error("Failed to parse analytics request")
 			return c.Status(fiber.StatusBadRequest).JSON(AnalyticsResponse{
@@ -592,11 +598,23 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 		"device_id":  req.DeviceID,
 	}).Info("Analytics data retrieved successfully")
 
-	return c.JSON(AnalyticsResponse{
-		Success: true,
-		Message: "Analytics data retrieved successfully",
-		Data:    analyticsData,
-	})
+	// Transform data to match frontend expectations
+	summary := analyticsData["summary"].(map[string]interface{})
+	responseData := map[string]interface{}{
+		"totalConversations":       summary["total_conversations"],
+		"aiActiveConversations":    summary["ai_active"],
+		"humanTakeovers":           summary["human_takeover"],
+		"uniqueDevices":            summary["unique_devices"],
+		"uniqueNiches":             summary["unique_niches"],
+		"conversationsWithStages":  summary["conversations_with_stage"],
+		"aiActivePercentage":       summary["ai_active_percentage"],
+		"humanTakeoverPercentage":  summary["human_takeover_percentage"],
+		"dailyBreakdown":           analyticsData["daily_data"],
+		"stageDistribution":        analyticsData["stage_distribution"],
+		"dateRange":                analyticsData["date_range"],
+	}
+
+	return c.JSON(responseData)
 }
 
 // Helper methods for consistent response formatting
