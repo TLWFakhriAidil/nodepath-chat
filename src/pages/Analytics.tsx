@@ -74,7 +74,7 @@ const Analytics = () => {
         params.append('idDevice', selectedDevice);
       }
       
-      const response = await fetch(`/ai/analytics?${params.toString()}`, {
+      const response = await fetch(`/api/ai/analytics?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

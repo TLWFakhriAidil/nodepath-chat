@@ -59,17 +59,27 @@ func NewAIWhatsappRepository(db *sql.DB) AIWhatsappRepository {
 }
 
 // CreateAIWhatsapp creates a new AI WhatsApp conversation record
+// Saves NULL instead of empty string when there's no conversation data
 func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	ai.CreatedAt = time.Now()
 	ai.UpdatedAt = time.Now()
 
-	// Convert conv_last to JSON string if it's not nil
-	var convLastJSON []byte
-	var err error
-	if ai.ConvLast != nil {
-		convLastJSON, err = json.Marshal(ai.ConvLast)
+	// Determine conv_last value - use NULL if empty, otherwise marshal to JSON
+	var convLastValue interface{}
+	if ai.ConvLast == nil {
+		convLastValue = nil // This will be stored as NULL in the database
+	} else {
+		// Check if it's empty JSON
+		convLastJSON, err := json.Marshal(ai.ConvLast)
 		if err != nil {
 			return fmt.Errorf("failed to marshal conv_last: %w", err)
+		}
+		// Check if the marshaled result is empty JSON
+		jsonStr := string(convLastJSON)
+		if jsonStr == "null" || jsonStr == "{}" || jsonStr == "[]" || jsonStr == "\"\"" {
+			convLastValue = nil
+		} else {
+			convLastValue = jsonStr
 		}
 	}
 
@@ -91,8 +101,8 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		convCurrentValue = nil
 	}
 
-	_, err = r.db.Exec(query,
-		ai.IDProspect, ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, string(convLastJSON),
+	_, err := r.db.Exec(query,
+		ai.IDProspect, ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, convLastValue,
 		convCurrentValue, ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
@@ -621,16 +631,26 @@ func (r *aiWhatsappRepository) GetConversationLogsByStage(stage string) ([]model
 }
 
 // UpdateAIWhatsapp updates an existing AI WhatsApp conversation
+// Saves NULL instead of empty string when there's no conversation data
 func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 	ai.UpdatedAt = time.Now()
 
-	// Convert conv_last to JSON string if it's not nil
-	var convLastJSON []byte
-	var err error
-	if ai.ConvLast != nil {
-		convLastJSON, err = json.Marshal(ai.ConvLast)
+	// Determine conv_last value - use NULL if empty, otherwise marshal to JSON
+	var convLastValue interface{}
+	if ai.ConvLast == nil {
+		convLastValue = nil // This will be stored as NULL in the database
+	} else {
+		// Check if it's empty JSON
+		convLastJSON, err := json.Marshal(ai.ConvLast)
 		if err != nil {
 			return fmt.Errorf("failed to marshal conv_last: %w", err)
+		}
+		// Check if the marshaled result is empty JSON
+		jsonStr := string(convLastJSON)
+		if jsonStr == "null" || jsonStr == "{}" || jsonStr == "[]" || jsonStr == "\"\"" {
+			convLastValue = nil
+		} else {
+			convLastValue = jsonStr
 		}
 	}
 
@@ -652,8 +672,8 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		convCurrentValue = nil
 	}
 
-	_, err = r.db.Exec(query,
-		ai.IDDevice, ai.Stage, ai.DateOrder, string(convLastJSON), convCurrentValue,
+	_, err := r.db.Exec(query,
+		ai.IDDevice, ai.Stage, ai.DateOrder, convLastValue, convCurrentValue,
 		ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
@@ -733,11 +753,59 @@ func (r *aiWhatsappRepository) UpdateConvCurrent(prospectNum string, convCurrent
 }
 
 // UpdateConvLast updates the last conversation JSON data
+// Saves NULL instead of empty string when there's no conversation data
 func (r *aiWhatsappRepository) UpdateConvLast(prospectNum string, convLast interface{}) error {
-	// Convert conv_last to JSON string
-	convLastJSON, err := json.Marshal(convLast)
-	if err != nil {
-		return fmt.Errorf("failed to marshal conv_last: %w", err)
+	// Determine conv_last value - use NULL if empty, otherwise marshal to JSON
+	var convLastValue interface{}
+	
+	// Check if convLast is empty or nil
+	if convLast == nil {
+		convLastValue = nil // This will be stored as NULL in the database
+	} else {
+		// Check if it's an empty string, empty slice, or empty map
+		switch v := convLast.(type) {
+		case string:
+			if v == "" {
+				convLastValue = nil
+			} else {
+				convLastValue = v
+			}
+		case []interface{}:
+			if len(v) == 0 {
+				convLastValue = nil
+			} else {
+				// Convert to JSON string
+				convLastJSON, err := json.Marshal(convLast)
+				if err != nil {
+					return fmt.Errorf("failed to marshal conv_last: %w", err)
+				}
+				convLastValue = string(convLastJSON)
+			}
+		case map[string]interface{}:
+			if len(v) == 0 {
+				convLastValue = nil
+			} else {
+				// Convert to JSON string
+				convLastJSON, err := json.Marshal(convLast)
+				if err != nil {
+					return fmt.Errorf("failed to marshal conv_last: %w", err)
+				}
+				convLastValue = string(convLastJSON)
+			}
+		default:
+			// Convert to JSON string for other types
+			convLastJSON, err := json.Marshal(convLast)
+			if err != nil {
+				return fmt.Errorf("failed to marshal conv_last: %w", err)
+			}
+			// Check if the marshaled result is empty JSON
+			jsonStr := string(convLastJSON)
+			if jsonStr == "null" || jsonStr == "{}" || jsonStr == "[]" || jsonStr == "\"\"" {
+				convLastValue = nil
+			} else {
+				convLastValue = jsonStr
+			}
+		}
 	}
 
 	query := `
@@ -746,11 +814,16 @@ func (r *aiWhatsappRepository) UpdateConvLast(prospectNum string, convLast inter
 		WHERE prospect_num = ?
 	`
 
-	_, err = r.db.Exec(query, string(convLastJSON), time.Now(), prospectNum)
+	_, err := r.db.Exec(query, convLastValue, time.Now(), prospectNum)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to update conv_last")
 		return fmt.Errorf("failed to update conv_last: %w", err)
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"conv_last_is_null": convLastValue == nil,
+	}).Info("Conv_last updated successfully")
 
 	return nil
 }
