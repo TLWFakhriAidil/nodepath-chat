@@ -63,6 +63,43 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 - **Deployment Ready**: Application can now be successfully built and deployed on Railway
 - **Build Consistency**: Aligned Docker build with current project structure
 
+### 🗄️ Database Schema Migration: ID Staff to ID Device (Complete)
+**Date**: Current Session
+
+#### 📋 Migration Overview:
+Completed comprehensive database schema migration to rename `id_staff` columns to `id_device` across all remaining database tables, ensuring complete system consistency.
+
+#### 🎯 Tables Migrated:
+- **ai_whatsapp_nodepath**: `id_staff` → `id_device`
+- **conversation_log_nodepath**: `id_staff` → `id_device` 
+- **conversation_log_nodepath_backup**: `id_staff` → `id_device`
+- **chatbot_executions_nodepath**: `staff_id` → `id_device`
+
+#### 🛠️ Migration Tools Created:
+- **`debug/migrate_id_staff_to_id_device.go`**: Standalone migration script for local execution
+- **`debug/check_database_schema.go`**: Schema verification utility
+- **Updated `debug/fix_production_schema.go`**: Enhanced production migration with ID migration support
+
+#### ✅ Migration Features:
+- **Safe Migration**: Checks for existing columns before attempting changes
+- **Rollback Protection**: Handles cases where migration was partially completed
+- **Column Definition Preservation**: Maintains all column attributes (type, nullability, defaults, extras)
+- **Production Ready**: Integrated into Railway deployment migration scripts
+- **Verification**: Automated schema verification after migration
+
+#### 🎉 Migration Results:
+- **4/4 Tables Successfully Migrated**
+- **Zero Data Loss**: All existing data preserved during column rename
+- **Schema Consistency**: All tables now use `id_device` exclusively
+- **Production Deployment Ready**: Migration integrated into production scripts
+
+#### 🎯 Benefits:
+- **Complete System Consistency**: All database tables now use `id_device`
+- **Data Integrity**: Safe migration with comprehensive error handling
+- **Production Ready**: Automated migration for Railway deployment
+- **Verification**: Built-in schema checking and validation
+- **Maintainable**: Reusable migration utilities for future schema changes
+
 ### 🔄 Database Schema Migration - IDStaff to IDDevice (August 18, 2025)
 
 **Major system-wide migration completed to standardize device identification:**

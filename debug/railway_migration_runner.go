@@ -94,7 +94,7 @@ func createMissingTables(db *sql.DB) error {
 				id VARCHAR(255) PRIMARY KEY,
 				flow_reference VARCHAR(255) NOT NULL,
 				phone_number VARCHAR(255) NOT NULL,
-				staff_id VARCHAR(255) NOT NULL,
+				id_device VARCHAR(255) NOT NULL,
 				conv_last JSON DEFAULT NULL,
 				conv_current TEXT DEFAULT NULL,
 				current_node VARCHAR(255) DEFAULT NULL,
@@ -105,7 +105,7 @@ func createMissingTables(db *sql.DB) error {
 				
 				INDEX idx_flow_reference (flow_reference),
 				INDEX idx_phone_number (phone_number),
-				INDEX idx_staff_id (staff_id),
+				INDEX idx_id_device (id_device),
 				INDEX idx_status (status),
 				INDEX idx_created_at (created_at)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,

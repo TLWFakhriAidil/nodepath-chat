@@ -469,11 +469,11 @@ func (s *Service) handleIncomingMessage(evt *events.Message) {
 
 // processIncomingMessage processes an incoming message through the flow engine
 func (s *Service) processIncomingMessage(phoneNumber, content string) {
-	// For now, use a default staff ID - in a real implementation, you'd determine this based on routing logic
-	staffID := "default"
+	// For now, use a default device ID - in a real implementation, you'd determine this based on routing logic
+	idDevice := "default"
 
 	// Get or create active execution
-	execution, err := s.chatService.GetActiveExecution(phoneNumber, staffID)
+	execution, err := s.chatService.GetActiveExecution(phoneNumber, idDevice)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get active execution")
 		return

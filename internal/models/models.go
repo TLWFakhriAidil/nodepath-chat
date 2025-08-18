@@ -93,7 +93,7 @@ type ChatbotExecution struct {
 	ID            string           `json:"id" db:"id"`
 	FlowReference string           `json:"flow_reference" db:"flow_reference"`
 	PhoneNumber   string           `json:"phone_number" db:"phone_number"`
-	StaffID       string           `json:"staff_id" db:"staff_id"`
+	IDDevice      string           `json:"id_device" db:"id_device"`
 	ConvLast      json.RawMessage  `json:"conv_last" db:"conv_last"`
 	ConvCurrent   string           `json:"conv_current" db:"conv_current"`
 	CurrentNode   string           `json:"current_node" db:"current_node"`
