@@ -74,7 +74,7 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		INSERT INTO ai_whatsapp_nodepath (
 			id_prospect, id_staff, prospect_num, stage, conv_last, 
 			conv_current, human, niche, jam, intro, 
-			catatan, balas, data_image, conv_stage, 
+			catatan_staff, balas, data_image, conv_stage, 
 			bot_balas, keywordiklan, marketer, update_today, 
 			created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -124,7 +124,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 	query := `
 		SELECT id_prospect, id_staff, prospect_num, stage, conv_last, 
 		       conv_current, human, niche, jam, intro, 
-		       catatan, balas, data_image, conv_stage, 
+		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
@@ -167,7 +167,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 	query := `
 		SELECT id_prospect, id_staff, prospect_num, stage, conv_last, 
 		       conv_current, human, niche, jam, intro, 
-		       catatan, balas, data_image, conv_stage, 
+		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
@@ -210,7 +210,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByStaff(idStaff string) ([]models.AI
 	query := `
 		SELECT id_prospect, id_staff, prospect_num, stage, conv_last, 
 		       conv_current, human, niche, jam, intro, 
-		       catatan, balas, data_image, conv_stage, 
+		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
@@ -261,7 +261,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByNiche(niche string) ([]models.AIWh
 	query := `
 		SELECT id_prospect, id_staff, prospect_num, stage, conv_last, 
 		       conv_current, human, niche, jam, intro, 
-		       catatan, balas, data_image, conv_stage, 
+		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
@@ -312,7 +312,7 @@ func (r *aiWhatsappRepository) GetActiveAIConversations() ([]models.AIWhatsapp, 
 	query := `
 		SELECT id_prospect, id_staff, prospect_num, stage, conv_last, 
 		       conv_current, human, niche, jam, intro, 
-		       catatan, balas, data_image, conv_stage, 
+		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
@@ -447,7 +447,7 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		UPDATE ai_whatsapp_nodepath SET 
 			id_staff = ?, stage = ?, conv_last = ?, conv_current = ?, 
 			human = ?, niche = ?, jam = ?, intro = ?, 
-			catatan = ?, balas = ?, data_image = ?, conv_stage = ?, 
+			catatan_staff = ?, balas = ?, data_image = ?, conv_stage = ?, 
 			bot_balas = ?, keywordiklan = ?, marketer = ?, update_today = ?, 
 			updated_at = ?
 		WHERE id_prospect = ?
@@ -643,7 +643,7 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 	query := `
 		SELECT id_prospect, id_staff, prospect_num, stage, conv_last, 
 		       conv_current, human, niche, jam, intro, 
-		       catatan, balas, data_image, conv_stage, 
+		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
