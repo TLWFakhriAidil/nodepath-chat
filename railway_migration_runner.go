@@ -42,8 +42,83 @@ func convertMySQLURI(uri string) string {
 	return dsn
 }
 
+// createMissingTables creates all missing tables in the database
+func createMissingTables(db *sql.DB) error {
+	log.Println("📋 Creating missing tables...")
+
+	// Define all required tables
+	tables := []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "conversation_log_nodepath",
+			sql: `CREATE TABLE IF NOT EXISTS conversation_log_nodepath (
+				id INT AUTO_INCREMENT PRIMARY KEY,
+				prospect_num VARCHAR(255) NOT NULL,
+				id_staff VARCHAR(255) NOT NULL,
+				message TEXT NOT NULL,
+				sender VARCHAR(10) NOT NULL COMMENT 'user or bot',
+				stage VARCHAR(255) DEFAULT NULL,
+				timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				
+				INDEX idx_prospect_num (prospect_num),
+				INDEX idx_id_staff (id_staff),
+				INDEX idx_sender (sender),
+				INDEX idx_stage (stage),
+				INDEX idx_timestamp (timestamp),
+				INDEX idx_created_at (created_at)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		},
+		{
+			name: "ai_settings_nodepath",
+			sql: `CREATE TABLE IF NOT EXISTS ai_settings_nodepath (
+				id INT AUTO_INCREMENT PRIMARY KEY,
+				id_staff VARCHAR(255) NOT NULL,
+				system_prompt TEXT DEFAULT NULL,
+				closing_prompt TEXT DEFAULT NULL,
+				instance_prompt TEXT DEFAULT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				
+				INDEX idx_id_staff (id_staff)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		},
+	}
+
+	// Create each table
+	for _, table := range tables {
+		log.Printf("🔄 Creating table: %s", table.name)
+		
+		// Check if table exists
+		var tableExists bool
+		err := db.QueryRow("SELECT COUNT(*) > 0 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?", table.name).Scan(&tableExists)
+		if err != nil {
+			log.Printf("⚠️ Failed to check if table %s exists: %v", table.name, err)
+			continue
+		}
+
+		if tableExists {
+			log.Printf("⏭️ Table %s already exists, skipping", table.name)
+			continue
+		}
+
+		// Create the table
+		_, err = db.Exec(table.sql)
+		if err != nil {
+			log.Printf("❌ Failed to create table %s: %v", table.name, err)
+			return fmt.Errorf("failed to create table %s: %w", table.name, err)
+		}
+		log.Printf("✅ Successfully created table: %s", table.name)
+	}
+
+	log.Println("✅ All missing tables created successfully!")
+	return nil
+}
+
 func main() {
-	log.Println("🚀 Railway Migration Runner - Adding missing columns to ai_whatsapp_nodepath")
+	log.Println("🚀 Railway Migration Runner - Comprehensive Database Migration")
 
 	// Get MySQL URI from environment (Railway provides this)
 	mysqlURI := os.Getenv("MYSQL_URI")
@@ -71,6 +146,12 @@ func main() {
 		log.Fatalf("❌ Failed to ping database: %v", err)
 	}
 	log.Println("✅ Database connection successful!")
+
+	// Create missing tables first
+	if err := createMissingTables(db); err != nil {
+		log.Printf("❌ Failed to create missing tables: %v", err)
+		os.Exit(1)
+	}
 
 	// Check if table exists
 	log.Println("📋 Checking if ai_whatsapp_nodepath table exists...")
@@ -207,6 +288,18 @@ func main() {
 		log.Printf("❌ Jam column test failed: %v", err)
 		os.Exit(1)
 	} else {
-		log.Println("✅ Jam column is accessible! Migration successful.")
+		log.Println("✅ Jam column is accessible!")
 	}
+
+	// Test if conversation_log_nodepath table exists and is accessible
+	log.Println("🧪 Testing conversation_log_nodepath table access...")
+	_, err = db.Query("SELECT id_staff FROM conversation_log_nodepath LIMIT 1")
+	if err != nil {
+		log.Printf("❌ conversation_log_nodepath table test failed: %v", err)
+		os.Exit(1)
+	} else {
+		log.Println("✅ conversation_log_nodepath table is accessible!")
+	}
+
+	log.Println("\n🎉 Comprehensive migration completed successfully!")
 }
