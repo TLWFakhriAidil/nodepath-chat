@@ -29,6 +29,9 @@ type AIWhatsappService interface {
 	// Log conversation
 	LogConversation(prospectNum string, idDevice string, message, sender, stage string) error
 	
+	// Save conversation history to conv_last field
+	SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error
+	
 	// Check if human takeover is active
 	IsHumanTakeoverActive(prospectNum string) (bool, error)
 	
@@ -362,6 +365,20 @@ func (s *aiWhatsappService) ToggleHumanTakeover(prospectNum string, human bool) 
 	
 	aiConv.Human = humanValue
 	return s.aiRepo.UpdateAIWhatsapp(aiConv)
+}
+
+// SaveConversationHistory saves conversation history to conv_last field
+// Creates new record if phone number and id_device combination doesn't exist
+// Updates existing record if combination already exists
+func (s *aiWhatsappService) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error {
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"device_id":    idDevice,
+		"stage":        stage,
+	}).Info("Saving conversation history")
+
+	// Use repository method to handle create or update logic
+	return s.aiRepo.SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage)
 }
 
 // ProcessDeviceCommand processes device-specific commands

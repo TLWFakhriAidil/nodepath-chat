@@ -25,6 +25,7 @@ type AIWhatsappRepository interface {
 	GetActiveAIConversations() ([]models.AIWhatsapp, error)
 	GetConversationHistory(prospectNum string, limit int) ([]models.ConversationLog, error)
 	GetConversationLogsByStage(stage string) ([]models.ConversationLog, error)
+	GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error)
 
 	// Update operations
 	UpdateAIWhatsapp(ai *models.AIWhatsapp) error
@@ -32,6 +33,7 @@ type AIWhatsappRepository interface {
 	UpdateHumanTakeover(prospectNum string, human int) error
 	UpdateConvCurrent(prospectNum string, convCurrent string) error
 	UpdateConvLast(prospectNum string, convLast interface{}) error
+	SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error
 
 	// Delete operations
 	DeleteAIWhatsapp(id int) error
@@ -718,6 +720,141 @@ func (r *aiWhatsappRepository) UpdateConvLast(prospectNum string, convLast inter
 	if err != nil {
 		logrus.WithError(err).Error("Failed to update conv_last")
 		return fmt.Errorf("failed to update conv_last: %w", err)
+	}
+
+	return nil
+}
+
+// GetAIWhatsappByProspectAndDevice retrieves AI WhatsApp conversation by prospect number and device ID
+func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error) {
+	query := `
+		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
+		       conv_current, human, niche, jam, intro, 
+		       catatan_staff, balas, data_image, conv_stage, 
+		       bot_balas, keywordiklan, marketer, update_today, 
+		       created_at, updated_at
+		FROM ai_whatsapp_nodepath 
+		WHERE prospect_num = ? AND id_device = ?
+	`
+
+	row := r.db.QueryRow(query, prospectNum, idDevice)
+
+	ai := &models.AIWhatsapp{}
+	var convLastJSON sql.NullString
+	var convCurrentSQL sql.NullString
+
+	err := row.Scan(
+		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
+		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
+		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
+		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+		&ai.CreatedAt, &ai.UpdatedAt,
+	)
+
+	ai.ConvCurrent = convCurrentSQL
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Not found
+		}
+		logrus.WithError(err).Error("Failed to get AI WhatsApp conversation by prospect and device")
+		return nil, fmt.Errorf("failed to get AI WhatsApp conversation: %w", err)
+	}
+
+	// Parse conv_last JSON if it exists
+	if convLastJSON.Valid && convLastJSON.String != "" {
+		if err := json.Unmarshal([]byte(convLastJSON.String), &ai.ConvLast); err != nil {
+			logrus.WithError(err).Warn("Failed to unmarshal conv_last JSON")
+		}
+	}
+
+	return ai, nil
+}
+
+// SaveConversationHistory saves conversation history to conv_last field
+// If record exists, it updates the conv_last field; otherwise, it creates a new record
+func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error {
+	// Check if record exists
+	existingRecord, err := r.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+	if err != nil {
+		return fmt.Errorf("failed to check existing record: %w", err)
+	}
+
+	// Parse existing conversation history or create new
+	var convHistory []map[string]string
+	if existingRecord != nil && existingRecord.ConvLast != nil {
+		// Try to parse existing conversation history
+		var existingHistory interface{}
+		if err := json.Unmarshal(existingRecord.ConvLast, &existingHistory); err == nil {
+			// Check if it's already in the correct format
+			if historySlice, ok := existingHistory.([]interface{}); ok {
+				for _, item := range historySlice {
+					if itemMap, ok := item.(map[string]interface{}); ok {
+						convItem := make(map[string]string)
+						for k, v := range itemMap {
+							if str, ok := v.(string); ok {
+								convItem[k] = str
+							}
+						}
+						convHistory = append(convHistory, convItem)
+					}
+				}
+			}
+		}
+	}
+
+	// Add new conversation entries
+	if userMessage != "" {
+		convHistory = append(convHistory, map[string]string{
+			"user": userMessage,
+		})
+	}
+	if botResponse != "" {
+		convHistory = append(convHistory, map[string]string{
+			"bot": botResponse,
+		})
+	}
+
+	// Convert to JSON
+	convLastJSON, err := json.Marshal(convHistory)
+	if err != nil {
+		return fmt.Errorf("failed to marshal conversation history: %w", err)
+	}
+
+	if existingRecord != nil {
+		// Update existing record
+		query := `
+			UPDATE ai_whatsapp_nodepath 
+			SET conv_last = ?, stage = ?, updated_at = ?
+			WHERE prospect_num = ? AND id_device = ?
+		`
+		_, err = r.db.Exec(query, string(convLastJSON), stage, time.Now(), prospectNum, idDevice)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update conversation history")
+			return fmt.Errorf("failed to update conversation history: %w", err)
+		}
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"id_device": idDevice,
+		}).Info("Conversation history updated successfully")
+	} else {
+		// Create new record
+		now := time.Now()
+		query := `
+			INSERT INTO ai_whatsapp_nodepath (
+				id_device, prospect_num, stage, conv_last, human, 
+				created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?)
+		`
+		_, err = r.db.Exec(query, idDevice, prospectNum, stage, string(convLastJSON), 0, now, now)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create new conversation record")
+			return fmt.Errorf("failed to create new conversation record: %w", err)
+		}
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"id_device": idDevice,
+		}).Info("New conversation record created successfully")
 	}
 
 	return nil

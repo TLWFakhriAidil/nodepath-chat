@@ -460,8 +460,26 @@ func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, device
 		return
 	}
 
-	// Send response back to WhatsApp (this would integrate with your WhatsApp sending service)
+	// Save conversation history if we have a response
 	if response != nil {
+		// Extract bot response text from response array
+		var botResponseText string
+		for _, item := range response.Response {
+			if item.Type == "text" {
+				if botResponseText != "" {
+					botResponseText += " "
+				}
+				botResponseText += item.Content
+			}
+		}
+
+		// Save conversation history to conv_last field
+		err = h.AIWhatsappService.SaveConversationHistory(prospectNum, deviceID, message, botResponseText, response.Stage)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to save conversation history")
+		}
+
+		// Send response back to WhatsApp
 		h.sendWhatsappResponse(prospectNum, deviceID, provider, response)
 	}
 }
