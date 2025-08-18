@@ -48,17 +48,19 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### ✅ Production Database Schema Fix & Automated Migration (Latest)
-- **Fixed Production 'jam' Column Error**: Resolved Error 1054 (42S22) Unknown column 'jam' in field list in Railway production
-- **Automated Migration System**: Integrated database schema migration into Docker build process
-- **Railway Deployment Migration**: Created startup script that runs migration before server starts
-- **Production Schema Verification**: Added utility to verify table structure and column existence
+### ✅ Complete Database Schema Fix & Automated Migration (Latest)
+- **Fixed All Missing Column Errors**: Resolved Error 1054 (42S22) for jam, intro, date_order, balas, data_image, conv_stage, keywordiklan, marketer, update_today columns
+- **Comprehensive Schema Migration**: Updated ai_whatsapp_nodepath table to match AIWhatsapp struct completely
+- **Data Type Corrections**: Fixed id_prospect (VARCHAR→INT) and bot_balas (TINYINT→TIMESTAMP) type mismatches
+- **Automated Migration System**: Integrated complete database schema migration into Docker build process
+- **Railway Deployment Migration**: Created startup script that runs comprehensive migration before server starts
+- **Production Schema Verification**: Added utility to verify complete table structure and all column existence
 - **Zero-Downtime Migration**: Migration runs automatically during Railway deployment without service interruption
-- **Webhook Processing Fix**: Resolved data saving issues that prevented AI conversations from being stored
-- **Docker Integration**: Migration utility and SQL scripts included in production Docker image
+- **Webhook Processing Fix**: Resolved all data saving issues that prevented AI conversations from being stored
+- **Docker Integration**: Migration utility and comprehensive SQL scripts included in production Docker image
 - **Fallback Handling**: Server starts even if migration fails, ensuring service availability
 - **Connection String Conversion**: Added support for both mysql:// and tcp() connection formats
-- **Production Ready**: All database schema issues resolved for Railway production environment
+- **Production Ready**: All database schema issues completely resolved for Railway production environment
 
 ### ✅ Compilation Fixes & Field Access Resolution
 - **Fixed Struct Field Access**: Resolved "unknown field" errors in AIWhatsappHandlers struct literal
@@ -151,19 +153,21 @@ go run test_mysql_uri_connection.go
 
 ### 🔧 Automated Production Migration System
 
-**Problem Solved**: Railway production database missing 'jam' column causing webhook processing failures.
+**Problem Solved**: Railway production database had multiple schema mismatches causing "Unknown column" errors for jam, intro, date_order, balas, data_image, conv_stage, keywordiklan, marketer, and update_today columns during webhook processing.
 
-**Solution**: Integrated automated migration system that runs during Docker deployment.
+**Solution**: Integrated comprehensive automated migration system that aligns database schema with AIWhatsapp struct during Docker deployment.
 
 **Migration Components**:
-- ✅ **production_fix_jam_column.sql** - SQL script to add missing 'jam' column safely
-- ✅ **fix_production_schema.go** - Go utility to execute migration and verify schema
+- ✅ **production_fix_jam_column.sql** - Comprehensive SQL script to add all missing columns and fix data types
+- ✅ **fix_production_schema.go** - Go utility to execute complete migration and verify schema
 - ✅ **start-with-migration.sh** - Startup script that runs migration before server starts
-- ✅ **Docker Integration** - Migration built into Docker image and executed automatically
+- ✅ **Docker Integration** - Complete migration built into Docker image and executed automatically
 
 **Migration Features**:
-- ✅ **Safe Column Addition** - Checks if column exists before adding to prevent errors
-- ✅ **Schema Verification** - Verifies table structure after migration
+- ✅ **Complete Schema Alignment** - Ensures ai_whatsapp_nodepath table matches AIWhatsapp struct exactly
+- ✅ **Safe Column Addition** - Uses ADD COLUMN IF NOT EXISTS to prevent errors
+- ✅ **Data Type Corrections** - Fixes id_prospect (VARCHAR→INT) and bot_balas (TINYINT→TIMESTAMP) mismatches
+- ✅ **Schema Verification** - Verifies complete table structure after migration
 - ✅ **Connection Format Support** - Handles both mysql:// and tcp() connection strings
 - ✅ **Fallback Handling** - Server starts even if migration fails
 - ✅ **Zero Downtime** - Migration runs during deployment without service interruption
@@ -172,16 +176,18 @@ go run test_mysql_uri_connection.go
 **Migration Process**:
 1. **Docker Build** - Migration utility compiled during image build
 2. **Container Start** - Migration runs automatically before server starts
-3. **Schema Check** - Verifies 'jam' column exists in ai_whatsapp_nodepath table
-4. **Column Addition** - Adds column if missing using safe ALTER TABLE statement
-5. **Verification** - Confirms schema is correct and displays table structure
-6. **Server Start** - Main application starts with correct database schema
+3. **Schema Check** - Verifies all required columns exist in ai_whatsapp_nodepath table
+4. **Column Addition** - Adds missing columns (jam, intro, date_order, balas, data_image, conv_stage, keywordiklan, marketer, update_today)
+5. **Data Type Fix** - Corrects id_prospect and bot_balas column types
+6. **Verification** - Confirms complete schema alignment and displays table structure
+7. **Server Start** - Main application starts with fully aligned database schema
 
-**Files Created**:
-- `production_fix_jam_column.sql` - Production migration SQL script
+**Files Created/Updated**:
+- `production_fix_jam_column.sql` - Comprehensive production migration SQL script
 - `fix_production_schema.go` - Migration execution utility
 - `start-with-migration.sh` - Docker startup script with migration
 - Updated `Dockerfile` - Includes migration in build and startup process
+- Updated `internal/database/database.go` - Complete schema definition matching AIWhatsapp struct
 
 **Deployment**:
 ```bash
