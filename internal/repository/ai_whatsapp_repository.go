@@ -166,10 +166,16 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 		return nil, fmt.Errorf("failed to get AI WhatsApp conversation: %w", err)
 	}
 
-	// Parse conv_last JSON if it exists
+	// Handle conv_last data (both JSON and plain text formats)
 	if convLastJSON.Valid && convLastJSON.String != "" {
-		if err := json.Unmarshal([]byte(convLastJSON.String), &ai.ConvLast); err != nil {
-			logrus.WithError(err).Warn("Failed to unmarshal conv_last JSON")
+		// Try to parse as JSON first (for backward compatibility)
+		var testJSON interface{}
+		if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
+			// It's valid JSON, store as is
+			ai.ConvLast = json.RawMessage(convLastJSON.String)
+		} else {
+			// It's plain text, store as is
+			ai.ConvLast = json.RawMessage(convLastJSON.String)
 		}
 	}
 
@@ -212,10 +218,16 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 		return nil, fmt.Errorf("failed to get AI WhatsApp conversation: %w", err)
 	}
 
-	// Parse conv_last JSON if it exists
+	// Handle conv_last data (both JSON and plain text formats)
 	if convLastJSON.Valid && convLastJSON.String != "" {
-		if err := json.Unmarshal([]byte(convLastJSON.String), &ai.ConvLast); err != nil {
-			logrus.WithError(err).Warn("Failed to unmarshal conv_last JSON")
+		// Try to parse as JSON first (for backward compatibility)
+		var testJSON interface{}
+		if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
+			// It's valid JSON, store as is
+			ai.ConvLast = json.RawMessage(convLastJSON.String)
+		} else {
+			// It's plain text, store as is
+			ai.ConvLast = json.RawMessage(convLastJSON.String)
 		}
 	}
 
@@ -263,10 +275,16 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 			continue
 		}
 
-		// Parse conv_last JSON if it exists
+		// Handle conv_last data (both JSON and plain text formats)
 		if convLastJSON.Valid && convLastJSON.String != "" {
-			if err := json.Unmarshal([]byte(convLastJSON.String), &ai.ConvLast); err != nil {
-				logrus.WithError(err).Warn("Failed to unmarshal conv_last JSON")
+			// Try to parse as JSON first (for backward compatibility)
+			var testJSON interface{}
+			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
+				// It's valid JSON, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
+			} else {
+				// It's plain text, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
 			}
 		}
 
@@ -452,10 +470,16 @@ func (r *aiWhatsappRepository) GetAIWhatsappByNiche(niche string) ([]models.AIWh
 			continue
 		}
 
-		// Parse conv_last JSON if it exists
+		// Handle conv_last data (both JSON and plain text formats)
 		if convLastJSON.Valid && convLastJSON.String != "" {
-			if err := json.Unmarshal([]byte(convLastJSON.String), &ai.ConvLast); err != nil {
-				logrus.WithError(err).Warn("Failed to unmarshal conv_last JSON")
+			// Try to parse as JSON first (for backward compatibility)
+			var testJSON interface{}
+			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
+				// It's valid JSON, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
+			} else {
+				// It's plain text, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
 			}
 		}
 
@@ -506,10 +530,16 @@ func (r *aiWhatsappRepository) GetActiveAIConversations() ([]models.AIWhatsapp, 
 			continue
 		}
 
-		// Parse conv_last JSON if it exists
+		// Handle conv_last data (both JSON and plain text formats)
 		if convLastJSON.Valid && convLastJSON.String != "" {
-			if err := json.Unmarshal([]byte(convLastJSON.String), &ai.ConvLast); err != nil {
-				logrus.WithError(err).Warn("Failed to unmarshal conv_last JSON")
+			// Try to parse as JSON first (for backward compatibility)
+			var testJSON interface{}
+			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
+				// It's valid JSON, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
+			} else {
+				// It's plain text, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
 			}
 		}
 
@@ -761,17 +791,23 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 		return nil, fmt.Errorf("failed to get AI WhatsApp conversation: %w", err)
 	}
 
-	// Parse conv_last JSON if it exists
+	// Handle conv_last data (both JSON and plain text formats)
 	if convLastJSON.Valid && convLastJSON.String != "" {
-		if err := json.Unmarshal([]byte(convLastJSON.String), &ai.ConvLast); err != nil {
-			logrus.WithError(err).Warn("Failed to unmarshal conv_last JSON")
+		// Try to parse as JSON first (for backward compatibility)
+		var testJSON interface{}
+		if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
+			// It's valid JSON, store as is
+			ai.ConvLast = json.RawMessage(convLastJSON.String)
+		} else {
+			// It's plain text, store as is
+			ai.ConvLast = json.RawMessage(convLastJSON.String)
 		}
 	}
 
 	return ai, nil
 }
 
-// SaveConversationHistory saves conversation history to conv_last field
+// SaveConversationHistory saves conversation history to conv_last field as plain text
 // If record exists, it updates the conv_last field; otherwise, it creates a new record
 func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error {
 	// Check if record exists
@@ -780,45 +816,52 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 		return fmt.Errorf("failed to check existing record: %w", err)
 	}
 
-	// Parse existing conversation history or create new
-	var convHistory []map[string]string
+	// Get existing conversation history as plain text
+	var convHistory string
 	if existingRecord != nil && existingRecord.ConvLast != nil {
-		// Try to parse existing conversation history
+		// Check if existing data is JSON format (for backward compatibility)
 		var existingHistory interface{}
 		if err := json.Unmarshal(existingRecord.ConvLast, &existingHistory); err == nil {
-			// Check if it's already in the correct format
+			// Convert JSON format to plain text format
 			if historySlice, ok := existingHistory.([]interface{}); ok {
 				for _, item := range historySlice {
 					if itemMap, ok := item.(map[string]interface{}); ok {
-						convItem := make(map[string]string)
 						for k, v := range itemMap {
 							if str, ok := v.(string); ok {
-								convItem[k] = str
+								if k == "user" {
+									if convHistory != "" {
+										convHistory += "\n"
+									}
+									convHistory += "USER:" + str
+								} else if k == "bot" {
+									if convHistory != "" {
+										convHistory += "\n"
+									}
+									convHistory += "BOT:" + str
+								}
 							}
 						}
-						convHistory = append(convHistory, convItem)
 					}
 				}
 			}
+		} else {
+			// Already in plain text format
+			convHistory = string(existingRecord.ConvLast)
 		}
 	}
 
-	// Add new conversation entries
+	// Add new conversation entries in plain text format
 	if userMessage != "" {
-		convHistory = append(convHistory, map[string]string{
-			"user": userMessage,
-		})
+		if convHistory != "" {
+			convHistory += "\n"
+		}
+		convHistory += "USER:" + userMessage
 	}
 	if botResponse != "" {
-		convHistory = append(convHistory, map[string]string{
-			"bot": botResponse,
-		})
-	}
-
-	// Convert to JSON
-	convLastJSON, err := json.Marshal(convHistory)
-	if err != nil {
-		return fmt.Errorf("failed to marshal conversation history: %w", err)
+		if convHistory != "" {
+			convHistory += "\n"
+		}
+		convHistory += "BOT:" + botResponse
 	}
 
 	if existingRecord != nil {
@@ -828,7 +871,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 			SET conv_last = ?, stage = ?, updated_at = ?
 			WHERE prospect_num = ? AND id_device = ?
 		`
-		_, err = r.db.Exec(query, string(convLastJSON), stage, time.Now(), prospectNum, idDevice)
+		_, err = r.db.Exec(query, convHistory, stage, time.Now(), prospectNum, idDevice)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update conversation history")
 			return fmt.Errorf("failed to update conversation history: %w", err)
@@ -846,7 +889,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 				created_at, updated_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?)
 		`
-		_, err = r.db.Exec(query, idDevice, prospectNum, stage, string(convLastJSON), 0, now, now)
+		_, err = r.db.Exec(query, idDevice, prospectNum, stage, convHistory, 0, now, now)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create new conversation record")
 			return fmt.Errorf("failed to create new conversation record: %w", err)
@@ -991,10 +1034,16 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 			continue
 		}
 
-		// Parse conv_last JSON if it exists
+		// Handle conv_last data (both JSON and plain text formats)
 		if convLastJSON.Valid && convLastJSON.String != "" {
-			if err := json.Unmarshal([]byte(convLastJSON.String), &ai.ConvLast); err != nil {
-				logrus.WithError(err).Warn("Failed to unmarshal conv_last JSON")
+			// Try to parse as JSON first (for backward compatibility)
+			var testJSON interface{}
+			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
+				// It's valid JSON, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
+			} else {
+				// It's plain text, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
 			}
 		}
 
