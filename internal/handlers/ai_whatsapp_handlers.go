@@ -59,6 +59,9 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 	// Analytics endpoints
 	api.Get("/ai/analytics", h.GetAnalytics)
 	api.Post("/ai/analytics", h.GetAnalytics)
+
+	// Data table endpoints
+	api.Get("/ai/whatsapp/data", h.GetAllAIWhatsappData)
 }
 
 // WhatsappWebhookRequest represents incoming WhatsApp webhook data
@@ -600,6 +603,16 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 
 	// Transform data to match frontend expectations
 	summary := analyticsData["summary"].(map[string]interface{})
+	
+	// Transform stage distribution from array to object format
+	stageDistributionArray := analyticsData["stage_distribution"].([]map[string]interface{})
+	stageDistributionMap := make(map[string]interface{})
+	for _, item := range stageDistributionArray {
+		stage := item["stage"].(string)
+		count := item["count"]
+		stageDistributionMap[stage] = count
+	}
+	
 	responseData := map[string]interface{}{
 		"totalConversations":       summary["total_conversations"],
 		"aiActiveConversations":    summary["ai_active"],
@@ -610,11 +623,49 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 		"aiActivePercentage":       summary["ai_active_percentage"],
 		"humanTakeoverPercentage":  summary["human_takeover_percentage"],
 		"dailyBreakdown":           analyticsData["daily_data"],
-		"stageDistribution":        analyticsData["stage_distribution"],
+		"stageDistribution":        stageDistributionMap,
 		"dateRange":                analyticsData["date_range"],
 	}
 
 	return c.JSON(responseData)
+}
+
+// GetAllAIWhatsappData retrieves all AI WhatsApp conversation records for data table display
+func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
+	// Parse query parameters for pagination and filtering
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 50)
+	deviceFilter := c.Query("device_id", "")
+	stageFilter := c.Query("stage", "")
+	search := c.Query("search", "")
+
+	// Calculate offset for pagination
+	offset := (page - 1) * limit
+
+	// Get data from repository
+	data, total, err := h.AIRepo.GetAllAIWhatsappData(limit, offset, deviceFilter, stageFilter, search)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get AI WhatsApp data")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "Failed to retrieve AI WhatsApp data",
+		})
+	}
+
+	// Calculate pagination info
+	totalPages := (total + limit - 1) / limit
+
+	// Return paginated response
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data": data,
+		"pagination": fiber.Map{
+			"current_page": page,
+			"total_pages":  totalPages,
+			"total_records": total,
+			"limit":        limit,
+		},
+	})
 }
 
 // Helper methods for consistent response formatting

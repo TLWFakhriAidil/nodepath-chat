@@ -44,6 +44,9 @@ type AIWhatsappRepository interface {
 	GetActiveConversationCount() (int, error)
 	GetConversationsByDateRange(startDate, endDate time.Time) ([]models.AIWhatsapp, error)
 	GetAnalyticsData(startDate, endDate time.Time, idDevice string) (map[string]interface{}, error)
+
+	// Data table operations
+	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string) ([]models.AIWhatsapp, int, error)
 }
 
 // aiWhatsappRepository implements AIWhatsappRepository interface
@@ -302,6 +305,129 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 	}
 
 	return conversations, nil
+}
+
+// GetAllAIWhatsappData retrieves all AI WhatsApp conversation records with pagination and filtering
+func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string) ([]models.AIWhatsapp, int, error) {
+	// Build base query
+	baseQuery := `
+		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
+		       conv_current, human, niche, jam, intro, 
+		       catatan_staff, balas, data_image, conv_stage, 
+		       bot_balas, keywordiklan, marketer, update_today, 
+		       created_at, updated_at
+		FROM ai_whatsapp_nodepath
+	`
+
+	countQuery := `SELECT COUNT(*) FROM ai_whatsapp_nodepath`
+
+	// Build WHERE conditions
+	var conditions []string
+	var args []interface{}
+	var countArgs []interface{}
+
+	// Add device filter
+	if deviceFilter != "" {
+		conditions = append(conditions, "id_device = ?")
+		args = append(args, deviceFilter)
+		countArgs = append(countArgs, deviceFilter)
+	}
+
+	// Add stage filter
+	if stageFilter != "" {
+		conditions = append(conditions, "stage = ?")
+		args = append(args, stageFilter)
+		countArgs = append(countArgs, stageFilter)
+	}
+
+	// Add search filter (searches in prospect_num, niche, and stage)
+	if search != "" {
+		conditions = append(conditions, "(prospect_num LIKE ? OR niche LIKE ? OR stage LIKE ? OR marketer LIKE ?)")
+		searchTerm := "%" + search + "%"
+		args = append(args, searchTerm, searchTerm, searchTerm, searchTerm)
+		countArgs = append(countArgs, searchTerm, searchTerm, searchTerm, searchTerm)
+	}
+
+	// Add WHERE clause if conditions exist
+	if len(conditions) > 0 {
+		whereClause := " WHERE " + fmt.Sprintf("%s", conditions[0])
+		for i := 1; i < len(conditions); i++ {
+			whereClause += " AND " + conditions[i]
+		}
+		baseQuery += whereClause
+		countQuery += whereClause
+	}
+
+	// Add ORDER BY and LIMIT for main query
+	baseQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	// Get total count first
+	var total int
+	err := r.db.QueryRow(countQuery, countArgs...).Scan(&total)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get total count for AI WhatsApp data")
+		return nil, 0, fmt.Errorf("failed to get total count: %w", err)
+	}
+
+	// Execute main query
+	rows, err := r.db.Query(baseQuery, args...)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get AI WhatsApp data")
+		return nil, 0, fmt.Errorf("failed to get AI WhatsApp data: %w", err)
+	}
+	defer rows.Close()
+
+	var conversations []models.AIWhatsapp
+	for rows.Next() {
+		ai := models.AIWhatsapp{}
+		var convLastJSON sql.NullString
+		var convCurrentSQL sql.NullString
+
+		err := rows.Scan(
+			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
+			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
+			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+			&ai.CreatedAt, &ai.UpdatedAt,
+		)
+
+		ai.ConvCurrent = convCurrentSQL
+
+		if err != nil {
+			logrus.WithError(err).Error("Failed to scan AI WhatsApp conversation")
+			continue
+		}
+
+		// Handle conv_last data (both JSON and plain text formats)
+		if convLastJSON.Valid && convLastJSON.String != "" {
+			// Try to parse as JSON first (for backward compatibility)
+			var testJSON interface{}
+			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
+				// It's valid JSON, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
+			} else {
+				// It's plain text, store as is
+				ai.ConvLast = json.RawMessage(convLastJSON.String)
+			}
+		}
+
+		conversations = append(conversations, ai)
+	}
+
+	if err = rows.Err(); err != nil {
+		logrus.WithError(err).Error("Error iterating over AI WhatsApp data rows")
+		return nil, 0, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"total_records": total,
+		"returned_records": len(conversations),
+		"limit": limit,
+		"offset": offset,
+	}).Info("Successfully retrieved AI WhatsApp data")
+
+	return conversations, total, nil
 }
 
 // GetAnalyticsData retrieves analytics data from ai_whatsapp_nodepath table with date filtering

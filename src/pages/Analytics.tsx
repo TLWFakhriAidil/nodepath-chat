@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DatePickerWithRange } from '@/components/ui/date-picker';
+import AIWhatsappDataTable from '@/components/AIWhatsappDataTable';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -566,6 +567,11 @@ const Analytics = () => {
           </Card>
         </div>
       )}
+      
+      {/* AI WhatsApp Data Table */}
+      <div className="mt-8">
+        <AIWhatsappDataTable />
+      </div>
     </div>
   );
 };
