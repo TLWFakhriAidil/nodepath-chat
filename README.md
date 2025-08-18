@@ -48,6 +48,21 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
+### 🐳 Docker Build Fix - Railway Deployment (Latest)
+**Date**: Current Session
+
+#### ✅ Changes Made:
+- **Dockerfile Path Updates**: Fixed Docker build paths for migration utilities
+- **Migration File References**: Updated paths to reference `./debug/fix_production_schema.go` and `./debug/railway_migration_runner.go`
+- **Build Process Resolution**: Resolved Railway deployment build failures caused by missing file references
+- **Debug Directory Integration**: Properly integrated moved debug files into Docker build process
+
+#### 🎯 Benefits:
+- **Successful Railway Deployment**: Fixed Docker build process for Railway platform
+- **Correct File Paths**: Migration utilities now reference correct file locations in debug directory
+- **Deployment Ready**: Application can now be successfully built and deployed on Railway
+- **Build Consistency**: Aligned Docker build with current project structure
+
 ### 🔄 Database Schema Migration - IDStaff to IDDevice (August 18, 2025)
 
 **Major system-wide migration completed to standardize device identification:**
