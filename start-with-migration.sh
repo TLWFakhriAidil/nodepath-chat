@@ -1,29 +1,29 @@
-#!/bin/sh
-# Railway Startup Script - Runs database migration before starting server
-# This ensures the 'jam' column exists before processing webhooks
+#!/bin/bash
 
-echo "🚀 Starting Railway application with database migration..."
+# Railway startup script with database migration
+# This script runs the migration before starting the main server
 
-# Check if MYSQL_URI is set
+echo "🚀 Starting Railway deployment with database migration..."
+
+# Check if MYSQL_URI is available
 if [ -z "$MYSQL_URI" ]; then
-    echo "⚠️  Warning: MYSQL_URI environment variable is not set"
-    echo "🚀 Starting server without migration..."
-    exec /app/server
-fi
-
-echo "✅ MYSQL_URI found, running database migration..."
-
-# Run the migration utility
-echo "🔧 Executing database schema migration..."
-/app/migrate
-
-if [ $? -eq 0 ]; then
-    echo "🎉 Database migration completed successfully!"
+    echo "⚠️ MYSQL_URI not found, skipping migration"
 else
-    echo "⚠️  Migration failed or skipped, continuing with server startup..."
+    echo "📡 MYSQL_URI found, running comprehensive migration..."
+    
+    # Run the Railway migration runner
+    echo "🔄 Executing comprehensive database migration..."
+    /app/railway_migration_runner
+    
+    migration_exit_code=$?
+    if [ $migration_exit_code -eq 0 ]; then
+        echo "✅ Comprehensive migration completed successfully"
+    else
+        echo "⚠️ Migration failed with exit code $migration_exit_code, but continuing..."
+        echo "ℹ️ Server will start anyway to maintain service availability"
+    fi
 fi
 
-echo "🚀 Starting main application server..."
-
+echo "🚀 Starting main server..."
 # Start the main application
 exec /app/server
