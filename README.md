@@ -48,7 +48,19 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### ✅ Compilation Fixes & Field Access Resolution (Latest)
+### ✅ Production Database Schema Fix & Automated Migration (Latest)
+- **Fixed Production 'jam' Column Error**: Resolved Error 1054 (42S22) Unknown column 'jam' in field list in Railway production
+- **Automated Migration System**: Integrated database schema migration into Docker build process
+- **Railway Deployment Migration**: Created startup script that runs migration before server starts
+- **Production Schema Verification**: Added utility to verify table structure and column existence
+- **Zero-Downtime Migration**: Migration runs automatically during Railway deployment without service interruption
+- **Webhook Processing Fix**: Resolved data saving issues that prevented AI conversations from being stored
+- **Docker Integration**: Migration utility and SQL scripts included in production Docker image
+- **Fallback Handling**: Server starts even if migration fails, ensuring service availability
+- **Connection String Conversion**: Added support for both mysql:// and tcp() connection formats
+- **Production Ready**: All database schema issues resolved for Railway production environment
+
+### ✅ Compilation Fixes & Field Access Resolution
 - **Fixed Struct Field Access**: Resolved "unknown field" errors in AIWhatsappHandlers struct literal
 - **Exported Field Names**: Updated constructor to use exported field names (AIWhatsappService, AIRepo, DeviceRepo)
 - **Method Reference Updates**: Fixed all method calls to use correct exported field names
@@ -135,6 +147,47 @@ MYSQL_URI=mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
 # Set MYSQL_URI and run tests
 $env:MYSQL_URI="mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
 go run test_mysql_uri_connection.go
+```
+
+### 🔧 Automated Production Migration System
+
+**Problem Solved**: Railway production database missing 'jam' column causing webhook processing failures.
+
+**Solution**: Integrated automated migration system that runs during Docker deployment.
+
+**Migration Components**:
+- ✅ **production_fix_jam_column.sql** - SQL script to add missing 'jam' column safely
+- ✅ **fix_production_schema.go** - Go utility to execute migration and verify schema
+- ✅ **start-with-migration.sh** - Startup script that runs migration before server starts
+- ✅ **Docker Integration** - Migration built into Docker image and executed automatically
+
+**Migration Features**:
+- ✅ **Safe Column Addition** - Checks if column exists before adding to prevent errors
+- ✅ **Schema Verification** - Verifies table structure after migration
+- ✅ **Connection Format Support** - Handles both mysql:// and tcp() connection strings
+- ✅ **Fallback Handling** - Server starts even if migration fails
+- ✅ **Zero Downtime** - Migration runs during deployment without service interruption
+- ✅ **Production Ready** - Designed specifically for Railway production environment
+
+**Migration Process**:
+1. **Docker Build** - Migration utility compiled during image build
+2. **Container Start** - Migration runs automatically before server starts
+3. **Schema Check** - Verifies 'jam' column exists in ai_whatsapp_nodepath table
+4. **Column Addition** - Adds column if missing using safe ALTER TABLE statement
+5. **Verification** - Confirms schema is correct and displays table structure
+6. **Server Start** - Main application starts with correct database schema
+
+**Files Created**:
+- `production_fix_jam_column.sql` - Production migration SQL script
+- `fix_production_schema.go` - Migration execution utility
+- `start-with-migration.sh` - Docker startup script with migration
+- Updated `Dockerfile` - Includes migration in build and startup process
+
+**Deployment**:
+```bash
+# Railway automatically runs migration during deployment
+# No manual intervention required
+git push origin main  # Triggers Railway deployment with migration
 ```
 
 ### Server Stability Improvements

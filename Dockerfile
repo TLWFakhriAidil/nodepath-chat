@@ -44,6 +44,9 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/server ./cmd/server
 
+# Build migration utility
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/migrate ./fix_production_schema.go
+
 # Final stage
 FROM alpine:latest
 
@@ -55,6 +58,14 @@ RUN mkdir -p /app
 
 # Copy binary from backend builder
 COPY --from=backend-builder /app/bin/server /app/server
+
+# Copy migration utility and SQL script
+COPY --from=backend-builder /app/bin/migrate /app/migrate
+COPY --from=backend-builder /src/production_fix_jam_column.sql /app/production_fix_jam_column.sql
+
+# Copy startup script
+COPY --from=backend-builder /src/start-with-migration.sh /app/start-with-migration.sh
+RUN chmod +x /app/start-with-migration.sh
 
 # Copy built React application from frontend builder
 COPY --from=frontend-builder /app/dist /app/dist
@@ -77,5 +88,5 @@ ENV APP_ENV=production
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/healthz || exit 1
 
-# Run the application
-CMD ["/app/server"]
+# Run the application with migration
+CMD ["/app/start-with-migration.sh"]
