@@ -48,7 +48,36 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### ✅ Complete Database Schema Fix & Automated Migration (Latest)
+### 🔄 Database Schema Migration - IDStaff to IDDevice (August 18, 2025)
+
+**Major system-wide migration completed to standardize device identification:**
+
+#### ✅ Changes Made:
+- **Removed IDStaff references**: Eliminated all `id_staff` fields and references throughout the codebase
+- **Standardized to IDDevice**: All operations now use `id_device` for consistent device identification
+- **Updated Database Schema**: 
+  - Modified `ai_whatsapp_nodepath` table to use `id_device` instead of `id_staff`
+  - Updated `conversation_log_nodepath` table schema
+  - Removed deprecated `ai_settings_nodepath` table
+- **Repository Layer Updates**: Updated all SQL queries and scan operations in `ai_whatsapp_repository.go`
+- **Handler Layer Updates**: Modified `StartAIConversationRequest` struct and validation logic
+- **Service Layer Updates**: Updated AI WhatsApp service to use device-based identification
+- **Model Updates**: Created new `AISettings` model with `IDDevice` field
+- **Code Organization**: Moved debug/test files to separate `debug/` directory
+
+#### 🎯 Benefits:
+- **Simplified Architecture**: Single device identification system across all components
+- **Better Performance**: Reduced complexity in database queries and joins
+- **Improved Maintainability**: Consistent naming convention throughout the system
+- **Enhanced Scalability**: Cleaner data model for handling 3000+ concurrent devices
+
+#### 🔧 Technical Details:
+- **Files Modified**: 15+ files across handlers, services, repositories, and models
+- **Database Tables Updated**: `ai_whatsapp_nodepath`, `conversation_log_nodepath`
+- **Migration Status**: ✅ Complete - All compilation errors resolved
+- **Server Status**: ✅ Running successfully on port 8080
+
+```### ✅ Complete Database Schema Fix & Automated Migration (Latest)
 - **Fixed All Missing Column Errors**: Resolved Error 1054 (42S22) for jam, intro, date_order, balas, data_image, conv_stage, keywordiklan, marketer, update_today columns
 - **Comprehensive Schema Migration**: Updated ai_whatsapp_nodepath table to match AIWhatsapp struct completely
 - **Data Type Corrections**: Fixed id_prospect (VARCHAR→INT) and bot_balas (TINYINT→TIMESTAMP) type mismatches

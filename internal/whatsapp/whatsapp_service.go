@@ -826,6 +826,8 @@ func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, executi
 	// would require more complex scheduling infrastructure
 	// In a production system, this would involve setting up a timer
 	// and handling timeout scenarios
+	// TODO: Implement actual timeout logic using waitTime (%d seconds)
+	_ = waitTime // Suppress unused variable warning
 
 	// Move to next node after processing user input
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)

@@ -589,6 +589,8 @@ func (h *Handlers) processTestWaitingReplyTimesNode(flow *models.ChatbotFlow, ex
 	}
 
 	// For test chat, we'll process immediately and show the wait time in response
+	// TODO: In production, implement actual timeout logic using waitTime (%d seconds)
+	_ = waitTime // Suppress unused variable warning
 	// Move to next node after processing user input
 	nextNode, err := h.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {

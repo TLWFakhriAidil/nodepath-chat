@@ -14,42 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      ai_settings_nodepath: {
-        Row: {
-          closing_prompt: string | null
-          created_at: string
-          id: string
-          id_staff: string | null
-          instance_prompt: string | null
-          open_model: string | null
-          open_router_key: string | null
-          system_prompt: string | null
-          updated_at: string
-        }
-        Insert: {
-          closing_prompt?: string | null
-          created_at?: string
-          id?: string
-          id_staff?: string | null
-          instance_prompt?: string | null
-          open_model?: string | null
-          open_router_key?: string | null
-          system_prompt?: string | null
-          updated_at?: string
-        }
-        Update: {
-          closing_prompt?: string | null
-          created_at?: string
-          id?: string
-          id_staff?: string | null
-          instance_prompt?: string | null
-          open_model?: string | null
-          open_router_key?: string | null
-          system_prompt?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       chatbot_executions: {
         Row: {
           created_at: string

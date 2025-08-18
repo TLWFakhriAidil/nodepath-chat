@@ -215,14 +215,14 @@ func (h *AIWhatsappHandlers) StartAIConversation(c *fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if req.ProspectNum == "" || req.IDStaff == "" || req.IDDevice == "" {
+	if req.ProspectNum == "" || req.IDDevice == "" {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Missing required fields")
 	}
 
 	// Create AI WhatsApp conversation record
 	aiWhatsapp := &models.AIWhatsapp{
 		ProspectNum: req.ProspectNum,
-		IDStaff:     req.IDStaff,
+		IDDevice:    req.IDDevice,
 		Stage:       req.Stage,
 		Human:       0, // AI active by default
 		Niche:       req.Niche,
@@ -364,8 +364,8 @@ func (h *AIWhatsappHandlers) CreateAISettings(c *fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if settings.IDStaff == "" {
-		return h.errorResponse(c, fiber.StatusBadRequest, "Staff ID is required")
+	if settings.IDDevice == "" {
+		return h.errorResponse(c, fiber.StatusBadRequest, "Device ID is required")
 	}
 
 	// TODO: Implement CreateAISettings method in repository
