@@ -15,12 +15,86 @@ function debug_log($message) {
 debug_log('Starting database connection test');
 
 // Get database connection parameters from environment variables
-// Check for both VITE_ prefixed variables (for local dev) and regular DB_ variables (for Railway)
-$host = getenv('VITE_DB_HOST') ?: getenv('DB_HOST') ?: '159.89.198.71';
-$dbname = getenv('VITE_DB_NAME') ?: getenv('DB_NAME') ?: 'admin_railway';
-$user = getenv('VITE_DB_USER') ?: getenv('DB_USER') ?: 'admin_aqil';
-$pass = getenv('VITE_DB_PASSWORD') ?: getenv('DB_PASSWORD') ?: 'admin_aqil';
-$port = getenv('VITE_DB_PORT') ?: getenv('DB_PORT') ?: '3306';
+// Check for both VITE_ prefixed variables (for local dev) and regular DB_// Function to parse MYSQL_URI into connection parameters
+function parseMySQLURI($mysqlURI) {
+    if (empty($mysqlURI) || !str_starts_with($mysqlURI, 'mysql://')) {
+        return null;
+    }
+    
+    // Remove mysql:// prefix
+    $url = substr($mysqlURI, 8);
+    
+    // Split user:password@host:port/database
+    $parts = explode('@', $url);
+    if (count($parts) !== 2) {
+        return null;
+    }
+    
+    $userPass = $parts[0];
+    $hostPortDB = $parts[1];
+    
+    // Split user:password
+    $userParts = explode(':', $userPass);
+    if (count($userParts) !== 2) {
+        return null;
+    }
+    
+    $user = $userParts[0];
+    $password = $userParts[1];
+    
+    // Split host:port/database
+    $hostParts = explode('/', $hostPortDB);
+    if (count($hostParts) !== 2) {
+        return null;
+    }
+    
+    $database = $hostParts[1];
+    $hostPort = $hostParts[0];
+    
+    $hostPortParts = explode(':', $hostPort);
+    if (count($hostPortParts) !== 2) {
+        return null;
+    }
+    
+    $host = $hostPortParts[0];
+    $port = $hostPortParts[1];
+    
+    return [
+        'host' => $host,
+        'port' => $port,
+        'user' => $user,
+        'password' => $password,
+        'database' => $database
+    ];
+}
+
+// Database configuration using MYSQL_URI exclusively
+$mysqlURI = getenv('MYSQL_URI');
+if ($mysqlURI) {
+    $config = parseMySQLURI($mysqlURI);
+    if ($config) {
+        $host = $config['host'];
+        $dbname = $config['database'];
+        $user = $config['user'];
+        $pass = $config['password'];
+        $port = $config['port'];
+        echo "Using MYSQL_URI for database connection\n";
+    } else {
+        echo "Failed to parse MYSQL_URI, using fallback values\n";
+        $host = '159.89.198.71';
+        $dbname = 'admin_railway';
+        $user = 'admin_aqil';
+        $pass = 'admin_aqil';
+        $port = '3306';
+    }
+} else {
+    echo "MYSQL_URI not found, using fallback values\n";
+    $host = '159.89.198.71';
+    $dbname = 'admin_railway';
+    $user = 'admin_aqil';
+    $pass = 'admin_aqil';
+    $port = '3306';
+}
 
 debug_log("Connection parameters: host=$host, dbname=$dbname, user=$user");
 

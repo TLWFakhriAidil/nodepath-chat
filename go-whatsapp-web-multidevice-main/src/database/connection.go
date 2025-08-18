@@ -25,10 +25,10 @@ func GetDB() *sql.DB {
 	once.Do(func() {
 		var err error
 		
-		// Check for MySQL configuration first
+		// Check for MySQL configuration using MYSQL_URI exclusively
 		mysqlURI := os.Getenv("MYSQL_URI")
 		if mysqlURI == "" {
-			mysqlURI = os.Getenv("DB_URI")
+			log.Fatal("MYSQL_URI environment variable is required")
 		}
 		
 		if mysqlURI != "" && strings.Contains(mysqlURI, "mysql") {

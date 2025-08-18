@@ -10,10 +10,10 @@ import (
 )
 
 func main() {
-	// Get database connection string from environment
-	dbURL := os.Getenv("DATABASE_URL")
+	// Get database URL from environment - using MYSQL_URI exclusively
+	dbURL := os.Getenv("MYSQL_URI")
 	if dbURL == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
+		log.Fatal("MYSQL_URI environment variable is required")
 	}
 
 	fmt.Printf("Connecting to database...\n")

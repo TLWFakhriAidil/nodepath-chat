@@ -9,9 +9,10 @@ import (
 )
 
 func main() {
-	dbURL := os.Getenv("DATABASE_URL")
+	// Get database URL from environment - using MYSQL_URI exclusively
+	dbURL := os.Getenv("MYSQL_URI")
 	if dbURL == "" {
-		fmt.Println("❌ DATABASE_URL environment variable is not set")
+		fmt.Println("❌ MYSQL_URI environment variable is not set")
 		return
 	}
 

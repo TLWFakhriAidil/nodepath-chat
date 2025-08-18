@@ -31,11 +31,83 @@ foreach ($_SERVER as $key => $value) {
 // Check MySQL connection
 $mysqlStatus = 'Not tested';
 try {
-    // Try to connect to MySQL using environment variables
-    $host = getenv('DB_HOST') ?: 'localhost';
-    $dbname = getenv('DB_NAME') ?: 'database';
-    $user = getenv('DB_USER') ?: 'user';
-    $pass = getenv('DB_PASSWORD') ?: 'password';
+    // Function to parse MYSQL_URI into connection parameters
+    function parseMySQLURI($mysqlURI) {
+        if (empty($mysqlURI) || !str_starts_with($mysqlURI, 'mysql://')) {
+            return null;
+        }
+        
+        // Remove mysql:// prefix
+        $url = substr($mysqlURI, 8);
+        
+        // Split user:password@host:port/database
+        $parts = explode('@', $url);
+        if (count($parts) !== 2) {
+            return null;
+        }
+        
+        $userPass = $parts[0];
+        $hostPortDB = $parts[1];
+        
+        // Split user:password
+        $userParts = explode(':', $userPass);
+        if (count($userParts) !== 2) {
+            return null;
+        }
+        
+        $user = $userParts[0];
+        $password = $userParts[1];
+        
+        // Split host:port/database
+        $hostParts = explode('/', $hostPortDB);
+        if (count($hostParts) !== 2) {
+            return null;
+        }
+        
+        $database = $hostParts[1];
+        $hostPort = $hostParts[0];
+        
+        $hostPortParts = explode(':', $hostPort);
+        if (count($hostPortParts) !== 2) {
+            return null;
+        }
+        
+        $host = $hostPortParts[0];
+        $port = $hostPortParts[1];
+        
+        return [
+            'host' => $host,
+            'port' => $port,
+            'user' => $user,
+            'password' => $password,
+            'database' => $database
+        ];
+    }
+
+    // Database configuration using MYSQL_URI exclusively
+    $mysqlURI = getenv('MYSQL_URI');
+    if ($mysqlURI) {
+        $config = parseMySQLURI($mysqlURI);
+        if ($config) {
+            $host = $config['host'];
+            $dbname = $config['database'];
+            $user = $config['user'];
+            $pass = $config['password'];
+            $port = $config['port'];
+        } else {
+            $host = '159.89.198.71';
+            $dbname = 'admin_railway';
+            $user = 'admin_aqil';
+            $pass = 'admin_aqil';
+            $port = '3306';
+        }
+    } else {
+        $host = '159.89.198.71';
+        $dbname = 'admin_railway';
+        $user = 'admin_aqil';
+        $pass = 'admin_aqil';
+        $port = '3306';
+    }
     
     $dsn = "mysql:host={$host};dbname={$dbname}";
     $options = [

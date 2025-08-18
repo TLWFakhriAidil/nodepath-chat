@@ -15,6 +15,59 @@ function debug_log($message) {
   error_log($message);
 }
 
+// Function to parse MYSQL_URI into connection parameters
+function parseMySQLURI($mysqlURI) {
+    if (empty($mysqlURI) || !str_starts_with($mysqlURI, 'mysql://')) {
+        return null;
+    }
+    
+    // Remove mysql:// prefix
+    $url = substr($mysqlURI, 8);
+    
+    // Split user:password@host:port/database
+    $parts = explode('@', $url);
+    if (count($parts) !== 2) {
+        return null;
+    }
+    
+    $userPass = $parts[0];
+    $hostPortDB = $parts[1];
+    
+    // Split user:password
+    $userParts = explode(':', $userPass);
+    if (count($userParts) !== 2) {
+        return null;
+    }
+    
+    $user = $userParts[0];
+    $password = $userParts[1];
+    
+    // Split host:port/database
+    $hostParts = explode('/', $hostPortDB);
+    if (count($hostParts) !== 2) {
+        return null;
+    }
+    
+    $database = $hostParts[1];
+    $hostPort = $hostParts[0];
+    
+    $hostPortParts = explode(':', $hostPort);
+    if (count($hostPortParts) !== 2) {
+        return null;
+    }
+    
+    $host = $hostPortParts[0];
+    $port = $hostPortParts[1];
+    
+    return [
+        'host' => $host,
+        'port' => $port,
+        'user' => $user,
+        'password' => $password,
+        'database' => $database
+    ];
+}
+
 debug_log('Request received: ' . $_SERVER['REQUEST_METHOD']);
 
 // Handle preflight requests
@@ -73,16 +126,33 @@ $params = $input['params'] ?? [];
 // Get config from input or use environment variables as fallback
 $config = $input['config'] ?? [];
 
-// If config is empty or missing required fields, use environment variables
+// If config is empty or missing required fields, use MYSQL_URI exclusively
 if (empty($config) || empty($config['host']) || empty($config['user']) || empty($config['password']) || empty($config['database'])) {
-    $config = [
-        'host' => getenv('VITE_DB_HOST') ?: getenv('DB_HOST') ?: '159.89.198.71',
-        'database' => getenv('VITE_DB_NAME') ?: getenv('DB_NAME') ?: 'admin_railway',
-        'user' => getenv('VITE_DB_USER') ?: getenv('DB_USER') ?: 'admin_aqil',
-        'password' => getenv('VITE_DB_PASSWORD') ?: getenv('DB_PASSWORD') ?: 'admin_aqil',
-        'port' => getenv('VITE_DB_PORT') ?: getenv('DB_PORT') ?: '3306'
-    ];
-    debug_log('Using environment variables for database connection');
+    $mysqlURI = getenv('MYSQL_URI');
+    if ($mysqlURI) {
+        $config = parseMySQLURI($mysqlURI);
+        if ($config) {
+            debug_log('Using MYSQL_URI for database connection');
+        } else {
+            debug_log('Failed to parse MYSQL_URI, using fallback values');
+            $config = [
+                'host' => '159.89.198.71',
+                'database' => 'admin_railway',
+                'user' => 'admin_aqil',
+                'password' => 'admin_aqil',
+                'port' => '3306'
+            ];
+        }
+    } else {
+        debug_log('MYSQL_URI not found, using fallback values');
+        $config = [
+            'host' => '159.89.198.71',
+            'database' => 'admin_railway',
+            'user' => 'admin_aqil',
+            'password' => 'admin_aqil',
+            'port' => '3306'
+        ];
+    }
 }
 
 if (empty($query)) {
