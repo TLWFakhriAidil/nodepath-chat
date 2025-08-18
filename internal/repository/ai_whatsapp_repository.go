@@ -418,6 +418,13 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		})
 	}
 
+	// Calculate percentages safely (avoid division by zero)
+	var aiActivePercentage, humanTakeoverPercentage float64
+	if totalConversations > 0 {
+		aiActivePercentage = float64(aiActive) / float64(totalConversations) * 100
+		humanTakeoverPercentage = float64(humanTakeover) / float64(totalConversations) * 100
+	}
+
 	// Return comprehensive analytics data
 	return map[string]interface{}{
 		"summary": map[string]interface{}{
@@ -427,8 +434,8 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			"unique_devices":            uniqueDevices,
 			"unique_niches":             uniqueNiches,
 			"conversations_with_stage":  conversationsWithStage,
-			"ai_active_percentage":      float64(aiActive) / float64(totalConversations) * 100,
-			"human_takeover_percentage": float64(humanTakeover) / float64(totalConversations) * 100,
+			"ai_active_percentage":      aiActivePercentage,
+			"human_takeover_percentage": humanTakeoverPercentage,
 		},
 		"daily_data":         dailyData,
 		"stage_distribution": stageDistribution,
