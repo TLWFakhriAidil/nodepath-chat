@@ -21,13 +21,13 @@ type AIWhatsappService interface {
 	ProcessAIConversation(prospectNum, idDevice, currentText, stage string) (*AIWhatsappResponse, error)
 	
 	// Get AI settings
-	GetAISettings(idStaff string) (*models.AISettings, error)
+	GetAISettings(idDevice string) (*models.AISettings, error)
 	
 	// Update conversation stage
 	UpdateConversationStage(prospectNum, stage string) error
 	
 	// Log conversation
-	LogConversation(prospectNum string, idStaff string, message, sender, stage string) error
+	LogConversation(prospectNum string, idDevice string, message, sender, stage string) error
 	
 	// Check if human takeover is active
 	IsHumanTakeoverActive(prospectNum string) (bool, error)
@@ -80,14 +80,16 @@ type AIWhatsappAPIResponse struct {
 type aiWhatsappService struct {
 	aiRepo       repository.AIWhatsappRepository
 	deviceRepo   repository.DeviceSettingsRepository
+	flowService  *FlowService
 	httpClient   *http.Client
 }
 
 // NewAIWhatsappService creates a new instance of AIWhatsappService
-func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo repository.DeviceSettingsRepository) AIWhatsappService {
+func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo repository.DeviceSettingsRepository, flowService *FlowService) AIWhatsappService {
 	return &aiWhatsappService{
-		aiRepo:     aiRepo,
-		deviceRepo: deviceRepo,
+		aiRepo:      aiRepo,
+		deviceRepo:  deviceRepo,
+		flowService: flowService,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -136,10 +138,73 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		return nil, fmt.Errorf("failed to get AI conversation: %w", err)
 	}
 
+	// If prospect doesn't exist, create a new one with proper flow-based stage
+	if aiConv == nil {
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"id_device": idDevice,
+		}).Info("Creating new prospect record")
+		
+		// Get default flow for the device to determine initial stage
+		defaultFlow, err := s.flowService.GetDefaultFlowForDevice(idDevice)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to get default flow for device, using default stage")
+		}
+		
+		// Determine initial stage and niche from flow
+		initialStage := "welcome" // Default stage
+		niche := ""
+		
+		if defaultFlow != nil {
+			// Get the start node from the flow to determine initial stage
+			startNode, err := s.flowService.GetStartNode(defaultFlow)
+			if err == nil && startNode != nil {
+				// Use the node ID as the initial stage
+				if startNode.ID != "" {
+					initialStage = startNode.ID
+				}
+			}
+			niche = defaultFlow.Niche
+			logrus.WithFields(logrus.Fields{
+				"flow_id": defaultFlow.ID,
+				"flow_name": defaultFlow.Name,
+				"initial_stage": initialStage,
+				"niche": niche,
+			}).Info("Using flow-based configuration for new prospect")
+		} else {
+			logrus.WithField("id_device", idDevice).Warn("No flow found for device, using default configuration")
+		}
+		
+		// Create new AI WhatsApp conversation record
+		now := time.Now()
+		newAIConv := &models.AIWhatsapp{
+			IDDevice:    idDevice, // Use idDevice for device identification
+			ProspectNum: prospectNum,
+			Stage:       initialStage,
+			Human:       0,         // AI is active by default
+			Niche:       niche,
+			DateOrder:   &now,
+		}
+		
+		err = s.aiRepo.CreateAIWhatsapp(newAIConv)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create new prospect record")
+			return nil, fmt.Errorf("failed to create new prospect record: %w", err)
+		}
+		
+		// Use the newly created conversation
+		aiConv = newAIConv
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"stage": initialStage,
+			"niche": niche,
+		}).Info("New prospect record created successfully")
+	}
+
 	// Get AI settings
 	var aiSettings *models.AISettings
 	if aiConv != nil {
-		aiSettings, err = s.GetAISettings(aiConv.IDStaff)
+		aiSettings, err = s.GetAISettings(aiConv.IDDevice)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to get AI settings")
 			return nil, fmt.Errorf("failed to get AI settings: %w", err)
@@ -205,7 +270,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 	// Log user message
 	var staffID string
 	if aiConv != nil {
-		staffID = aiConv.IDStaff
+		staffID = aiConv.IDDevice
 	}
 	err = s.LogConversation(prospectNum, staffID, currentText, "user", stage)
 	if err != nil {
@@ -223,12 +288,12 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 }
 
 // GetAISettings retrieves AI settings for a staff member
-func (s *aiWhatsappService) GetAISettings(idStaff string) (*models.AISettings, error) {
+func (s *aiWhatsappService) GetAISettings(idDevice string) (*models.AISettings, error) {
 	// For now, return a default AI settings since the method doesn't exist
 	// TODO: Implement GetAISettingsByStaff method in repository
 	return &models.AISettings{
 		ID:             "default",
-		IDStaff:        idStaff,
+		IDDevice:       idDevice,
 		SystemPrompt:   "You are a helpful AI assistant.",
 		ClosingPrompt:  "Thank you for using our service.",
 		InstancePrompt: "Please provide more details.",
@@ -252,10 +317,10 @@ func (s *aiWhatsappService) UpdateConversationStage(prospectNum, stage string) e
 }
 
 // LogConversation logs a conversation message
-func (s *aiWhatsappService) LogConversation(prospectNum string, idStaff string, message, sender, stage string) error {
+func (s *aiWhatsappService) LogConversation(prospectNum string, idDevice string, message, sender, stage string) error {
 	convLog := &models.ConversationLog{
 		ProspectNum: prospectNum,
-		IDStaff:     idStaff,
+		IDDevice:    idDevice,
 		Message:     message,
 		Sender:      sender,
 		Stage:       stage,

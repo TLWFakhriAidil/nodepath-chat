@@ -44,7 +44,7 @@ func NewHandlers(
 	deviceRepo := repository.NewDeviceSettingsRepository(db)
 	
 	// Initialize AI WhatsApp service
-	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo)
+	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
 	
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)

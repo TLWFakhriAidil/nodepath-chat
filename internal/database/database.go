@@ -135,7 +135,7 @@ const createAIWhatsappTable = `
 CREATE TABLE IF NOT EXISTS ai_whatsapp_nodepath (
     id VARCHAR(255) PRIMARY KEY,
     id_prospect INT NOT NULL,
-    id_staff VARCHAR(255) NOT NULL,
+    id_device VARCHAR(255) NOT NULL,
     prospect_num VARCHAR(20) NOT NULL,
     stage VARCHAR(255) DEFAULT 'initial',
     date_order TIMESTAMP NULL,
@@ -156,10 +156,10 @@ CREATE TABLE IF NOT EXISTS ai_whatsapp_nodepath (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_prospect_num (prospect_num),
-    INDEX idx_id_staff (id_staff),
+    INDEX idx_id_device (id_device),
     INDEX idx_stage (stage),
     INDEX idx_human (human),
-    UNIQUE KEY unique_prospect_staff (prospect_num, id_staff)
+    UNIQUE KEY unique_prospect_device (prospect_num, id_device)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 

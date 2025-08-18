@@ -3,6 +3,7 @@ package handlers
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
@@ -49,11 +50,15 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 	// AI settings management
 	api.Get("/ai/settings/:staff_id", h.GetAISettings)
 	api.Post("/ai/settings", h.CreateAISettings)
-	api.Put("/ai/settings/:id", h.UpdateAISettings)
-	api.Delete("/ai/settings/:id", h.DeleteAISettings)
+	api.Put("/ai/settings/:staff_id", h.UpdateAISettings)
+	api.Delete("/ai/settings/:staff_id", h.DeleteAISettings)
 
 	// Device command processing
 	api.Post("/ai/device/command", h.ProcessDeviceCommand)
+
+	// Analytics endpoints
+	api.Get("/ai/analytics", h.GetAnalytics)
+	api.Post("/ai/analytics", h.GetAnalytics)
 }
 
 // WhatsappWebhookRequest represents incoming WhatsApp webhook data
@@ -85,7 +90,6 @@ type WhacenterWebhookRequest struct {
 // StartAIConversationRequest represents request to start AI conversation
 type StartAIConversationRequest struct {
 	ProspectNum string `json:"prospect_num"`
-	IDStaff     string `json:"id_staff"`
 	IDDevice    string `json:"id_device"`
 	Niche       string `json:"niche"`
 	Stage       string `json:"stage"`
@@ -110,6 +114,20 @@ type ProcessDeviceCommandRequest struct {
 	ProspectNum string `json:"prospect_num"`
 	Command     string `json:"command"`
 	IDDevice    string `json:"id_device"`
+}
+
+// AnalyticsRequest represents the request structure for analytics endpoint
+type AnalyticsRequest struct {
+	StartDate string `json:"start_date" form:"start_date"`
+	EndDate   string `json:"end_date" form:"end_date"`
+	DeviceID  string `json:"device_id" form:"device_id"`
+}
+
+// AnalyticsResponse represents the response structure for analytics endpoint
+type AnalyticsResponse struct {
+	Success bool                   `json:"success"`
+	Message string                 `json:"message"`
+	Data    map[string]interface{} `json:"data"`
 }
 
 // HandleWhatsappWebhook handles generic WhatsApp webhook messages
@@ -218,7 +236,6 @@ func (h *AIWhatsappHandlers) StartAIConversation(c *fiber.Ctx) error {
 
 	logrus.WithFields(logrus.Fields{
 		"prospect_num": req.ProspectNum,
-		"id_staff":     req.IDStaff,
 		"id_device":    req.IDDevice,
 	}).Info("AI conversation started")
 
@@ -475,6 +492,93 @@ func (h *AIWhatsappHandlers) sendWhatsappResponse(prospectNum, deviceID, provide
 			// Send image message
 		}
 	}
+}
+
+// GetAnalytics retrieves analytics data from ai_whatsapp_nodepath with date filtering
+func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
+	var req AnalyticsRequest
+
+	// Parse query parameters or JSON body
+	if err := c.QueryParser(&req); err != nil {
+		if err := c.BodyParser(&req); err != nil {
+			logrus.WithError(err).Error("Failed to parse analytics request")
+			return c.Status(fiber.StatusBadRequest).JSON(AnalyticsResponse{
+				Success: false,
+				Message: "Invalid request format",
+			})
+		}
+	}
+
+	// Set default date range if not provided (current month start to today)
+	now := time.Now()
+	var startDate, endDate time.Time
+	var err error
+
+	if req.StartDate == "" {
+		// Default to first day of current month
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	} else {
+		startDate, err = time.Parse("2006-01-02", req.StartDate)
+		if err != nil {
+			logrus.WithError(err).Error("Invalid start date format")
+			return c.Status(fiber.StatusBadRequest).JSON(AnalyticsResponse{
+				Success: false,
+				Message: "Invalid start date format. Use YYYY-MM-DD",
+			})
+		}
+	}
+
+	if req.EndDate == "" {
+		// Default to today
+		endDate = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
+	} else {
+		endDate, err = time.Parse("2006-01-02", req.EndDate)
+		if err != nil {
+			logrus.WithError(err).Error("Invalid end date format")
+			return c.Status(fiber.StatusBadRequest).JSON(AnalyticsResponse{
+				Success: false,
+				Message: "Invalid end date format. Use YYYY-MM-DD",
+			})
+		}
+		// Set end time to end of day
+		endDate = time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 0, endDate.Location())
+	}
+
+	// Validate date range
+	if startDate.After(endDate) {
+		return c.Status(fiber.StatusBadRequest).JSON(AnalyticsResponse{
+			Success: false,
+			Message: "Start date cannot be after end date",
+		})
+	}
+
+	// Set default device filter to "all" if not provided
+	if req.DeviceID == "" {
+		req.DeviceID = "all"
+	}
+
+	// Get analytics data from repository
+	analyticsData, err := h.AIRepo.GetAnalyticsData(startDate, endDate, req.DeviceID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get analytics data")
+		return c.Status(fiber.StatusInternalServerError).JSON(AnalyticsResponse{
+			Success: false,
+			Message: "Failed to retrieve analytics data",
+		})
+	}
+
+	// Log successful analytics request
+	logrus.WithFields(logrus.Fields{
+		"start_date": startDate.Format("2006-01-02"),
+		"end_date":   endDate.Format("2006-01-02"),
+		"device_id":  req.DeviceID,
+	}).Info("Analytics data retrieved successfully")
+
+	return c.JSON(AnalyticsResponse{
+		Success: true,
+		Message: "Analytics data retrieved successfully",
+		Data:    analyticsData,
+	})
 }
 
 // Helper methods for consistent response formatting

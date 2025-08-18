@@ -344,6 +344,10 @@ func (h *Handlers) processTestChatMessage(execution *models.ChatbotExecution, us
 		return h.processTestAdvancedAIPromptNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeManual:
 		return h.processTestManualNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeUserReply:
+		return h.processTestUserReplyNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeWaitingReplyTimes:
+		return h.processTestWaitingReplyTimesNode(flow, execution, currentNode, userInput)
 	default:
 		return h.processTestDefaultNode(flow, execution, currentNode, userInput)
 	}
@@ -556,6 +560,46 @@ func (h *Handlers) buildResponseFromParts(parts []models.AIResponsePart) string 
 	}
 	
 	return response.String()
+}
+
+// processTestUserReplyNode processes a user reply node in test chat
+func (h *Handlers) processTestUserReplyNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// User reply node waits for any user input before proceeding
+	// Once user provides input, move to the next node
+	nextNode, err := h.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		h.chatService.UpdateExecution(execution)
+		return h.processTestChatMessage(execution, userInput)
+	}
+
+	// End of flow
+	h.chatService.CompleteExecution(execution.ID)
+	return "Thank you for your response!", nil
+}
+
+// processTestWaitingReplyTimesNode processes a waiting reply times node in test chat
+func (h *Handlers) processTestWaitingReplyTimesNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get wait time from node data (default to 5 seconds if not specified)
+	waitTime := 5
+	if wt, ok := node.Data["waitTime"].(float64); ok {
+		waitTime = int(wt)
+	} else if wt, ok := node.Data["waitTimeSeconds"].(float64); ok {
+		waitTime = int(wt)
+	}
+
+	// For test chat, we'll process immediately and show the wait time in response
+	// Move to next node after processing user input
+	nextNode, err := h.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		h.chatService.UpdateExecution(execution)
+		return h.processTestChatMessage(execution, userInput)
+	}
+
+	// End of flow
+	h.chatService.CompleteExecution(execution.ID)
+	return "Thank you for your response!", nil
 }
 
 // processTestDefaultNode processes other node types in test chat

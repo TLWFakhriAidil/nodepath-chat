@@ -130,6 +130,83 @@ func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 	return flows, nil
 }
 
+// GetFlowsByDevice retrieves flows by device ID
+func (s *FlowService) GetFlowsByDevice(idDevice string) ([]*models.ChatbotFlow, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	
+	query := `
+		SELECT id, name, niche, id_device,
+		       nodes, edges, created_at, updated_at
+		FROM chatbot_flows_nodepath 
+		WHERE id_device = ?
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.Query(query, idDevice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flows by device: %w", err)
+	}
+	defer rows.Close()
+
+	var flows []*models.ChatbotFlow
+	for rows.Next() {
+		var flow models.ChatbotFlow
+		err := rows.Scan(
+			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges, 
+			&flow.CreatedAt, &flow.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan flow: %w", err)
+		}
+		flows = append(flows, &flow)
+	}
+
+	return flows, nil
+}
+
+// GetDefaultFlowForDevice retrieves the first/default flow for a device
+func (s *FlowService) GetDefaultFlowForDevice(idDevice string) (*models.ChatbotFlow, error) {
+	flows, err := s.GetFlowsByDevice(idDevice)
+	if err != nil {
+		return nil, err
+	}
+	
+	if len(flows) == 0 {
+		return nil, nil // No flows found for device
+	}
+	
+	return flows[0], nil // Return the first flow as default
+}
+
+// GetStartNode extracts the start node from a flow's nodes JSON
+func (s *FlowService) GetStartNode(flow *models.ChatbotFlow) (*models.FlowNode, error) {
+	if flow.Nodes == nil || len(*flow.Nodes) == 0 {
+		return nil, fmt.Errorf("flow has no nodes")
+	}
+	
+	var nodes []*models.FlowNode
+	err := json.Unmarshal(*flow.Nodes, &nodes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse nodes JSON: %w", err)
+	}
+	
+	// Find the start node (type="start" or first node)
+	for _, node := range nodes {
+		if string(node.Type) == "start" {
+			return node, nil
+		}
+	}
+	
+	// If no start node found, return the first node
+	if len(nodes) > 0 {
+		return nodes[0], nil
+	}
+	
+	return nil, fmt.Errorf("no nodes found in flow")
+}
+
 // UpdateFlow updates an existing flow
 func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 	flow.UpdatedAt = time.Now()
@@ -238,37 +315,7 @@ func (s *FlowService) GetNextNode(flow *models.ChatbotFlow, currentNodeID string
 	return s.FindNodeByID(flow, nextNodeID)
 }
 
-// GetStartNode finds the starting node of the flow
-func (s *FlowService) GetStartNode(flow *models.ChatbotFlow) (*models.FlowNode, error) {
-	nodes, err := s.GetFlowNodes(flow)
-	if err != nil {
-		return nil, err
-	}
 
-	edges, err := s.GetFlowEdges(flow)
-	if err != nil {
-		return nil, err
-	}
-
-	// Find nodes that are not targets of any edge (start nodes)
-	targetNodes := make(map[string]bool)
-	for _, edge := range edges {
-		targetNodes[edge.Target] = true
-	}
-
-	for _, node := range nodes {
-		if !targetNodes[node.ID] {
-			return node, nil // This is a start node
-		}
-	}
-
-	// If no start node found, return the first node
-	if len(nodes) > 0 {
-		return nodes[0], nil
-	}
-
-	return nil, fmt.Errorf("no start node found in flow")
-}
 
 
 

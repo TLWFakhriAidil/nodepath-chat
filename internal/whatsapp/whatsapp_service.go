@@ -548,6 +548,10 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, execution *models
 		return s.processAdvancedAIPromptNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeManual:
 		return s.processManualNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeUserReply:
+		return s.processUserReplyNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeWaitingReplyTimes:
+		return s.processWaitingReplyTimesNode(flow, execution, currentNode, userInput)
 	default:
 		return s.processDefaultNode(flow, execution, currentNode, userInput)
 	}
@@ -790,6 +794,50 @@ func (s *Service) processDefaultNode(flow *models.ChatbotFlow, execution *models
 	// End of flow
 	s.chatService.CompleteExecution(execution.ID)
 	return "Thank you for using our service!", nil
+}
+
+// processUserReplyNode processes a user reply node that waits indefinitely for user input
+func (s *Service) processUserReplyNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// User reply node waits for any user input before proceeding
+	// Once user provides input, move to the next node
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		return s.processFlowMessage(flow, execution, userInput)
+	}
+
+	// End of flow
+	s.chatService.CompleteExecution(execution.ID)
+	return "Thank you for your response!", nil
+}
+
+// processWaitingReplyTimesNode processes a waiting reply times node with configurable timeout
+func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get wait time from node data (default to 5 seconds if not specified)
+	waitTime := 5
+	if wt, ok := node.Data["waitTime"].(float64); ok {
+		waitTime = int(wt)
+	} else if wt, ok := node.Data["waitTimeSeconds"].(float64); ok {
+		waitTime = int(wt)
+	}
+
+	// For now, we'll treat this as immediate processing since the timeout logic
+	// would require more complex scheduling infrastructure
+	// In a production system, this would involve setting up a timer
+	// and handling timeout scenarios
+
+	// Move to next node after processing user input
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		return s.processFlowMessage(flow, execution, userInput)
+	}
+
+	// End of flow
+	s.chatService.CompleteExecution(execution.ID)
+	return "Thank you for your response!", nil
 }
 
 // parsePhoneNumber converts a phone number string to WhatsApp JID

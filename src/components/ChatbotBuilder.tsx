@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MessageSquare, GitBranch, Clock, Play, Download, Upload, Image, Mic, Video, Save, Sparkles, X, Send, Bot } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Play, Download, Upload, Image, Mic, Video, Save, Sparkles, X, Send, Bot, MessageCircle, Timer } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +34,8 @@ import VideoNode from './nodes/VideoNode';
 import ManualNode from './nodes/ManualNode';
 import PromptNode from './nodes/PromptNode';
 import StageNode from './nodes/StageNode';
+import UserReplyNode from './nodes/UserReplyNode';
+import WaitingReplyTimesNode from './nodes/WaitingReplyTimesNode';
 
 const nodeTypes: NodeTypes = {
   message: MessageNode,
@@ -46,6 +48,8 @@ const nodeTypes: NodeTypes = {
   manual: ManualNode,
   prompt: PromptNode,
   stage: StageNode,
+  user_reply: UserReplyNode,
+  waiting_reply_times: WaitingReplyTimesNode,
 };
 
 const initialNodes: Node[] = [
@@ -147,6 +151,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                  type === 'video' ? 'New Video' :
                  type === 'manual' ? 'Manual Response' :
                  type === 'prompt' ? 'AI Prompt' :
+                 type === 'user_reply' ? 'User Reply' :
+                 type === 'waiting_reply_times' ? 'Wait Reply Times' :
                  'New Node',
           message: type === 'message' ? 'Enter your message here...' : undefined,
           condition: type === 'condition' ? 'user_input contains "yes"' : undefined,
@@ -160,6 +166,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
           responseOutput: type === 'manual' ? '' : undefined,
           systemPrompt: type === 'prompt' ? 'You are a helpful assistant that responds clearly and concisely.' : undefined,
           stageName: type === 'stage' ? '' : undefined,
+          waitTime: type === 'waiting_reply_times' ? 5 : undefined,
+          waitTimeSeconds: type === 'waiting_reply_times' ? 5 : undefined,
           node_type: type === 'prompt' ? 'ai_prompt' : undefined,
           onDelete: deleteNode,
           onUpdate: updateNodeData,
@@ -455,6 +463,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     { type: 'video', label: 'Send Video', icon: Video, color: 'bg-gradient-to-r from-purple-500 to-pink-500', gradient: 'gradient-purple' },
     { type: 'delay', label: 'Delay', icon: Clock, color: 'bg-gradient-to-r from-orange-500 to-red-500', gradient: 'gradient-warning' },
     { type: 'condition', label: 'Conditions', icon: GitBranch, color: 'bg-gradient-to-r from-violet-500 to-purple-500', gradient: 'gradient-purple' },
+    { type: 'user_reply', label: 'User Reply', icon: MessageCircle, color: 'bg-gradient-to-r from-green-500 to-teal-500', gradient: 'gradient-success' },
+    { type: 'waiting_reply_times', label: 'Waiting Reply Times', icon: Timer, color: 'bg-gradient-to-r from-orange-500 to-amber-500', gradient: 'gradient-warning' },
   ];
 
   return (

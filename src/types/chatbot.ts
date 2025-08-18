@@ -9,7 +9,7 @@ export interface MediaFile {
 
 export interface FlowNode {
   id: string
-  type: 'start' | 'message' | 'image' | 'audio' | 'video' | 'delay' | 'condition' | 'manual' | 'prompt' | 'stage'
+  type: 'start' | 'message' | 'image' | 'audio' | 'video' | 'delay' | 'condition' | 'manual' | 'prompt' | 'stage' | 'user_reply' | 'waiting_reply_times'
   position: { x: number; y: number }
   data: {
     label?: string
@@ -29,6 +29,8 @@ export interface FlowNode {
     } | null
     delay?: number
     delaySeconds?: number
+    waitTime?: number
+    waitTimeSeconds?: number
     conditions?: ConditionRule[]
     variables?: Record<string, string>
     // Manual node fields

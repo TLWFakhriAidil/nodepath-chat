@@ -20,7 +20,7 @@ type AIWhatsappRepository interface {
 	// Read operations
 	GetAIWhatsappByProspectNum(prospectNum string) (*models.AIWhatsapp, error)
 	GetAIWhatsappByID(id int) (*models.AIWhatsapp, error)
-	GetAIWhatsappByStaff(idStaff string) ([]models.AIWhatsapp, error)
+	GetAIWhatsappByDevice(idDevice string) ([]models.AIWhatsapp, error)
 	GetAIWhatsappByNiche(niche string) ([]models.AIWhatsapp, error)
 	GetActiveAIConversations() ([]models.AIWhatsapp, error)
 	GetConversationHistory(prospectNum string, limit int) ([]models.ConversationLog, error)
@@ -38,9 +38,10 @@ type AIWhatsappRepository interface {
 	DeleteConversationLogs(prospectNum string) error
 
 	// Analytics operations
-	GetConversationStats(idStaff string) (map[string]int, error)
+	GetConversationStats(idDevice string) (map[string]int, error)
 	GetActiveConversationCount() (int, error)
 	GetConversationsByDateRange(startDate, endDate time.Time) ([]models.AIWhatsapp, error)
+	GetAnalyticsData(startDate, endDate time.Time, idDevice string) (map[string]interface{}, error)
 }
 
 // aiWhatsappRepository implements AIWhatsappRepository interface
@@ -146,7 +147,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 
 	var convCurrentSQL sql.NullString
 	err := row.Scan(
-		&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
+		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
@@ -176,7 +177,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 // GetAIWhatsappByID retrieves AI WhatsApp conversation by ID
 func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, error) {
 	query := `
-		SELECT id_prospect, id_staff, prospect_num, stage, date_order, conv_last, 
+		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
@@ -219,22 +220,22 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 	return ai, nil
 }
 
-// GetAIWhatsappByStaff retrieves all AI WhatsApp conversations for a specific staff member
-func (r *aiWhatsappRepository) GetAIWhatsappByStaff(idStaff string) ([]models.AIWhatsapp, error) {
+// GetAIWhatsappByDevice retrieves all AI WhatsApp conversations for a specific device
+func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.AIWhatsapp, error) {
 	query := `
-		SELECT id_prospect, id_staff, prospect_num, stage, date_order, conv_last, 
+		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
-		WHERE id_staff = ?
+		WHERE id_device = ?
 		ORDER BY updated_at DESC
 	`
 
-	rows, err := r.db.Query(query, idStaff)
+	rows, err := r.db.Query(query, idDevice)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get AI WhatsApp conversations by staff")
+		logrus.WithError(err).Error("Failed to get AI WhatsApp conversations by device")
 		return nil, fmt.Errorf("failed to get AI WhatsApp conversations: %w", err)
 	}
 	defer rows.Close()
@@ -246,7 +247,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByStaff(idStaff string) ([]models.AI
 
 		var convCurrentSQL sql.NullString
 		err := rows.Scan(
-			&ai.IDProspect, &ai.IDStaff, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
+			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
@@ -271,6 +272,141 @@ func (r *aiWhatsappRepository) GetAIWhatsappByStaff(idStaff string) ([]models.AI
 	}
 
 	return conversations, nil
+}
+
+// GetAnalyticsData retrieves analytics data from ai_whatsapp_nodepath table with date filtering
+func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, idDevice string) (map[string]interface{}, error) {
+	// Base query for filtering by date_order
+	baseQuery := `
+		SELECT 
+			COUNT(*) as total_conversations,
+			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_active,
+			COUNT(CASE WHEN human = 1 THEN 1 END) as human_takeover,
+			COUNT(DISTINCT id_device) as unique_devices,
+			COUNT(DISTINCT niche) as unique_niches,
+			COUNT(CASE WHEN stage IS NOT NULL AND stage != '' THEN 1 END) as conversations_with_stage
+		FROM ai_whatsapp_nodepath 
+		WHERE date_order BETWEEN ? AND ?
+	`
+
+	// Add device filter if specified
+	args := []interface{}{startDate, endDate}
+	if idDevice != "" && idDevice != "all" {
+		baseQuery += " AND id_device = ?"
+		args = append(args, idDevice)
+	}
+
+	// Execute main analytics query
+	var totalConversations, aiActive, humanTakeover, uniqueDevices, uniqueNiches, conversationsWithStage int
+	err := r.db.QueryRow(baseQuery, args...).Scan(
+		&totalConversations, &aiActive, &humanTakeover, &uniqueDevices, &uniqueNiches, &conversationsWithStage,
+	)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get analytics data")
+		return nil, fmt.Errorf("failed to get analytics data: %w", err)
+	}
+
+	// Get daily breakdown
+	dailyQuery := `
+		SELECT 
+			DATE(date_order) as date,
+			COUNT(*) as conversations,
+			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_conversations,
+			COUNT(CASE WHEN human = 1 THEN 1 END) as human_conversations
+		FROM ai_whatsapp_nodepath 
+		WHERE date_order BETWEEN ? AND ?
+	`
+
+	dailyArgs := []interface{}{startDate, endDate}
+	if idDevice != "" && idDevice != "all" {
+		dailyQuery += " AND id_device = ?"
+		dailyArgs = append(dailyArgs, idDevice)
+	}
+	dailyQuery += " GROUP BY DATE(date_order) ORDER BY DATE(date_order)"
+
+	rows, err := r.db.Query(dailyQuery, dailyArgs...)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get daily analytics data")
+		return nil, fmt.Errorf("failed to get daily analytics data: %w", err)
+	}
+	defer rows.Close()
+
+	var dailyData []map[string]interface{}
+	for rows.Next() {
+		var date string
+		var conversations, aiConversations, humanConversations int
+		err := rows.Scan(&date, &conversations, &aiConversations, &humanConversations)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to scan daily analytics data")
+			continue
+		}
+
+		dailyData = append(dailyData, map[string]interface{}{
+			"date":                date,
+			"conversations":       conversations,
+			"ai_conversations":    aiConversations,
+			"human_conversations": humanConversations,
+		})
+	}
+
+	// Get stage distribution
+	stageQuery := `
+		SELECT 
+			stage,
+			COUNT(*) as count
+		FROM ai_whatsapp_nodepath 
+		WHERE date_order BETWEEN ? AND ? AND stage IS NOT NULL AND stage != ''
+	`
+
+	stageArgs := []interface{}{startDate, endDate}
+	if idDevice != "" && idDevice != "all" {
+		stageQuery += " AND id_device = ?"
+		stageArgs = append(stageArgs, idDevice)
+	}
+	stageQuery += " GROUP BY stage ORDER BY count DESC"
+
+	stageRows, err := r.db.Query(stageQuery, stageArgs...)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get stage distribution data")
+		return nil, fmt.Errorf("failed to get stage distribution data: %w", err)
+	}
+	defer stageRows.Close()
+
+	var stageDistribution []map[string]interface{}
+	for stageRows.Next() {
+		var stage string
+		var count int
+		err := stageRows.Scan(&stage, &count)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to scan stage distribution data")
+			continue
+		}
+
+		stageDistribution = append(stageDistribution, map[string]interface{}{
+			"stage": stage,
+			"count": count,
+		})
+	}
+
+	// Return comprehensive analytics data
+	return map[string]interface{}{
+		"summary": map[string]interface{}{
+			"total_conversations":       totalConversations,
+			"ai_active":                 aiActive,
+			"human_takeover":            humanTakeover,
+			"unique_devices":            uniqueDevices,
+			"unique_niches":             uniqueNiches,
+			"conversations_with_stage":  conversationsWithStage,
+			"ai_active_percentage":      float64(aiActive) / float64(totalConversations) * 100,
+			"human_takeover_percentage": float64(humanTakeover) / float64(totalConversations) * 100,
+		},
+		"daily_data":         dailyData,
+		"stage_distribution": stageDistribution,
+		"date_range": map[string]interface{}{
+			"start_date": startDate.Format("2006-01-02"),
+			"end_date":   endDate.Format("2006-01-02"),
+		},
+	}, nil
 }
 
 // GetAIWhatsappByNiche retrieves all AI WhatsApp conversations for a specific niche
@@ -615,14 +751,14 @@ func (r *aiWhatsappRepository) DeleteConversationLogs(prospectNum string) error 
 	return nil
 }
 
-// GetConversationStats returns conversation statistics for a staff member
-func (r *aiWhatsappRepository) GetConversationStats(idStaff string) (map[string]int, error) {
+// GetConversationStats returns conversation statistics for a device
+func (r *aiWhatsappRepository) GetConversationStats(idDevice string) (map[string]int, error) {
 	stats := make(map[string]int)
 
 	// Total conversations
 	var total int
-	query := `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_staff = ?`
-	row := r.db.QueryRow(query, idStaff)
+	query := `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_device = ?`
+	row := r.db.QueryRow(query, idDevice)
 	err := row.Scan(&total)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total conversations: %w", err)
@@ -631,8 +767,8 @@ func (r *aiWhatsappRepository) GetConversationStats(idStaff string) (map[string]
 
 	// Active AI conversations
 	var activeAI int
-	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_staff = ? AND human = 0`
-	row = r.db.QueryRow(query, idStaff)
+	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_device = ? AND human = 0`
+	row = r.db.QueryRow(query, idDevice)
 	err = row.Scan(&activeAI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active AI conversations: %w", err)
@@ -641,8 +777,8 @@ func (r *aiWhatsappRepository) GetConversationStats(idStaff string) (map[string]
 
 	// Human takeover conversations
 	var humanTakeover int
-	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_staff = ? AND human = 1`
-	row = r.db.QueryRow(query, idStaff)
+	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_device = ? AND human = 1`
+	row = r.db.QueryRow(query, idDevice)
 	err = row.Scan(&humanTakeover)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get human takeover conversations: %w", err)
@@ -651,8 +787,8 @@ func (r *aiWhatsappRepository) GetConversationStats(idStaff string) (map[string]
 
 	// Today's conversations
 	var today int
-	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_staff = ? AND DATE(created_at) = CURDATE()`
-	row = r.db.QueryRow(query, idStaff)
+	query = `SELECT COUNT(*) FROM ai_whatsapp_nodepath WHERE id_device = ? AND DATE(created_at) = CURDATE()`
+	row = r.db.QueryRow(query, idDevice)
 	err = row.Scan(&today)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get today's conversations: %w", err)

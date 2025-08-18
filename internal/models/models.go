@@ -28,6 +28,8 @@ const (
 	NodeTypeVideo            NodeType = "video"
 	NodeTypeDelay            NodeType = "delay"
 	NodeTypeCondition        NodeType = "condition"
+	NodeTypeUserReply        NodeType = "user_reply"
+	NodeTypeWaitingReplyTimes NodeType = "waiting_reply_times"
 )
 
 // ExecutionStatus represents the status of a flow execution
@@ -179,7 +181,7 @@ type TestChatMessage struct {
 // AIWhatsapp represents an AI WhatsApp conversation record
 type AIWhatsapp struct {
 	IDProspect   int             `json:"id_prospect" db:"id_prospect"`
-	IDStaff      string          `json:"id_staff" db:"id_staff"`
+	IDDevice     string          `json:"id_device" db:"id_device"`
 	ProspectNum  string          `json:"prospect_num" db:"prospect_num"`
 	Stage        string          `json:"stage" db:"stage"`
 	DateOrder    *time.Time      `json:"date_order" db:"date_order"`
@@ -207,7 +209,7 @@ type AIWhatsapp struct {
 type ConversationLog struct {
 	ID          int       `json:"id" db:"id"`
 	ProspectNum string    `json:"prospect_num" db:"prospect_num"`
-	IDStaff     string    `json:"id_staff" db:"id_staff"`
+	IDDevice    string    `json:"id_device" db:"id_device"`
 	Message     string    `json:"message" db:"message"`
 	Sender      string    `json:"sender" db:"sender"` // 'user' or 'bot'
 	Stage       string    `json:"stage" db:"stage"`
@@ -218,7 +220,7 @@ type ConversationLog struct {
 // AISettings represents AI prompt configuration
 type AISettings struct {
 	ID             string    `json:"id" db:"id"`
-	IDStaff        string    `json:"id_staff" db:"id_staff"`
+	IDDevice       string    `json:"id_device" db:"id_device"`
 	SystemPrompt   string    `json:"system_prompt" db:"system_prompt"`
 	ClosingPrompt  string    `json:"closing_prompt" db:"closing_prompt"`
 	InstancePrompt string    `json:"instance_prompt" db:"instance_prompt"`
