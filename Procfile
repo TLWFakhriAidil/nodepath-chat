@@ -1,1 +1,1 @@
-web: ./server
+web: /app/start-with-migration.sh
