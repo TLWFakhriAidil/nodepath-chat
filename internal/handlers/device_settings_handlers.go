@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"nodepath-chat/internal/models"
-	"nodepath-chat/internal/services"
 	"strings"
 	"time"
 
@@ -1481,21 +1480,19 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		if response != nil {
 			// Extract bot response text from response array
 			var botResponseText string
-			if aiResponse, ok := response.(*services.AIWhatsappResponse); ok {
-				for _, item := range aiResponse.Response {
-					if item.Type == "text" {
-						if botResponseText != "" {
-							botResponseText += " "
-						}
-						botResponseText += item.Content
+			for _, item := range response.Response {
+				if item.Type == "text" {
+					if botResponseText != "" {
+						botResponseText += " "
 					}
+					botResponseText += item.Content
 				}
+			}
 
-				// Save conversation history to conv_last field
-				err = h.aiWhatsappHandlers.AIWhatsappService.SaveConversationHistory(from, idDevice, message, botResponseText, aiResponse.Stage)
-				if err != nil {
-					logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history")
-				}
+			// Save conversation history to conv_last field
+			err = h.aiWhatsappHandlers.AIWhatsappService.SaveConversationHistory(from, idDevice, message, botResponseText, response.Stage)
+			if err != nil {
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history")
 			}
 
 			logrus.WithFields(logrus.Fields{
