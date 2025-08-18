@@ -53,8 +53,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/railway_
 # Final stage
 FROM alpine:latest
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata wget
+# Install runtime dependencies including bash
+RUN apk add --no-cache ca-certificates tzdata wget bash
 
 # Create app directory
 RUN mkdir -p /app
