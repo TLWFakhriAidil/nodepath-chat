@@ -1431,13 +1431,6 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"from": from,
-		"message": message,
-		"provider": provider,
-	}).Info("🤖 WEBHOOK: Processing message for AI conversation")
-
 	// Check if this is a device command (%, #, cmd)
 	if strings.HasPrefix(message, "%") || strings.HasPrefix(message, "#") || strings.ToLower(strings.TrimSpace(message)) == "cmd" {
 		logrus.WithFields(logrus.Fields{
@@ -1458,6 +1451,50 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
+	// Check if device has a configured flow - prioritize flow engine over AI conversation
+	flows, err := h.flowService.GetFlowsByDevice(idDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to check for device flows")
+	}
+
+	// If device has configured flows, use the flow engine
+	if len(flows) > 0 {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"message": message,
+			"provider": provider,
+			"flow_count": len(flows),
+		}).Info("🔄 WEBHOOK: Processing message through flow engine")
+
+		// Process message through WhatsApp service flow engine
+		if h.whatsappService != nil {
+			err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider)
+			if err != nil {
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to process message through flow engine")
+				// Fallback to AI conversation if flow processing fails
+				h.processAIConversation(from, message, idDevice, provider)
+			}
+		} else {
+			logrus.Error("❌ WEBHOOK: WhatsApp service not available, falling back to AI conversation")
+			h.processAIConversation(from, message, idDevice, provider)
+		}
+		return
+	}
+
+	// No flows configured, use AI conversation system
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"from": from,
+		"message": message,
+		"provider": provider,
+	}).Info("🤖 WEBHOOK: No flows configured, processing message through AI conversation")
+
+	h.processAIConversation(from, message, idDevice, provider)
+}
+
+// processAIConversation handles message processing through the AI conversation system
+func (h *Handlers) processAIConversation(from, message, idDevice, provider string) {
 	// Get current conversation stage from AI WhatsApp repository
 	var stage string
 	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {

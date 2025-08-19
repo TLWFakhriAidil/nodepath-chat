@@ -48,6 +48,40 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
+### ✅ Flow-Based Message Routing System (2025-01-19)
+- **Intelligent Message Routing**: Implemented priority-based message routing that checks for configured flows before falling back to AI conversation system
+- **Flow Engine Integration**: Added seamless integration between webhook handlers and the WhatsApp flow processing engine
+- **Device Flow Detection**: Automatic detection of configured flows per device using `flowService.GetFlowsByDevice`
+- **Priority System**: Flow engine takes priority over AI conversation system when flows are configured
+- **Graceful Fallback**: Automatic fallback to AI conversation system when:
+  - No flows are configured for the device
+  - Flow processing fails or encounters errors
+  - WhatsApp service is unavailable
+- **Public API Enhancement**: Created `ProcessIncomingMessageFromWebhook` method to expose flow processing capabilities
+- **Error Handling**: Robust error handling with detailed logging for flow processing failures
+- **Device Context**: Proper device ID passing throughout the flow processing pipeline
+
+**Routing Logic**:
+```go
+// 1. Check for configured flows
+flows, err := h.flowService.GetFlowsByDevice(deviceID)
+if err == nil && len(flows) > 0 {
+    // 2. Process through flow engine (priority)
+    err = h.whatsappService.ProcessIncomingMessageFromWebhook(phoneNumber, content, deviceID)
+    if err == nil {
+        return // Success - flow processed
+    }
+    // Log error and fallback to AI
+}
+// 3. Fallback to AI conversation system
+h.processAIConversation(phoneNumber, content, deviceID)
+```
+
+**Files Modified**:
+- ✅ `internal/handlers/device_settings_handlers.go` - Added flow routing logic
+- ✅ `internal/whatsapp/whatsapp_service.go` - Created public webhook processing method
+- ✅ Enhanced error handling and logging throughout the flow processing pipeline
+
 ### ✅ Flow Node Processing Enhancement (2025-01-19)
 - **Enhanced Flow Processing**: Added complete support for all node types in WhatsApp flow processing
 - **New Node Handlers**: Implemented processing functions for `message`, `image`, `audio`, `video`, `delay`, `condition`, and `stage` nodes

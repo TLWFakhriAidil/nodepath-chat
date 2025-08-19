@@ -464,13 +464,30 @@ func (s *Service) handleIncomingMessage(evt *events.Message) {
 	}).Info("Received WhatsApp message")
 
 	// Process message through flow engine
-	go s.processIncomingMessage(phoneNumber, content)
+	go s.processIncomingMessage(phoneNumber, content, "default")
+}
+
+// ProcessIncomingMessageFromWebhook processes an incoming message from webhook through the flow engine
+func (s *Service) ProcessIncomingMessageFromWebhook(phoneNumber, content, deviceID, provider string) error {
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"content": content,
+		"device_id": deviceID,
+		"provider": provider,
+	}).Info("Processing webhook message through flow engine")
+
+	// Process the message through the flow engine
+	s.processIncomingMessage(phoneNumber, content, deviceID)
+	return nil
 }
 
 // processIncomingMessage processes an incoming message through the flow engine
-func (s *Service) processIncomingMessage(phoneNumber, content string) {
-	// For now, use a default device ID - in a real implementation, you'd determine this based on routing logic
+func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID ...string) {
+	// Use provided device ID or default
 	idDevice := "default"
+	if len(deviceID) > 0 && deviceID[0] != "" {
+		idDevice = deviceID[0]
+	}
 
 	// Get or create active execution
 	execution, err := s.chatService.GetActiveExecution(phoneNumber, idDevice)
