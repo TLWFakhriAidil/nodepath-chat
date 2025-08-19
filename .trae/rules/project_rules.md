@@ -77,3 +77,7 @@
 19. The systems only used id_device for all process, so there will be no id_staff in the system.
 20. The system database type input will not used the json type except the chatbot_flows_nodepath database.
 21. The system database type output will not used the json type except the chatbot_flows_nodepath database.
+22. The provider that used in this are Wablas and Whacenter only, this will get from the device_setting_nodepath columns of provider.
+23. The system will used the instance from the device_setting_nodepath columns of instance for sending message.
+
+

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"nodepath-chat/internal/models"
+	"nodepath-chat/internal/services"
 	"strings"
 	"time"
 
@@ -1524,42 +1525,38 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 		return
 	}
 
-	// Parse response data
-	responseData, ok := response.(map[string]interface{})
-	if !ok {
-		logrus.Error("❌ WHATSAPP: Invalid response format")
+	// Parse response data - handle AIWhatsappResponse struct
+	var aiResponse *services.AIWhatsappResponse
+	switch v := response.(type) {
+	case *services.AIWhatsappResponse:
+		aiResponse = v
+	case services.AIWhatsappResponse:
+		aiResponse = &v
+	default:
+		logrus.WithField("response_type", fmt.Sprintf("%T", response)).Error("❌ WHATSAPP: Invalid response format")
 		return
 	}
 
-	// Extract response messages
-	responses, ok := responseData["Response"].([]interface{})
-	if !ok {
+	// Validate response structure
+	if aiResponse == nil || len(aiResponse.Response) == 0 {
 		logrus.Error("❌ WHATSAPP: No response messages found")
 		return
 	}
 
 	// Send each response message
-	for _, resp := range responses {
-		respMsg, ok := resp.(map[string]interface{})
-		if !ok {
+	for _, respItem := range aiResponse.Response {
+		if respItem.Content == "" {
 			continue
 		}
 
-		respType, _ := respMsg["type"].(string)
-		content, _ := respMsg["content"].(string)
-
-		if content == "" {
-			continue
-		}
-
-		switch respType {
+		switch respItem.Type {
 		case "text":
-			h.sendTextMessage(to, content, deviceSettings, provider)
+			h.sendTextMessage(to, respItem.Content, deviceSettings, provider)
 		case "image":
-			h.sendImageMessage(to, content, deviceSettings, provider)
+			h.sendImageMessage(to, respItem.Content, deviceSettings, provider)
 		default:
 			// Default to text message
-			h.sendTextMessage(to, content, deviceSettings, provider)
+			h.sendTextMessage(to, respItem.Content, deviceSettings, provider)
 		}
 
 		// Add small delay between messages to avoid rate limiting
@@ -1567,25 +1564,45 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 	}
 }
 
-// sendTextMessage sends a text message through the appropriate provider
+// sendTextMessage sends a text message through the appropriate provider with delay support
 func (h *Handlers) sendTextMessage(to, message string, deviceSettings *models.DeviceSettings, provider string) {
+	// Add delay before sending (similar to PHP delax parameter)
+	delay := 1 * time.Second
+	time.Sleep(delay)
+
+	// Determine provider based on instance length if not specified
+	if provider == "" {
+		provider = h.determineProviderFromInstance(deviceSettings.Instance.String)
+	}
+
 	switch provider {
 	case "whacenter":
 		h.sendWhacenterTextMessage(to, message, deviceSettings)
 	case "wablas":
 		h.sendWablasTextMessage(to, message, deviceSettings)
+
 	default:
 		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for text message")
 	}
 }
 
-// sendImageMessage sends an image message through the appropriate provider
+// sendImageMessage sends an image message through the appropriate provider with delay support
 func (h *Handlers) sendImageMessage(to, imageURL string, deviceSettings *models.DeviceSettings, provider string) {
+	// Add delay before sending (similar to PHP delax parameter)
+	delay := 1 * time.Second
+	time.Sleep(delay)
+
+	// Determine provider based on instance length if not specified
+	if provider == "" {
+		provider = h.determineProviderFromInstance(deviceSettings.Instance.String)
+	}
+
 	switch provider {
 	case "whacenter":
 		h.sendWhacenterImageMessage(to, imageURL, deviceSettings)
 	case "wablas":
 		h.sendWablasImageMessage(to, imageURL, deviceSettings)
+
 	default:
 		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for image message")
 	}
@@ -1685,6 +1702,12 @@ func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *mod
 
 // sendWhacenterImageMessage sends image message via Whacenter API
 func (h *Handlers) sendWhacenterImageMessage(to, imageURL string, deviceSettings *models.DeviceSettings) {
+	h.sendWhacenterMultimediaMessage(to, "", imageURL, "image", deviceSettings)
+}
+
+// sendWhacenterMultimediaMessage sends multimedia messages (video, audio, image) via Whacenter API
+// Equivalent to PHP sendChatMessage function for Whacenter provider
+func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType string, deviceSettings *models.DeviceSettings) {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WHACENTER: No instance available")
 		return
@@ -1696,9 +1719,14 @@ func (h *Handlers) sendWhacenterImageMessage(to, imageURL string, deviceSettings
 	// Prepare request payload
 	payload := map[string]interface{}{
 		"device_id": deviceSettings.IDDevice,
-		"number": to,
-		"media_url": imageURL,
-		"type": "image",
+		"number":    to,
+		"media_url": fileURL,
+		"type":      fileType,
+	}
+
+	// Add caption if provided
+	if caption != "" {
+		payload["caption"] = caption
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -1722,32 +1750,54 @@ func (h *Handlers) sendWhacenterImageMessage(to, imageURL string, deviceSettings
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		logrus.WithError(err).Error("❌ WHACENTER: Failed to send image")
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to send multimedia message")
 		return
 	}
 	defer resp.Body.Close()
 
 	logrus.WithFields(logrus.Fields{
-		"to": to,
+		"to":          to,
+		"file_type":   fileType,
 		"status_code": resp.StatusCode,
-	}).Info("📤 WHACENTER: Image message sent")
+	}).Info("📤 WHACENTER: Multimedia message sent")
 }
 
 // sendWablasImageMessage sends image message via Wablas API
 func (h *Handlers) sendWablasImageMessage(to, imageURL string, deviceSettings *models.DeviceSettings) {
+	h.sendWablasMultimediaMessage(to, "", imageURL, "image", deviceSettings)
+}
+
+// sendWablasMultimediaMessage sends multimedia messages (video, audio, image) via Wablas API
+// Equivalent to PHP sendChatMessage function for Wablas provider
+func (h *Handlers) sendWablasMultimediaMessage(to, caption, fileURL, fileType string, deviceSettings *models.DeviceSettings) {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WABLAS: No instance available")
 		return
 	}
 
-	// Wablas API endpoint for sending media
-	apiURL := "https://my.wablas.com/api/send-image"
+	// Determine API endpoint based on file type
+	var apiURL string
+	var fieldName string
+
+	switch fileType {
+	case "video":
+		apiURL = "https://my.wablas.com/api/send-video"
+		fieldName = "video"
+	case "audio":
+		apiURL = "https://my.wablas.com/api/send-audio"
+		fieldName = "audio"
+	default: // image
+		apiURL = "https://my.wablas.com/api/send-image"
+		fieldName = "image"
+	}
 
 	// Prepare form data
 	formData := url.Values{}
 	formData.Set("phone", to)
-	formData.Set("image", imageURL)
-	formData.Set("isGroup", "false")
+	formData.Set(fieldName, fileURL)
+	if caption != "" {
+		formData.Set("caption", caption)
+	}
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
@@ -1764,16 +1814,62 @@ func (h *Handlers) sendWablasImageMessage(to, imageURL string, deviceSettings *m
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		logrus.WithError(err).Error("❌ WABLAS: Failed to send image")
+		logrus.WithError(err).Error("❌ WABLAS: Failed to send multimedia message")
 		return
 	}
 	defer resp.Body.Close()
 
 	logrus.WithFields(logrus.Fields{
-		"to": to,
+		"to":          to,
+		"file_type":   fileType,
 		"status_code": resp.StatusCode,
-	}).Info("📤 WABLAS: Image message sent")
+	}).Info("📤 WABLAS: Multimedia message sent")
 }
+
+// determineProviderFromInstance determines the provider based on instance string length
+// Based on PHP logic: if instance length > 20 then Whacenter, else Wablas
+func (h *Handlers) determineProviderFromInstance(instance string) string {
+	characterCount := len(instance)
+	if characterCount <= 20 {
+		return "wablas"
+	}
+	return "whacenter"
+}
+
+// sendChatMessage sends multimedia messages (video, audio, image) with caption support
+// Equivalent to PHP sendChatMessage function
+func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *models.DeviceSettings, delay time.Duration) {
+	// Add delay before sending
+	time.Sleep(delay)
+
+	// Determine provider based on instance length
+	provider := h.determineProviderFromInstance(deviceSettings.Instance.String)
+
+	// Determine file type based on extension
+	fileType := h.getFileType(fileURL)
+
+	switch provider {
+	case "wablas":
+		h.sendWablasMultimediaMessage(to, reply, fileURL, fileType, deviceSettings)
+	case "whacenter":
+		h.sendWhacenterMultimediaMessage(to, reply, fileURL, fileType, deviceSettings)
+
+	default:
+		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for multimedia message")
+	}
+}
+
+// getFileType determines file type based on file extension
+func (h *Handlers) getFileType(fileURL string) string {
+	if strings.Contains(fileURL, ".mp4") {
+		return "video"
+	} else if strings.Contains(fileURL, ".mp3") {
+		return "audio"
+	}
+	return "image"
+}
+
+
 
 func getStringFromNullString(ns sql.NullString) string {
 	if ns.Valid {

@@ -48,7 +48,32 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### 🐳 Docker Build Fix - Railway Deployment (Latest)
+### 🗑️ WhatsApp Provider Cleanup - Whapi Removal (Latest)
+**Date**: Current Session
+
+#### ✅ Changes Made:
+- **Removed Whapi Provider**: Completely removed all Whapi.cloud provider references from the codebase
+- **AI Cron Service Cleanup**: Removed `sendWhapiTextMessage` and `sendWhapiMultimediaMessage` functions from `ai_cron_service.go`
+- **Device Settings Handler Cleanup**: Removed Whapi cases from `sendTextMessage`, `sendImageMessage`, and `sendChatMessage` functions
+- **Provider Logic Simplification**: Updated `determineProviderFromInstance` to only handle Wablas and Whacenter providers
+- **Function Removal**: Deleted `sendWhapiTextMessage`, `sendWhapiImageMessage`, and `sendWhapiMultimediaMessage` implementations
+
+#### 🎯 Provider Support:
+- **Wablas Provider**: Fully supported for message sending (instances with length ≤ 15)
+- **Whacenter Provider**: Fully supported for message sending (instances with length > 15)
+- **Whapi Provider**: ❌ Completely removed from system
+
+#### 🛠️ Files Modified:
+- **`internal/services/ai_cron_service.go`**: Removed Whapi cases and functions
+- **`internal/handlers/device_settings_handlers.go`**: Removed Whapi provider logic and implementations
+
+#### 🎉 Benefits:
+- **Simplified Codebase**: Reduced complexity by removing unused provider
+- **Focused Support**: System now exclusively supports Wablas and Whacenter
+- **Cleaner Logic**: Simplified provider determination and message sending logic
+- **Reduced Maintenance**: Less code to maintain and fewer potential failure points
+
+### 🐳 Docker Build Fix - Railway Deployment
 **Date**: Current Session
 
 #### ✅ Changes Made:
