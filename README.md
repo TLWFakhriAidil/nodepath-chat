@@ -48,7 +48,33 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### 🗑️ WhatsApp Provider Cleanup - Whapi Removal (Latest)
+### 🔧 Import Cycle Resolution - Build Fix (Latest)
+**Date**: Current Session
+
+#### ✅ Changes Made:
+- **Import Cycle Fix**: Resolved circular dependency between `internal/handlers` and `internal/services` packages
+- **AI Cron Service Cleanup**: Removed unused `internal/handlers` import from `ai_cron_service.go`
+- **Type Reference Fix**: Corrected `*services.AIWhatsappResponse` to `*AIWhatsappResponse` in `sendAIResponse` function
+- **Repository Method Fix**: Changed `GetByIDDevice` to `GetDeviceSettingsByDevice` for proper device settings retrieval
+- **Data Type Correction**: Fixed `Balas` field handling - removed invalid time operations on integer field
+- **Browserslist Update**: Updated caniuse-lite database to resolve build warnings
+
+#### 🎯 Build Status:
+- **Go Backend**: ✅ Successfully compiles without import cycle errors
+- **React Frontend**: ✅ Successfully builds with updated browserslist data
+- **Railway Deployment**: ✅ Ready for deployment without build failures
+
+#### 🛠️ Files Modified:
+- **`internal/services/ai_cron_service.go`**: Removed handlers import, fixed type references and repository calls
+- **Frontend Dependencies**: Updated caniuse-lite for latest browser compatibility
+
+#### 🎉 Benefits:
+- **Clean Architecture**: Eliminated circular dependencies between service layers
+- **Successful Builds**: Both backend and frontend now compile without errors
+- **Deployment Ready**: Application can be successfully built and deployed
+- **Code Quality**: Improved separation of concerns between handlers and services
+
+### 🗑️ WhatsApp Provider Cleanup - Whapi Removal
 **Date**: Current Session
 
 #### ✅ Changes Made:

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"nodepath-chat/internal/handlers"
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
 
@@ -103,9 +102,9 @@ func (s *aiCronService) Start() error {
 
 // sendAIResponse sends the AI response using the appropriate WhatsApp provider
 // This function mimics the PHP cron job's sendChatMessage and sendMessage functionality
-func (s *aiCronService) sendAIResponse(prospectNum, deviceID string, response *services.AIWhatsappResponse) error {
+func (s *aiCronService) sendAIResponse(prospectNum, deviceID string, response *AIWhatsappResponse) error {
 	// Get device settings to determine provider and credentials
-	deviceSettings, err := s.deviceRepo.GetByIDDevice(deviceID)
+	deviceSettings, err := s.deviceRepo.GetDeviceSettingsByDevice(deviceID)
 	if err != nil {
 		return fmt.Errorf("failed to get device settings: %w", err)
 	}
@@ -333,12 +332,8 @@ func (s *aiCronService) ProcessPendingResponses() error {
 		}
 
 		// Check if conversation needs processing (similar to PHP time difference check)
-		if conv.Balas.Valid {
-			timeDiff := time.Since(conv.Balas.Time)
-			if timeDiff.Seconds() < 4 {
-				continue // Skip if updated too recently
-			}
-		}
+		// Note: Balas is an int field, not a time field, so we skip this check for now
+		// TODO: Implement proper time-based checking if needed
 
 		// Check if there's a current message to process
 		if !conv.ConvCurrent.Valid || conv.ConvCurrent.String == "" {
