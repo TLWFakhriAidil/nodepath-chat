@@ -278,8 +278,8 @@ func (s *Service) initializeClient(deviceID string) error {
 	// Create WhatsApp client
 	client := whatsmeow.NewClient(deviceStore, nil)
 
-	// Add event handlers
-	client.AddEventHandler(s.handleEvent)
+	// Add device-specific event handlers
+	client.AddEventHandler(s.createDeviceEventHandler(deviceID))
 
 	// Store client and container
 	s.clients[deviceID] = client
@@ -525,22 +525,65 @@ func (s *Service) SendMediaMessage(phoneNumber, caption, mediaURL, mediaType str
 	return s.SendMessage(phoneNumber, message)
 }
 
-// handleEvent handles incoming WhatsApp events
-func (s *Service) handleEvent(evt interface{}) {
-	switch v := evt.(type) {
-	case *events.Message:
-		s.handleIncomingMessage(v)
-	case *events.Connected:
-		logrus.Info("WhatsApp connected")
-		s.isConnected = true
-	case *events.Disconnected:
-		logrus.Info("WhatsApp disconnected")
-		s.isConnected = false
-	case *events.LoggedOut:
-		logrus.Info("WhatsApp logged out")
-		s.isConnected = false
-	default:
-		logrus.WithField("event_type", fmt.Sprintf("%T", v)).Debug("Unhandled WhatsApp event")
+// createDeviceEventHandler creates a device-specific event handler
+func (s *Service) createDeviceEventHandler(deviceID string) func(interface{}) {
+	return func(evt interface{}) {
+		switch v := evt.(type) {
+		case *events.Message:
+			s.handleIncomingMessage(v)
+		case *events.Connected:
+			s.clientMutex.Lock()
+			s.connections[deviceID] = true
+			s.clientMutex.Unlock()
+			
+			// Update global connection status
+			s.updateGlobalConnectionStatus()
+			
+			logrus.WithField("device_id", deviceID).Info("🟢 WHATSAPP: Device connected")
+		case *events.Disconnected:
+			s.clientMutex.Lock()
+			s.connections[deviceID] = false
+			s.clientMutex.Unlock()
+			
+			// Update global connection status
+			s.updateGlobalConnectionStatus()
+			
+			logrus.WithField("device_id", deviceID).Info("🔴 WHATSAPP: Device disconnected")
+		case *events.LoggedOut:
+			s.clientMutex.Lock()
+			s.connections[deviceID] = false
+			s.clientMutex.Unlock()
+			
+			// Update global connection status
+			s.updateGlobalConnectionStatus()
+			
+			logrus.WithField("device_id", deviceID).Info("🔴 WHATSAPP: Device logged out")
+		default:
+			logrus.WithField("event_type", fmt.Sprintf("%T", v)).WithField("device_id", deviceID).Debug("Unhandled WhatsApp event")
+		}
+	}
+}
+
+// updateGlobalConnectionStatus updates the global connection status based on individual device statuses
+func (s *Service) updateGlobalConnectionStatus() {
+	s.clientMutex.RLock()
+	defer s.clientMutex.RUnlock()
+	
+	// Check if any device is connected
+	anyConnected := false
+	for _, connected := range s.connections {
+		if connected {
+			anyConnected = true
+			break
+		}
+	}
+	
+	s.isConnected = anyConnected
+	
+	if anyConnected {
+		logrus.Info("🟢 WHATSAPP: Service has connected devices - ready to send messages")
+	} else {
+		logrus.Info("🔴 WHATSAPP: No devices connected - messages will fail until devices reconnect")
 	}
 }
 
