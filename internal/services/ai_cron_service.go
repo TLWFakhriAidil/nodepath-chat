@@ -2,7 +2,10 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -523,16 +526,77 @@ func (s *aiCronService) sendWablasTextMessage(to, message string, deviceSettings
 
 // sendWhacenterTextMessage sends text message via Whacenter provider
 func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSettings *models.DeviceSettings) error {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WHACENTER: No instance available")
+		return fmt.Errorf("no instance available")
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"to": to,
 		"provider": "whacenter",
-		"device_id": deviceSettings.IDDevice,
+		"device_id": deviceSettings.Instance.String, // ✅ Use instance
 	}).Debug("Sending text message via Whacenter")
 
-	// TODO: Implement actual Whacenter API call
-	// This should use the device settings to make HTTP request to Whacenter API
-	logrus.Info("📤 WHACENTER: Text message sent successfully")
-	return nil
+	// Whacenter API endpoint for sending messages
+	apiURL := "https://api.whacenter.com/api/send"
+
+	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
+	payload := map[string]interface{}{
+		"device_id": deviceSettings.Instance.String, // ✅ Use instance
+		"number": to,
+		"message": message,
+		"type": "text",
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to send message")
+		return fmt.Errorf("failed to send message: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body for error details
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to read response body")
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Log response details
+	logFields := logrus.Fields{
+		"to": to,
+		"status_code": resp.StatusCode,
+		"response_body": string(respBody),
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WHACENTER: Text message sent successfully")
+		return nil
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WHACENTER: Text message failed")
+		return fmt.Errorf("whacenter API error: status %d, body: %s", resp.StatusCode, string(respBody))
+	}
 }
 
 
@@ -554,15 +618,82 @@ func (s *aiCronService) sendWablasMultimediaMessage(to, caption, fileURL, fileTy
 
 // sendWhacenterMultimediaMessage sends multimedia message via Whacenter provider
 func (s *aiCronService) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WHACENTER: No instance available")
+		return fmt.Errorf("no instance available")
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"to": to,
 		"file_type": fileType,
 		"provider": "whacenter",
-		"device_id": deviceSettings.IDDevice,
+		"device_id": deviceSettings.Instance.String, // ✅ Use instance
 	}).Debug("Sending multimedia message via Whacenter")
 
-	// TODO: Implement actual Whacenter multimedia API call
-	// This should use the device settings to make HTTP request to Whacenter API
-	logrus.Info("📤 WHACENTER: Multimedia message sent successfully")
-	return nil
+	// Whacenter API endpoint for sending media
+	apiURL := "https://api.whacenter.com/api/send-media"
+
+	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
+	payload := map[string]interface{}{
+		"device_id": deviceSettings.Instance.String, // ✅ Use instance
+		"number":    to,
+		"media_url": fileURL,
+		"type":      fileType,
+	}
+
+	// Add caption if provided
+	if caption != "" {
+		payload["caption"] = caption
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to send multimedia message")
+		return fmt.Errorf("failed to send multimedia message: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body for error details
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to read response body")
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Log response details
+	logFields := logrus.Fields{
+		"to":          to,
+		"file_type":   fileType,
+		"status_code": resp.StatusCode,
+		"response_body": string(respBody),
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WHACENTER: Multimedia message sent successfully")
+		return nil
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WHACENTER: Multimedia message failed")
+		return fmt.Errorf("whacenter API error: status %d, body: %s", resp.StatusCode, string(respBody))
+	}
 }

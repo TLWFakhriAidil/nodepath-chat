@@ -1618,9 +1618,9 @@ func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *
 	// Whacenter API endpoint for sending messages
 	apiURL := "https://api.whacenter.com/api/send"
 
-	// Prepare request payload
+	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
 	payload := map[string]interface{}{
-		"device_id": deviceSettings.IDDevice,
+		"device_id": deviceSettings.Instance.String, // ✅ Use instance
 		"number": to,
 		"message": message,
 		"type": "text",
@@ -1750,9 +1750,9 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType
 	// Whacenter API endpoint for sending media
 	apiURL := "https://api.whacenter.com/api/send-media"
 
-	// Prepare request payload
+	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
 	payload := map[string]interface{}{
-		"device_id": deviceSettings.IDDevice,
+		"device_id": deviceSettings.Instance.String, // ✅ Use instance
 		"number":    to,
 		"media_url": fileURL,
 		"type":      fileType,

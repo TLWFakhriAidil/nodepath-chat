@@ -65,6 +65,49 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 - **Provider-Specific Logging**: Separate error handling for Whacenter and Wablas providers
 - **Real-time Error Monitoring**: Immediate visibility into API failures with complete context
 
+### 🔧 Whacenter API Integration Fix (Latest Update)
+
+#### 🎯 Problem Fixed:
+- **Incorrect Device ID Parameter**: Fixed Whacenter API calls to use correct `device_id` parameter
+- **Database Field Mapping**: Corrected mapping between database fields and API parameters
+- **Authentication Issues**: Resolved authorization header inconsistencies
+
+#### ✅ Solution Implemented:
+- **Correct Parameter Usage**: Changed from `deviceSettings.IDDevice` to `deviceSettings.Instance.String` for `device_id` in API payload
+- **Consistent Authentication**: Both payload `device_id` and Authorization header now use `instance` field
+- **Complete Implementation**: Replaced placeholder functions with full API implementations
+
+#### 🛠️ Files Modified:
+- **`internal/handlers/device_settings_handlers.go`**: 
+  - Fixed `sendWhacenterTextMessage` to use `deviceSettings.Instance.String` for `device_id`
+  - Fixed `sendWhacenterMultimediaMessage` to use correct device parameter
+  - Added proper error handling and response logging
+- **`internal/services/ai_cron_service.go`**: 
+  - Implemented complete `sendWhacenterTextMessage` function with actual API calls
+  - Implemented complete `sendWhacenterMultimediaMessage` function
+  - Added required HTTP imports (`encoding/json`, `io`, `net/http`)
+  - Fixed device_id parameter to use `deviceSettings.Instance.String`
+
+#### 📋 Technical Details:
+```go
+// ✅ CORRECT - Use instance for device_id
+payload := map[string]interface{}{
+    "device_id": deviceSettings.Instance.String, // ✅ Use instance
+    "number": to,
+    "message": message,
+    "type": "text",
+}
+
+// ❌ INCORRECT - Previously used IDDevice
+// "device_id": deviceSettings.IDDevice, // ❌ Wrong field
+```
+
+#### 🎉 Benefits:
+- **Proper API Communication**: Whacenter API now receives correct device identifiers
+- **Successful Message Delivery**: Messages will now be sent through correct device instances
+- **Consistent Data Flow**: Database `instance` field properly mapped to API `device_id` parameter
+- **Complete Functionality**: No more placeholder functions - full API implementation
+
 #### 🛠️ Files Modified:
 - **`internal/handlers/device_settings_handlers.go`**: Enhanced error logging for all WhatsApp provider functions
   - `sendWhacenterTextMessage`: Added response body capture and detailed error logging
