@@ -260,6 +260,12 @@ func (s *Service) initializeClient(deviceID string) error {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"current_devices": len(s.clients),
+		"max_devices": s.maxDevices,
+	}).Debug("🔧 WHATSAPP: Initializing client")
+
 	// Check if we've reached the maximum number of devices
 	if len(s.clients) >= s.maxDevices {
 		return fmt.Errorf("maximum number of devices (%d) reached", s.maxDevices)
@@ -267,27 +273,32 @@ func (s *Service) initializeClient(deviceID string) error {
 
 	// Ensure storage directory exists
 	storageDir := s.cfg.WhatsAppStoragePath
+	logrus.WithField("storage_dir", storageDir).Debug("📁 WHATSAPP: Creating storage directory")
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
 		return fmt.Errorf("failed to create storage directory: %w", err)
 	}
 
 	// Initialize SQLite store for session data
 	dbPath := filepath.Join(storageDir, fmt.Sprintf("whatsapp_%s.db", deviceID))
+	logrus.WithField("db_path", dbPath).Debug("💾 WHATSAPP: Creating SQLite store")
 	container, err := sqlstore.New("sqlite", fmt.Sprintf("%s?_pragma=foreign_keys(1)", dbPath), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create store: %w", err)
 	}
 
 	// Get device store
+	logrus.WithField("device_id", deviceID).Debug("📱 WHATSAPP: Getting device store")
 	deviceStore, err := container.GetFirstDevice()
 	if err != nil {
 		return fmt.Errorf("failed to get device store: %w", err)
 	}
 
 	// Create WhatsApp client
+	logrus.WithField("device_id", deviceID).Debug("🔨 WHATSAPP: Creating WhatsApp client")
 	client := whatsmeow.NewClient(deviceStore, nil)
 
 	// Add device-specific event handlers
+	logrus.WithField("device_id", deviceID).Debug("🎯 WHATSAPP: Adding event handlers")
 	client.AddEventHandler(s.createDeviceEventHandler(deviceID))
 
 	// Store client and container
@@ -296,7 +307,11 @@ func (s *Service) initializeClient(deviceID string) error {
 	s.connections[deviceID] = false
 	s.currentDevices++
 
-	logrus.WithField("device_id", deviceID).Info("WhatsApp client initialized")
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"total_clients": len(s.clients),
+		"client_stored": s.clients[deviceID] != nil,
+	}).Info("✅ WHATSAPP: Client initialized and stored in map")
 	return nil
 }
 
@@ -306,14 +321,27 @@ func (s *Service) Connect(deviceID string) error {
 	client, exists := s.clients[deviceID]
 	s.clientMutex.RUnlock()
 
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"client_exists": exists,
+		"total_clients": len(s.clients),
+	}).Debug("🔗 WHATSAPP: Connect called")
+
 	if !exists {
 		// Initialize client if it doesn't exist
+		logrus.WithField("device_id", deviceID).Debug("🔄 WHATSAPP: Initializing new client")
 		if err := s.initializeClient(deviceID); err != nil {
 			return fmt.Errorf("failed to initialize client: %w", err)
 		}
 		s.clientMutex.RLock()
 		client = s.clients[deviceID]
 		s.clientMutex.RUnlock()
+		logrus.WithField("device_id", deviceID).Debug("✅ WHATSAPP: Client initialized and retrieved")
+	}
+
+	if client == nil {
+		logrus.WithField("device_id", deviceID).Error("❌ WHATSAPP: Client is nil after initialization")
+		return fmt.Errorf("client is nil for device %s", deviceID)
 	}
 
 	if client.Store.ID == nil {
@@ -342,6 +370,7 @@ func (s *Service) Connect(deviceID string) error {
 	}
 
 	// Connect to WhatsApp
+	logrus.WithField("device_id", deviceID).Debug("🔗 WHATSAPP: Attempting to connect")
 	err := client.Connect()
 	if err != nil {
 		return fmt.Errorf("failed to connect to WhatsApp: %w", err)
@@ -463,6 +492,28 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 	s.clientMutex.RLock()
 	defer s.clientMutex.RUnlock()
 
+	// Debug logging for device availability
+	logrus.WithFields(logrus.Fields{
+		"requested_device_id": deviceID,
+		"total_clients": len(s.clients),
+		"phone_number": phoneNumber,
+	}).Debug("🔍 WHATSAPP: SendMessageFromDevice called")
+
+	// Log all available devices for debugging
+	for id, client := range s.clients {
+		var storeID string
+		if client != nil && client.Store.ID != nil {
+			storeID = client.Store.ID.String()
+		} else {
+			storeID = "nil"
+		}
+		logrus.WithFields(logrus.Fields{
+			"device_id": id,
+			"client_exists": client != nil,
+			"store_id": storeID,
+		}).Debug("📱 WHATSAPP: Available device")
+	}
+
 	// Get client for the specified device or first available
 	var client *whatsmeow.Client
 	var selectedDeviceID string
@@ -472,7 +523,9 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 		if c, exists := s.clients[deviceID]; exists && c != nil {
 			client = c
 			selectedDeviceID = deviceID
+			logrus.WithField("device_id", deviceID).Debug("✅ WHATSAPP: Found specific device")
 		} else {
+			logrus.WithField("device_id", deviceID).Error("❌ WHATSAPP: Specific device not found")
 			return fmt.Errorf("device %s not found", deviceID)
 		}
 	} else {
@@ -481,19 +534,31 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 			if c != nil && c.Store.ID != nil {
 				client = c
 				selectedDeviceID = id
+				logrus.WithField("device_id", id).Debug("✅ WHATSAPP: Using first available device")
 				break
 			}
 		}
 	}
 
 	if client == nil {
+		logrus.Error("❌ WHATSAPP: No WhatsApp devices available")
 		return fmt.Errorf("no WhatsApp devices available")
 	}
 
 	// Check if the client has a valid device JID (is authenticated)
 	if client.Store.ID == nil {
+		logrus.WithFields(logrus.Fields{
+			"device_id": selectedDeviceID,
+			"store_id": "nil",
+		}).Error("❌ WHATSAPP: Device is not authenticated")
 		return fmt.Errorf("device %s is not authenticated - please scan QR code first", selectedDeviceID)
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"device_id": selectedDeviceID,
+		"store_id": client.Store.ID.String(),
+		"phone_number": phoneNumber,
+	}).Debug("✅ WHATSAPP: Device is authenticated, proceeding to send message")
 
 	// Parse phone number to JID
 	jid, err := s.parsePhoneNumber(phoneNumber)
@@ -779,14 +844,18 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID .
 	if response != "" {
 		logrus.WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
+			"device_id": idDevice,
 			"response": response,
 			"response_length": len(response),
 		}).Info("📤 FLOW: Sending response back to user")
 		
-		// Send response back to user
-		err = s.SendMessage(phoneNumber, response)
+		// Send response back to user using specific device
+		err = s.SendMessageFromDevice(idDevice, phoneNumber, response)
 		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to send response message")
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"device_id": idDevice,
+				"phone_number": phoneNumber,
+			}).Error("❌ FLOW: Failed to send response message")
 			return
 		}
 		
