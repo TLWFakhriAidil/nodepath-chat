@@ -113,6 +113,7 @@ func (s *Service) messageProcessor() {
 	}
 }
 
+
 // processQueuedMessageInternal processes a single queued message
 func (s *Service) processQueuedMessageInternal(msg *QueuedMessage) error {
 	if msg.Message == nil {

@@ -48,6 +48,18 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
+### ✅ WhatsApp Device Connection Management (January 2025)
+- **Fixed**: "no WhatsApp devices connected" error during message sending
+- **Implemented**: Enhanced device-specific connection tracking system
+- **Features**:
+  - Device-specific event handlers for proper connection tracking
+  - Real-time connection status updates per device
+  - Manual device connection management through device settings
+  - Global connection status based on individual device states
+  - Comprehensive logging for device connection events
+- **User Control**: Users can manually connect/disconnect devices through device settings
+- **Performance**: Reliable message delivery when devices are connected
+
 ### ✅ Flow-Based Message Routing System (2025-01-19)
 - **Intelligent Message Routing**: Implemented priority-based message routing that checks for configured flows before falling back to AI conversation system
 - **Flow Engine Integration**: Added seamless integration between webhook handlers and the WhatsApp flow processing engine
