@@ -476,9 +476,9 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 			return fmt.Errorf("device %s not found", deviceID)
 		}
 	} else {
-		// Use first available device
+		// Use first available device that has a valid JID
 		for id, c := range s.clients {
-			if c != nil {
+			if c != nil && c.Store.ID != nil {
 				client = c
 				selectedDeviceID = id
 				break
@@ -488,6 +488,11 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 
 	if client == nil {
 		return fmt.Errorf("no WhatsApp devices available")
+	}
+
+	// Check if the client has a valid device JID (is authenticated)
+	if client.Store.ID == nil {
+		return fmt.Errorf("device %s is not authenticated - please scan QR code first", selectedDeviceID)
 	}
 
 	// Parse phone number to JID
