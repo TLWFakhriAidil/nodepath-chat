@@ -458,6 +458,7 @@ func (s *Service) SendMessage(phoneNumber, message string) error {
 }
 
 // SendMessageFromDevice sends a text message from a specific device
+// Note: Connection status checking removed - users manage connections via sidebar device settings
 func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) error {
 	s.clientMutex.RLock()
 	defer s.clientMutex.RUnlock()
@@ -467,17 +468,17 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 	var selectedDeviceID string
 	
 	if deviceID != "" {
-		// Use specific device
-		if c, exists := s.clients[deviceID]; exists && s.connections[deviceID] {
+		// Use specific device if exists
+		if c, exists := s.clients[deviceID]; exists && c != nil {
 			client = c
 			selectedDeviceID = deviceID
 		} else {
-			return fmt.Errorf("device %s not connected", deviceID)
+			return fmt.Errorf("device %s not found", deviceID)
 		}
 	} else {
-		// Use first available connected device
+		// Use first available device
 		for id, c := range s.clients {
-			if s.connections[id] && c != nil && c.IsConnected() {
+			if c != nil {
 				client = c
 				selectedDeviceID = id
 				break
@@ -486,7 +487,7 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 	}
 
 	if client == nil {
-		return fmt.Errorf("no WhatsApp devices connected")
+		return fmt.Errorf("no WhatsApp devices available")
 	}
 
 	// Parse phone number to JID
@@ -516,11 +517,8 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 }
 
 // SendMediaMessage sends a media message
+// Note: Connection status checking removed - users manage connections via sidebar device settings
 func (s *Service) SendMediaMessage(phoneNumber, caption, mediaURL, mediaType string) error {
-	if !s.IsConnected() {
-		return fmt.Errorf("WhatsApp not connected")
-	}
-
 	// For now, send as text with media URL
 	// In a full implementation, you'd download and upload the media
 	message := caption

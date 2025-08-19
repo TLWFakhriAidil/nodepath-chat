@@ -48,6 +48,18 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
+### ✅ WhatsApp Connection Checking Removal (January 2025)
+- **Removed**: Unnecessary device connection validation from message sending functions
+- **Simplified**: Flow-based message processing no longer requires connection status checks
+- **User Control**: Device connections are now managed exclusively through sidebar device settings
+- **Enhanced**: Flow responses can be sent regardless of temporary connection status
+- **Performance**: Eliminated "no WhatsApp devices connected" errors during flow processing
+- **Functions Updated**:
+  - `SendMessageFromDevice()` - Removed connection status validation
+  - `SendMediaMessage()` - Removed connection checking logic
+- **Rationale**: Users manage device connections manually via UI, flow processing should focus on node execution only
+- **Error Messages**: Updated error messages from "not connected" to "not found" for better clarity
+
 ### ✅ WhatsApp Device Connection Management (January 2025)
 - **Fixed**: "no WhatsApp devices connected" error during message sending
 - **Implemented**: Enhanced device-specific connection tracking system
