@@ -8,7 +8,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    allowedHosts: ["nodepath-chat-production.up.railway.app"]
+    allowedHosts: ["nodepath-chat-production.up.railway.app"],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   preview: {
     host: "0.0.0.0",

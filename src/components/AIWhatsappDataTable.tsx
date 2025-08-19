@@ -80,8 +80,8 @@ const AIWhatsappDataTable = () => {
   const [pageSize, setPageSize] = useState(10);
   
   // Filter state
-  const [deviceFilter, setDeviceFilter] = useState('');
-  const [stageFilter, setStageFilter] = useState('');
+  const [deviceFilter, setDeviceFilter] = useState('all');
+  const [stageFilter, setStageFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Available devices and stages for filters
@@ -97,8 +97,8 @@ const AIWhatsappDataTable = () => {
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: pageSize.toString(),
-        ...(deviceFilter && { device_id: deviceFilter }),
-        ...(stageFilter && { stage: stageFilter }),
+        ...(deviceFilter && deviceFilter !== 'all' && { device_id: deviceFilter }),
+        ...(stageFilter && stageFilter !== 'all' && { stage: stageFilter }),
         ...(searchTerm && { search: searchTerm })
       });
       
@@ -150,8 +150,8 @@ const AIWhatsappDataTable = () => {
 
   // Reset filters
   const resetFilters = () => {
-    setDeviceFilter('');
-    setStageFilter('');
+    setDeviceFilter('all');
+    setStageFilter('all');
     setSearchTerm('');
     setCurrentPage(1);
   };
@@ -258,7 +258,7 @@ const AIWhatsappDataTable = () => {
               <SelectValue placeholder="Filter by Device" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Devices</SelectItem>
+              <SelectItem value="all">All Devices</SelectItem>
               {availableDevices.map((device) => (
                 <SelectItem key={device} value={device}>
                   {device}
@@ -272,7 +272,7 @@ const AIWhatsappDataTable = () => {
               <SelectValue placeholder="Filter by Stage" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Stages</SelectItem>
+              <SelectItem value="all">All Stages</SelectItem>
               {availableStages.map((stage) => (
                 <SelectItem key={stage} value={stage}>
                   {stage}
