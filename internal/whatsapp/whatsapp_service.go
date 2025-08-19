@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -82,6 +83,9 @@ func NewService(cfg *config.Config, chatService *services.ChatService, queueServ
 		go service.messageProcessor()
 	}
 	
+	// Auto-load existing devices from database
+	go service.loadExistingDevicesOnStartup()
+	
 	return service, nil
 }
 
@@ -134,6 +138,112 @@ func (s *Service) processQueuedMessageInternal(msg *QueuedMessage) error {
 func (s *Service) SetServices(flowService *services.FlowService, aiService *services.AIService) {
 	s.flowService = flowService
 	s.aiService = aiService
+}
+
+// loadExistingDevicesOnStartup automatically loads and connects existing devices from database
+func (s *Service) loadExistingDevicesOnStartup() {
+	// Wait a bit for the service to fully initialize
+	time.Sleep(10 * time.Second)
+	
+	logrus.Info("🔄 WHATSAPP: Loading existing devices from database...")
+	
+	// Get database connection from chat service
+	db := s.chatService.GetDB()
+	
+	// Query for devices with existing WhatsApp sessions (have device_id from device_setting_nodepath)
+	query := `
+		SELECT DISTINCT ds.id_device 
+		FROM device_setting_nodepath ds 
+		WHERE ds.id_device IS NOT NULL 
+		  AND ds.id_device != '' 
+		  AND ds.provider IN ('wablas', 'whacenter')
+		LIMIT 50
+	`
+	
+	rows, err := db.Query(query)
+	if err != nil {
+		logrus.WithError(err).Error("❌ Failed to query devices from database")
+		return
+	}
+	defer rows.Close()
+	
+	loadedCount := 0
+	failedCount := 0
+	
+	for rows.Next() {
+		var deviceID sql.NullString
+		if err := rows.Scan(&deviceID); err != nil {
+			logrus.WithError(err).Error("❌ WHATSAPP: Failed to scan device row")
+			continue
+		}
+		
+		if !deviceID.Valid || deviceID.String == "" {
+			continue
+		}
+		
+		devID := deviceID.String
+		logrus.WithField("device_id", devID).Info("🔄 WHATSAPP: Attempting to load device...")
+		
+		// Check if device already exists in our service
+		s.clientMutex.RLock()
+		_, exists := s.clients[devID]
+		s.clientMutex.RUnlock()
+		
+		if exists {
+			logrus.WithField("device_id", devID).Info("ℹ️ WHATSAPP: Device already loaded, skipping")
+			continue
+		}
+		
+		// Try to initialize and connect the device
+		if err := s.initializeClient(devID); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"device_id": devID,
+				"error": err,
+			}).Error("❌ WHATSAPP: Failed to initialize device")
+			failedCount++
+			continue
+		}
+		
+		// Try to connect the device
+		if err := s.Connect(devID); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"device_id": devID,
+				"error": err,
+			}).Warn("⚠️ WHATSAPP: Device initialized but failed to connect (may need QR scan)")
+			// Don't count as failed since initialization succeeded
+		} else {
+			logrus.WithField("device_id", devID).Info("✅ WHATSAPP: Device loaded and connected successfully")
+		}
+		
+		loadedCount++
+		
+		// Small delay between device connections to avoid overwhelming the system
+		time.Sleep(500 * time.Millisecond)
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"loaded": loadedCount,
+		"failed": failedCount,
+		"total_clients": len(s.clients),
+	}).Info("🎯 WHATSAPP: Device loading completed")
+	
+	// Update global connection status if we have any connected devices
+	s.clientMutex.RLock()
+	hasConnectedDevices := false
+	for _, connected := range s.connections {
+		if connected {
+			hasConnectedDevices = true
+			break
+		}
+	}
+	s.clientMutex.RUnlock()
+	
+	if hasConnectedDevices {
+		s.isConnected = true
+		logrus.Info("🟢 WHATSAPP: Service marked as connected - ready to send messages")
+	} else {
+		logrus.Info("🟡 WHATSAPP: No devices connected yet - messages will queue until devices connect")
+	}
 }
 
 // initializeClient initializes a whatsmeow client for a specific device

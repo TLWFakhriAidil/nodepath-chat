@@ -27,6 +27,11 @@ func NewChatService(db *sql.DB, redis *redis.Client) *ChatService {
 	}
 }
 
+// GetDB returns the database connection
+func (s *ChatService) GetDB() *sql.DB {
+	return s.db
+}
+
 // StartExecution starts a new flow execution
 func (s *ChatService) StartExecution(flowReference, phoneNumber, idDevice string) (*models.ChatbotExecution, error) {
 	if s.db == nil {
