@@ -52,7 +52,10 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 - **Intelligent Message Routing**: Implemented priority-based message routing that checks for configured flows before falling back to AI conversation system
 - **Flow Engine Integration**: Added seamless integration between webhook handlers and the WhatsApp flow processing engine
 - **Device Flow Detection**: Automatic detection of configured flows per device using `flowService.GetFlowsByDevice`
+- **Automatic Execution Creation**: System now automatically creates new flow executions when none exist for incoming messages
+- **Default Flow Selection**: Automatically selects the first available flow for the device when starting new executions
 - **Priority System**: Flow engine takes priority over AI conversation system when flows are configured
+- **Comprehensive Logging**: Added detailed logging throughout the entire flow processing pipeline with emoji indicators
 - **Graceful Fallback**: Automatic fallback to AI conversation system when:
   - No flows are configured for the device
   - Flow processing fails or encounters errors
@@ -60,6 +63,8 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 - **Public API Enhancement**: Created `ProcessIncomingMessageFromWebhook` method to expose flow processing capabilities
 - **Error Handling**: Robust error handling with detailed logging for flow processing failures
 - **Device Context**: Proper device ID passing throughout the flow processing pipeline
+- **Flow Data Retrieval**: Complete flow data retrieval from `chatbot_flows_nodepath` including nodes and edges
+- **Conversation Management**: Tracks user and bot messages throughout the flow execution
 
 **Routing Logic**:
 ```go
@@ -77,9 +82,32 @@ if err == nil && len(flows) > 0 {
 h.processAIConversation(phoneNumber, content, deviceID)
 ```
 
+**Enhanced Flow Processing Features**:
+- 🔍 **Active Execution Detection**: Checks for existing active executions for phone number and device
+- 🆕 **New Execution Creation**: Automatically creates new executions when none exist
+- 📊 **Flow Data Retrieval**: Retrieves complete flow data from `chatbot_flows_nodepath`
+- 💬 **Message Tracking**: Logs user and bot messages being added to conversations
+- ⚙️ **Flow Processing**: Detailed logging of flow engine processing steps
+- 📤 **Response Delivery**: Logs when sending responses back to users
+- ✅ **Success Indicators**: Clear success/failure indicators for each step
+
+**Detailed Logging System**:
+```
+🔍 FLOW: Checking for active execution
+🆕 FLOW: No active execution found, checking for default flow
+🚀 FLOW: Starting new execution with default flow
+✅ FLOW: New execution started successfully
+📊 FLOW: Retrieving flow data from chatbot_flows_nodepath
+✅ FLOW: Successfully retrieved flow data
+💬 FLOW: Adding user message to conversation
+⚙️ FLOW: Processing message through flow engine
+📤 FLOW: Sending response back to user
+✅ FLOW: Response sent successfully
+```
+
 **Files Modified**:
 - ✅ `internal/handlers/device_settings_handlers.go` - Added flow routing logic
-- ✅ `internal/whatsapp/whatsapp_service.go` - Created public webhook processing method
+- ✅ `internal/whatsapp/whatsapp_service.go` - Enhanced with automatic execution creation and comprehensive logging
 - ✅ Enhanced error handling and logging throughout the flow processing pipeline
 
 ### ✅ Flow Node Processing Enhancement (2025-01-19)

@@ -489,58 +489,162 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID .
 		idDevice = deviceID[0]
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"device_id": idDevice,
+		"content": content,
+	}).Info("🔍 FLOW: Checking for active execution")
+
 	// Get or create active execution
 	execution, err := s.chatService.GetActiveExecution(phoneNumber, idDevice)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get active execution")
+		logrus.WithError(err).Error("❌ FLOW: Failed to get active execution")
 		return
 	}
 
 	if execution == nil {
-		// No active execution - you might want to start a default flow here
-		logrus.WithField("phone_number", phoneNumber).Info("No active execution found for incoming message")
-		return
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id": idDevice,
+		}).Info("🆕 FLOW: No active execution found, checking for default flow")
+		
+		// Get default flow for device
+		defaultFlow, err := s.flowService.GetDefaultFlowForDevice(idDevice)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to get default flow for device")
+			return
+		}
+		
+		if defaultFlow == nil {
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id": idDevice,
+			}).Info("⚠️ FLOW: No default flow found for device")
+			return
+		}
+		
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id": idDevice,
+			"flow_id": defaultFlow.ID,
+			"flow_name": defaultFlow.Name,
+		}).Info("🚀 FLOW: Starting new execution with default flow")
+		
+		// Start new execution with default flow
+		execution, err = s.chatService.StartExecution(defaultFlow.ID, phoneNumber, idDevice)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to start new execution")
+			return
+		}
+		
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.ID,
+			"flow_id": defaultFlow.ID,
+			"phone_number": phoneNumber,
+			"device_id": idDevice,
+		}).Info("✅ FLOW: New execution started successfully")
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.ID,
+			"flow_reference": execution.FlowReference,
+			"phone_number": phoneNumber,
+			"device_id": idDevice,
+		}).Info("🔄 FLOW: Found existing active execution")
 	}
 
-	// Get the flow
+	// Get the flow data from chatbot_flows_nodepath
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ID,
+		"flow_reference": execution.FlowReference,
+	}).Info("📊 FLOW: Retrieving flow data from chatbot_flows_nodepath")
+	
 	flow, err := s.flowService.GetFlow(execution.FlowReference)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get flow")
+		logrus.WithError(err).Error("❌ FLOW: Failed to get flow from database")
 		return
 	}
 
 	if flow == nil {
-		logrus.WithField("flow_reference", execution.FlowReference).Error("Flow not found")
+		logrus.WithField("flow_reference", execution.FlowReference).Error("❌ FLOW: Flow not found in database")
 		return
 	}
+	
+	logrus.WithFields(logrus.Fields{
+		"flow_id": flow.ID,
+		"flow_name": flow.Name,
+		"flow_niche": flow.Niche,
+		"device_id": flow.IdDevice,
+	}).Info("✅ FLOW: Successfully retrieved flow data from chatbot_flows_nodepath")
 
 	// Add user message to conversation
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ID,
+		"message_type": "USER",
+		"content": content,
+	}).Info("💬 FLOW: Adding user message to conversation")
+	
 	err = s.chatService.AddConversationMessage(execution, "USER", content)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to add user message")
+		logrus.WithError(err).Error("❌ FLOW: Failed to add user message to conversation")
 		return
 	}
+	
+	logrus.WithField("execution_id", execution.ID).Info("✅ FLOW: User message added to conversation successfully")
 
 	// Process the message through the flow
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ID,
+		"flow_id": flow.ID,
+		"current_node": execution.CurrentNode,
+		"user_input": content,
+	}).Info("⚙️ FLOW: Processing message through flow engine")
+	
 	response, err := s.processFlowMessage(flow, execution, content)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to process flow message")
+		logrus.WithError(err).Error("❌ FLOW: Failed to process flow message")
 		return
 	}
+	
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ID,
+		"response_length": len(response),
+		"has_response": response != "",
+	}).Info("🔄 FLOW: Flow processing completed")
 
 	if response != "" {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"response": response,
+			"response_length": len(response),
+		}).Info("📤 FLOW: Sending response back to user")
+		
 		// Send response back to user
 		err = s.SendMessage(phoneNumber, response)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to send response message")
+			logrus.WithError(err).Error("❌ FLOW: Failed to send response message")
 			return
 		}
+		
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"response": response,
+		}).Info("✅ FLOW: Response sent successfully")
 
 		// Add bot response to conversation
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.ID,
+			"message_type": "BOT",
+			"response": response,
+		}).Info("💬 FLOW: Adding bot response to conversation")
+		
 		err = s.chatService.AddConversationMessage(execution, "BOT", response)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to add bot message")
+			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to conversation")
+		} else {
+			logrus.WithField("execution_id", execution.ID).Info("✅ FLOW: Bot response added to conversation successfully")
 		}
+	} else {
+		logrus.WithField("execution_id", execution.ID).Info("ℹ️ FLOW: No response generated from flow processing")
 	}
 }
 
