@@ -102,7 +102,7 @@ const AIWhatsappDataTable = () => {
         ...(searchTerm && { search: searchTerm })
       });
       
-      const response = await fetch(`/ai/whatsapp/data?${params}`);
+      const response = await fetch(`/api/ai/whatsapp/data?${params}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
