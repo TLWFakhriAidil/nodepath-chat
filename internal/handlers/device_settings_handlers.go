@@ -1652,10 +1652,27 @@ func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *
 	}
 	defer resp.Body.Close()
 
-	logrus.WithFields(logrus.Fields{
+	// Read response body for error details
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to read response body")
+		return
+	}
+
+	// Log response details
+	logFields := logrus.Fields{
 		"to": to,
 		"status_code": resp.StatusCode,
-	}).Info("📤 WHACENTER: Text message sent")
+		"response_body": string(respBody),
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WHACENTER: Text message sent successfully")
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WHACENTER: Text message failed")
+	}
 }
 
 // sendWablasTextMessage sends text message via Wablas API
@@ -1694,10 +1711,27 @@ func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *mod
 	}
 	defer resp.Body.Close()
 
-	logrus.WithFields(logrus.Fields{
+	// Read response body for error details
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to read response body")
+		return
+	}
+
+	// Log response details
+	logFields := logrus.Fields{
 		"to": to,
 		"status_code": resp.StatusCode,
-	}).Info("📤 WABLAS: Text message sent")
+		"response_body": string(respBody),
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WABLAS: Text message sent successfully")
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WABLAS: Text message failed")
+	}
 }
 
 // sendWhacenterImageMessage sends image message via Whacenter API
@@ -1755,11 +1789,28 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType
 	}
 	defer resp.Body.Close()
 
-	logrus.WithFields(logrus.Fields{
+	// Read response body for error details
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to read response body")
+		return
+	}
+
+	// Log response details
+	logFields := logrus.Fields{
 		"to":          to,
 		"file_type":   fileType,
 		"status_code": resp.StatusCode,
-	}).Info("📤 WHACENTER: Multimedia message sent")
+		"response_body": string(respBody),
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WHACENTER: Multimedia message sent successfully")
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WHACENTER: Multimedia message failed")
+	}
 }
 
 // sendWablasImageMessage sends image message via Wablas API

@@ -48,7 +48,44 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### 🔧 Import Cycle Resolution - Build Fix (Latest)
+### 🐛 WhatsApp API Error Debugging Enhancement (Latest)
+**Date**: Current Session
+
+#### ✅ Changes Made:
+- **Enhanced Error Logging**: Added detailed response body capture for WhatsApp API failures
+- **Whacenter Error Details**: Now logs complete API response when status code indicates failure (400, 500, etc.)
+- **Wablas Error Details**: Enhanced error logging with full response body for debugging
+- **Status Code Handling**: Proper success/error classification based on HTTP status codes (200-299 = success)
+- **Multimedia Message Debugging**: Enhanced error logging for both text and multimedia message failures
+- **Response Body Capture**: All API responses now logged with complete error details for troubleshooting
+
+#### 🎯 Debugging Features:
+- **Detailed Error Messages**: Full API response body logged when WhatsApp providers return errors
+- **Status Code Tracking**: Clear indication of HTTP status codes for all WhatsApp API calls
+- **Provider-Specific Logging**: Separate error handling for Whacenter and Wablas providers
+- **Real-time Error Monitoring**: Immediate visibility into API failures with complete context
+
+#### 🛠️ Files Modified:
+- **`internal/handlers/device_settings_handlers.go`**: Enhanced error logging for all WhatsApp provider functions
+  - `sendWhacenterTextMessage`: Added response body capture and detailed error logging
+  - `sendWablasTextMessage`: Enhanced with complete API response logging
+  - `sendWhacenterMultimediaMessage`: Added detailed error tracking for media messages
+
+#### 🎉 Benefits:
+- **Better Debugging**: Complete API error details now visible in logs for troubleshooting
+- **Faster Issue Resolution**: Detailed error messages help identify specific API problems
+- **Improved Monitoring**: Real-time visibility into WhatsApp API failures and success rates
+- **Enhanced Support**: Detailed logs provide better context for resolving user issues
+
+#### 📋 Usage:
+When WhatsApp messages fail (like the 400 status code you encountered), the logs will now show:
+```
+time="2025-08-19T04:05:35Z" level=error msg="❌ WHACENTER: Text message failed" 
+status_code=400 response_body="{\"error\":\"Invalid phone number format\"}" 
+status="error" to="601171219823"
+```
+
+### 🔧 Import Cycle Resolution - Build Fix
 **Date**: Current Session
 
 #### ✅ Changes Made:
