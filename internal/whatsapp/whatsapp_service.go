@@ -84,6 +84,7 @@ func NewService(cfg *config.Config, chatService *services.ChatService, queueServ
 	}
 	
 	// Auto-load existing devices from database
+	logrus.Info("🔧 WHATSAPP: Starting loadExistingDevicesOnStartup goroutine")
 	go service.loadExistingDevicesOnStartup()
 	
 	return service, nil
@@ -143,6 +144,8 @@ func (s *Service) SetServices(flowService *services.FlowService, aiService *serv
 
 // loadExistingDevicesOnStartup automatically loads and connects existing devices from database
 func (s *Service) loadExistingDevicesOnStartup() {
+	logrus.Info("🚀 WHATSAPP: loadExistingDevicesOnStartup function called")
+	
 	// Wait a bit for the service to fully initialize
 	time.Sleep(10 * time.Second)
 	
@@ -150,6 +153,11 @@ func (s *Service) loadExistingDevicesOnStartup() {
 	
 	// Get database connection from chat service
 	db := s.chatService.GetDB()
+	if db == nil {
+		logrus.Error("❌ WHATSAPP: Database connection is nil, cannot load devices")
+		return
+	}
+	logrus.Info("✅ WHATSAPP: Database connection obtained successfully")
 	
 	// Query for devices with existing WhatsApp sessions (have device_id from device_setting_nodepath)
 	query := `

@@ -91,10 +91,13 @@ func main() {
 	logrus.Info("Media service initialized with CDN support")
 
 	// Initialize WhatsApp service with multi-device support
+	logrus.Info("🔧 MAIN: About to initialize WhatsApp service...")
+	logrus.Info("🔧 MAIN: Initializing WhatsApp service...")
 	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, websocketService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
+	logrus.Info("✅ MAIN: WhatsApp service initialized successfully")
 
 	// Initialize handlers with all services
 	handlers := handlers.NewHandlers(
