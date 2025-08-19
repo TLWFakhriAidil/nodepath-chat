@@ -542,12 +542,28 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, execution *models
 
 	// Process based on node type
 	switch currentNode.Type {
+	case models.NodeTypeStart:
+		return s.processStartNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeAIPrompt:
 		return s.processAIPromptNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeAdvancedAIPrompt:
 		return s.processAdvancedAIPromptNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeManual:
 		return s.processManualNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeMessage:
+		return s.processMessageNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeImage:
+		return s.processImageNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeAudio:
+		return s.processAudioNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeVideo:
+		return s.processVideoNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeDelay:
+		return s.processDelayNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeCondition:
+		return s.processConditionNode(flow, execution, currentNode, userInput)
+	case models.NodeTypeStage:
+		return s.processStageNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeUserReply:
 		return s.processUserReplyNode(flow, execution, currentNode, userInput)
 	case models.NodeTypeWaitingReplyTimes:
@@ -840,6 +856,336 @@ func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, executi
 	// End of flow
 	s.chatService.CompleteExecution(execution.ID)
 	return "Thank you for your response!", nil
+}
+
+// processMessageNode processes a message node that sends a text message
+func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get message from node data
+	message := "Hello! This is an automated message."
+	if msg, ok := node.Data["message"].(string); ok && msg != "" {
+		message = msg
+	}
+
+	// Get execution variables for message replacement
+	variables, err := s.chatService.GetExecutionVariables(execution)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+
+	// Replace variables in message
+	message = s.flowService.ReplaceVariables(message, variables)
+
+	// Move to next node
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		// Continue processing the next node
+		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			return message, nil // Return current message even if next fails
+		}
+		// If next node also has a response, combine them
+		if nextResponse != "" {
+			return message + "\n" + nextResponse, nil
+		}
+	} else {
+		// End of flow
+		s.chatService.CompleteExecution(execution.ID)
+	}
+
+	return message, nil
+}
+
+// processImageNode processes an image node that sends an image with caption
+func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get image URL and caption from node data
+	imageURL := ""
+	caption := "Image"
+	
+	if url, ok := node.Data["imageUrl"].(string); ok && url != "" {
+		imageURL = strings.Trim(url, " `")
+	}
+	if cap, ok := node.Data["caption"].(string); ok && cap != "" {
+		caption = cap
+	}
+
+	// Get execution variables for caption replacement
+	variables, err := s.chatService.GetExecutionVariables(execution)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+
+	// Replace variables in caption
+	caption = s.flowService.ReplaceVariables(caption, variables)
+
+	// Move to next node
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		// Continue processing the next node
+		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			return fmt.Sprintf("[Image: %s] %s", imageURL, caption), nil
+		}
+		// If next node also has a response, combine them
+		if nextResponse != "" {
+			return fmt.Sprintf("[Image: %s] %s\n%s", imageURL, caption, nextResponse), nil
+		}
+	} else {
+		// End of flow
+		s.chatService.CompleteExecution(execution.ID)
+	}
+
+	return fmt.Sprintf("[Image: %s] %s", imageURL, caption), nil
+}
+
+// processAudioNode processes an audio node that sends an audio file
+func (s *Service) processAudioNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get audio URL from node data
+	audioURL := ""
+	duration := 30
+	
+	if url, ok := node.Data["audioUrl"].(string); ok && url != "" {
+		audioURL = strings.Trim(url, " `")
+	}
+	if dur, ok := node.Data["duration"].(float64); ok {
+		duration = int(dur)
+	}
+
+	// Move to next node
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		// Continue processing the next node
+		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			return fmt.Sprintf("[Audio: %s (%ds)]", audioURL, duration), nil
+		}
+		// If next node also has a response, combine them
+		if nextResponse != "" {
+			return fmt.Sprintf("[Audio: %s (%ds)]\n%s", audioURL, duration, nextResponse), nil
+		}
+	} else {
+		// End of flow
+		s.chatService.CompleteExecution(execution.ID)
+	}
+
+	return fmt.Sprintf("[Audio: %s (%ds)]", audioURL, duration), nil
+}
+
+// processVideoNode processes a video node that sends a video file with caption
+func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get video URL and caption from node data
+	videoURL := ""
+	caption := "Video"
+	duration := 60
+	
+	if url, ok := node.Data["videoUrl"].(string); ok && url != "" {
+		videoURL = strings.Trim(url, " `")
+	}
+	if cap, ok := node.Data["caption"].(string); ok && cap != "" {
+		caption = cap
+	}
+	if dur, ok := node.Data["duration"].(float64); ok {
+		duration = int(dur)
+	}
+
+	// Get execution variables for caption replacement
+	variables, err := s.chatService.GetExecutionVariables(execution)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+
+	// Replace variables in caption
+	caption = s.flowService.ReplaceVariables(caption, variables)
+
+	// Move to next node
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		// Continue processing the next node
+		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			return fmt.Sprintf("[Video: %s (%ds)] %s", videoURL, duration, caption), nil
+		}
+		// If next node also has a response, combine them
+		if nextResponse != "" {
+			return fmt.Sprintf("[Video: %s (%ds)] %s\n%s", videoURL, duration, caption, nextResponse), nil
+		}
+	} else {
+		// End of flow
+		s.chatService.CompleteExecution(execution.ID)
+	}
+
+	return fmt.Sprintf("[Video: %s (%ds)] %s", videoURL, duration, caption), nil
+}
+
+// processDelayNode processes a delay node that waits for specified seconds
+func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get delay from node data (default to 3 seconds if not specified)
+	delay := 3
+	if d, ok := node.Data["delay"].(float64); ok {
+		delay = int(d)
+	} else if d, ok := node.Data["delaySeconds"].(float64); ok {
+		delay = int(d)
+	}
+
+	// For now, we'll process immediately and note the delay
+	// In a production system, this would involve actual delay implementation
+	// TODO: Implement actual delay logic using delay (%d seconds)
+	_ = delay // Suppress unused variable warning
+
+	// Move to next node immediately (delay would be handled by queue system)
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		return s.processFlowMessage(flow, execution, userInput)
+	}
+
+	// End of flow
+	s.chatService.CompleteExecution(execution.ID)
+	return "", nil // Delay nodes don't return messages
+}
+
+// processConditionNode processes a condition node that branches based on user input
+func (s *Service) processConditionNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get conditions from node data
+	conditions, ok := node.Data["conditions"].([]interface{})
+	if !ok {
+		// No conditions defined, move to default next node
+		nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+		if err == nil && nextNode != nil {
+			execution.CurrentNode = nextNode.ID
+			s.chatService.UpdateExecution(execution)
+			return s.processFlowMessage(flow, execution, userInput)
+		}
+		s.chatService.CompleteExecution(execution.ID)
+		return "Thank you for your response!", nil
+	}
+
+	// Process conditions to find matching one
+	userInputLower := strings.ToLower(strings.TrimSpace(userInput))
+	var nextNodeID string
+	
+	for _, condInterface := range conditions {
+		cond, ok := condInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		condType, _ := cond["type"].(string)
+		condValue, _ := cond["value"].(string)
+		condNextNodeID, _ := cond["nextNodeId"].(string)
+		
+		switch condType {
+		case "contains":
+			if strings.Contains(userInputLower, strings.ToLower(condValue)) {
+				nextNodeID = condNextNodeID
+				break
+			}
+		case "equals":
+			if userInputLower == strings.ToLower(condValue) {
+				nextNodeID = condNextNodeID
+				break
+			}
+		case "default":
+			if nextNodeID == "" { // Use as fallback
+				nextNodeID = condNextNodeID
+			}
+		}
+	}
+
+	// If we found a matching condition with nextNodeID, use it
+	if nextNodeID != "" {
+		nextNode, err := s.flowService.FindNodeByID(flow, nextNodeID)
+		if err == nil && nextNode != nil {
+			execution.CurrentNode = nextNode.ID
+			s.chatService.UpdateExecution(execution)
+			return s.processFlowMessage(flow, execution, userInput)
+		}
+	}
+
+	// No matching condition, use default flow
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		return s.processFlowMessage(flow, execution, userInput)
+	}
+
+	// End of flow
+	s.chatService.CompleteExecution(execution.ID)
+	return "Thank you for your response!", nil
+}
+
+// processStageNode processes a stage node that sets the current stage
+func (s *Service) processStageNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Get stage name from node data
+	stageName := "default"
+	if stage, ok := node.Data["stageName"].(string); ok && stage != "" {
+		stageName = stage
+	}
+
+	// Set the stage in execution variables
+	err := s.chatService.SetExecutionVariable(execution, "current_stage", stageName)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to set stage variable")
+	}
+
+	// Log stage transition
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ID,
+		"stage_name":   stageName,
+		"node_id":      node.ID,
+	}).Info("Stage transition")
+
+	// Move to next node immediately (stage nodes don't send messages)
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		return s.processFlowMessage(flow, execution, userInput)
+	}
+
+	// End of flow
+	s.chatService.CompleteExecution(execution.ID)
+	return "", nil // Stage nodes don't return messages
+}
+
+// processStartNode processes a start node that initiates the flow
+func (s *Service) processStartNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
+	// Log flow start
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ID,
+		"flow_id":      flow.ID,
+		"node_id":      node.ID,
+	}).Info("Flow started")
+
+	// Initialize execution variables if needed
+	err := s.chatService.SetExecutionVariable(execution, "flow_started", true)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to set flow start variable")
+	}
+
+	// Move to next node immediately (start nodes don't send messages)
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		execution.CurrentNode = nextNode.ID
+		s.chatService.UpdateExecution(execution)
+		return s.processFlowMessage(flow, execution, userInput)
+	}
+
+	// If no next node, end flow
+	s.chatService.CompleteExecution(execution.ID)
+	return "", nil // Start nodes don't return messages
 }
 
 // parsePhoneNumber converts a phone number string to WhatsApp JID

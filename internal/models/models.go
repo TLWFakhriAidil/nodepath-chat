@@ -19,6 +19,7 @@ const (
 type NodeType string
 
 const (
+	NodeTypeStart            NodeType = "start"
 	NodeTypeAIPrompt         NodeType = "ai_prompt"
 	NodeTypeAdvancedAIPrompt NodeType = "advanced_ai_prompt"
 	NodeTypeManual           NodeType = "manual"
@@ -28,6 +29,7 @@ const (
 	NodeTypeVideo            NodeType = "video"
 	NodeTypeDelay            NodeType = "delay"
 	NodeTypeCondition        NodeType = "condition"
+	NodeTypeStage            NodeType = "stage"
 	NodeTypeUserReply        NodeType = "user_reply"
 	NodeTypeWaitingReplyTimes NodeType = "waiting_reply_times"
 )
