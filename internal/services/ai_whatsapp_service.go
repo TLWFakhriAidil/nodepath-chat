@@ -55,6 +55,9 @@ type AIWhatsappService interface {
 	// Get active flow execution
 	GetActiveFlowExecution(prospectNum, idDevice string) (*models.AIWhatsapp, error)
 	
+	// Get any flow execution (regardless of status) - used for delayed message processing
+	GetFlowExecutionByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error)
+	
 	// Update flow execution state
 	UpdateFlowExecution(prospectNum, idDevice, currentNode string, variables map[string]interface{}, status string) error
 	
@@ -766,6 +769,23 @@ func (s *aiWhatsappService) GetActiveFlowExecution(prospectNum, idDevice string)
 		return nil, nil // No active execution
 	}
 
+	return aiConv, nil
+}
+
+// GetFlowExecutionByProspectAndDevice retrieves any flow execution (regardless of status) from ai_whatsapp_nodepath
+// This is used for delayed message processing where execution might be completed but delayed messages are still pending
+func (s *aiWhatsappService) GetFlowExecutionByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error) {
+	aiConv, err := s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AI WhatsApp record: %w", err)
+	}
+
+	if aiConv == nil {
+		return nil, nil // No record found
+	}
+
+	// Return execution regardless of status - this allows delayed processing to continue
+	// even if the execution was marked as completed
 	return aiConv, nil
 }
 

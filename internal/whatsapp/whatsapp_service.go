@@ -1401,16 +1401,43 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 		"device_id":    deviceID,
 	}).Info("🔄 FLOW: Processing flow continuation after delay")
 
-	// Get the execution from ai_whatsapp_nodepath
+	// First try to get active execution, then try any execution (including completed ones)
+	// This handles cases where execution was completed but delayed messages are still pending
 	execution, err := s.aiWhatsappService.GetActiveFlowExecution(phoneNumber, deviceID)
 	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to get execution for continuation")
-		return fmt.Errorf("failed to get execution: %w", err)
+		logrus.WithError(err).Error("❌ FLOW: Failed to get active execution for continuation")
+		return fmt.Errorf("failed to get active execution: %w", err)
 	}
 
+	// If no active execution found, try to get any execution (including completed)
 	if execution == nil {
-		logrus.WithField("execution_id", executionID).Warn("⚠️ FLOW: Execution not found for continuation")
-		return fmt.Errorf("execution not found: %s", executionID)
+		logrus.WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Info("🔄 FLOW: No active execution found, checking for any existing execution")
+		
+		// Get any execution (regardless of status) to continue delayed processing
+		execution, err = s.aiWhatsappService.GetFlowExecutionByProspectAndDevice(phoneNumber, deviceID)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to get any execution for continuation")
+			return fmt.Errorf("failed to get any execution: %w", err)
+		}
+		
+		if execution == nil {
+			logrus.WithField("execution_id", executionID).Warn("⚠️ FLOW: No execution found for continuation")
+			return fmt.Errorf("execution not found: %s", executionID)
+		}
+		
+		// Reactivate the execution for delayed processing
+		logrus.WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"previous_status": execution.ExecutionStatus.String,
+		}).Info("🔄 FLOW: Reactivating execution for delayed message processing")
+		
+		// Set execution status back to active for processing
+		execution.ExecutionStatus.String = "active"
+		execution.ExecutionStatus.Valid = true
 	}
 
 	// Get the flow
