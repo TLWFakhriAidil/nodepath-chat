@@ -870,7 +870,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 	}).Info("🔄 FLOW: Processing flow continuation after delay")
 
 	// Get the execution
-	execution, err := s.chatService.GetExecutionByID(executionID)
+	execution, err := s.chatService.GetExecution(executionID)
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to get execution for continuation")
 		return fmt.Errorf("failed to get execution: %w", err)
@@ -882,7 +882,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 	}
 
 	// Get the flow
-	flow, err := s.flowService.GetFlowByID(flowID)
+	flow, err := s.flowService.GetFlow(flowID)
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to get flow for continuation")
 		return fmt.Errorf("failed to get flow: %w", err)
@@ -894,7 +894,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 	}
 
 	// Get the current node
-	currentNode, err := s.flowService.GetNodeByID(flow, nodeID)
+	currentNode, err := s.flowService.FindNodeByID(flow, nodeID)
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to get node for continuation")
 		return fmt.Errorf("failed to get node: %w", err)
