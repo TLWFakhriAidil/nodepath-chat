@@ -262,7 +262,6 @@ func main() {
 	go func() {
 		<-c
 		logrus.Info("Shutting down server...")
-		whatsappService.Disconnect()
 		app.Shutdown()
 	}()
 
