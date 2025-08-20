@@ -306,8 +306,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"content":      content,
 		}).Info("💬 FLOW: Adding user message to ai_whatsapp_nodepath")
 
-	userConvHistory := fmt.Sprintf("USER: %s\n", content)
-	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", userConvHistory, "")
+	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "")
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to add user message to ai_whatsapp_nodepath")
 		return err
@@ -365,8 +364,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 				"response":     response,
 			}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
 
-		botConvHistory := fmt.Sprintf("BOT: %s\n", response)
-		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", botConvHistory, "")
+		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
 		} else {
@@ -1668,8 +1666,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 		}
 
 		// Add bot response to ai_whatsapp_nodepath conversation
-		botConvHistory := fmt.Sprintf("BOT: %s\n", response)
-		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", botConvHistory, "")
+		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
 		}
