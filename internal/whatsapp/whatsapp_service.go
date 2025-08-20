@@ -993,14 +993,182 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 
 // processAudioNode processes an audio node
 func (s *Service) processAudioNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
-	// For webhook-based system, we'll return a text message indicating audio would be sent
-	return s.processMessageNode(flow, execution, node, userInput)
+	// Get audio URL from node data
+	audioURL := ""
+	if url, ok := node.Data["audioUrl"].(string); ok {
+		audioURL = url
+	} else if url, ok := node.Data["audio"].(string); ok {
+		audioURL = url
+	} else if url, ok := node.Data["mediaUrl"].(string); ok {
+		audioURL = url
+	}
+
+	// Replace variables in audio URL
+	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+	audioURL = s.flowService.ReplaceVariables(audioURL, variables)
+
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.IDProspect,
+		"node_id":      node.ID,
+		"audio_url":    audioURL,
+	}).Info("🎵 AUDIO: Processing audio node")
+
+	// Check if next node exists and advance to it
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		if nextNode.Type == models.NodeTypeDelay {
+			// Advance to delay node and process it immediately
+			// This ensures the delay is scheduled properly
+			logrus.WithFields(logrus.Fields{
+				"execution_id": execution.IDProspect,
+				"current_node": node.ID,
+				"next_node":    nextNode.ID,
+				"next_type":    nextNode.Type,
+			}).Info("🎵 AUDIO: Audio processed, advancing to delay node")
+			
+			// Update execution to delay node
+			execution.CurrentNode.String = nextNode.ID
+			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
+			if err != nil {
+				logrus.WithError(err).Error("Failed to update execution to delay node")
+				return fmt.Sprintf("[AUDIO: %s]", audioURL), err
+			}
+			
+			// Process the delay node immediately to schedule the next message
+			_, err = s.processDelayNode(flow, execution, nextNode, userInput)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to process delay node")
+				return fmt.Sprintf("[AUDIO: %s]", audioURL), err
+			}
+			
+			// Return audio URL for webhook-based system
+			return fmt.Sprintf("[AUDIO: %s]", audioURL), nil
+		}
+		
+		// For non-delay nodes, continue processing immediately
+		execution.CurrentNode.String = nextNode.ID
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution after audio node")
+			return fmt.Sprintf("[AUDIO: %s]", audioURL), err
+		}
+		
+		// Recursively process the next node if it's not a delay
+		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process next node after audio")
+			return fmt.Sprintf("[AUDIO: %s]", audioURL), err
+		}
+		
+		// Combine responses if next node generated content
+		if nextResponse != "" {
+			return fmt.Sprintf("[AUDIO: %s]\n%s", audioURL, nextResponse), nil
+		}
+	} else {
+		// End of flow
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.IDProspect,
+			"node_id":      node.ID,
+		}).Info("🏁 AUDIO: End of flow reached, completing execution")
+		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
+	}
+
+	// Return audio URL for webhook-based system
+	return fmt.Sprintf("[AUDIO: %s]", audioURL), nil
 }
 
 // processVideoNode processes a video node
 func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
-	// For webhook-based system, we'll return a text message indicating video would be sent
-	return s.processMessageNode(flow, execution, node, userInput)
+	// Get video URL from node data
+	videoURL := ""
+	if url, ok := node.Data["videoUrl"].(string); ok {
+		videoURL = url
+	} else if url, ok := node.Data["video"].(string); ok {
+		videoURL = url
+	} else if url, ok := node.Data["mediaUrl"].(string); ok {
+		videoURL = url
+	}
+
+	// Replace variables in video URL
+	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+	videoURL = s.flowService.ReplaceVariables(videoURL, variables)
+
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.IDProspect,
+		"node_id":      node.ID,
+		"video_url":    videoURL,
+	}).Info("🎬 VIDEO: Processing video node")
+
+	// Check if next node exists and advance to it
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		if nextNode.Type == models.NodeTypeDelay {
+			// Advance to delay node and process it immediately
+			// This ensures the delay is scheduled properly
+			logrus.WithFields(logrus.Fields{
+				"execution_id": execution.IDProspect,
+				"current_node": node.ID,
+				"next_node":    nextNode.ID,
+				"next_type":    nextNode.Type,
+			}).Info("🎬 VIDEO: Video processed, advancing to delay node")
+			
+			// Update execution to delay node
+			execution.CurrentNode.String = nextNode.ID
+			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
+			if err != nil {
+				logrus.WithError(err).Error("Failed to update execution to delay node")
+				return fmt.Sprintf("[VIDEO: %s]", videoURL), err
+			}
+			
+			// Process the delay node immediately to schedule the next message
+			_, err = s.processDelayNode(flow, execution, nextNode, userInput)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to process delay node")
+				return fmt.Sprintf("[VIDEO: %s]", videoURL), err
+			}
+			
+			// Return video URL for webhook-based system
+			return fmt.Sprintf("[VIDEO: %s]", videoURL), nil
+		}
+		
+		// For non-delay nodes, continue processing immediately
+		execution.CurrentNode.String = nextNode.ID
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution after video node")
+			return fmt.Sprintf("[VIDEO: %s]", videoURL), err
+		}
+		
+		// Recursively process the next node if it's not a delay
+		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process next node after video")
+			return fmt.Sprintf("[VIDEO: %s]", videoURL), err
+		}
+		
+		// Combine responses if next node generated content
+		if nextResponse != "" {
+			return fmt.Sprintf("[VIDEO: %s]\n%s", videoURL, nextResponse), nil
+		}
+	} else {
+		// End of flow
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.IDProspect,
+			"node_id":      node.ID,
+		}).Info("🏁 VIDEO: End of flow reached, completing execution")
+		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
+	}
+
+	// Return video URL for webhook-based system
+	return fmt.Sprintf("[VIDEO: %s]", videoURL), nil
 }
 
 // processDelayNode processes a delay node
