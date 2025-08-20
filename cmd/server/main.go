@@ -113,6 +113,10 @@ func main() {
 	}
 	logrus.Info("✅ MAIN: WhatsApp service initialized successfully")
 
+	// Set WhatsApp service dependency on queue service for flow continuation
+	queueService.SetWhatsAppService(whatsappService)
+	logrus.Info("✅ MAIN: Queue service configured with WhatsApp service dependency")
+
 	// Initialize handlers with all services
 	handlers := handlers.NewHandlers(
 		flowService,

@@ -237,8 +237,10 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			logrus.WithFields(logrus.Fields{
 				"phone_number": phoneNumber,
 				"device_id":    deviceID,
-			}).Info("⚠️ FLOW: No default flow found for device")
-			return nil
+			}).Info("⚠️ FLOW: No default flow found for device, falling back to AI conversation")
+			
+			// Fallback to AI conversation when no flow is configured
+			return s.processAIConversation(phoneNumber, content, deviceID)
 		}
 
 		logrus.WithFields(logrus.Fields{
@@ -371,6 +373,38 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 		}
 	} else {
 		logrus.WithField("execution_id", execution.ID).Info("ℹ️ FLOW: No response generated from flow processing")
+		
+		// Create AI WhatsApp record as fallback when no flow response is generated
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Info("🤖 FLOW: Creating AI WhatsApp record for prospect tracking")
+		
+		// Check if AI WhatsApp record already exists
+		existingRecord, err := s.aiWhatsappService.GetAIWhatsappByProspectAndDevice(phoneNumber, deviceID)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to check existing AI WhatsApp record")
+		} else if existingRecord == nil {
+			// Create new AI WhatsApp record for prospect tracking
+			err = s.aiWhatsappService.CreateAIWhatsappRecord(phoneNumber, deviceID, content, flow.Niche)
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to create AI WhatsApp record")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"phone_number": phoneNumber,
+					"device_id":    deviceID,
+					"niche":        flow.Niche,
+				}).Info("✅ FLOW: AI WhatsApp record created successfully")
+			}
+		} else {
+			// Update existing record with new conversation data
+			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", existingRecord.Stage)
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to update conversation history")
+			} else {
+				logrus.WithField("phone_number", phoneNumber).Info("✅ FLOW: Conversation history updated successfully")
+			}
+		}
 	}
 
 	return nil
@@ -650,13 +684,76 @@ func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.C
 
 // processDelayNode processes a delay node
 func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
-	// For webhook-based system, we'll skip delays and move to next node
-	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
-	if err == nil && nextNode != nil {
-		execution.CurrentNode = nextNode.ID
-		s.chatService.UpdateExecution(execution)
-		return s.processFlowMessage(flow, execution, userInput)
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ID,
+		"node_id":      node.ID,
+		"flow_id":      flow.ID,
+	}).Info("🕐 DELAY: Processing delay node")
+	
+	// Get delay time from node data (default to 5 seconds if not specified)
+	delaySeconds := 5
+	if delay, ok := node.Data["delay"].(float64); ok {
+		delaySeconds = int(delay)
+	} else if delay, ok := node.Data["delaySeconds"].(float64); ok {
+		delaySeconds = int(delay)
 	}
+	
+	logrus.WithFields(logrus.Fields{
+		"execution_id":   execution.ID,
+		"delay_seconds":  delaySeconds,
+		"phone_number":   execution.PhoneNumber,
+		"device_id":      execution.IDDevice,
+	}).Info("🕐 DELAY: Scheduling delayed message")
+	
+	// Get next node to process after delay
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err != nil || nextNode == nil {
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.ID,
+			"node_id":      node.ID,
+		}).Info("🕐 DELAY: No next node found, completing execution")
+		s.chatService.CompleteExecution(execution.ID)
+		return "", nil
+	}
+	
+	// Update execution to next node
+	execution.CurrentNode = nextNode.ID
+	err = s.chatService.UpdateExecution(execution)
+	if err != nil {
+		logrus.WithError(err).Error("🕐 DELAY: Failed to update execution")
+		return "", fmt.Errorf("failed to update execution: %w", err)
+	}
+	
+	// Create delayed message for queue processing
+	delayedMessage := &services.QueueMessage{
+		ID:          fmt.Sprintf("delayed_%s_%s_%d", execution.ID, nextNode.ID, time.Now().Unix()),
+		DeviceID:    execution.IDDevice,
+		PhoneNumber: execution.PhoneNumber,
+		Content:     userInput, // Pass the original user input
+		MessageType: "flow_continuation",
+		FlowID:      flow.ID,
+		ExecutionID: execution.ID,
+		NodeID:      nextNode.ID,
+		Delay:       time.Duration(delaySeconds) * time.Second,
+		CreatedAt:   time.Now(),
+	}
+	
+	// Queue the delayed message
+	err = s.queueService.EnqueueDelayedMessage(delayedMessage)
+	if err != nil {
+		logrus.WithError(err).Error("🕐 DELAY: Failed to queue delayed message")
+		return "", fmt.Errorf("failed to queue delayed message: %w", err)
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"execution_id":   execution.ID,
+		"message_id":     delayedMessage.ID,
+		"delay_seconds":  delaySeconds,
+		"next_node_id":   nextNode.ID,
+	}).Info("🕐 DELAY: Message queued successfully for delayed processing")
+	
+	// Return empty string as no immediate response is needed
+	// The delayed message will be processed later by the queue processor
 	return "", nil
 }
 
@@ -758,5 +855,90 @@ func (s *Service) processQueuedMessage(message *services.QueueMessage) error {
 		"message_id": message.ID,
 		"content":    message.Content,
 	}).Info("📋 QUEUE: Processing queued message (placeholder implementation)")
+	return nil
+}
+
+// ProcessFlowContinuation processes flow continuation after delay
+// This method is called by the queue service when a delayed message is ready
+func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumber, deviceID, userInput string) error {
+	logrus.WithFields(logrus.Fields{
+		"execution_id": executionID,
+		"flow_id":      flowID,
+		"node_id":      nodeID,
+		"phone_number": phoneNumber,
+		"device_id":    deviceID,
+	}).Info("🔄 FLOW: Processing flow continuation after delay")
+
+	// Get the execution
+	execution, err := s.chatService.GetExecutionByID(executionID)
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to get execution for continuation")
+		return fmt.Errorf("failed to get execution: %w", err)
+	}
+
+	if execution == nil {
+		logrus.WithField("execution_id", executionID).Warn("⚠️ FLOW: Execution not found for continuation")
+		return fmt.Errorf("execution not found: %s", executionID)
+	}
+
+	// Get the flow
+	flow, err := s.flowService.GetFlowByID(flowID)
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to get flow for continuation")
+		return fmt.Errorf("failed to get flow: %w", err)
+	}
+
+	if flow == nil {
+		logrus.WithField("flow_id", flowID).Warn("⚠️ FLOW: Flow not found for continuation")
+		return fmt.Errorf("flow not found: %s", flowID)
+	}
+
+	// Get the current node
+	currentNode, err := s.flowService.GetNodeByID(flow, nodeID)
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to get node for continuation")
+		return fmt.Errorf("failed to get node: %w", err)
+	}
+
+	if currentNode == nil {
+		logrus.WithField("node_id", nodeID).Warn("⚠️ FLOW: Node not found for continuation")
+		return fmt.Errorf("node not found: %s", nodeID)
+	}
+
+	// Process the current node
+	response, err := s.processFlowMessage(flow, execution, userInput)
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to process flow continuation")
+		return fmt.Errorf("failed to process flow: %w", err)
+	}
+
+	// Send response if available
+	if response != "" {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+			"response":     response,
+		}).Info("📤 FLOW: Sending delayed response to user")
+
+		err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to send delayed response")
+			return fmt.Errorf("failed to send response: %w", err)
+		}
+
+		// Add bot response to conversation
+		err = s.chatService.AddConversationMessage(execution, "BOT", response)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to conversation")
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"response":     response,
+		}).Info("✅ FLOW: Delayed response sent successfully")
+	} else {
+		logrus.WithField("execution_id", executionID).Info("ℹ️ FLOW: No response generated from delayed flow continuation")
+	}
+
 	return nil
 }

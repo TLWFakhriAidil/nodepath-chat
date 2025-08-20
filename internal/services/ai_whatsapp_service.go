@@ -40,6 +40,12 @@ type AIWhatsappService interface {
 	
 	// Process device commands (%, #, cmd)
 	ProcessDeviceCommand(prospectNum, command, idDevice string) error
+	
+	// Create AI WhatsApp record for prospect tracking
+	CreateAIWhatsappRecord(prospectNum, idDevice, userMessage, niche string) error
+	
+	// Get AI WhatsApp record by prospect and device
+	GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error)
 }
 
 // AIWhatsappResponse represents the response from AI WhatsApp service
@@ -602,4 +608,52 @@ func (s *aiWhatsappService) formatResponseForLogging(responses []AIWhatsappRespo
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// CreateAIWhatsappRecord creates a new AI WhatsApp record for prospect tracking
+func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMessage, niche string) error {
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"id_device":    idDevice,
+		"niche":        niche,
+	}).Info("Creating new AI WhatsApp record for prospect tracking")
+	
+	// Create new AI WhatsApp conversation record
+	now := time.Now()
+	newAIConv := &models.AIWhatsapp{
+		IDDevice:    idDevice,
+		ProspectNum: prospectNum,
+		Stage:       "welcome", // Default initial stage
+		Human:       0,         // AI is active by default
+		Niche:       niche,
+		DateOrder:   &now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	
+	err := s.aiRepo.CreateAIWhatsapp(newAIConv)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create AI WhatsApp record")
+		return fmt.Errorf("failed to create AI WhatsApp record: %w", err)
+	}
+	
+	// Save initial conversation history
+	err = s.SaveConversationHistory(prospectNum, idDevice, userMessage, "", "welcome")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to save initial conversation history")
+		// Don't return error here as the main record was created successfully
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"id_device":    idDevice,
+		"niche":        niche,
+	}).Info("AI WhatsApp record created successfully")
+	
+	return nil
+}
+
+// GetAIWhatsappByProspectAndDevice retrieves AI WhatsApp record by prospect number and device ID
+func (s *aiWhatsappService) GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error) {
+	return s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
 }
