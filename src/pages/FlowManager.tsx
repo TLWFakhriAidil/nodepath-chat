@@ -10,7 +10,6 @@ import { ChatbotFlow } from '@/types/chatbot';
 import {
   Edit,
   Trash2,
-  Play,
   Plus,
   RefreshCw,
   Calendar,
@@ -82,9 +81,7 @@ export default function FlowManager() {
     }
   };
 
-  const handleSimulation = (flowId: string) => {
-    navigate(`/test-chat?flowId=${flowId}`);
-  };
+  // handleSimulation function removed - test functionality no longer available
 
   const handleCreateNew = () => {
     navigate('/flow-builder');
@@ -238,15 +235,7 @@ export default function FlowManager() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
-                          <Button
-                            onClick={() => handleSimulation(flow.id)}
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-3"
-                          >
-                            <Play className="w-3 h-3 mr-1" />
-                            Test
-                          </Button>
+                          {/* Test button removed */}
                           <Button
                             onClick={() => handleEdit(flow.id)}
                             variant="outline"

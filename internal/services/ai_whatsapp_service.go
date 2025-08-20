@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,6 +47,22 @@ type AIWhatsappService interface {
 	
 	// Get AI WhatsApp record by prospect and device
 	GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error)
+	
+	// Flow execution methods - consolidating chatbot_executions_nodepath functionality
+	// Start a new flow execution
+	StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error)
+	
+	// Get active flow execution
+	GetActiveFlowExecution(prospectNum, idDevice string) (*models.AIWhatsapp, error)
+	
+	// Update flow execution state
+	UpdateFlowExecution(prospectNum, idDevice, currentNode string, variables map[string]interface{}, status string) error
+	
+	// Complete flow execution
+	CompleteFlowExecution(prospectNum, idDevice string) error
+	
+	// Get flow execution variables
+	GetFlowExecutionVariables(prospectNum, idDevice string) (map[string]interface{}, error)
 }
 
 // AIWhatsappResponse represents the response from AI WhatsApp service
@@ -656,4 +673,185 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 // GetAIWhatsappByProspectAndDevice retrieves AI WhatsApp record by prospect number and device ID
 func (s *aiWhatsappService) GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error) {
 	return s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+}
+
+// Flow execution methods - consolidating chatbot_executions_nodepath functionality
+
+// StartFlowExecution starts a new flow execution in ai_whatsapp_nodepath
+func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error) {
+	logrus.WithFields(logrus.Fields{
+		"prospect_num":   prospectNum,
+		"id_device":      idDevice,
+		"flow_reference": flowReference,
+	}).Info("Starting flow execution")
+
+	// Generate unique execution ID
+	executionID := fmt.Sprintf("%s_%s_%d", prospectNum, idDevice, time.Now().Unix())
+
+	// Convert variables to JSON
+	variablesJSON, err := json.Marshal(variables)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to marshal flow variables")
+		return nil, fmt.Errorf("failed to marshal flow variables: %w", err)
+	}
+
+	// Check if record already exists
+	aiConv, err := s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get existing AI WhatsApp record")
+		return nil, fmt.Errorf("failed to get existing record: %w", err)
+	}
+
+	now := time.Now()
+	if aiConv == nil {
+		// Create new record with flow execution data
+		aiConv = &models.AIWhatsapp{
+			IDDevice:        idDevice,
+			ProspectNum:     prospectNum,
+			Stage:           "flow_start",
+			Human:           0,
+			DateOrder:       &now,
+			FlowReference:   sql.NullString{String: flowReference, Valid: true},
+			CurrentNode:     sql.NullString{String: "", Valid: false},
+			Variables:       json.RawMessage(variablesJSON),
+			ExecutionStatus: sql.NullString{String: "active", Valid: true},
+			ExecutionID:     sql.NullString{String: executionID, Valid: true},
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+
+		err = s.aiRepo.CreateAIWhatsapp(aiConv)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create AI WhatsApp record with flow execution")
+			return nil, fmt.Errorf("failed to create record: %w", err)
+		}
+	} else {
+		// Update existing record with flow execution data
+		aiConv.FlowReference = sql.NullString{String: flowReference, Valid: true}
+		aiConv.CurrentNode = sql.NullString{String: "", Valid: false}
+		aiConv.Variables = json.RawMessage(variablesJSON)
+		aiConv.ExecutionStatus = sql.NullString{String: "active", Valid: true}
+		aiConv.ExecutionID = sql.NullString{String: executionID, Valid: true}
+		aiConv.UpdatedAt = now
+
+		err = s.aiRepo.UpdateAIWhatsapp(aiConv)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update AI WhatsApp record with flow execution")
+			return nil, fmt.Errorf("failed to update record: %w", err)
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"prospect_num":   prospectNum,
+		"execution_id":   executionID,
+		"flow_reference": flowReference,
+	}).Info("Flow execution started successfully")
+
+	return aiConv, nil
+}
+
+// GetActiveFlowExecution retrieves active flow execution from ai_whatsapp_nodepath
+func (s *aiWhatsappService) GetActiveFlowExecution(prospectNum, idDevice string) (*models.AIWhatsapp, error) {
+	aiConv, err := s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AI WhatsApp record: %w", err)
+	}
+
+	if aiConv == nil {
+		return nil, nil // No record found
+	}
+
+	// Check if there's an active flow execution
+	if !aiConv.ExecutionStatus.Valid || aiConv.ExecutionStatus.String != "active" {
+		return nil, nil // No active execution
+	}
+
+	return aiConv, nil
+}
+
+// UpdateFlowExecution updates flow execution state in ai_whatsapp_nodepath
+func (s *aiWhatsappService) UpdateFlowExecution(prospectNum, idDevice, currentNode string, variables map[string]interface{}, status string) error {
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"id_device":    idDevice,
+		"current_node": currentNode,
+		"status":       status,
+	}).Info("Updating flow execution")
+
+	aiConv, err := s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+	if err != nil {
+		return fmt.Errorf("failed to get AI WhatsApp record: %w", err)
+	}
+
+	if aiConv == nil {
+		return fmt.Errorf("AI WhatsApp record not found for prospect %s and device %s", prospectNum, idDevice)
+	}
+
+	// Update current node
+	if currentNode != "" {
+		aiConv.CurrentNode = sql.NullString{String: currentNode, Valid: true}
+	}
+
+	// Update variables if provided
+	if variables != nil {
+		variablesJSON, err := json.Marshal(variables)
+		if err != nil {
+			return fmt.Errorf("failed to marshal variables: %w", err)
+		}
+		aiConv.Variables = json.RawMessage(variablesJSON)
+	}
+
+	// Update execution status
+	if status != "" {
+		aiConv.ExecutionStatus = sql.NullString{String: status, Valid: true}
+	}
+
+	aiConv.UpdatedAt = time.Now()
+
+	err = s.aiRepo.UpdateAIWhatsapp(aiConv)
+	if err != nil {
+		return fmt.Errorf("failed to update AI WhatsApp record: %w", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"current_node": currentNode,
+		"status":       status,
+	}).Info("Flow execution updated successfully")
+
+	return nil
+}
+
+// CompleteFlowExecution marks flow execution as completed in ai_whatsapp_nodepath
+func (s *aiWhatsappService) CompleteFlowExecution(prospectNum, idDevice string) error {
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"id_device":    idDevice,
+	}).Info("Completing flow execution")
+
+	return s.UpdateFlowExecution(prospectNum, idDevice, "", nil, "completed")
+}
+
+// GetFlowExecutionVariables retrieves flow execution variables from ai_whatsapp_nodepath
+func (s *aiWhatsappService) GetFlowExecutionVariables(prospectNum, idDevice string) (map[string]interface{}, error) {
+	aiConv, err := s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AI WhatsApp record: %w", err)
+	}
+
+	if aiConv == nil {
+		return nil, fmt.Errorf("AI WhatsApp record not found")
+	}
+
+	if len(aiConv.Variables) == 0 {
+		return make(map[string]interface{}), nil // Return empty map if no variables
+	}
+
+	var variables map[string]interface{}
+	err = json.Unmarshal(aiConv.Variables, &variables)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal variables: %w", err)
+	}
+
+	return variables, nil
 }
