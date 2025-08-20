@@ -650,13 +650,46 @@ func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models
 	}
 	message = s.flowService.ReplaceVariables(message, variables)
 
-	// Move to next node
+	// Check if next node is a delay node - if so, don't auto-advance
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
+		if nextNode.Type == models.NodeTypeDelay {
+			// Don't advance to delay node automatically - let it be processed separately
+			// This ensures proper sequential flow with delays
+			logrus.WithFields(logrus.Fields{
+				"execution_id": execution.ID,
+				"current_node": node.ID,
+				"next_node":    nextNode.ID,
+				"next_type":    nextNode.Type,
+			}).Info("📤 MESSAGE: Message sent, next node is delay - not auto-advancing")
+			return message, nil
+		}
+		
+		// For non-delay nodes, continue processing immediately
 		execution.CurrentNode = nextNode.ID
-		s.chatService.UpdateExecution(execution)
+		err = s.chatService.UpdateExecution(execution)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution after message node")
+			return message, err
+		}
+		
+		// Recursively process the next node if it's not a delay
+		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process next node after message")
+			return message, err
+		}
+		
+		// Combine responses if next node generated content
+		if nextResponse != "" {
+			return message + "\n" + nextResponse, nil
+		}
 	} else {
 		// End of flow
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.ID,
+			"node_id":      node.ID,
+		}).Info("🏁 MESSAGE: End of flow reached, completing execution")
 		s.chatService.CompleteExecution(execution.ID)
 	}
 
@@ -665,9 +698,74 @@ func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models
 
 // processImageNode processes an image node
 func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
-	// For webhook-based system, we'll return a text message indicating image would be sent
-	// In a full implementation, this would trigger image sending via the provider API
-	return s.processMessageNode(flow, execution, node, userInput)
+	// Get image URL from node data
+	imageURL := ""
+	if url, ok := node.Data["imageUrl"].(string); ok {
+		imageURL = url
+	} else if url, ok := node.Data["image"].(string); ok {
+		imageURL = url
+	}
+
+	// Replace variables in image URL
+	variables, err := s.chatService.GetExecutionVariables(execution)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+	imageURL = s.flowService.ReplaceVariables(imageURL, variables)
+
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ID,
+		"node_id":      node.ID,
+		"image_url":    imageURL,
+	}).Info("🖼️ IMAGE: Processing image node")
+
+	// Check if next node is a delay node - if so, don't auto-advance
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err == nil && nextNode != nil {
+		if nextNode.Type == models.NodeTypeDelay {
+			// Don't advance to delay node automatically - let it be processed separately
+			// This ensures proper sequential flow with delays
+			logrus.WithFields(logrus.Fields{
+				"execution_id": execution.ID,
+				"current_node": node.ID,
+				"next_node":    nextNode.ID,
+				"next_type":    nextNode.Type,
+			}).Info("🖼️ IMAGE: Image processed, next node is delay - not auto-advancing")
+			// Return image URL for webhook-based system
+			return fmt.Sprintf("[IMAGE: %s]", imageURL), nil
+		}
+		
+		// For non-delay nodes, continue processing immediately
+		execution.CurrentNode = nextNode.ID
+		err = s.chatService.UpdateExecution(execution)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution after image node")
+			return fmt.Sprintf("[IMAGE: %s]", imageURL), err
+		}
+		
+		// Recursively process the next node if it's not a delay
+		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process next node after image")
+			return fmt.Sprintf("[IMAGE: %s]", imageURL), err
+		}
+		
+		// Combine responses if next node generated content
+		if nextResponse != "" {
+			return fmt.Sprintf("[IMAGE: %s]\n%s", imageURL, nextResponse), nil
+		}
+	} else {
+		// End of flow
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.ID,
+			"node_id":      node.ID,
+		}).Info("🏁 IMAGE: End of flow reached, completing execution")
+		s.chatService.CompleteExecution(execution.ID)
+	}
+
+	// Return image URL for webhook-based system
+	return fmt.Sprintf("[IMAGE: %s]", imageURL), nil
 }
 
 // processAudioNode processes an audio node
@@ -716,13 +814,14 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.C
 		return "", nil
 	}
 	
-	// Update execution to next node
-	execution.CurrentNode = nextNode.ID
-	err = s.chatService.UpdateExecution(execution)
-	if err != nil {
-		logrus.WithError(err).Error("🕐 DELAY: Failed to update execution")
-		return "", fmt.Errorf("failed to update execution: %w", err)
-	}
+	// DO NOT update execution here - let ProcessFlowContinuation handle the transition
+	// This ensures proper sequential flow processing
+	logrus.WithFields(logrus.Fields{
+		"execution_id":     execution.ID,
+		"current_node":     node.ID,
+		"next_node":        nextNode.ID,
+		"delay_seconds":    delaySeconds,
+	}).Info("🕐 DELAY: Keeping execution at current node, will advance after delay")
 	
 	// Create delayed message for queue processing
 	delayedMessage := &services.QueueMessage{
@@ -733,7 +832,7 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.C
 		MessageType: "flow_continuation",
 		FlowID:      flow.ID,
 		ExecutionID: execution.ID,
-		NodeID:      nextNode.ID,
+		NodeID:      nextNode.ID, // This is the node to process AFTER the delay
 		Delay:       time.Duration(delaySeconds) * time.Second,
 		CreatedAt:   time.Now(),
 	}
@@ -893,19 +992,33 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 		return fmt.Errorf("flow not found: %s", flowID)
 	}
 
-	// Get the current node
-	currentNode, err := s.flowService.FindNodeByID(flow, nodeID)
+	// Get the target node (the node to process after delay)
+	targetNode, err := s.flowService.FindNodeByID(flow, nodeID)
 	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to get node for continuation")
-		return fmt.Errorf("failed to get node: %w", err)
+		logrus.WithError(err).Error("❌ FLOW: Failed to get target node for continuation")
+		return fmt.Errorf("failed to get target node: %w", err)
 	}
 
-	if currentNode == nil {
-		logrus.WithField("node_id", nodeID).Warn("⚠️ FLOW: Node not found for continuation")
-		return fmt.Errorf("node not found: %s", nodeID)
+	if targetNode == nil {
+		logrus.WithField("node_id", nodeID).Warn("⚠️ FLOW: Target node not found for continuation")
+		return fmt.Errorf("target node not found: %s", nodeID)
 	}
 
-	// Process the current node
+	// Update execution to the target node (advance from delay node to next node)
+	logrus.WithFields(logrus.Fields{
+		"execution_id":   executionID,
+		"previous_node":  execution.CurrentNode,
+		"target_node":    nodeID,
+	}).Info("🔄 FLOW: Advancing execution to target node after delay")
+	
+	execution.CurrentNode = nodeID
+	err = s.chatService.UpdateExecution(execution)
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to update execution to target node")
+		return fmt.Errorf("failed to update execution: %w", err)
+	}
+
+	// Process the target node
 	response, err := s.processFlowMessage(flow, execution, userInput)
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to process flow continuation")
