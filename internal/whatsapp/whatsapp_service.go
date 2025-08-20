@@ -27,11 +27,14 @@ type Service struct {
 	cfg *config.Config
 
 	// Service dependencies
-	chatService      *services.ChatService
-	queueService     *services.QueueService
-	flowService      *services.FlowService
-	aiService        *services.AIService
-	websocketService *services.WebSocketService
+	chatService           *services.ChatService
+	queueService          *services.QueueService
+	flowService           *services.FlowService
+	aiService             *services.AIService
+	aiWhatsappService     services.AIWhatsappService
+	websocketService      *services.WebSocketService
+	deviceSettingsService *services.DeviceSettingsService
+	providerService       *services.ProviderService
 
 	// Message processing queue for performance
 	messageQueue chan *WebhookMessage
@@ -49,15 +52,18 @@ type WebhookMessage struct {
 }
 
 // NewService creates a new simplified WhatsApp service for webhook-based system
-func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, websocketService *services.WebSocketService) (*Service, error) {
+func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService services.AIWhatsappService, websocketService *services.WebSocketService, deviceSettingsService *services.DeviceSettingsService, providerService *services.ProviderService) (*Service, error) {
 	service := &Service{
-		cfg:              cfg,
-		chatService:      chatService,
-		queueService:     queueService,
-		flowService:      flowService,
-		aiService:        aiService,
-		websocketService: websocketService,
-		messageQueue:     make(chan *WebhookMessage, 1000), // Buffered queue for performance
+		cfg:                   cfg,
+		chatService:           chatService,
+		queueService:          queueService,
+		flowService:           flowService,
+		aiService:             aiService,
+		aiWhatsappService:     aiWhatsappService,
+		websocketService:      websocketService,
+		deviceSettingsService: deviceSettingsService,
+		providerService:       providerService,
+		messageQueue:          make(chan *WebhookMessage, 1000), // Buffered queue for performance
 	}
 
 	// Start message processing workers for high performance
@@ -143,34 +149,50 @@ func (s *Service) SendMessage(phoneNumber, message string) error {
 	return nil
 }
 
-// SendMessageFromDevice sends a message from a specific device using provider APIs
+// SendMessageFromDevice sends a message from a specific device through the appropriate provider
 func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"message":      message,
-	}).Info("📤 SENDING: Message via provider API")
+	}).Info("📤 MESSAGE: Sending message from device")
 
-	// For now, just log the message sending attempt
-	// Message sending would be implemented through the provider service
-	logrus.WithFields(logrus.Fields{
-		"device_id":    deviceID,
-		"phone_number": phoneNumber,
-		"message":      message,
-	}).Info("📤 MESSAGE: Sending message from device (not implemented)")
+	// Get device settings by device_id
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to get device settings for %s: %w", deviceID, err)
+	}
+
+	// Send message through provider service
+	err = s.providerService.SendMessage(deviceSettings, phoneNumber, message)
+	if err != nil {
+		return fmt.Errorf("failed to send message through provider: %w", err)
+	}
+
 	return nil
 }
 
-// SendMediaMessage sends a media message using provider APIs
-func (s *Service) SendMediaMessage(phoneNumber, caption, mediaURL, mediaType string) error {
-	// For now, just log the media message sending attempt
-	// Media message sending would be implemented through the provider service
+// SendMediaMessage sends a media message through the appropriate provider
+func (s *Service) SendMediaMessage(deviceID, phoneNumber, caption, mediaURL string) error {
 	logrus.WithFields(logrus.Fields{
+		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"caption":      caption,
 		"media_url":    mediaURL,
-		"media_type":   mediaType,
-	}).Info("📤 MEDIA: Sending media message (not implemented)")
+	}).Info("📤 MEDIA: Sending media message")
+
+	// Get device settings by device_id
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to get device settings for %s: %w", deviceID, err)
+	}
+
+	// Send media message through provider service
+	err = s.providerService.SendMediaMessage(deviceSettings, phoneNumber, caption, mediaURL)
+	if err != nil {
+		return fmt.Errorf("failed to send media message through provider: %w", err)
+	}
+
 	return nil
 }
 
@@ -378,9 +400,71 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 		"phone_number": phoneNumber,
 	}).Info("🤖 AI: Processing AI conversation")
 
-	// For now, just send a simple response
-	// AI conversation processing would be implemented through the flow system
-	return s.SendMessageFromDevice(deviceID, phoneNumber, "AI conversation processing not yet implemented. Please use flows.")
+	// Get current conversation stage from AI WhatsApp service
+	var stage string
+	// Note: We pass empty stage initially, the AI service will handle stage determination
+	stage = "" // Default stage, AI service will determine appropriate stage
+
+	// Process AI conversation through AI WhatsApp service
+	response, err := s.aiWhatsappService.ProcessAIConversation(phoneNumber, deviceID, content, stage)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to process AI conversation")
+		// Send fallback message
+		return s.SendMessageFromDevice(deviceID, phoneNumber, "I'm sorry, I'm having trouble processing your message right now. Please try again later.")
+	}
+
+	// Send AI response if we have one
+	if response != nil && len(response.Response) > 0 {
+		return s.sendAIResponse(phoneNumber, deviceID, response)
+	}
+
+	return nil
+}
+
+// sendAIResponse sends AI response with multiple message types (text and images)
+func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *services.AIWhatsappResponse) error {
+	logrus.WithFields(logrus.Fields{
+		"device_id":    deviceID,
+		"phone_number": phoneNumber,
+		"stage":        response.Stage,
+		"response_count": len(response.Response),
+	}).Info("📤 AI: Sending AI response")
+
+	// Send each response item in sequence
+	for i, item := range response.Response {
+		switch item.Type {
+		case "text":
+			// Send text message
+			err := s.SendMessageFromDevice(deviceID, phoneNumber, item.Content)
+			if err != nil {
+				logrus.WithError(err).WithField("item_index", i).Error("Failed to send text message")
+				return err
+			}
+			// Add small delay between messages for better user experience
+			time.Sleep(500 * time.Millisecond)
+
+		case "image":
+			// Send image message
+			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content, "image")
+			if err != nil {
+				logrus.WithError(err).WithField("item_index", i).Error("Failed to send image message")
+				return err
+			}
+			// Add small delay between messages
+			time.Sleep(500 * time.Millisecond)
+
+		default:
+			logrus.WithField("type", item.Type).Warn("Unknown response type, skipping")
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"device_id":    deviceID,
+		"phone_number": phoneNumber,
+		"stage":        response.Stage,
+	}).Info("✅ AI: Successfully sent AI response")
+
+	return nil
 }
 
 // processFlowMessage processes a message through the flow logic

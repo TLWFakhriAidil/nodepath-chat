@@ -22,6 +22,7 @@ import (
 	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/database"
 	"nodepath-chat/internal/handlers"
+	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/services"
 	"nodepath-chat/internal/whatsapp"
 )
@@ -82,6 +83,15 @@ func main() {
 	queueService := services.NewQueueService(redisClient)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
 	
+	// Initialize repositories
+	aiWhatsappRepo := repository.NewAIWhatsappRepository(db)
+	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
+	logrus.Info("Repositories initialized successfully")
+	
+	// Initialize AI WhatsApp service
+	aiWhatsappService := services.NewAIWhatsappService(aiWhatsappRepo, deviceSettingsRepo, flowService)
+	logrus.Info("AI WhatsApp service initialized successfully")
+	
 	// Initialize WebSocket service for real-time communication
 	websocketService := services.NewWebSocketService(cfg.MaxConcurrentUsers)
 	logrus.Info("WebSocket service initialized for real-time messaging")
@@ -90,10 +100,14 @@ func main() {
 	mediaService := services.NewMediaService(cfg.CDNEnabled, cfg.CDNBaseURL, "./media")
 	logrus.Info("Media service initialized with CDN support")
 
+	// Initialize provider service for message sending
+	providerService := services.NewProviderService()
+	logrus.Info("Provider service initialized for Wablas/Whacenter APIs")
+
 	// Initialize WhatsApp service with multi-device support
 	logrus.Info("🔧 MAIN: About to initialize WhatsApp service...")
 	logrus.Info("🔧 MAIN: Initializing WhatsApp service...")
-	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, websocketService)
+	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
