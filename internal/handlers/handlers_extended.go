@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"nodepath-chat/internal/models"
@@ -18,7 +16,8 @@ func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
 	flowReference := c.Query("flow_reference")
 
 	if flowReference != "" {
-		executions, err := h.chatService.GetExecutionsByFlow(flowReference)
+		// Use AI WhatsApp repository to get executions
+		executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to get executions by flow")
 			return h.errorResponse(c, 500, "Failed to retrieve executions")
@@ -26,7 +25,7 @@ func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
 		return h.successResponse(c, executions)
 	}
 
-	// For now, return empty array - in a full implementation, you'd have a GetAllExecutions method
+	// Return empty array for now
 	return h.successResponse(c, []interface{}{})
 }
 
@@ -37,7 +36,8 @@ func (h *Handlers) GetExecution(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Execution ID is required")
 	}
 
-	execution, err := h.chatService.GetExecution(executionID)
+	// Use AI WhatsApp service to get execution by prospect number
+	execution, err := h.aiWhatsappHandlers.AIRepo.GetAIWhatsappByProspectNum(executionID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get execution")
 		return h.errorResponse(c, 500, "Failed to retrieve execution")
@@ -57,7 +57,8 @@ func (h *Handlers) CompleteExecution(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Execution ID is required")
 	}
 
-	err := h.chatService.CompleteExecution(executionID)
+	// Use AI WhatsApp service to complete execution
+	err := h.aiWhatsappHandlers.AIWhatsappService.CompleteFlowExecution(executionID, "")
 	if err != nil {
 		logrus.WithError(err).Error("Failed to complete execution")
 		return h.errorResponse(c, 500, "Failed to complete execution")
@@ -73,8 +74,8 @@ func (h *Handlers) DeleteExecution(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Execution ID is required")
 	}
 
-	// For now, just mark as failed - in a full implementation, you'd have a DeleteExecution method
-	err := h.chatService.FailExecution(executionID)
+	// Update execution status to failed/deleted
+	err := h.aiWhatsappHandlers.AIWhatsappService.UpdateFlowExecution(executionID, "", "", nil, "failed")
 	if err != nil {
 		logrus.WithError(err).Error("Failed to delete execution")
 		return h.errorResponse(c, 500, "Failed to delete execution")
@@ -227,8 +228,8 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Flow reference is required")
 	}
 
-	// Get executions for the flow
-	executions, err := h.chatService.GetExecutionsByFlow(flowReference)
+	// Get executions for the flow using AI WhatsApp repository
+	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow executions")
 		return h.errorResponse(c, 500, "Failed to get flow statistics")
@@ -243,13 +244,11 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	}
 
 	for _, execution := range executions {
-		switch execution.Status {
-		case models.ExecutionStatusActive:
+		// Use Human field to determine status: 0 = AI active, 1 = human takeover
+		if execution.Human == 0 {
 			stats["active_executions"] = stats["active_executions"].(int) + 1
-		case models.ExecutionStatusCompleted:
+		} else {
 			stats["completed_executions"] = stats["completed_executions"].(int) + 1
-		case models.ExecutionStatusFailed:
-			stats["failed_executions"] = stats["failed_executions"].(int) + 1
 		}
 	}
 

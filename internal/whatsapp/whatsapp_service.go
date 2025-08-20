@@ -27,7 +27,6 @@ type Service struct {
 	cfg *config.Config
 
 	// Service dependencies
-	chatService           *services.ChatService
 	queueService          *services.QueueService
 	flowService           *services.FlowService
 	aiService             *services.AIService
@@ -52,10 +51,9 @@ type WebhookMessage struct {
 }
 
 // NewService creates a new simplified WhatsApp service for webhook-based system
-func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService services.AIWhatsappService, websocketService *services.WebSocketService, deviceSettingsService *services.DeviceSettingsService, providerService *services.ProviderService) (*Service, error) {
+func NewService(cfg *config.Config, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService services.AIWhatsappService, websocketService *services.WebSocketService, deviceSettingsService *services.DeviceSettingsService, providerService *services.ProviderService) (*Service, error) {
 	service := &Service{
 		cfg:                   cfg,
-		chatService:           chatService,
 		queueService:          queueService,
 		flowService:           flowService,
 		aiService:             aiService,
@@ -303,27 +301,27 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 
 	// Add user message to ai_whatsapp_nodepath conversation
 	logrus.WithFields(logrus.Fields{
-		"execution_id": aiExecution.ExecutionID.String,
-		"message_type": "USER",
-		"content":      content,
-	}).Info("💬 FLOW: Adding user message to ai_whatsapp_nodepath")
+			"execution_id": aiExecution.IDProspect,
+			"message_type": "USER",
+			"content":      content,
+		}).Info("💬 FLOW: Adding user message to ai_whatsapp_nodepath")
 
 	userConvHistory := fmt.Sprintf("USER: %s\n", content)
-	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, userConvHistory)
+	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", userConvHistory, "")
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to add user message to ai_whatsapp_nodepath")
 		return err
 	}
 
-	logrus.WithField("execution_id", aiExecution.ExecutionID.String).Info("✅ FLOW: User message added to conversation successfully")
+	logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: User message added to conversation successfully")
 
 	// Process the message through the flow
 	logrus.WithFields(logrus.Fields{
-		"execution_id": aiExecution.ExecutionID.String,
-		"flow_id":      flow.ID,
-		"current_node": aiExecution.CurrentNode.String,
-		"user_input":   content,
-	}).Info("⚙️ FLOW: Processing message through flow engine")
+			"execution_id": aiExecution.IDProspect,
+			"flow_id":      flow.ID,
+			"current_node": aiExecution.CurrentNode.String,
+			"user_input":   content,
+		}).Info("⚙️ FLOW: Processing message through flow engine")
 
 	response, err := s.processFlowMessage(flow, aiExecution, content)
 	if err != nil {
@@ -332,10 +330,10 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"execution_id":    aiExecution.ExecutionID.String,
-		"response_length": len(response),
-		"has_response":    response != "",
-	}).Info("🔄 FLOW: Flow processing completed")
+			"execution_id":    aiExecution.IDProspect,
+			"response_length": len(response),
+			"has_response":    response != "",
+		}).Info("🔄 FLOW: Flow processing completed")
 
 	if response != "" {
 		logrus.WithFields(logrus.Fields{
@@ -362,20 +360,20 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 
 		// Add bot response to conversation
 		logrus.WithFields(logrus.Fields{
-			"execution_id": aiExecution.ExecutionID.String,
-			"message_type": "BOT",
-			"response":     response,
-		}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
+				"execution_id": aiExecution.IDProspect,
+				"message_type": "BOT",
+				"response":     response,
+			}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
 
 		botConvHistory := fmt.Sprintf("BOT: %s\n", response)
-		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, botConvHistory)
+		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", botConvHistory, "")
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
 		} else {
-			logrus.WithField("execution_id", aiExecution.ExecutionID.String).Info("✅ FLOW: Bot response added to ai_whatsapp_nodepath successfully")
+			logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: Bot response added to ai_whatsapp_nodepath successfully")
 		}
 	} else {
-		logrus.WithField("execution_id", aiExecution.ExecutionID.String).Info("ℹ️ FLOW: No response generated from flow processing")
+		logrus.WithField("execution_id", aiExecution.IDProspect).Info("ℹ️ FLOW: No response generated from flow processing")
 		
 		// Create AI WhatsApp record as fallback when no flow response is generated
 		logrus.WithFields(logrus.Fields{
@@ -505,7 +503,7 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 }
 
 // processFlowMessage processes a message through the flow logic
-func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *models.AIWhatsappExecution, userInput string) (string, error) {
+func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *models.AIWhatsapp, userInput string) (string, error) {
 	// Get current node
 	currentNode, err := s.flowService.FindNodeByID(flow, aiExecution.CurrentNode.String)
 	if err != nil {
@@ -551,7 +549,7 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 }
 
 // processAIPromptNode processes an AI prompt node
-func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Get AI configuration from node data
 	var systemPrompt, instance, apiProvider string
 
@@ -577,15 +575,8 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
 	}
 
-	// Get conversation history from ai_whatsapp_nodepath
-	history, err := s.aiWhatsappService.GetConversationHistory(execution.PhoneNumber, execution.IDDevice)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to get conversation history")
-		history = []models.ConversationMessage{}
-	}
-
 	// Get execution variables for prompt replacement
-	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ExecutionID.String)
+	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to get execution variables")
 		variables = make(map[string]interface{})
@@ -595,7 +586,7 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
 
 	// Generate AI response
-	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, history)
+	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, []models.ConversationMessage{})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
@@ -605,28 +596,28 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
 		execution.CurrentNode.String = nextNode.ID
-		s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 	} else {
 		// End of flow
-		s.aiWhatsappService.CompleteFlowExecution(execution.ExecutionID.String)
+		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
 	}
 
 	return response, nil
 }
 
 // processAdvancedAIPromptNode processes an advanced AI prompt node with JSON response parsing
-func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Similar to processAIPromptNode but with advanced JSON parsing
 	// Implementation would include JSON response parsing and multi-part responses
 	return s.processAIPromptNode(flow, execution, node, userInput)
 }
 
 // processManualNode processes a manual node (human intervention required)
-func (s *Service) processManualNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processManualNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// For now, just return a message indicating manual intervention
 	// Human mode would be implemented through a separate table or field
 	logrus.WithFields(logrus.Fields{
-		"execution_id": execution.ID,
+		"prospect_id": execution.IDProspect,
 		"node_id":     node.ID,
 	}).Info("👤 MANUAL: Manual intervention node triggered")
 
@@ -638,7 +629,7 @@ func (s *Service) processManualNode(flow *models.ChatbotFlow, execution *models.
 }
 
 // processMessageNode processes a simple message node
-func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Get message from node data
 	message := ""
 	if msg, ok := node.Data["message"].(string); ok {
@@ -646,7 +637,7 @@ func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models
 	}
 
 	// Replace variables in message
-	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ExecutionID.String)
+	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to get execution variables")
 		variables = make(map[string]interface{})
@@ -660,7 +651,7 @@ func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models
 			// Don't advance to delay node automatically - let it be processed separately
 			// This ensures proper sequential flow with delays
 			logrus.WithFields(logrus.Fields{
-				"execution_id": execution.ID,
+				"prospect_id": execution.IDProspect,
 				"current_node": node.ID,
 				"next_node":    nextNode.ID,
 				"next_type":    nextNode.Type,
@@ -670,7 +661,7 @@ func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models
 		
 		// For non-delay nodes, continue processing immediately
 		execution.CurrentNode.String = nextNode.ID
-		err = s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update execution after message node")
 			return message, err
@@ -690,17 +681,17 @@ func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models
 	} else {
 		// End of flow
 		logrus.WithFields(logrus.Fields{
-			"execution_id": execution.ExecutionID.String,
+			"execution_id": execution.IDProspect,
 			"node_id":      node.ID,
 		}).Info("🏁 MESSAGE: End of flow reached, completing execution")
-		s.aiWhatsappService.CompleteFlowExecution(execution.ExecutionID.String)
+		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
 	}
 
 	return message, nil
 }
 
 // processImageNode processes an image node
-func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Get image URL from node data
 	imageURL := ""
 	if url, ok := node.Data["imageUrl"].(string); ok {
@@ -710,7 +701,7 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 	}
 
 	// Replace variables in image URL
-	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ExecutionID.String)
+	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to get execution variables")
 		variables = make(map[string]interface{})
@@ -718,7 +709,7 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 	imageURL = s.flowService.ReplaceVariables(imageURL, variables)
 
 	logrus.WithFields(logrus.Fields{
-		"execution_id": execution.ExecutionID.String,
+		"execution_id": execution.IDProspect,
 		"node_id":      node.ID,
 		"image_url":    imageURL,
 	}).Info("🖼️ IMAGE: Processing image node")
@@ -730,7 +721,7 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 			// Don't advance to delay node automatically - let it be processed separately
 			// This ensures proper sequential flow with delays
 			logrus.WithFields(logrus.Fields{
-				"execution_id": execution.ExecutionID.String,
+				"execution_id": execution.IDProspect,
 				"current_node": node.ID,
 				"next_node":    nextNode.ID,
 				"next_type":    nextNode.Type,
@@ -741,7 +732,7 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 		
 		// For non-delay nodes, continue processing immediately
 		execution.CurrentNode.String = nextNode.ID
-		err = s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update execution after image node")
 			return fmt.Sprintf("[IMAGE: %s]", imageURL), err
@@ -761,10 +752,10 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 	} else {
 		// End of flow
 		logrus.WithFields(logrus.Fields{
-			"execution_id": execution.ExecutionID.String,
+			"execution_id": execution.IDProspect,
 			"node_id":      node.ID,
 		}).Info("🏁 IMAGE: End of flow reached, completing execution")
-		s.aiWhatsappService.CompleteFlowExecution(execution.ExecutionID.String)
+		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
 	}
 
 	// Return image URL for webhook-based system
@@ -772,21 +763,21 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 }
 
 // processAudioNode processes an audio node
-func (s *Service) processAudioNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processAudioNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// For webhook-based system, we'll return a text message indicating audio would be sent
 	return s.processMessageNode(flow, execution, node, userInput)
 }
 
 // processVideoNode processes a video node
-func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// For webhook-based system, we'll return a text message indicating video would be sent
 	return s.processMessageNode(flow, execution, node, userInput)
 }
 
 // processDelayNode processes a delay node
-func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	logrus.WithFields(logrus.Fields{
-		"execution_id": execution.ExecutionID.String,
+		"execution_id": execution.IDProspect,
 		"node_id":      node.ID,
 		"flow_id":      flow.ID,
 	}).Info("🕐 DELAY: Processing delay node")
@@ -800,9 +791,9 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 	}
 	
 	logrus.WithFields(logrus.Fields{
-		"execution_id":   execution.ExecutionID.String,
+		"execution_id":   execution.IDProspect,
 		"delay_seconds":  delaySeconds,
-		"phone_number":   execution.PhoneNumber,
+		"phone_number":   execution.ProspectNum,
 		"device_id":      execution.IDDevice,
 	}).Info("🕐 DELAY: Scheduling delayed message")
 	
@@ -810,17 +801,17 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err != nil || nextNode == nil {
 		logrus.WithFields(logrus.Fields{
-			"execution_id": execution.ExecutionID.String,
+			"execution_id": execution.IDProspect,
 			"node_id":      node.ID,
 		}).Info("🕐 DELAY: No next node found, completing execution")
-		s.aiWhatsappService.CompleteFlowExecution(execution.ExecutionID.String)
+		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
 		return "", nil
 	}
 	
 	// DO NOT update execution here - let ProcessFlowContinuation handle the transition
 	// This ensures proper sequential flow processing
 	logrus.WithFields(logrus.Fields{
-		"execution_id":     execution.ExecutionID.String,
+		"execution_id":     execution.IDProspect,
 		"current_node":     node.ID,
 		"next_node":        nextNode.ID,
 		"delay_seconds":    delaySeconds,
@@ -828,13 +819,13 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 	
 	// Create delayed message for queue processing
 	delayedMessage := &services.QueueMessage{
-		ID:          fmt.Sprintf("delayed_%s_%s_%d", execution.ExecutionID.String, nextNode.ID, time.Now().Unix()),
+		ID:          fmt.Sprintf("delayed_%s_%s_%d", execution.IDProspect, nextNode.ID, time.Now().Unix()),
 		DeviceID:    execution.IDDevice,
-		PhoneNumber: execution.PhoneNumber,
+		PhoneNumber: execution.ProspectNum,
 		Content:     userInput, // Pass the original user input
 		MessageType: "flow_continuation",
 		FlowID:      flow.ID,
-		ExecutionID: execution.ExecutionID.String,
+		ExecutionID: fmt.Sprintf("%d", execution.IDProspect),
 		NodeID:      nextNode.ID, // This is the node to process AFTER the delay
 		Delay:       time.Duration(delaySeconds) * time.Second,
 		CreatedAt:   time.Now(),
@@ -848,7 +839,7 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 	}
 	
 	logrus.WithFields(logrus.Fields{
-		"execution_id":   execution.ExecutionID.String,
+		"execution_id":   execution.IDProspect,
 		"message_id":     delayedMessage.ID,
 		"delay_seconds":  delaySeconds,
 		"next_node_id":   nextNode.ID,
@@ -860,24 +851,24 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 }
 
 // processConditionNode processes a condition node
-func (s *Service) processConditionNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processConditionNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Evaluate condition and move to appropriate next node
 	// This would include condition evaluation logic
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
 		execution.CurrentNode.String = nextNode.ID
-		s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		return s.processFlowMessage(flow, execution, userInput)
 	}
 	return "", nil
 }
 
 // processStageNode processes a stage node
-func (s *Service) processStageNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processStageNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// For now, just log the stage transition
 	// Stage tracking would be implemented through a separate field or table
 	logrus.WithFields(logrus.Fields{
-		"execution_id": execution.ExecutionID.String,
+		"execution_id": execution.IDProspect,
 		"node_id":     node.ID,
 		"stage":       node.Data["stage"],
 	}).Info("🎯 STAGE: Stage transition node processed")
@@ -885,58 +876,58 @@ func (s *Service) processStageNode(flow *models.ChatbotFlow, execution *models.A
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
 		execution.CurrentNode.String = nextNode.ID
-		s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		return s.processFlowMessage(flow, execution, userInput)
 	}
 	return "", nil
 }
 
 // processUserReplyNode processes a user reply node
-func (s *Service) processUserReplyNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processUserReplyNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Store user input and move to next node
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
 		execution.CurrentNode.String = nextNode.ID
-		s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		return s.processFlowMessage(flow, execution, userInput)
 	}
 	return "", nil
 }
 
 // processWaitingReplyTimesNode processes a waiting reply times node
-func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Handle reply timing logic and move to next node
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
 		execution.CurrentNode.String = nextNode.ID
-		s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		return s.processFlowMessage(flow, execution, userInput)
 	}
 	return "", nil
 }
 
 // processStartNode processes a start node
-func (s *Service) processStartNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processStartNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Move to next node from start
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
 		execution.CurrentNode.String = nextNode.ID
-		s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		return s.processFlowMessage(flow, execution, userInput)
 	}
 	return "", nil
 }
 
 // processDefaultNode processes any unrecognized node type
-func (s *Service) processDefaultNode(flow *models.ChatbotFlow, execution *models.AIWhatsappExecution, node *models.FlowNode, userInput string) (string, error) {
+func (s *Service) processDefaultNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Default behavior - move to next node or end flow
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
 		execution.CurrentNode.String = nextNode.ID
-		s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+		s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		return s.processFlowMessage(flow, execution, userInput)
 	}
-	s.aiWhatsappService.CompleteFlowExecution(execution.ExecutionID.String)
+	s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
 	return "", nil
 }
 
@@ -1015,7 +1006,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 	}).Info("🔄 FLOW: Advancing execution to target node after delay")
 	
 	execution.CurrentNode.String = nodeID
-	err = s.aiWhatsappService.UpdateFlowExecution(execution.ExecutionID.String, execution.CurrentNode.String, execution.FlowReference.String, make(map[string]interface{}))
+	err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to update execution to target node")
 		return fmt.Errorf("failed to update execution: %w", err)
@@ -1044,7 +1035,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 
 		// Add bot response to ai_whatsapp_nodepath conversation
 		botConvHistory := fmt.Sprintf("BOT: %s\n", response)
-		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, botConvHistory)
+		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", botConvHistory, "")
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
 		}

@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"strconv"
-	"time"
 
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
@@ -17,7 +15,6 @@ import (
 // Handlers contains all HTTP handlers
 type Handlers struct {
 	flowService           *services.FlowService
-	chatService           *services.ChatService
 	aiService             *services.AIService
 	queueService          *services.QueueService
 	whatsappService       *whatsapp.Service
@@ -30,7 +27,6 @@ type Handlers struct {
 // NewHandlers creates a new handlers instance
 func NewHandlers(
 	flowService *services.FlowService,
-	chatService *services.ChatService,
 	aiService *services.AIService,
 	queueService *services.QueueService,
 	whatsappService *whatsapp.Service,
@@ -51,7 +47,6 @@ func NewHandlers(
 	
 	return &Handlers{
 		flowService:           flowService,
-		chatService:           chatService,
 		aiService:             aiService,
 		queueService:          queueService,
 		whatsappService:       whatsappService,

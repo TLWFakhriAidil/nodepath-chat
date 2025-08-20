@@ -78,7 +78,6 @@ func main() {
 	}
 	
 	flowService := services.NewFlowService(db, concreteRedisClient)
-	chatService := services.NewChatService(db, concreteRedisClient)
 	aiService := services.NewAIService(cfg)
 	queueService := services.NewQueueService(redisClient)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
@@ -107,7 +106,7 @@ func main() {
 	// Initialize WhatsApp service with multi-device support
 	logrus.Info("🔧 MAIN: About to initialize WhatsApp service...")
 	logrus.Info("🔧 MAIN: Initializing WhatsApp service...")
-	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService)
+	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
@@ -120,7 +119,6 @@ func main() {
 	// Initialize handlers with all services
 	handlers := handlers.NewHandlers(
 		flowService,
-		chatService,
 		aiService,
 		queueService,
 		whatsappService,
