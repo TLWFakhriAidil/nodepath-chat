@@ -86,12 +86,8 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	executions.Put("/:id/complete", h.CompleteExecution)
 	executions.Delete("/:id", h.DeleteExecution)
 
-	// WhatsApp routes
+	// WhatsApp routes - simplified for webhook-based system
 	whatsapp := api.Group("/whatsapp")
-	whatsapp.Get("/status", h.GetWhatsAppStatus)
-	whatsapp.Post("/connect", h.ConnectWhatsApp)
-	whatsapp.Post("/disconnect", h.DisconnectWhatsApp)
-	whatsapp.Get("/qr", h.GetWhatsAppQR)
 	whatsapp.Post("/send", h.SendWhatsAppMessage)
 
 	// Queue management routes

@@ -85,70 +85,13 @@ func (h *Handlers) DeleteExecution(c *fiber.Ctx) error {
 
 // WhatsApp handlers
 
-// GetWhatsAppStatus returns WhatsApp connection status
-func (h *Handlers) GetWhatsAppStatus(c *fiber.Ctx) error {
-	if h.whatsappService == nil {
-		return h.successResponse(c, map[string]interface{}{
-			"connected": false,
-			"status":    "not_initialized",
-		})
-	}
+// GetWhatsAppStatus - REMOVED: Not needed for webhook-based system
 
-	return h.successResponse(c, map[string]interface{}{
-		"connected": h.whatsappService.IsConnected(),
-		"status":    "initialized",
-	})
-}
+// ConnectWhatsApp - REMOVED: Not needed for webhook-based system
 
-// ConnectWhatsApp connects to WhatsApp
-func (h *Handlers) ConnectWhatsApp(c *fiber.Ctx) error {
-	if h.whatsappService == nil {
-		return h.errorResponse(c, 500, "WhatsApp service not available")
-	}
+// DisconnectWhatsApp - REMOVED: Not needed for webhook-based system
 
-	// Get device ID from query parameter or use default
-	deviceID := c.Query("device_id", "default")
-
-	err := h.whatsappService.Connect(deviceID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to connect to WhatsApp")
-		return h.errorResponse(c, 500, "Failed to connect to WhatsApp")
-	}
-
-	return h.successMessageResponse(c, "Connected to WhatsApp successfully", map[string]interface{}{
-		"device_id": deviceID,
-	})
-}
-
-// DisconnectWhatsApp disconnects from WhatsApp
-func (h *Handlers) DisconnectWhatsApp(c *fiber.Ctx) error {
-	if h.whatsappService == nil {
-		return h.errorResponse(c, 500, "WhatsApp service not available")
-	}
-
-	h.whatsappService.Disconnect()
-	return h.successMessageResponse(c, "Disconnected from WhatsApp successfully", nil)
-}
-
-// GetWhatsAppQR returns QR code for WhatsApp pairing
-func (h *Handlers) GetWhatsAppQR(c *fiber.Ctx) error {
-	if h.whatsappService == nil {
-		return h.errorResponse(c, 500, "WhatsApp service not available")
-	}
-
-	// Get device ID from query parameter or use default
-	deviceID := c.Query("device_id", "default")
-
-	qrCode, err := h.whatsappService.GetQRCode(deviceID)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get QR code")
-		return h.errorResponse(c, 500, "Failed to get QR code")
-	}
-
-	return h.successResponse(c, map[string]string{
-		"qr_code": qrCode,
-	})
-}
+// GetWhatsAppQR - REMOVED: Not needed for webhook-based system
 
 type SendWhatsAppMessageRequest struct {
 	PhoneNumber string `json:"phone_number"`
