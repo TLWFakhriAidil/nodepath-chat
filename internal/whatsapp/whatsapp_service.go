@@ -1237,12 +1237,12 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 		"flow_id":      flow.ID,
 	}).Info("🕐 DELAY: Processing delay node")
 	
-	// Hardcode delay to 3 seconds for all delay nodes
-	delaySeconds := 3
+	// Hardcode delay to 5 seconds for all delay nodes
+	delaySeconds := 5
 	logrus.WithFields(logrus.Fields{
 		"execution_id": execution.IDProspect,
 		"hardcoded_delay": delaySeconds,
-	}).Info("🕐 DELAY: Using hardcoded 3-second delay")
+	}).Info("🕐 DELAY: Using hardcoded 5-second delay")
 	
 	logrus.WithFields(logrus.Fields{
 		"execution_id":   execution.IDProspect,
