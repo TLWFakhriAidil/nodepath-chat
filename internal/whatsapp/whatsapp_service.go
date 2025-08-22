@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -455,6 +456,27 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 }
 
 // sendAIResponse sends AI response with multiple message types (text and images)
+// extractMediaURL extracts URL from text content based on file extensions
+func (s *Service) extractMediaURL(content string) (string, string) {
+	// Regex pattern to match URLs with media file extensions
+	mediaPattern := `https?://[^\s\[\]]+\.(png|jpg|jpeg|gif|mp3|wav|mp4|avi|mov|webm)`
+	re := regexp.MustCompile(mediaPattern)
+	match := re.FindString(content)
+	
+	if match != "" {
+		// Determine media type based on file extension
+		if regexp.MustCompile(`\.(png|jpg|jpeg|gif)$`).MatchString(match) {
+			return match, "image"
+		} else if regexp.MustCompile(`\.(mp3|wav)$`).MatchString(match) {
+			return match, "audio"
+		} else if regexp.MustCompile(`\.(mp4|avi|mov|webm)$`).MatchString(match) {
+			return match, "video"
+		}
+	}
+	
+	return "", ""
+}
+
 func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *services.AIWhatsappResponse) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
@@ -467,18 +489,34 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 	for i, item := range response.Response {
 		switch item.Type {
 		case "text":
-			// Send text message
-			err := s.SendMessageFromDevice(deviceID, phoneNumber, item.Content)
-			if err != nil {
-				logrus.WithError(err).WithField("item_index", i).Error("Failed to send text message")
-				return err
+			// Check if text content contains media URLs
+			mediaURL, mediaType := s.extractMediaURL(item.Content)
+			if mediaURL != "" {
+				// Send as media message
+				logrus.WithFields(logrus.Fields{
+					"media_url": mediaURL,
+					"media_type": mediaType,
+				}).Info("📤 MEDIA: Extracted media URL from text content")
+				
+				err := s.SendMediaMessage(deviceID, phoneNumber, "", mediaURL)
+				if err != nil {
+					logrus.WithError(err).WithField("item_index", i).Error("Failed to send extracted media message")
+					return err
+				}
+			} else {
+				// Send as regular text message
+				err := s.SendMessageFromDevice(deviceID, phoneNumber, item.Content)
+				if err != nil {
+					logrus.WithError(err).WithField("item_index", i).Error("Failed to send text message")
+					return err
+				}
 			}
 			// Add small delay between messages for better user experience
 			time.Sleep(500 * time.Millisecond)
 
 		case "image":
 			// Send image message
-			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content, "image")
+			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
 			if err != nil {
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send image message")
 				return err
@@ -1177,13 +1215,12 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 		"flow_id":      flow.ID,
 	}).Info("🕐 DELAY: Processing delay node")
 	
-	// Get delay time from node data (default to 5 seconds if not specified)
-	delaySeconds := 5
-	if delay, ok := node.Data["delay"].(float64); ok {
-		delaySeconds = int(delay)
-	} else if delay, ok := node.Data["delaySeconds"].(float64); ok {
-		delaySeconds = int(delay)
-	}
+	// Hardcode delay to 3 seconds for all delay nodes
+	delaySeconds := 3
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.IDProspect,
+		"hardcoded_delay": delaySeconds,
+	}).Info("🕐 DELAY: Using hardcoded 3-second delay")
 	
 	logrus.WithFields(logrus.Fields{
 		"execution_id":   execution.IDProspect,
@@ -1258,8 +1295,8 @@ func (s *Service) processConditionNode(flow *models.ChatbotFlow, execution *mode
 	}).Info("🔀 CONDITION: Processing condition node")
 
 	// Check if this is the first time processing this condition node
-	// If userInput is empty or this is the initial processing, send the question
-	if userInput == "" || execution.CurrentNode.String != node.ID {
+	// If userInput is empty, send the question (first time processing)
+	if userInput == "" {
 		// Phase 1: Send the condition question/message to user
 		message := ""
 		if msg, ok := node.Data["message"].(string); ok {
