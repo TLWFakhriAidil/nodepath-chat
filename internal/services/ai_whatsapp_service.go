@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,6 +67,9 @@ type AIWhatsappService interface {
 	
 	// Get flow execution variables
 	GetFlowExecutionVariables(prospectNum, idDevice string) (map[string]interface{}, error)
+	
+	// Get flow execution by specific execution ID
+	GetFlowExecutionByID(executionID string) (*models.AIWhatsapp, error)
 }
 
 // AIWhatsappResponse represents the response from AI WhatsApp service
@@ -874,4 +878,22 @@ func (s *aiWhatsappService) GetFlowExecutionVariables(prospectNum, idDevice stri
 	}
 
 	return variables, nil
+}
+
+// GetFlowExecutionByID retrieves flow execution by specific execution ID
+func (s *aiWhatsappService) GetFlowExecutionByID(executionID string) (*models.AIWhatsapp, error) {
+	logrus.WithField("execution_id", executionID).Info("Getting flow execution by ID")
+	
+	// Convert execution ID to integer
+	id, err := strconv.Atoi(executionID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid execution ID format: %w", err)
+	}
+	
+	aiConv, err := s.aiRepo.GetAIWhatsappByID(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AI WhatsApp record by ID: %w", err)
+	}
+	
+	return aiConv, nil
 }

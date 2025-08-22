@@ -315,6 +315,29 @@ func (s *FlowService) GetNextNode(flow *models.ChatbotFlow, currentNodeID string
 	return s.FindNodeByID(flow, nextNodeID)
 }
 
+// GetNextNodeByCondition finds the next node based on condition evaluation
+func (s *FlowService) GetNextNodeByCondition(flow *models.ChatbotFlow, currentNodeID string, conditionID string) (*models.FlowNode, error) {
+	edges, err := s.GetFlowEdges(flow)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the edge that starts from the current node with specific sourceHandle (condition ID)
+	var nextNodeID string
+	for _, edge := range edges {
+		if edge.Source == currentNodeID && edge.SourceHandle == conditionID {
+			nextNodeID = edge.Target
+			break
+		}
+	}
+
+	if nextNodeID == "" {
+		return nil, nil // No next node for this condition
+	}
+
+	return s.FindNodeByID(flow, nextNodeID)
+}
+
 
 
 

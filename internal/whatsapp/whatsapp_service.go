@@ -1245,52 +1245,225 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 	return "", nil
 }
 
-// processConditionNode processes a condition node
+// processConditionNode processes a condition node with proper condition evaluation
+// processConditionNode processes a condition node with proper two-phase approach
+// Phase 1: Send question message and wait for user reply
+// Phase 2: Evaluate user reply against conditions and route accordingly
 func (s *Service) processConditionNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
-	// Evaluate condition and move to appropriate next node
-	// This would include condition evaluation logic
-	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
-	if err == nil && nextNode != nil {
-		if nextNode.Type == models.NodeTypeDelay {
-			// Advance to delay node and process it immediately
-			// This ensures the delay is scheduled properly
-			logrus.WithFields(logrus.Fields{
-				"prospect_id": execution.IDProspect,
-				"current_node": node.ID,
-				"next_node":    nextNode.ID,
-				"next_type":    nextNode.Type,
-			}).Info("🔀 CONDITION: Condition evaluated, advancing to delay node")
-			
-			// Update execution to delay node
-			execution.CurrentNode.String = nextNode.ID
-			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
-			if err != nil {
-				logrus.WithError(err).Error("Failed to update execution to delay node")
-				return "", err
-			}
-			
-			// Process the delay node immediately to schedule the next message
-			_, err = s.processDelayNode(flow, execution, nextNode, userInput)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to process delay node")
-				return "", err
-			}
-			
-			return "", nil
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.IDProspect,
+		"node_id":      node.ID,
+		"user_input":   userInput,
+		"current_node": execution.CurrentNode.String,
+	}).Info("🔀 CONDITION: Processing condition node")
+
+	// Check if this is the first time processing this condition node
+	// If userInput is empty or this is the initial processing, send the question
+	if userInput == "" || execution.CurrentNode.String != node.ID {
+		// Phase 1: Send the condition question/message to user
+		message := ""
+		if msg, ok := node.Data["message"].(string); ok {
+			message = msg
+		} else if question, ok := node.Data["question"].(string); ok {
+			message = question
+		} else {
+			// Default message if none specified
+			message = "Please choose an option:"
 		}
-		
-		// For non-delay nodes, continue processing immediately
-		execution.CurrentNode.String = nextNode.ID
+
+		// Replace variables in message
+		variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to get execution variables")
+			variables = make(map[string]interface{})
+		}
+		message = s.flowService.ReplaceVariables(message, variables)
+
+		// Update execution to stay on this condition node and wait for user reply
+		execution.CurrentNode.String = node.ID
 		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		if err != nil {
-			logrus.WithError(err).Error("Failed to update execution after condition node")
+			logrus.WithError(err).Error("Failed to update execution to condition node")
+			return message, err
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.IDProspect,
+			"node_id":      node.ID,
+			"message":      message,
+		}).Info("🔀 CONDITION: Sent question, waiting for user reply")
+
+		return message, nil
+	}
+
+	// Phase 2: User has replied, now evaluate the conditions
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.IDProspect,
+		"node_id":      node.ID,
+		"user_reply":   userInput,
+	}).Info("🔀 CONDITION: Evaluating user reply against conditions")
+
+	// Extract conditions from node data
+	conditions, ok := node.Data["conditions"].([]interface{})
+	if !ok {
+		logrus.WithFields(logrus.Fields{
+			"node_id": node.ID,
+			"execution_id": execution.IDProspect,
+		}).Warn("🔀 CONDITION: No conditions found in node data, using default routing")
+		
+		// Fallback to default routing if no conditions
+		nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+		if err != nil || nextNode == nil {
+			return "", err
+		}
+		return s.processNextNodeAfterCondition(flow, execution, node, nextNode, userInput, "default")
+	}
+
+	// Normalize user input for comparison
+	userInputLower := strings.ToLower(strings.TrimSpace(userInput))
+	
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"execution_id": execution.IDProspect,
+		"user_input": userInput,
+		"conditions_count": len(conditions),
+	}).Info("🔀 CONDITION: Evaluating user input against conditions")
+
+	// Evaluate each condition
+	var defaultConditionID string
+	for _, conditionInterface := range conditions {
+		condition, ok := conditionInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		conditionID, _ := condition["id"].(string)
+		conditionType, _ := condition["type"].(string)
+		conditionValue, _ := condition["value"].(string)
+		conditionLabel, _ := condition["label"].(string)
+		
+		// Store default condition for fallback
+		if conditionType == "default" {
+			defaultConditionID = conditionID
+			continue
+		}
+		
+		// Evaluate condition based on type
+		var conditionMet bool
+		switch conditionType {
+		case "equals":
+			conditionMet = strings.ToLower(strings.TrimSpace(conditionValue)) == userInputLower
+		case "contains":
+			conditionMet = strings.Contains(userInputLower, strings.ToLower(strings.TrimSpace(conditionValue)))
+		}
+		
+		logrus.WithFields(logrus.Fields{
+			"condition_id": conditionID,
+			"condition_type": conditionType,
+			"condition_value": conditionValue,
+			"condition_label": conditionLabel,
+			"condition_met": conditionMet,
+			"user_reply": userInput,
+		}).Info("🔀 CONDITION: Evaluated condition")
+		
+		if conditionMet {
+			// Find next node based on this condition
+			nextNode, err := s.flowService.GetNextNodeByCondition(flow, node.ID, conditionID)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to get next node by condition")
+				return "", err
+			}
+			
+			if nextNode != nil {
+				logrus.WithFields(logrus.Fields{
+					"condition_id": conditionID,
+					"condition_label": conditionLabel,
+					"next_node": nextNode.ID,
+				}).Info("🔀 CONDITION: Condition matched, routing to next node")
+				
+				return s.processNextNodeAfterCondition(flow, execution, node, nextNode, userInput, conditionLabel)
+			}
+		}
+	}
+	
+	// No condition matched, use default condition if available
+	if defaultConditionID != "" {
+		nextNode, err := s.flowService.GetNextNodeByCondition(flow, node.ID, defaultConditionID)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to get next node by default condition")
 			return "", err
 		}
 		
-		// Recursively process the next node if it's not a delay
-		return s.processFlowMessage(flow, execution, userInput)
+		if nextNode != nil {
+			logrus.WithFields(logrus.Fields{
+				"condition_id": defaultConditionID,
+				"next_node": nextNode.ID,
+			}).Info("🔀 CONDITION: Using default condition path")
+			
+			return s.processNextNodeAfterCondition(flow, execution, node, nextNode, userInput, "default")
+		}
 	}
+	
+	// No matching condition and no default - end flow
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"execution_id": execution.IDProspect,
+		"user_input": userInput,
+	}).Warn("🔀 CONDITION: No matching condition found and no default path")
+	
 	return "", nil
+}
+
+// processNextNodeAfterCondition handles the next node processing after condition evaluation
+func (s *Service) processNextNodeAfterCondition(flow *models.ChatbotFlow, execution *models.AIWhatsapp, currentNode *models.FlowNode, nextNode *models.FlowNode, userInput string, conditionLabel string) (string, error) {
+	if nextNode.Type == models.NodeTypeDelay {
+		// Advance to delay node and process it immediately
+		// This ensures the delay is scheduled properly
+		logrus.WithFields(logrus.Fields{
+			"prospect_id": execution.IDProspect,
+			"current_node": currentNode.ID,
+			"next_node":    nextNode.ID,
+			"next_type":    nextNode.Type,
+			"condition": conditionLabel,
+		}).Info("🔀 CONDITION: Condition evaluated, advancing to delay node")
+		
+		// Update execution to delay node
+		execution.CurrentNode.String = nextNode.ID
+		err := s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution to delay node")
+			return "", err
+		}
+		
+		// Process the delay node immediately to schedule the next message
+		_, err = s.processDelayNode(flow, execution, nextNode, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process delay node")
+			return "", err
+		}
+		
+		return "", nil
+	}
+	
+	// For non-delay nodes, continue processing immediately
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": execution.IDProspect,
+		"current_node": currentNode.ID,
+		"next_node": nextNode.ID,
+		"next_type": nextNode.Type,
+		"condition": conditionLabel,
+	}).Info("🔀 CONDITION: Condition evaluated, continuing to next node")
+	
+	// Update execution to next node
+	execution.CurrentNode.String = nextNode.ID
+	err := s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to update execution to next node")
+		return "", err
+	}
+	
+	// Recursively process the next node
+	return s.processFlowMessage(flow, execution, userInput)
 }
 
 // processStageNode processes a stage node
@@ -1567,21 +1740,31 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 		"device_id":    deviceID,
 	}).Info("🔄 FLOW: Processing flow continuation after delay")
 
-	// First try to get active execution, then try any execution (including completed ones)
-	// This handles cases where execution was completed but delayed messages are still pending
-	execution, err := s.aiWhatsappService.GetActiveFlowExecution(phoneNumber, deviceID)
+	// First try to get execution by specific execution ID
+	execution, err := s.aiWhatsappService.GetFlowExecutionByID(executionID)
 	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to get active execution for continuation")
-		return fmt.Errorf("failed to get active execution: %w", err)
+		logrus.WithError(err).WithField("execution_id", executionID).Error("❌ FLOW: Failed to get execution by ID")
+		// Fallback to phone number and device ID lookup
+		logrus.WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Info("🔄 FLOW: Falling back to phone number and device ID lookup")
+		
+		execution, err = s.aiWhatsappService.GetActiveFlowExecution(phoneNumber, deviceID)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to get active execution for continuation")
+			return fmt.Errorf("failed to get active execution: %w", err)
+		}
 	}
 
-	// If no active execution found, try to get any execution (including completed)
+	// If no execution found by ID, try to get any execution (including completed)
 	if execution == nil {
 		logrus.WithFields(logrus.Fields{
 			"execution_id": executionID,
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
-		}).Info("🔄 FLOW: No active execution found, checking for any existing execution")
+		}).Info("🔄 FLOW: No execution found by ID, checking for any existing execution")
 		
 		// Get any execution (regardless of status) to continue delayed processing
 		execution, err = s.aiWhatsappService.GetFlowExecutionByProspectAndDevice(phoneNumber, deviceID)
