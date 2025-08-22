@@ -458,7 +458,29 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 // sendAIResponse sends AI response with multiple message types (text and images)
 // extractMediaURL extracts URL from text content based on file extensions
 func (s *Service) extractMediaURL(content string) (string, string) {
-	// Regex pattern to match URLs with media file extensions
+	// First check for bracketed media format: [IMAGE: url], [AUDIO: url], [VIDEO: url]
+	bracketedPatterns := map[string]string{
+		`\[IMAGE:\s*([^\]]+)\]`: "image",
+		`\[AUDIO:\s*([^\]]+)\]`: "audio",
+		`\[VIDEO:\s*([^\]]+)\]`: "video",
+	}
+	
+	for pattern, mediaType := range bracketedPatterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			// Extract URL from the bracketed format and trim whitespace
+			mediaURL := strings.TrimSpace(matches[1])
+			logrus.WithFields(logrus.Fields{
+				"media_url": mediaURL,
+				"media_type": mediaType,
+				"pattern": pattern,
+			}).Info("📤 MEDIA: Extracted media URL from bracketed format")
+			return mediaURL, mediaType
+		}
+	}
+	
+	// Fallback to direct URL pattern with media file extensions
 	mediaPattern := `https?://[^\s\[\]]+\.(png|jpg|jpeg|gif|mp3|wav|mp4|avi|mov|webm)`
 	re := regexp.MustCompile(mediaPattern)
 	match := re.FindString(content)

@@ -233,12 +233,12 @@ func (bwp *BroadcastWorkerPool) QueueMessage(msg *domainBroadcast.BroadcastMessa
 			logrus.Errorf("Failed to update message status: %v", err)
 		}
 		return nil
-	case <-time.After(30 * time.Second): // 30 second timeout
+	case <-time.After(5 * time.Second): // 5 second timeout for faster processing
 		atomic.AddInt64(&bwp.failedCount, 1)
 		// Log detailed error for debugging
-		logrus.Errorf("Timeout queueing message to device %s after 30s. Queue size: %d/%d", 
+		logrus.Errorf("Timeout queueing message to device %s after 5s. Queue size: %d/%d", 
 			msg.DeviceID, len(group.messageQueue), cap(group.messageQueue))
-		return fmt.Errorf("timeout queueing message to worker after 30 seconds")
+		return fmt.Errorf("timeout queueing message to worker after 5 seconds")
 	}
 }
 

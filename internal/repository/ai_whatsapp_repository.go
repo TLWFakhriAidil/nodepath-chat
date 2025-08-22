@@ -1022,6 +1022,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
+		       flow_reference, current_node, variables, execution_status, execution_id,
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE prospect_num = ? AND id_device = ?
@@ -1032,12 +1033,14 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 	ai := &models.AIWhatsapp{}
 	var convLastJSON sql.NullString
 	var convCurrentSQL sql.NullString
+	var variablesJSON sql.NullString
 
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+		&ai.FlowReference, &ai.CurrentNode, &variablesJSON, &ai.ExecutionStatus, &ai.ExecutionID,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
 
@@ -1049,6 +1052,13 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 		}
 		logrus.WithError(err).Error("Failed to get AI WhatsApp conversation by prospect and device")
 		return nil, fmt.Errorf("failed to get AI WhatsApp conversation: %w", err)
+	}
+
+	// Handle variables JSON field
+	if variablesJSON.Valid && variablesJSON.String != "" {
+		ai.Variables = json.RawMessage(variablesJSON.String)
+	} else {
+		ai.Variables = json.RawMessage("{}")
 	}
 
 	// Handle conv_last data (both JSON and plain text formats)
