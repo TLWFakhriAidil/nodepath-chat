@@ -201,7 +201,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"content":      content,
-	}).Info("🔍 FLOW: Checking for active execution in ai_whatsapp_nodepath")
+	}).Info("🔍 FLOW: Processing incoming message")
 
 	// Check for personal commands (%, #, cmd)
 	if strings.HasPrefix(content, "%") || strings.HasPrefix(content, "#") || strings.HasPrefix(content, "cmd") {
@@ -212,66 +212,102 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 		return s.handlePersonalCommand(phoneNumber, content, deviceID)
 	}
 
-	// Get or create active execution from ai_whatsapp_nodepath
-	aiExecution, err := s.aiWhatsappService.GetActiveFlowExecution(phoneNumber, deviceID)
+	// First check if there's any existing conversation record (regardless of execution status)
+	existingRecord, err := s.aiWhatsappService.GetAIWhatsappByProspectAndDevice(phoneNumber, deviceID)
 	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to get active execution from ai_whatsapp_nodepath")
+		logrus.WithError(err).Error("❌ FLOW: Failed to get existing conversation record")
 		return err
 	}
 
-	if aiExecution == nil {
+	if existingRecord != nil {
 		logrus.WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
-		}).Info("🆕 FLOW: No active execution found, checking for default flow")
-
-		// Get default flow for device
-		defaultFlow, err := s.flowService.GetDefaultFlowForDevice(deviceID)
-		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to get default flow for device")
-			return err
-		}
-
-		if defaultFlow == nil {
-			logrus.WithFields(logrus.Fields{
-				"phone_number": phoneNumber,
-				"device_id":    deviceID,
-			}).Info("⚠️ FLOW: No default flow found for device, falling back to AI conversation")
+			"current_stage": existingRecord.Stage,
+			"flow_reference": existingRecord.FlowReference.String,
+		}).Info("🔄 FLOW: Found existing conversation record, continuing conversation")
+		
+		// Continue with existing conversation - check if it's a flow or AI conversation
+		if existingRecord.FlowReference.Valid && existingRecord.FlowReference.String != "" {
+			// It's a flow execution - continue with flow processing
+			logrus.WithField("flow_reference", existingRecord.FlowReference.String).Info("🔄 FLOW: Continuing flow execution")
 			
-			// Fallback to AI conversation when no flow is configured
+			// Get the flow data from chatbot_flows_nodepath for existing conversation
+			logrus.WithFields(logrus.Fields{
+				"execution_id":   existingRecord.ExecutionID.String,
+				"flow_reference": existingRecord.FlowReference.String,
+			}).Info("📊 FLOW: Retrieving flow data for existing conversation")
+
+			flow, err := s.flowService.GetFlow(existingRecord.FlowReference.String)
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to get flow from database for existing conversation")
+				return err
+			}
+
+			if flow == nil {
+				logrus.WithField("flow_reference", existingRecord.FlowReference.String).Error("❌ FLOW: Flow not found in database for existing conversation")
+				return fmt.Errorf("flow not found for existing conversation")
+			}
+
+			logrus.WithFields(logrus.Fields{
+				"flow_id":    flow.ID,
+				"flow_name":  flow.Name,
+				"current_node": existingRecord.CurrentNode.String,
+			}).Info("✅ FLOW: Successfully retrieved flow data for existing conversation")
+			
+			_, err = s.processFlowMessage(flow, existingRecord, content)
+			return err
+		} else {
+			// It's an AI conversation - continue with AI processing
+			logrus.WithField("stage", existingRecord.Stage).Info("🤖 AI: Continuing AI conversation")
 			return s.processAIConversation(phoneNumber, content, deviceID)
 		}
-
-		logrus.WithFields(logrus.Fields{
-			"phone_number": phoneNumber,
-			"device_id":    deviceID,
-			"flow_id":      defaultFlow.ID,
-			"flow_name":    defaultFlow.Name,
-		}).Info("🚀 FLOW: Starting new execution with default flow in ai_whatsapp_nodepath")
-
-		// Start new execution with default flow in ai_whatsapp_nodepath
-		variables := make(map[string]interface{})
-		aiExecution, err = s.aiWhatsappService.StartFlowExecution(phoneNumber, deviceID, defaultFlow.ID, variables)
-		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to start new execution in ai_whatsapp_nodepath")
-			return err
-		}
-
-		logrus.WithFields(logrus.Fields{
-			"execution_id": aiExecution.ExecutionID.String,
-			"flow_id":      defaultFlow.ID,
-			"phone_number": phoneNumber,
-			"device_id":    deviceID,
-		}).Info("✅ FLOW: New execution started successfully in ai_whatsapp_nodepath")
-	} else {
-		logrus.WithFields(logrus.Fields{
-			"execution_id":   aiExecution.ExecutionID.String,
-			"flow_reference": aiExecution.FlowReference.String,
-			"phone_number":   phoneNumber,
-			"device_id":      deviceID,
-			"current_node":   aiExecution.CurrentNode.String,
-		}).Info("🔄 FLOW: Found existing active execution in ai_whatsapp_nodepath")
 	}
+
+	// No existing record found - check for default flow to start new conversation
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"device_id":    deviceID,
+	}).Info("🆕 FLOW: No existing conversation found, checking for default flow")
+
+	// Get default flow for device
+	defaultFlow, err := s.flowService.GetDefaultFlowForDevice(deviceID)
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to get default flow for device")
+		return err
+	}
+
+	if defaultFlow == nil {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Info("⚠️ FLOW: No default flow found for device, falling back to AI conversation")
+		
+		// Fallback to AI conversation when no flow is configured
+		return s.processAIConversation(phoneNumber, content, deviceID)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"device_id":    deviceID,
+		"flow_id":      defaultFlow.ID,
+		"flow_name":    defaultFlow.Name,
+	}).Info("🚀 FLOW: Starting new execution with default flow")
+
+	// Start new execution with default flow
+	variables := make(map[string]interface{})
+	aiExecution, err := s.aiWhatsappService.StartFlowExecution(phoneNumber, deviceID, defaultFlow.ID, variables)
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to start new execution")
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"execution_id": aiExecution.ExecutionID.String,
+		"flow_id":      defaultFlow.ID,
+		"phone_number": phoneNumber,
+		"device_id":    deviceID,
+	}).Info("✅ FLOW: New execution started successfully")
 
 	// Note: Human mode checking would be implemented through a separate table or field
 	// For now, we'll process all messages through the flow

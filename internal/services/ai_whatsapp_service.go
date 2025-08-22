@@ -317,6 +317,22 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		logrus.WithError(err).Error("Failed to log AI response")
 	}
 
+	// Save conversation history to conv_last field
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"device_id": idDevice,
+		"user_message": currentText,
+		"bot_response": aiResponseText,
+		"stage": parsedResponse.Stage,
+	}).Info("💬 AI: Saving conversation history to conv_last")
+	
+	err = s.SaveConversationHistory(prospectNum, idDevice, currentText, aiResponseText, parsedResponse.Stage)
+	if err != nil {
+		logrus.WithError(err).Error("❌ AI: Failed to save conversation history to conv_last")
+	} else {
+		logrus.WithField("prospect_num", prospectNum).Info("✅ AI: Conversation history saved to conv_last successfully")
+	}
+
 	return parsedResponse, nil
 }
 
