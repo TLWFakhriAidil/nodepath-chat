@@ -267,7 +267,7 @@ func main() {
 			if err := queueService.ProcessDelayedMessages(); err != nil {
 				logrus.WithError(err).Error("Error processing delayed messages")
 			}
-			time.Sleep(30 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	}()
 

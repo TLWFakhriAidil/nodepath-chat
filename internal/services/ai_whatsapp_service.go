@@ -661,11 +661,23 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		return fmt.Errorf("failed to create AI WhatsApp record: %w", err)
 	}
 	
-	// Save initial conversation history
+	// Save initial user message to conversation history (welcome stage - no bot response yet)
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"device_id": idDevice,
+		"user_message": userMessage,
+		"stage": "welcome",
+	}).Info("💬 SERVICE: Saving initial user message to conversation history")
+	
 	err = s.SaveConversationHistory(prospectNum, idDevice, userMessage, "", "welcome")
 	if err != nil {
-		logrus.WithError(err).Error("Failed to save initial conversation history")
+		logrus.WithError(err).Error("❌ SERVICE: Failed to save initial conversation history")
 		// Don't return error here as the main record was created successfully
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"device_id": idDevice,
+		}).Info("✅ SERVICE: Initial conversation history saved successfully")
 	}
 	
 	logrus.WithFields(logrus.Fields{

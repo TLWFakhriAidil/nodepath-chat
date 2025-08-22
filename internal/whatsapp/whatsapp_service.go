@@ -300,20 +300,12 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 		"device_id":  flow.IdDevice,
 	}).Info("✅ FLOW: Successfully retrieved flow data from chatbot_flows_nodepath")
 
-	// Add user message to ai_whatsapp_nodepath conversation
+	// Store user message for later conversation history saving
 	logrus.WithFields(logrus.Fields{
 			"execution_id": aiExecution.IDProspect,
 			"message_type": "USER",
 			"content":      content,
-		}).Info("💬 FLOW: Adding user message to ai_whatsapp_nodepath")
-
-	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "")
-	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to add user message to ai_whatsapp_nodepath")
-		return err
-	}
-
-	logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: User message added to conversation successfully")
+		}).Info("💬 FLOW: Processing user message for conversation history")
 
 	// Process the message through the flow
 	logrus.WithFields(logrus.Fields{
@@ -358,18 +350,18 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"response":     response,
 		}).Info("✅ FLOW: Response sent successfully")
 
-		// Add bot response to conversation
+		// Save complete conversation pair (user message + bot response)
 		logrus.WithFields(logrus.Fields{
 				"execution_id": aiExecution.IDProspect,
-				"message_type": "BOT",
-				"response":     response,
-			}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
+				"user_message": content,
+				"bot_response": response,
+			}).Info("💬 FLOW: Saving complete conversation pair to ai_whatsapp_nodepath")
 
-		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
+		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, response, "")
 		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
+			logrus.WithError(err).Error("❌ FLOW: Failed to save conversation pair to ai_whatsapp_nodepath")
 		} else {
-			logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: Bot response added to ai_whatsapp_nodepath successfully")
+			logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: Complete conversation pair saved to ai_whatsapp_nodepath successfully")
 		}
 	} else {
 		logrus.WithField("execution_id", aiExecution.IDProspect).Info("ℹ️ FLOW: No response generated from flow processing")
@@ -397,12 +389,18 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 				}).Info("✅ FLOW: AI WhatsApp record created successfully")
 			}
 		} else {
-			// Update existing record with new conversation data
+			// Save user message only when no bot response is generated
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"user_message": content,
+				"stage": existingRecord.Stage,
+			}).Info("💬 FLOW: Saving user message (no bot response generated)")
+			
 			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", existingRecord.Stage)
 			if err != nil {
-				logrus.WithError(err).Error("❌ FLOW: Failed to update conversation history")
+				logrus.WithError(err).Error("❌ FLOW: Failed to save user message to conversation history")
 			} else {
-				logrus.WithField("phone_number", phoneNumber).Info("✅ FLOW: Conversation history updated successfully")
+				logrus.WithField("phone_number", phoneNumber).Info("✅ FLOW: User message saved to conversation history successfully")
 			}
 		}
 	}
@@ -499,6 +497,34 @@ func (s *Service) extractMediaURL(content string) (string, string) {
 	return "", ""
 }
 
+// removeMediaBrackets removes bracketed media text from content
+// This function removes patterns like [IMAGE: url], [AUDIO: url], [VIDEO: url] from text
+func (s *Service) removeMediaBrackets(content string) string {
+	// Define patterns for bracketed media formats
+	bracketedPatterns := []string{
+		`\[IMAGE:\s*[^\]]+\]`,
+		`\[AUDIO:\s*[^\]]+\]`,
+		`\[VIDEO:\s*[^\]]+\]`,
+	}
+	
+	cleanedContent := content
+	for _, pattern := range bracketedPatterns {
+		re := regexp.MustCompile(pattern)
+		cleanedContent = re.ReplaceAllString(cleanedContent, "")
+	}
+	
+	// Clean up extra whitespace
+	cleanedContent = regexp.MustCompile(`\s+`).ReplaceAllString(cleanedContent, " ")
+	cleanedContent = strings.TrimSpace(cleanedContent)
+	
+	logrus.WithFields(logrus.Fields{
+		"original_content": content,
+		"cleaned_content": cleanedContent,
+	}).Info("📤 MEDIA: Removed bracketed media text from content")
+	
+	return cleanedContent
+}
+
 func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *services.AIWhatsappResponse) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
@@ -524,6 +550,16 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 				if err != nil {
 					logrus.WithError(err).WithField("item_index", i).Error("Failed to send extracted media message")
 					return err
+				}
+				
+				// Remove the bracketed media text from content and send remaining text if any
+				cleanedContent := s.removeMediaBrackets(item.Content)
+				if strings.TrimSpace(cleanedContent) != "" {
+					err := s.SendMessageFromDevice(deviceID, phoneNumber, cleanedContent)
+					if err != nil {
+						logrus.WithError(err).WithField("item_index", i).Error("Failed to send cleaned text message")
+						return err
+					}
 				}
 			} else {
 				// Send as regular text message
@@ -1305,9 +1341,8 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 }
 
 // processConditionNode processes a condition node with proper condition evaluation
-// processConditionNode processes a condition node with proper two-phase approach
-// Phase 1: Send question message and wait for user reply
-// Phase 2: Evaluate user reply against conditions and route accordingly
+// Uses a better approach to distinguish between first-time processing and user replies
+// by checking if the current node in execution matches this condition node
 func (s *Service) processConditionNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	logrus.WithFields(logrus.Fields{
 		"execution_id": execution.IDProspect,
@@ -1317,8 +1352,8 @@ func (s *Service) processConditionNode(flow *models.ChatbotFlow, execution *mode
 	}).Info("🔀 CONDITION: Processing condition node")
 
 	// Check if this is the first time processing this condition node
-	// If userInput is empty, send the question (first time processing)
-	if userInput == "" {
+	// If the current node in execution is NOT this condition node, it means we're arriving from another node
+	if execution.CurrentNode.String != node.ID {
 		// Phase 1: Send the condition question/message to user
 		message := ""
 		if msg, ok := node.Data["message"].(string); ok {
@@ -1907,10 +1942,18 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 			return fmt.Errorf("failed to send response: %w", err)
 		}
 
-		// Add bot response to ai_whatsapp_nodepath conversation
+		// Save delayed bot response to conversation history (no user message for delayed responses)
+		logrus.WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"bot_response": response,
+			"response_type": "delayed",
+		}).Info("💬 FLOW: Saving delayed bot response to ai_whatsapp_nodepath")
+		
 		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
 		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
+			logrus.WithError(err).Error("❌ FLOW: Failed to save delayed bot response to ai_whatsapp_nodepath")
+		} else {
+			logrus.WithField("execution_id", executionID).Info("✅ FLOW: Delayed bot response saved to ai_whatsapp_nodepath successfully")
 		}
 
 		logrus.WithFields(logrus.Fields{
