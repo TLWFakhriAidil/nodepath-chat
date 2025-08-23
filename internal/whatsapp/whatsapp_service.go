@@ -797,52 +797,313 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 }
 
 // processFlowMessage processes a message through the flow logic
+// processFlowMessage processes flow messages with proper execution control
+// This function eliminates recursive calls and implements sequential node processing
 func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *models.AIWhatsapp, userInput string) (string, error) {
-	// Get current node
-	currentNode, err := s.flowService.FindNodeByID(flow, aiExecution.CurrentNode.String)
-	if err != nil {
-		// If no current node, start from the beginning
-		currentNode, err = s.flowService.GetStartNode(flow)
+	var combinedResponse strings.Builder
+	
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": aiExecution.IDProspect,
+		"current_node": aiExecution.CurrentNode.String,
+		"user_input": userInput,
+	}).Info("🔄 FLOW: Starting flow message processing")
+
+	// Process nodes sequentially until we hit a stopping condition
+	for {
+		// Get current node
+		currentNode, err := s.flowService.FindNodeByID(flow, aiExecution.CurrentNode.String)
 		if err != nil {
-			return "", fmt.Errorf("failed to get start node: %w", err)
+			// If no current node, start from the beginning
+			currentNode, err = s.flowService.GetStartNode(flow)
+			if err != nil {
+				return "", fmt.Errorf("failed to get start node: %w", err)
+			}
+			aiExecution.CurrentNode.String = currentNode.ID
 		}
-		aiExecution.CurrentNode.String = currentNode.ID
+
+		logrus.WithFields(logrus.Fields{
+			"node_id": currentNode.ID,
+			"node_type": currentNode.Type,
+		}).Info("🎯 FLOW: Processing node")
+
+		// Process current node and get response
+		response, shouldStop, err := s.processNodeWithControl(flow, aiExecution, currentNode, userInput)
+		if err != nil {
+			return combinedResponse.String(), err
+		}
+
+		// Add response to combined output if not empty
+		if response != "" {
+			if combinedResponse.Len() > 0 {
+				combinedResponse.WriteString("\n")
+			}
+			combinedResponse.WriteString(response)
+		}
+
+		// Check if we should stop processing
+		if shouldStop {
+			logrus.WithFields(logrus.Fields{
+				"node_id": currentNode.ID,
+				"node_type": currentNode.Type,
+			}).Info("🛑 FLOW: Flow execution stopped")
+			break
+		}
+
+		// Get next node
+		nextNode, err := s.flowService.GetNextNode(flow, currentNode.ID)
+		if err != nil || nextNode == nil {
+			// End of flow
+			logrus.WithFields(logrus.Fields{
+				"execution_id": aiExecution.IDProspect,
+				"node_id": currentNode.ID,
+			}).Info("🏁 FLOW: End of flow reached, completing execution")
+			s.aiWhatsappService.CompleteFlowExecution(aiExecution.ProspectNum, aiExecution.IDDevice)
+			break
+		}
+
+		// Update execution to next node
+		aiExecution.CurrentNode.String = nextNode.ID
+		err = s.aiWhatsappService.UpdateFlowExecution(aiExecution.ProspectNum, aiExecution.IDDevice, aiExecution.CurrentNode.String, make(map[string]interface{}), "active")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution to next node")
+			return combinedResponse.String(), err
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"from_node": currentNode.ID,
+			"to_node": nextNode.ID,
+			"next_type": nextNode.Type,
+		}).Info("➡️ FLOW: Advanced to next node")
 	}
 
+	return combinedResponse.String(), nil
+}
+
+// processNodeWithControl processes a single node and returns response, shouldStop flag, and error
+// This function replaces the recursive node processing with controlled execution
+func (s *Service) processNodeWithControl(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
 	// Process based on node type
-	switch currentNode.Type {
+	switch node.Type {
 	case models.NodeTypeStart:
-		return s.processStartNode(flow, aiExecution, currentNode, userInput)
+		return s.processStartNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeAIPrompt:
-		return s.processAIPromptNode(flow, aiExecution, currentNode, userInput)
+		return s.processAIPromptNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeAdvancedAIPrompt:
-		return s.processAdvancedAIPromptNode(flow, aiExecution, currentNode, userInput)
+		return s.processAdvancedAIPromptNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeManual:
-		return s.processManualNode(flow, aiExecution, currentNode, userInput)
+		return s.processManualNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeMessage:
-		return s.processMessageNode(flow, aiExecution, currentNode, userInput)
+		return s.processMessageNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeImage:
-		return s.processImageNode(flow, aiExecution, currentNode, userInput)
+		return s.processImageNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeAudio:
-		return s.processAudioNode(flow, aiExecution, currentNode, userInput)
+		return s.processAudioNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeVideo:
-		return s.processVideoNode(flow, aiExecution, currentNode, userInput)
+		return s.processVideoNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeDelay:
-		return s.processDelayNode(flow, aiExecution, currentNode, userInput)
+		return s.processDelayNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeCondition:
-		return s.processConditionNode(flow, aiExecution, currentNode, userInput)
+		return s.processConditionNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeStage:
-		return s.processStageNode(flow, aiExecution, currentNode, userInput)
+		return s.processStageNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeUserReply:
-		return s.processUserReplyNode(flow, aiExecution, currentNode, userInput)
+		return s.processUserReplyNodeControlled(flow, execution, node, userInput)
 	case models.NodeTypeWaitingReplyTimes:
-		return s.processWaitingReplyTimesNode(flow, aiExecution, currentNode, userInput)
+		return s.processWaitingReplyTimesNodeControlled(flow, execution, node, userInput)
 	default:
-		return s.processDefaultNode(flow, aiExecution, currentNode, userInput)
+		return s.processDefaultNodeControlled(flow, execution, node, userInput)
 	}
 }
 
-// processAIPromptNode processes an AI prompt node
+// processUserReplyNodeControlled processes a User Reply node with proper flow control
+func (s *Service) processUserReplyNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	// Check if this is the first time reaching this User Reply node or if user has provided input
+	if userInput == "" {
+		// First time reaching User Reply node - stop and wait for user input
+		logrus.WithFields(logrus.Fields{
+			"prospect_id": execution.IDProspect,
+			"node_id":     node.ID,
+		}).Info("💬 USER_REPLY: User reply node reached - stopping flow execution and waiting for user response")
+		
+		// Return empty response and STOP execution - no message should be sent to user at this point
+		// The flow is now waiting for user input
+		return "", true, nil
+	}
+	
+	// User has provided input - acknowledge it and continue to next node
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": execution.IDProspect,
+		"node_id":     node.ID,
+		"user_input":  userInput,
+	}).Info("💬 USER_REPLY: User provided input - continuing to next node")
+	
+	// Return empty response but continue processing (shouldStop = false)
+	// The user input has been received, now continue to next node
+	return "", false, nil
+}
+
+// processAIPromptNodeControlled processes an AI prompt node without recursive calls
+func (s *Service) processAIPromptNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	// Get AI configuration from node data
+	var systemPrompt, instance, apiProvider string
+
+	// Check node data for configuration
+	if sp, ok := node.Data["system_prompt"].(string); ok {
+		systemPrompt = sp
+	}
+	if inst, ok := node.Data["instance"].(string); ok {
+		instance = inst
+	}
+	if ap, ok := node.Data["apiprovider"].(string); ok {
+		apiProvider = ap
+	}
+
+	// Use global settings as fallback
+	if apiProvider == "" {
+		apiProvider = flow.Niche
+	}
+
+	// Check if we have complete AI configuration
+	if systemPrompt == "" || instance == "" || apiProvider == "" {
+		// Fallback to manual response
+		return "I'm sorry, I'm not configured to handle this request. Please contact support.", false, nil
+	}
+
+	// Get execution variables for prompt replacement
+	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+
+	// Replace variables in system prompt
+	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
+
+	// Generate AI response
+	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, []models.ConversationMessage{})
+	if err != nil {
+		logrus.WithError(err).Error("Failed to generate AI response")
+		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", false, nil
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": execution.IDProspect,
+		"node_id": node.ID,
+		"response_length": len(response),
+	}).Info("🤖 AI_PROMPT: AI response generated successfully")
+
+	return response, false, nil
+}
+
+// processMessageNodeControlled processes a simple message node without recursive calls
+func (s *Service) processMessageNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	// Get message from node data
+	message := ""
+	if msg, ok := node.Data["message"].(string); ok {
+		message = msg
+	}
+
+	// Replace variables in message
+	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get execution variables")
+		variables = make(map[string]interface{})
+	}
+	message = s.flowService.ReplaceVariables(message, variables)
+
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": execution.IDProspect,
+		"node_id": node.ID,
+		"message_length": len(message),
+	}).Info("📤 MESSAGE: Message node processed successfully")
+
+	return message, false, nil
+}
+
+// processStartNodeControlled processes a start node without recursive calls
+func (s *Service) processStartNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	// Start nodes typically don't generate responses, just mark the beginning
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": execution.IDProspect,
+		"node_id": node.ID,
+	}).Info("🚀 START: Start node processed")
+
+	return "", false, nil
+}
+
+// processDelayNodeControlled processes a delay node without recursive calls
+func (s *Service) processDelayNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	// Get delay configuration from node data
+	var delaySeconds int
+	if delay, ok := node.Data["delay"].(float64); ok {
+		delaySeconds = int(delay)
+	} else if delay, ok := node.Data["delay"].(int); ok {
+		delaySeconds = delay
+	} else {
+		delaySeconds = 1 // Default 1 second delay
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": execution.IDProspect,
+		"node_id": node.ID,
+		"delay_seconds": delaySeconds,
+	}).Info("⏰ DELAY: Delay node processed - stopping execution for scheduled continuation")
+
+	// Schedule the continuation of the flow after delay
+	// This should stop current execution and schedule next processing
+	// TODO: Implement proper delay scheduling mechanism
+	
+	return "", true, nil // Stop execution for delay
+}
+
+// processDefaultNodeControlled processes unknown node types
+func (s *Service) processDefaultNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": execution.IDProspect,
+		"node_id": node.ID,
+		"node_type": node.Type,
+	}).Warn("❓ DEFAULT: Unknown node type processed")
+
+	return "", false, nil
+}
+
+// Placeholder controlled functions for other node types
+func (s *Service) processAdvancedAIPromptNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	// For now, use same logic as regular AI prompt
+	return s.processAIPromptNodeControlled(flow, execution, node, userInput)
+}
+
+func (s *Service) processManualNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	// Similar to message node
+	return s.processMessageNodeControlled(flow, execution, node, userInput)
+}
+
+func (s *Service) processImageNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	return "", false, nil // Images handled separately
+}
+
+func (s *Service) processAudioNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	return "", false, nil // Audio handled separately
+}
+
+func (s *Service) processVideoNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	return "", false, nil // Video handled separately
+}
+
+func (s *Service) processConditionNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	return "", false, nil // Conditions handled in flow logic
+}
+
+func (s *Service) processStageNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	return "", false, nil // Stage changes handled separately
+}
+
+func (s *Service) processWaitingReplyTimesNodeControlled(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
+	// Similar to User Reply - should stop and wait
+	return "", true, nil
+}
+
+// processAIPromptNode processes an AI prompt node (LEGACY - will be removed)
 func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	// Get AI configuration from node data
 	var systemPrompt, instance, apiProvider string

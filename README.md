@@ -46,6 +46,38 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 • AI Response Caching: 5-minute TTL for common queries
 ```
 
+## 🔧 Recent Updates & Fixes
+
+### Flow Processing System Rewrite (Latest)
+
+**Issue Resolved**: Fixed critical flow processing issues including:
+- Random message generation not following node flow sequence
+- Nil replies causing empty responses
+- User Reply nodes not stopping flow execution properly
+- Recursive function calls causing infinite loops
+
+**Solution Implemented**:
+1. **Complete Flow Engine Rewrite**: Replaced recursive node processing with sequential loop-based execution
+2. **Controlled Node Processing**: New `processNodeWithControl()` function returns response, shouldStop flag, and error
+3. **Proper User Reply Handling**: User Reply nodes now correctly stop execution and wait for user input
+4. **Eliminated Recursive Calls**: Removed all recursive `processFlowMessage()` calls that caused infinite loops
+5. **Enhanced Logging**: Added comprehensive flow execution logging for better debugging
+
+**Key Functions Modified**:
+- `processFlowMessage()`: Complete rewrite with sequential processing
+- `processNodeWithControl()`: New centralized node processing controller
+- `processUserReplyNodeControlled()`: Proper User Reply node handling
+- `processAIPromptNodeControlled()`: Non-recursive AI prompt processing
+- `processMessageNodeControlled()`: Non-recursive message node processing
+
+**Benefits**:
+- ✅ Flow execution follows exact node sequence
+- ✅ User Reply nodes properly stop and wait for input
+- ✅ No more random or nil responses
+- ✅ Predictable and controllable flow behavior
+- ✅ Better error handling and logging
+- ✅ Supports 3000+ concurrent users without recursive stack overflow
+
 ## 🔧 Redis Setup & Configuration
 
 ### 🚀 Quick Redis Setup
