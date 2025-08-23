@@ -1829,17 +1829,17 @@ func (s *Service) processUserReplyNode(flow *models.ChatbotFlow, execution *mode
 		return "", nil
 	}
 	
-	// User has provided input - continue to next node
+	// User has provided input - process it and move to next node but DO NOT continue execution
 	logrus.WithFields(logrus.Fields{
 		"prospect_id": execution.IDProspect,
 		"node_id":     node.ID,
 		"user_input":  userInput,
-	}).Info("💬 USER_REPLY: User provided input - continuing to next node")
+	}).Info("💬 USER_REPLY: User provided input - moving to next node and stopping execution")
 	
-	// Get next node and continue processing
+	// Get next node and update execution state
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
-		// Update execution to next node
+		// Update execution to next node but DO NOT continue processing
 		execution.CurrentNode.String = nextNode.ID
 		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		if err != nil {
@@ -1847,8 +1847,14 @@ func (s *Service) processUserReplyNode(flow *models.ChatbotFlow, execution *mode
 			return "", err
 		}
 		
-		// Continue processing from the next node
-		return s.processFlowMessage(flow, execution, userInput)
+		// IMPORTANT: Do NOT continue processing - let the flow wait for next user input
+		// The next node will be processed when the user sends another message
+		logrus.WithFields(logrus.Fields{
+			"next_node_id": nextNode.ID,
+			"next_node_type": nextNode.Type,
+		}).Info("💬 USER_REPLY: Moved to next node, flow execution stopped - waiting for next user interaction")
+		
+		return "", nil
 	} else {
 		// End of flow
 		logrus.WithFields(logrus.Fields{
@@ -1894,7 +1900,28 @@ func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, executi
 			return "", nil
 		}
 		
-		// For non-delay nodes, continue processing immediately
+		// Check if next node is a User Reply node - if so, stop execution and wait
+		if nextNode.Type == models.NodeTypeUserReply {
+			logrus.WithFields(logrus.Fields{
+				"prospect_id": execution.IDProspect,
+				"current_node": node.ID,
+				"next_node":    nextNode.ID,
+				"next_type":    nextNode.Type,
+			}).Info("⏱️ WAITING_REPLY: Next node is User Reply - stopping execution and waiting for user input")
+			
+			// Update execution to User Reply node but DO NOT continue processing
+			execution.CurrentNode.String = nextNode.ID
+			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
+			if err != nil {
+				logrus.WithError(err).Error("Failed to update execution to User Reply node")
+				return "", err
+			}
+			
+			// Stop execution here - wait for user input
+			return "", nil
+		}
+		
+		// For other non-delay nodes, continue processing immediately
 		execution.CurrentNode.String = nextNode.ID
 		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNode.String, make(map[string]interface{}), "active")
 		if err != nil {
@@ -1902,7 +1929,7 @@ func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, executi
 			return "", err
 		}
 		
-		// Recursively process the next node if it's not a delay
+		// Recursively process the next node if it's not a delay or User Reply
 		return s.processFlowMessage(flow, execution, userInput)
 	}
 	return "", nil
@@ -2126,6 +2153,16 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to process flow continuation")
 		return fmt.Errorf("failed to process flow: %w", err)
+	}
+
+	// Check if we've reached a User Reply node - if so, stop processing
+	if targetNode.Type == models.NodeTypeUserReply {
+		logrus.WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"node_id":      nodeID,
+			"node_type":    targetNode.Type,
+		}).Info("🔄 FLOW: Reached User Reply node during continuation - stopping execution")
+		return nil // Stop processing, wait for user input
 	}
 
 	// Send response if available
