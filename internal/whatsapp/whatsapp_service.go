@@ -158,13 +158,13 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 	}).Info("📤 DEVICE: Sending message from device")
 
 	// Get device settings for provider information
-	deviceSettings, err := s.deviceSettingsService.GetDeviceSettings(deviceID)
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
 	if err != nil {
 		return fmt.Errorf("failed to get device settings: %w", err)
 	}
 
 	// Send message using provider service
-	return s.providerService.SendMessage(deviceSettings.Provider, deviceSettings.Instance, phoneNumber, message)
+	return s.providerService.SendMessage(deviceSettings, phoneNumber, message)
 }
 
 // SendMediaMessage sends a media message from a specific device
@@ -177,28 +177,13 @@ func (s *Service) SendMediaMessage(deviceID, phoneNumber, caption, mediaURL stri
 	}).Info("📤 MEDIA: Sending media message")
 
 	// Get device settings for provider information
-	deviceSettings, err := s.deviceSettingsService.GetDeviceSettings(deviceID)
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
 	if err != nil {
 		return fmt.Errorf("failed to get device settings: %w", err)
 	}
 
-	// Determine media type from URL
-	mediaType := "image" // Default to image
-	if strings.Contains(mediaURL, ".mp4") || strings.Contains(mediaURL, ".avi") {
-		mediaType = "video"
-	} else if strings.Contains(mediaURL, ".mp3") || strings.Contains(mediaURL, ".wav") {
-		mediaType = "audio"
-	}
-
 	// Send media message using provider service
-	switch mediaType {
-	case "video":
-		return s.providerService.SendVideo(deviceSettings.Provider, deviceSettings.Instance, phoneNumber, mediaURL, caption)
-	case "audio":
-		return s.providerService.SendAudio(deviceSettings.Provider, deviceSettings.Instance, phoneNumber, mediaURL)
-	default:
-		return s.providerService.SendImage(deviceSettings.Provider, deviceSettings.Instance, phoneNumber, mediaURL, caption)
-	}
+	return s.providerService.SendMediaMessage(deviceSettings, phoneNumber, caption, mediaURL)
 }
 
 // ============================================================================
@@ -220,6 +205,25 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"command":   content,
 		}).Info("🔧 COMMAND: Personal command detected")
 		return s.handlePersonalCommand(phoneNumber, content, deviceID)
+	}
+
+	// Get device settings
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to get device settings: %w", err)
+	}
+
+	// Check if there's an active flow for this device
+	flow, err := s.flowService.GetDefaultFlowForDevice(deviceID)
+	if err != nil {
+		logrus.WithError(err).Info("No default flow found, falling back to AI conversation")
+		return s.processAIConversation(phoneNumber, content, deviceID)
+	}
+
+	if flow == nil {
+		// No flow configured, use AI conversation
+		logrus.Info("⚠️ FLOW: No default flow found, using AI conversation")
+		return s.processAIConversation(phoneNumber, content, deviceID)
 	}
 
 	// Check for existing conversation
@@ -294,48 +298,31 @@ func (s *Service) startNewConversation(phoneNumber, deviceID, userInput string) 
 	return s.executeFlow(execution, userInput)
 }
 
-// executeFlow executes the flow logic - COMPLETELY REBUILT
+// executeFlow executes the flow logic using the new FlowEngine
 func (s *Service) executeFlow(execution *models.AIWhatsapp, userInput string) error {
 	logrus.WithFields(logrus.Fields{
 		"execution_id": execution.ExecutionID.String,
 		"flow_ref":     execution.FlowReference.String,
 		"current_node": execution.CurrentNode.String,
-	}).Info("⚙️ FLOW: Executing flow")
+	}).Info("⚙️ FLOW: Executing flow with FlowEngine")
 
-	// Get flow data
-	flow, err := s.flowService.GetFlow(execution.FlowReference.String)
+	// Create FlowEngine instance
+	flowEngine := NewFlowEngine(
+		s.flowService,
+		&s.aiWhatsappService,
+		s.aiService,
+		s.providerService,
+		s.deviceSettingsService,
+	)
+
+	// Execute flow using the FlowEngine
+	err := flowEngine.ExecuteFlow(execution, userInput)
 	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to get flow data")
+		logrus.WithError(err).Error("❌ FLOW: FlowEngine execution failed")
 		return err
 	}
 
-	if flow == nil {
-		logrus.Error("❌ FLOW: Flow not found")
-		return fmt.Errorf("flow not found")
-	}
-
-	// Process the flow step by step
-	response, err := s.processFlowExecution(flow, execution, userInput)
-	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Flow execution failed")
-		return err
-	}
-
-	// Send response if generated
-	if response != "" {
-		err = s.sendFlowResponse(execution.ProspectNum, execution.IDDevice, response)
-		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to send response")
-			return err
-		}
-
-		// Save conversation history
-		err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, userInput, response, "")
-		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to save conversation")
-		}
-	}
-
+	logrus.Info("✅ FLOW: FlowEngine execution completed successfully")
 	return nil
 }
 
@@ -491,20 +478,19 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	}
 	
 	// Get device settings for AI configuration
-	deviceSettings, err := s.deviceSettingsService.GetDeviceSettings(execution.IDDevice)
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(execution.IDDevice)
 	if err != nil {
 		return "", false, fmt.Errorf("failed to get device settings: %w", err)
 	}
 	
-	// Get conversation history
-	history, err := s.aiWhatsappService.GetConversationHistory(execution.ProspectNum, execution.IDDevice, 10)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to get conversation history")
-		history = []*models.AIWhatsapp{}
+	// Get API key from device settings
+	apiKey := ""
+	if deviceSettings.APIKey.Valid {
+		apiKey = deviceSettings.APIKey.String
 	}
 	
-	// Call AI service
-	response, err := s.aiService.GenerateResponse(prompt, userInput, history, deviceSettings)
+	// Call AI service with correct parameters
+	response, err := s.aiService.GenerateResponse(prompt, userInput, apiKey, nil)
 	if err != nil {
 		return "", false, fmt.Errorf("AI generation failed: %w", err)
 	}
@@ -700,6 +686,12 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 		"device_id":    deviceID,
 	}).Info("🤖 AI: Processing AI conversation")
 	
+	// Get device settings
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to get device settings: %w", err)
+	}
+	
 	// Get or create AI WhatsApp record
 	existingRecord, err := s.aiWhatsappService.GetAIWhatsappByProspectAndDevice(phoneNumber, deviceID)
 	if err != nil {
@@ -720,20 +712,8 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 		}
 	}
 	
-	// Get device settings
-	deviceSettings, err := s.deviceSettingsService.GetDeviceSettings(deviceID)
-	if err != nil {
-		return err
-	}
-	
-	// Get conversation history
-	history, err := s.aiWhatsappService.GetConversationHistory(phoneNumber, deviceID, 10)
-	if err != nil {
-		history = []*models.AIWhatsapp{}
-	}
-	
-	// Generate AI response
-	response, err := s.aiService.GenerateAIConversationResponse(content, existingRecord.Stage, history, deviceSettings)
+	// Use AI WhatsApp service to process conversation
+	response, err := s.aiWhatsappService.ProcessAIConversation(phoneNumber, deviceID, content, existingRecord.Stage)
 	if err != nil {
 		return err
 	}
