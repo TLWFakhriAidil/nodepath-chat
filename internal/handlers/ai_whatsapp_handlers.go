@@ -431,28 +431,31 @@ func (h *AIWhatsappHandlers) ProcessDeviceCommand(c *fiber.Ctx) error {
 }
 
 // processIncomingMessage processes incoming WhatsApp messages asynchronously
+// This function now properly routes all messages through the flow engine
 func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, deviceID, provider string) {
 	logrus.WithFields(logrus.Fields{
 		"prospect_num": prospectNum,
 		"device_id":    deviceID,
 		"provider":     provider,
 		"message":      message,
-	}).Info("Processing incoming message")
+	}).Info("🔄 AI_WEBHOOK: Processing incoming message through flow engine")
 
-	// Use WhatsApp service for proper flow processing instead of direct AI service
+	// Always use WhatsApp service for proper flow processing
 	if h.WhatsappService != nil {
 		// Use the WhatsApp service's ProcessIncomingMessageFromWebhook which handles flow logic properly
 		err := h.WhatsappService.ProcessIncomingMessageFromWebhook(prospectNum, message, deviceID, provider)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to process message through WhatsApp service")
-			// Fallback to direct AI processing if WhatsApp service fails
-			h.processDirectAIConversation(prospectNum, message, deviceID, provider)
+			logrus.WithError(err).Error("❌ AI_WEBHOOK: Failed to process message through flow engine")
+			// Log the error but don't fall back to direct AI conversation
+			// This ensures all messages go through the flow engine for consistency
+			return
 		}
+		logrus.Info("✅ AI_WEBHOOK: Message processed successfully through flow engine")
 		return
 	}
 
-	// Fallback to direct AI processing if WhatsApp service is not available
-	h.processDirectAIConversation(prospectNum, message, deviceID, provider)
+	// Log error if WhatsApp service is not available - this should not happen in production
+	logrus.Error("❌ AI_WEBHOOK: WhatsApp service not available - message cannot be processed")
 }
 
 // processDirectAIConversation handles direct AI conversation processing (fallback)

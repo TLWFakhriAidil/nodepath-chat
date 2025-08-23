@@ -1343,12 +1343,13 @@ func (h *Handlers) DebugDevices(c *fiber.Ctx) error {
 
 // Helper function to convert sql.NullString to string
 // processWebhookMessage processes incoming webhook messages and integrates with AI WhatsApp service
+// This function ensures all messages are routed through the flow engine for consistent processing
 func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idDevice, provider string) {
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"provider": provider,
 		"webhook_data": webhookData,
-	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration")
+	}).Info("🔄 DEVICE_WEBHOOK: Processing webhook message for flow integration")
 
 	// Extract message data based on provider
 	var from, message, messageType string
@@ -1457,43 +1458,31 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	// Check if device has a configured flow - prioritize flow engine over AI conversation
 	flows, err := h.flowService.GetFlowsByDevice(idDevice)
 	if err != nil {
-		logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to check for device flows")
+		logrus.WithError(err).Warn("⚠️ DEVICE_WEBHOOK: Failed to check for device flows")
 	}
 
-	// If device has configured flows, use the flow engine
-	if len(flows) > 0 {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"message": message,
-			"provider": provider,
-			"flow_count": len(flows),
-		}).Info("🔄 WEBHOOK: Processing message through flow engine")
-
-		// Process message through WhatsApp service flow engine
-		if h.whatsappService != nil {
-			err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider)
-			if err != nil {
-				logrus.WithError(err).Error("❌ WEBHOOK: Failed to process message through flow engine")
-				// Fallback to AI conversation if flow processing fails
-				h.processAIConversation(from, message, idDevice, provider)
-			}
-		} else {
-			logrus.Error("❌ WEBHOOK: WhatsApp service not available, falling back to AI conversation")
-			h.processAIConversation(from, message, idDevice, provider)
-		}
-		return
-	}
-
-	// No flows configured, use AI conversation system
+	// Always process through WhatsApp service flow engine for consistency
+	// The flow engine will handle both flow execution and AI conversation fallback internally
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"from": from,
 		"message": message,
 		"provider": provider,
-	}).Info("🤖 WEBHOOK: No flows configured, processing message through AI conversation")
+		"flow_count": len(flows),
+	}).Info("🔄 DEVICE_WEBHOOK: Processing message through flow engine (handles both flows and AI)")
 
-	h.processAIConversation(from, message, idDevice, provider)
+	// Process message through WhatsApp service flow engine
+	if h.whatsappService != nil {
+		err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider)
+		if err != nil {
+			logrus.WithError(err).Error("❌ DEVICE_WEBHOOK: Failed to process message through flow engine")
+			// Log error but don't fallback - let the flow engine handle all routing decisions
+			return
+		}
+		logrus.Info("✅ DEVICE_WEBHOOK: Message processed successfully through flow engine")
+	} else {
+		logrus.Error("❌ DEVICE_WEBHOOK: WhatsApp service not available - message cannot be processed")
+	}
 }
 
 // processAIConversation handles message processing through the AI conversation system
