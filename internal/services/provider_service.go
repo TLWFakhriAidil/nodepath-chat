@@ -55,7 +55,14 @@ func (ps *ProviderService) SendMessage(deviceSettings *models.DeviceSettings, ph
 
 // SendMediaMessage sends a media message through the appropriate provider
 func (ps *ProviderService) SendMediaMessage(deviceSettings *models.DeviceSettings, phoneNumber, caption, mediaURL string) error {
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"caption": caption,
+		"media_url": mediaURL,
+	}).Info("📤 PROVIDER: [TRACE] Starting SendMediaMessage")
+	
 	if deviceSettings == nil {
+		logrus.Error("❌ PROVIDER: [TRACE] Device settings is nil")
 		return fmt.Errorf("device settings cannot be nil")
 	}
 
@@ -66,14 +73,29 @@ func (ps *ProviderService) SendMediaMessage(deviceSettings *models.DeviceSetting
 		"device_id":    deviceSettings.IDDevice.String,
 		"phone_number": phoneNumber,
 		"media_url":    mediaURL,
-	}).Info("📤 MEDIA: Sending media message through provider")
+		"caption": caption,
+		"instance_valid": deviceSettings.Instance.Valid,
+		"api_key_valid": deviceSettings.APIKey.Valid,
+	}).Info("📤 PROVIDER: [TRACE] Device settings and provider info")
 
 	switch provider {
 	case "wablas":
+		logrus.WithFields(logrus.Fields{
+			"provider": "wablas",
+			"media_url": mediaURL,
+		}).Info("📤 PROVIDER: [TRACE] Routing to Wablas media service")
 		return ps.sendWablasImageMessage(deviceSettings, phoneNumber, caption, mediaURL)
 	case "whacenter":
+		logrus.WithFields(logrus.Fields{
+			"provider": "whacenter",
+			"media_url": mediaURL,
+		}).Info("📤 PROVIDER: [TRACE] Routing to Whacenter media service")
 		return ps.sendWhacenterMediaMessage(deviceSettings, phoneNumber, caption, mediaURL)
 	default:
+		logrus.WithFields(logrus.Fields{
+			"unsupported_provider": provider,
+			"media_url": mediaURL,
+		}).Error("❌ PROVIDER: [TRACE] Unsupported provider")
 		return fmt.Errorf("unsupported provider: %s", provider)
 	}
 }
@@ -321,21 +343,32 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 	// Use the correct Whacenter media API endpoint
 	apiURL := "https://api.whacenter.com/api/send-media"
 	
+	logrus.WithFields(logrus.Fields{
+		"api_url": apiURL,
+		"phone_number": phoneNumber,
+		"media_url": mediaURL,
+		"caption": caption,
+	}).Info("📤 WHACENTER: [TRACE] Starting sendWhacenterMediaMessage")
+	
 	// Determine file type from URL for proper media type detection
 	fileType := ps.getFileTypeFromURL(mediaURL)
 	
 	logrus.WithFields(logrus.Fields{
-		"api_url":      apiURL,
-		"phone_number": phoneNumber,
-		"media_url":    mediaURL,
-		"file_type":    fileType,
-		"caption_len":  len(caption),
-	}).Debug("[WHACENTER] Preparing media request")
+		"media_url": mediaURL,
+		"detected_file_type": fileType,
+	}).Info("📤 WHACENTER: [TRACE] File type detection result")
 
 	// Get device ID from instance (Whacenter uses instance as device_id)
 	if !deviceSettings.Instance.Valid {
+		logrus.WithField("device_id", deviceSettings.IDDevice.String).Error("❌ WHACENTER: [TRACE] No valid instance found")
 		return fmt.Errorf("no instance found for Whacenter media message")
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceSettings.IDDevice.String,
+		"instance": deviceSettings.Instance.String,
+		"instance_valid": deviceSettings.Instance.Valid,
+	}).Info("📤 WHACENTER: [TRACE] Using instance as device_id and auth token")
 
 	// Prepare JSON payload for media message using correct Whacenter API structure
 	payload := map[string]interface{}{
@@ -348,52 +381,89 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 	// Add caption if provided
 	if caption != "" {
 		payload["caption"] = caption
+		logrus.WithField("caption", caption).Info("📤 WHACENTER: [TRACE] Added caption to payload")
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"payload": payload,
+	}).Info("📤 WHACENTER: [TRACE] Prepared JSON payload")
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: [TRACE] Failed to marshal JSON payload")
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"json_payload": string(jsonData),
+		"payload_size": len(jsonData),
+	}).Info("📤 WHACENTER: [TRACE] JSON payload marshaled")
 
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: [TRACE] Failed to create HTTP request")
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers - Whacenter uses instance for authorization
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+	
+	logrus.WithFields(logrus.Fields{
+		"content_type": "application/json",
+		"auth_token": "Bearer " + deviceSettings.Instance.String,
+		"method": "POST",
+		"url": apiURL,
+	}).Info("📤 WHACENTER: [TRACE] HTTP request prepared with headers")
 
 	// Send request
+	logrus.Info("📤 WHACENTER: [TRACE] Sending HTTP request to Whacenter API")
 	startTime := time.Now()
 	resp, err := ps.httpClient.Do(req)
 	if err != nil {
+		logrus.WithError(err).WithField("api_url", apiURL).Error("❌ WHACENTER: [TRACE] HTTP request failed")
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	logrus.WithFields(logrus.Fields{
+		"status_code": resp.StatusCode,
+		"request_duration": time.Since(startTime),
+	}).Info("📤 WHACENTER: [TRACE] HTTP response received")
+
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: [TRACE] Failed to read response body")
 		return fmt.Errorf("failed to read response: %w", err)
 	}
 
 	duration := time.Since(startTime)
 	logrus.WithFields(logrus.Fields{
 		"status_code": resp.StatusCode,
-		"response":    string(body),
-		"duration":    duration,
-	}).Debug("[WHACENTER] Media response received")
+		"response_body": string(body),
+		"response_size": len(body),
+		"total_duration": duration,
+	}).Info("📤 WHACENTER: [TRACE] Complete API response details")
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logrus.WithFields(logrus.Fields{
+			"status_code": resp.StatusCode,
+			"response_body": string(body),
+			"media_url": mediaURL,
+			"file_type": fileType,
+		}).Error("❌ WHACENTER: [TRACE] API returned error status")
 		return fmt.Errorf("whacenter API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
-		"duration":     duration,
-	}).Info("[WHACENTER] ✅ Media sent successfully")
+		"media_url": mediaURL,
+		"file_type": fileType,
+		"duration": duration,
+		"status_code": resp.StatusCode,
+	}).Info("✅ WHACENTER: [TRACE] Media message sent successfully")
 
 	return nil
 }

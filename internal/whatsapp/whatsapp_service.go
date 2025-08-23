@@ -178,19 +178,46 @@ func (s *Service) SendMediaMessage(deviceID, phoneNumber, caption, mediaURL stri
 		"phone_number": phoneNumber,
 		"caption":      caption,
 		"media_url":    mediaURL,
-	}).Info("📤 MEDIA: Sending media message")
+	}).Info("📤 MEDIA: [TRACE] Starting SendMediaMessage")
 
 	// Get device settings by device_id
+	logrus.WithField("device_id", deviceID).Info("📤 MEDIA: [TRACE] Getting device settings")
 	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
 	if err != nil {
+		logrus.WithError(err).WithField("device_id", deviceID).Error("❌ MEDIA: [TRACE] Failed to get device settings")
 		return fmt.Errorf("failed to get device settings for %s: %w", deviceID, err)
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"provider": deviceSettings.Provider,
+		"instance_valid": deviceSettings.Instance.Valid,
+		"api_key_valid": deviceSettings.APIKey.Valid,
+	}).Info("📤 MEDIA: [TRACE] Device settings retrieved")
+
 	// Send media message through provider service
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"phone_number": phoneNumber,
+		"media_url": mediaURL,
+		"provider": deviceSettings.Provider,
+	}).Info("📤 MEDIA: [TRACE] Calling provider service SendMediaMessage")
+	
 	err = s.providerService.SendMediaMessage(deviceSettings, phoneNumber, caption, mediaURL)
 	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"phone_number": phoneNumber,
+			"media_url": mediaURL,
+			"provider": deviceSettings.Provider,
+		}).Error("❌ MEDIA: [TRACE] Provider service SendMediaMessage failed")
 		return fmt.Errorf("failed to send media message through provider: %w", err)
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"phone_number": phoneNumber,
+		"media_url": mediaURL,
+	}).Info("✅ MEDIA: [TRACE] SendMediaMessage completed successfully")
 
 	return nil
 }
@@ -492,6 +519,8 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 // sendAIResponse sends AI response with multiple message types (text and images)
 // extractMediaURL extracts URL from text content based on file extensions
 func (s *Service) extractMediaURL(content string) (string, string) {
+	logrus.WithField("content", content).Info("🔍 MEDIA: [TRACE] Starting extractMediaURL")
+	
 	// First check for bracketed media format: [IMAGE: url], [AUDIO: url], [VIDEO: url]
 	bracketedPatterns := map[string]string{
 		`\[IMAGE:\s*([^\]]+)\]`: "image",
@@ -499,9 +528,22 @@ func (s *Service) extractMediaURL(content string) (string, string) {
 		`\[VIDEO:\s*([^\]]+)\]`: "video",
 	}
 	
+	logrus.WithField("patterns_count", len(bracketedPatterns)).Info("🔍 MEDIA: [TRACE] Checking bracketed patterns")
+	
 	for pattern, mediaType := range bracketedPatterns {
+		logrus.WithFields(logrus.Fields{
+			"pattern": pattern,
+			"media_type": mediaType,
+		}).Info("🔍 MEDIA: [TRACE] Testing pattern")
+		
 		re := regexp.MustCompile(pattern)
 		matches := re.FindStringSubmatch(content)
+		
+		logrus.WithFields(logrus.Fields{
+			"pattern": pattern,
+			"matches_found": len(matches),
+		}).Info("🔍 MEDIA: [TRACE] Pattern match result")
+		
 		if len(matches) > 1 {
 			// Extract URL from the bracketed format and trim whitespace
 			mediaURL := strings.TrimSpace(matches[1])
@@ -509,27 +551,49 @@ func (s *Service) extractMediaURL(content string) (string, string) {
 				"media_url": mediaURL,
 				"media_type": mediaType,
 				"pattern": pattern,
-			}).Info("📤 MEDIA: Extracted media URL from bracketed format")
+				"raw_match": matches[1],
+			}).Info("✅ MEDIA: [TRACE] Extracted media URL from bracketed format")
 			return mediaURL, mediaType
 		}
 	}
+	
+	logrus.Info("🔍 MEDIA: [TRACE] No bracketed patterns matched, trying direct URL pattern")
 	
 	// Fallback to direct URL pattern with media file extensions
 	mediaPattern := `https?://[^\s\[\]]+\.(png|jpg|jpeg|gif|mp3|wav|mp4|avi|mov|webm)`
 	re := regexp.MustCompile(mediaPattern)
 	match := re.FindString(content)
 	
+	logrus.WithFields(logrus.Fields{
+		"direct_pattern": mediaPattern,
+		"match_found": match != "",
+		"match": match,
+	}).Info("🔍 MEDIA: [TRACE] Direct URL pattern result")
+	
 	if match != "" {
 		// Determine media type based on file extension
 		if regexp.MustCompile(`\.(png|jpg|jpeg|gif)$`).MatchString(match) {
+			logrus.WithFields(logrus.Fields{
+				"media_url": match,
+				"media_type": "image",
+			}).Info("✅ MEDIA: [TRACE] Detected image from direct URL")
 			return match, "image"
 		} else if regexp.MustCompile(`\.(mp3|wav)$`).MatchString(match) {
+			logrus.WithFields(logrus.Fields{
+				"media_url": match,
+				"media_type": "audio",
+			}).Info("✅ MEDIA: [TRACE] Detected audio from direct URL")
 			return match, "audio"
 		} else if regexp.MustCompile(`\.(mp4|avi|mov|webm)$`).MatchString(match) {
+			logrus.WithFields(logrus.Fields{
+				"media_url": match,
+				"media_type": "video",
+			}).Info("✅ MEDIA: [TRACE] Detected video from direct URL")
 			return match, "video"
 		}
 	}
 	
+	logrus.WithField("content", content).Info("❌ MEDIA: [TRACE] No media URL found in content")
 	return "", ""
 }
 
@@ -567,59 +631,147 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 		"phone_number": phoneNumber,
 		"stage":        response.Stage,
 		"response_count": len(response.Response),
-	}).Info("📤 AI: Sending AI response")
+	}).Info("📤 AI: [TRACE] Starting sendAIResponse")
 
 	// Send each response item in sequence
 	for i, item := range response.Response {
+		logrus.WithFields(logrus.Fields{
+			"item_index": i,
+			"item_type": item.Type,
+			"item_content": item.Content,
+		}).Info("📤 AI: [TRACE] Processing response item")
+		
 		switch item.Type {
 		case "text":
+			logrus.WithFields(logrus.Fields{
+				"item_index": i,
+				"content": item.Content,
+			}).Info("📤 AI: [TRACE] Processing text item, checking for media URLs")
+			
 			// Check if text content contains media URLs
 			mediaURL, mediaType := s.extractMediaURL(item.Content)
+			
+			logrus.WithFields(logrus.Fields{
+				"item_index": i,
+				"media_url_found": mediaURL != "",
+				"media_url": mediaURL,
+				"media_type": mediaType,
+			}).Info("📤 AI: [TRACE] Media URL extraction result")
+			
 			if mediaURL != "" {
 				// Send as media message
 				logrus.WithFields(logrus.Fields{
+					"item_index": i,
 					"media_url": mediaURL,
 					"media_type": mediaType,
-				}).Info("📤 MEDIA: Extracted media URL from text content")
+				}).Info("📤 MEDIA: [TRACE] Sending extracted media URL as media message")
 				
 				err := s.SendMediaMessage(deviceID, phoneNumber, "", mediaURL)
 				if err != nil {
-					logrus.WithError(err).WithField("item_index", i).Error("Failed to send extracted media message")
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"item_index": i,
+						"media_url": mediaURL,
+						"media_type": mediaType,
+					}).Error("❌ MEDIA: [TRACE] Failed to send extracted media message")
 					return err
 				}
 				
+				logrus.WithFields(logrus.Fields{
+					"item_index": i,
+					"media_url": mediaURL,
+				}).Info("✅ MEDIA: [TRACE] Successfully sent extracted media message")
+				
 				// Remove the bracketed media text from content and send remaining text if any
+				logrus.WithFields(logrus.Fields{
+					"item_index": i,
+					"original_content": item.Content,
+				}).Info("📤 AI: [TRACE] Removing media brackets from content")
+				
 				cleanedContent := s.removeMediaBrackets(item.Content)
+				
+				logrus.WithFields(logrus.Fields{
+					"item_index": i,
+					"cleaned_content": cleanedContent,
+					"has_remaining_text": strings.TrimSpace(cleanedContent) != "",
+				}).Info("📤 AI: [TRACE] Content cleaning result")
+				
 				if strings.TrimSpace(cleanedContent) != "" {
+					logrus.WithFields(logrus.Fields{
+						"item_index": i,
+						"cleaned_content": cleanedContent,
+					}).Info("📤 AI: [TRACE] Sending remaining text after media extraction")
+					
 					err := s.SendMessageFromDevice(deviceID, phoneNumber, cleanedContent)
 					if err != nil {
-						logrus.WithError(err).WithField("item_index", i).Error("Failed to send cleaned text message")
+						logrus.WithError(err).WithFields(logrus.Fields{
+							"item_index": i,
+							"cleaned_content": cleanedContent,
+						}).Error("❌ AI: [TRACE] Failed to send cleaned text message")
 						return err
 					}
+					
+					logrus.WithFields(logrus.Fields{
+						"item_index": i,
+						"cleaned_content": cleanedContent,
+					}).Info("✅ AI: [TRACE] Successfully sent cleaned text message")
+				} else {
+					logrus.WithField("item_index", i).Info("📤 AI: [TRACE] No remaining text to send after media extraction")
 				}
 			} else {
 				// Send as regular text message
+				logrus.WithFields(logrus.Fields{
+					"item_index": i,
+					"content": item.Content,
+				}).Info("📤 AI: [TRACE] Sending as regular text message (no media found)")
+				
 				err := s.SendMessageFromDevice(deviceID, phoneNumber, item.Content)
 				if err != nil {
-					logrus.WithError(err).WithField("item_index", i).Error("Failed to send text message")
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"item_index": i,
+						"content": item.Content,
+					}).Error("❌ AI: [TRACE] Failed to send text message")
 					return err
 				}
+				
+				logrus.WithFields(logrus.Fields{
+					"item_index": i,
+					"content": item.Content,
+				}).Info("✅ AI: [TRACE] Successfully sent text message")
 			}
 			// Add small delay between messages for better user experience
+			logrus.WithField("item_index", i).Info("📤 AI: [TRACE] Adding 500ms delay between messages")
 			time.Sleep(500 * time.Millisecond)
 
 		case "image":
 			// Send image message
+			logrus.WithFields(logrus.Fields{
+				"item_index": i,
+				"image_url": item.Content,
+			}).Info("📤 MEDIA: [TRACE] Sending direct image message")
+			
 			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
 			if err != nil {
-				logrus.WithError(err).WithField("item_index", i).Error("Failed to send image message")
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"item_index": i,
+					"image_url": item.Content,
+				}).Error("❌ MEDIA: [TRACE] Failed to send image message")
 				return err
 			}
+			
+			logrus.WithFields(logrus.Fields{
+				"item_index": i,
+				"image_url": item.Content,
+			}).Info("✅ MEDIA: [TRACE] Successfully sent image message")
+			
 			// Add small delay between messages
+			logrus.WithField("item_index", i).Info("📤 AI: [TRACE] Adding 500ms delay between messages")
 			time.Sleep(500 * time.Millisecond)
 
 		default:
-			logrus.WithField("type", item.Type).Warn("Unknown response type, skipping")
+			logrus.WithFields(logrus.Fields{
+				"item_index": i,
+				"unknown_type": item.Type,
+			}).Warn("⚠️ AI: [TRACE] Unknown response type, skipping")
 		}
 	}
 
@@ -627,7 +779,8 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"stage":        response.Stage,
-	}).Info("✅ AI: Successfully sent AI response")
+		"items_processed": len(response.Response),
+	}).Info("✅ AI: [TRACE] Successfully completed sendAIResponse")
 
 	return nil
 }
