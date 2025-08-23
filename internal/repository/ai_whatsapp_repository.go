@@ -254,6 +254,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
+		       flow_reference, current_node, variables, execution_status, execution_id,
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE id_prospect = ?
@@ -263,17 +264,26 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 
 	ai := &models.AIWhatsapp{}
 	var convLastJSON sql.NullString
-
 	var convCurrentSQL sql.NullString
+	var variablesJSON sql.NullString
+
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+		&ai.FlowReference, &ai.CurrentNode, &variablesJSON, &ai.ExecutionStatus, &ai.ExecutionID,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
 
 	ai.ConvCurrent = convCurrentSQL
+
+	// Handle Variables JSON field
+	if variablesJSON.Valid && variablesJSON.String != "" {
+		ai.Variables = json.RawMessage(variablesJSON.String)
+	} else {
+		ai.Variables = nil
+	}
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -315,6 +325,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
+		       flow_reference, current_node, variables, execution_status, execution_id,
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE id_device = ?
@@ -332,17 +343,26 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 	for rows.Next() {
 		ai := models.AIWhatsapp{}
 		var convLastJSON sql.NullString
-
 		var convCurrentSQL sql.NullString
+		var variablesJSON sql.NullString
+
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+			&ai.FlowReference, &ai.CurrentNode, &variablesJSON, &ai.ExecutionStatus, &ai.ExecutionID,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
 
 		ai.ConvCurrent = convCurrentSQL
+
+		// Handle Variables JSON field
+		if variablesJSON.Valid && variablesJSON.String != "" {
+			ai.Variables = json.RawMessage(variablesJSON.String)
+		} else {
+			ai.Variables = nil
+		}
 
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan AI WhatsApp conversation")

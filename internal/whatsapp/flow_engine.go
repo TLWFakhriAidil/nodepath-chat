@@ -97,8 +97,13 @@ func (e *FlowEngine) ExecuteFlow(execution *models.AIWhatsapp, userInput string)
 		}
 	}
 
-	// Note: Conversation history is saved by the AI conversation processing in whatsapp_service.go
-	// to prevent duplicate saves and data conflicts
+	// Save conversation history for flow execution
+	// This ensures both user input and flow responses are tracked
+	err = e.saveFlowConversationHistory(ctx)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to save flow conversation history")
+		// Don't return error - flow execution was successful
+	}
 
 	return nil
 }
@@ -478,9 +483,48 @@ func (e *FlowEngine) sendSingleResponse(phoneNumber, deviceID, message string) e
 		return fmt.Errorf("failed to send message: %w", err)
 	}
 
+	// Note: Conversation history is saved in ExecuteFlow method
+	// to prevent duplicate saves and ensure proper batching
+
 	return nil
 }
 
-// saveConversationHistory saves the conversation to history
-// saveConversationHistory function removed to prevent duplicate conversation saves
-// Conversation history is now handled exclusively by AI conversation processing in whatsapp_service.go
+// saveFlowConversationHistory saves both user input and flow responses to conversation history
+func (e *FlowEngine) saveFlowConversationHistory(ctx *ExecutionContext) error {
+	// Only save if we have user input or responses
+	if ctx.UserInput == "" && len(ctx.Response) == 0 {
+		return nil
+	}
+
+	// Combine all flow responses into a single bot response
+	botResponse := ""
+	for i, response := range ctx.Response {
+		if response != "" && response != "<nil>" && response != "nil" && strings.TrimSpace(response) != "" {
+			if i > 0 {
+				botResponse += " "
+			}
+			botResponse += response
+		}
+	}
+
+	// Save conversation history with both user input and bot response
+	err := e.aiWhatsappService.SaveConversationHistory(
+		ctx.Execution.ProspectNum,
+		ctx.Execution.IDDevice,
+		ctx.UserInput,
+		botResponse,
+		ctx.Execution.Stage,
+	)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to save flow conversation history")
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": ctx.Execution.ProspectNum,
+		"user_input":   ctx.UserInput,
+		"bot_response": botResponse,
+	}).Info("💾 FLOW_ENGINE: Conversation history saved")
+
+	return nil
+}
