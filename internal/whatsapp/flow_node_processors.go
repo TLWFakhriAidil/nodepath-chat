@@ -3,6 +3,7 @@ package whatsapp
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -219,6 +220,9 @@ func (e *FlowEngine) processAIPromptNode(ctx *ExecutionContext) error {
 	logrus.WithField("node_id", ctx.CurrentNode.ID).Info("🤖 FLOW_ENGINE: Processing AI prompt node")
 	
 	if ctx.CurrentNode.Data == nil {
+		logrus.Warn("AI prompt node has no data configured")
+		fallbackResponse := "I'm here to help! Could you please rephrase your question?"
+		ctx.Response = append(ctx.Response, fallbackResponse)
 		return nil
 	}
 	
@@ -230,38 +234,94 @@ func (e *FlowEngine) processAIPromptNode(ctx *ExecutionContext) error {
 	
 	if prompt == "" {
 		logrus.Warn("AI prompt node has no prompt configured")
+		fallbackResponse := "I'm here to help! Could you please rephrase your question?"
+		ctx.Response = append(ctx.Response, fallbackResponse)
 		return nil
 	}
 	
 	// Get device settings for AI configuration
 	deviceSettings, err := e.deviceSettingsService.GetByIDDevice(ctx.Execution.IDDevice)
 	if err != nil {
-		return fmt.Errorf("failed to get device settings: %w", err)
+		logrus.WithError(err).Error("Failed to get device settings for AI prompt node")
+		fallbackResponse := "I apologize, but I'm having trouble processing your request right now. Please try again."
+		ctx.Response = append(ctx.Response, fallbackResponse)
+		return nil
 	}
 	
-	// Get API key from device settings
+	// Validate device settings exist
+	if deviceSettings == nil {
+		logrus.WithField("id_device", ctx.Execution.IDDevice).Error("Device settings not found for AI prompt node")
+		fallbackResponse := "I apologize, but I'm having trouble processing your request right now. Please try again."
+		ctx.Response = append(ctx.Response, fallbackResponse)
+		return nil
+	}
+	
+	// Get API key from device settings with validation
 	apiKey := ""
-	if deviceSettings.APIKey.Valid {
+	if deviceSettings.APIKey.Valid && deviceSettings.APIKey.String != "" {
 		apiKey = deviceSettings.APIKey.String
+	} else {
+		// Check for special devices that use hardcoded API key
+		if ctx.Execution.IDDevice == "SCHQ-S94" || ctx.Execution.IDDevice == "SCHQ-S12" {
+			apiKey = "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"
+			logrus.WithField("id_device", ctx.Execution.IDDevice).Info("Using hardcoded API key for special device")
+		} else {
+			logrus.WithField("id_device", ctx.Execution.IDDevice).Warn("No API key configured for device, using fallback response")
+			fallbackResponse := "I'm here to help! Could you please rephrase your question?"
+			ctx.Response = append(ctx.Response, fallbackResponse)
+			return nil
+		}
 	}
 	
 	// Replace variables in prompt
 	prompt = e.flowService.ReplaceVariables(prompt, ctx.Variables)
 	
-	// Generate AI response
-	response, err := e.aiService.GenerateResponse(prompt, ctx.UserInput, apiKey, nil)
-	if err != nil {
-		return fmt.Errorf("AI generation failed: %w", err)
+	// Validate prompt after variable replacement
+	if prompt == "" {
+		logrus.Warn("Prompt is empty after variable replacement")
+		fallbackResponse := "I'm here to help! Could you please rephrase your question?"
+		ctx.Response = append(ctx.Response, fallbackResponse)
+		return nil
 	}
 	
-	if response != "" {
-		ctx.Response = append(ctx.Response, response)
-		
+	// Generate AI response with enhanced error handling
+	response, err := e.aiService.GenerateResponse(prompt, ctx.UserInput, apiKey, nil)
+	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"node_id":  ctx.CurrentNode.ID,
-			"response": response,
-		}).Info("🤖 FLOW_ENGINE: AI response generated")
+			"node_id": ctx.CurrentNode.ID,
+			"error": err.Error(),
+			"has_api_key": apiKey != "",
+		}).Error("AI generation failed")
+		// Add fallback response instead of returning error
+		fallbackResponse := "I apologize, but I'm having trouble processing your request right now. Please try again."
+		ctx.Response = append(ctx.Response, fallbackResponse)
+		return nil
 	}
+	
+	// Enhanced response validation to prevent <nil> responses
+	if response != "" && response != "<nil>" && response != "null" && response != "nil" && len(response) > 0 {
+		// Additional validation to ensure response is meaningful
+		trimmedResponse := strings.TrimSpace(response)
+		if trimmedResponse != "" && trimmedResponse != "<nil>" && trimmedResponse != "null" && trimmedResponse != "nil" {
+			ctx.Response = append(ctx.Response, trimmedResponse)
+			
+			logrus.WithFields(logrus.Fields{
+				"node_id":  ctx.CurrentNode.ID,
+				"response_length": len(trimmedResponse),
+			}).Info("🤖 FLOW_ENGINE: AI response generated successfully")
+			return nil
+		}
+	}
+	
+	// Handle empty, nil, or invalid response
+	logrus.WithFields(logrus.Fields{
+		"node_id": ctx.CurrentNode.ID,
+		"raw_response": response,
+		"response_length": len(response),
+	}).Warn("AI returned empty or invalid response, using fallback")
+	
+	fallbackResponse := "I'm here to help! Could you please rephrase your question?"
+	ctx.Response = append(ctx.Response, fallbackResponse)
 	
 	return nil
 }
@@ -306,23 +366,45 @@ func (e *FlowEngine) processAdvancedAIPromptNode(ctx *ExecutionContext) error {
 	// Generate advanced AI response
 	response, err := e.aiService.GenerateAdvancedResponse(prompt, ctx.UserInput, apiKey, nil, closingPrompt)
 	if err != nil {
-		return fmt.Errorf("advanced AI generation failed: %w", err)
+		logrus.WithError(err).Error("Advanced AI generation failed")
+		// Add fallback response instead of returning error
+		fallbackResponse := "I apologize, but I'm having trouble processing your request right now. Please try again."
+		ctx.Response = append(ctx.Response, fallbackResponse)
+		return nil
 	}
 	
 	if response != nil && len(response.Response) > 0 {
 		// Process structured response
+		validResponseAdded := false
 		for _, item := range response.Response {
-			if item.Type == "text" && item.Content != "" {
+			if item.Type == "text" && item.Content != "" && item.Content != "<nil>" && item.Content != "null" {
 				ctx.Response = append(ctx.Response, item.Content)
+				validResponseAdded = true
 			}
 			// TODO: Handle image responses
 		}
 		
-		logrus.WithFields(logrus.Fields{
-			"node_id": ctx.CurrentNode.ID,
-			"stage":   response.Stage,
-			"items":   len(response.Response),
-		}).Info("🧠 FLOW_ENGINE: Advanced AI response generated")
+		if validResponseAdded {
+			logrus.WithFields(logrus.Fields{
+				"node_id": ctx.CurrentNode.ID,
+				"stage":   response.Stage,
+				"items":   len(response.Response),
+			}).Info("🧠 FLOW_ENGINE: Advanced AI response generated")
+		} else {
+			// No valid responses found, add fallback
+			logrus.WithFields(logrus.Fields{
+				"node_id": ctx.CurrentNode.ID,
+				"response_items": len(response.Response),
+			}).Warn("Advanced AI returned no valid text responses, using fallback")
+			
+			fallbackResponse := "I'm here to help! Could you please rephrase your question?"
+			ctx.Response = append(ctx.Response, fallbackResponse)
+		}
+	} else {
+		// Handle empty or nil response
+		logrus.WithField("node_id", ctx.CurrentNode.ID).Warn("Advanced AI returned empty response, using fallback")
+		fallbackResponse := "I'm here to help! Could you please rephrase your question?"
+		ctx.Response = append(ctx.Response, fallbackResponse)
 	}
 	
 	return nil
@@ -382,11 +464,15 @@ func (e *FlowEngine) processDelayNode(ctx *ExecutionContext) error {
 func (e *FlowEngine) processConditionNode(ctx *ExecutionContext) error {
 	logrus.WithField("node_id", ctx.CurrentNode.ID).Info("🔀 FLOW_ENGINE: Processing condition node")
 	
-	// TODO: Implement proper condition evaluation
-	// For now, just continue to the first available next node
-	// This will be enhanced later with proper condition logic
+	// Condition nodes don't generate responses, they just evaluate conditions
+	// The actual condition evaluation happens in the getNextNode method
+	// when determining which path to take based on user input
 	
-	logrus.Info("🔀 FLOW_ENGINE: Condition evaluation not implemented yet, continuing")
+	logrus.WithFields(logrus.Fields{
+		"node_id": ctx.CurrentNode.ID,
+		"user_input": ctx.UserInput,
+	}).Info("🔀 FLOW_ENGINE: Condition node processed, evaluation will happen during path selection")
+	
 	return nil
 }
 

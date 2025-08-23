@@ -211,7 +211,7 @@ func (e *FlowEngine) getNextNode(ctx *ExecutionContext) (*models.FlowNode, error
 	return e.flowService.GetNextNode(ctx.Flow, ctx.CurrentNode.ID)
 }
 
-// getNextNodeFromCondition handles condition node logic
+// getNextNodeFromCondition handles condition node logic with proper evaluation
 func (e *FlowEngine) getNextNodeFromCondition(ctx *ExecutionContext) (*models.FlowNode, error) {
 	// Get all possible next nodes for this condition
 	nextNodes, err := e.flowService.GetAllNextNodes(ctx.Flow, ctx.CurrentNode.ID)
@@ -223,13 +223,36 @@ func (e *FlowEngine) getNextNodeFromCondition(ctx *ExecutionContext) (*models.Fl
 		return nil, nil // End of flow
 	}
 	
-	// For now, return the first available node
-	// TODO: Implement proper condition evaluation based on user input and variables
+	// Evaluate conditions based on user input
+	selectedNode := e.evaluateConditions(ctx, nextNodes)
+	if selectedNode != nil {
+		logrus.WithFields(logrus.Fields{
+			"condition_node": ctx.CurrentNode.ID,
+			"user_input": ctx.UserInput,
+			"available_paths": len(nextNodes),
+			"selected_path": selectedNode.ID,
+		}).Info("🔀 FLOW_ENGINE: Condition evaluated - selected matching path")
+		return selectedNode, nil
+	}
+	
+	// If no condition matches, look for default path or use first available
+	defaultNode := e.findDefaultPath(ctx, nextNodes)
+	if defaultNode != nil {
+		logrus.WithFields(logrus.Fields{
+			"condition_node": ctx.CurrentNode.ID,
+			"user_input": ctx.UserInput,
+			"selected_path": defaultNode.ID,
+		}).Info("🔀 FLOW_ENGINE: No condition matched - using default path")
+		return defaultNode, nil
+	}
+	
+	// Fallback to first available node
 	logrus.WithFields(logrus.Fields{
 		"condition_node": ctx.CurrentNode.ID,
+		"user_input": ctx.UserInput,
 		"available_paths": len(nextNodes),
 		"selected_path": nextNodes[0].ID,
-	}).Info("🔀 FLOW_ENGINE: Condition node - selecting first available path")
+	}).Warn("🔀 FLOW_ENGINE: No conditions or default found - using first available path")
 	
 	return nextNodes[0], nil
 }
@@ -240,10 +263,47 @@ func (e *FlowEngine) updateExecutionState(ctx *ExecutionContext) error {
 	ctx.Execution.CurrentNode.String = ctx.CurrentNode.ID
 	ctx.Execution.CurrentNode.Valid = true
 	
+	// Parse existing variables from execution
+	variables := make(map[string]interface{})
+	if len(ctx.Execution.Variables) > 0 {
+		err := json.Unmarshal(ctx.Execution.Variables, &variables)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to parse existing variables, using empty map")
+		}
+	}
+	
+	// Add any new variables from context
+	for key, value := range ctx.Variables {
+		variables[key] = value
+	}
+	
+	// Update flow execution state in database
+	err := e.aiWhatsappService.UpdateFlowExecution(
+		ctx.Execution.ProspectNum,
+		ctx.Execution.IDDevice,
+		ctx.CurrentNode.ID,
+		variables,
+		"active",
+	)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to update flow execution state")
+		return fmt.Errorf("failed to update flow execution state: %w", err)
+	}
+	
 	// Update conversation stage if changed
 	if ctx.Execution.Stage != "" {
-		return e.aiWhatsappService.UpdateConversationStage(ctx.Execution.ProspectNum, ctx.Execution.Stage)
+		stageErr := e.aiWhatsappService.UpdateConversationStage(ctx.Execution.ProspectNum, ctx.Execution.Stage)
+		if stageErr != nil {
+			logrus.WithError(stageErr).Warn("Failed to update conversation stage")
+		}
 	}
+	
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": ctx.Execution.ProspectNum,
+		"current_node": ctx.CurrentNode.ID,
+		"variables_count": len(variables),
+	}).Info("💾 FLOW_ENGINE: Execution state updated successfully")
+	
 	return nil
 }
 
@@ -253,6 +313,109 @@ func (e *FlowEngine) completeFlowExecution(ctx *ExecutionContext) error {
 	if ctx.Execution.Stage != "" {
 		return e.aiWhatsappService.UpdateConversationStage(ctx.Execution.ProspectNum, ctx.Execution.Stage)
 	}
+	return nil
+}
+
+// evaluateConditions evaluates user input against condition edges to find matching path
+func (e *FlowEngine) evaluateConditions(ctx *ExecutionContext, nextNodes []*models.FlowNode) *models.FlowNode {
+	userInput := strings.ToLower(strings.TrimSpace(ctx.UserInput))
+	
+	// Get edges from current condition node to evaluate conditions
+	edges, err := e.flowService.GetEdgesFromNode(ctx.Flow, ctx.CurrentNode.ID)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get edges for condition evaluation")
+		return nil
+	}
+	
+	// Evaluate each edge condition
+	for _, edge := range edges {
+		if edge.Condition == nil {
+			continue
+		}
+		
+		// Get condition data
+		conditionType, _ := edge.Condition["type"].(string)
+		conditionValue, _ := edge.Condition["value"].(string)
+		
+		if conditionType == "" || conditionValue == "" {
+			continue
+		}
+		
+		// Evaluate condition based on type
+		matches := false
+		switch conditionType {
+		case "contains":
+			matches = strings.Contains(userInput, strings.ToLower(conditionValue))
+		case "equals":
+			matches = userInput == strings.ToLower(conditionValue)
+		case "starts_with":
+			matches = strings.HasPrefix(userInput, strings.ToLower(conditionValue))
+		case "ends_with":
+			matches = strings.HasSuffix(userInput, strings.ToLower(conditionValue))
+		case "regex":
+			// TODO: Implement regex matching if needed
+			logrus.Warn("Regex condition type not implemented yet")
+		}
+		
+		if matches {
+			// Find the target node for this edge
+			for _, node := range nextNodes {
+				if node.ID == edge.Target {
+					logrus.WithFields(logrus.Fields{
+						"condition_type": conditionType,
+						"condition_value": conditionValue,
+						"user_input": ctx.UserInput,
+						"target_node": node.ID,
+					}).Info("🎯 FLOW_ENGINE: Condition matched")
+					return node
+				}
+			}
+		}
+	}
+	
+	return nil
+}
+
+// findDefaultPath finds a default path among the available next nodes by checking edge conditions
+func (e *FlowEngine) findDefaultPath(ctx *ExecutionContext, nextNodes []*models.FlowNode) *models.FlowNode {
+	// Get edges from current condition node to find default path
+	edges, err := e.flowService.GetEdgesFromNode(ctx.Flow, ctx.CurrentNode.ID)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get edges for default path evaluation")
+		return nil
+	}
+	
+	// Look for edges with default condition type
+	for _, edge := range edges {
+		if edge.Condition != nil {
+			conditionType, _ := edge.Condition["type"].(string)
+			if conditionType == "default" {
+				// Find the target node for this default edge
+				for _, node := range nextNodes {
+					if node.ID == edge.Target {
+						logrus.WithFields(logrus.Fields{
+							"default_edge": edge.ID,
+							"target_node": node.ID,
+						}).Info("🎯 FLOW_ENGINE: Found default path")
+						return node
+					}
+				}
+			}
+		}
+	}
+	
+	// Fallback: look for nodes that are marked as default in their data
+	for _, node := range nextNodes {
+		if node.Data != nil {
+			if isDefault, ok := node.Data["isDefault"].(bool); ok && isDefault {
+				return node
+			}
+			if defaultFlag, ok := node.Data["default"].(bool); ok && defaultFlag {
+				return node
+			}
+		}
+	}
+	
 	return nil
 }
 

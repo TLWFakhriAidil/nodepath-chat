@@ -59,19 +59,38 @@ func NewAIService(cfg *config.Config) *AIService {
 
 // GenerateResponse generates an AI response using OpenRouter with caching and concurrency control
 func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, conversationHistory []models.ConversationMessage) (string, error) {
+	// Validate input parameters
+	if systemPrompt == "" {
+		logrus.Warn("🚨 AI_SERVICE: Empty system prompt provided")
+		return s.getFallbackResponse(userInput), nil
+	}
+	
 	if apiKey == "" {
 		apiKey = s.cfg.OpenRouterDefaultKey
 	}
 
 	if apiKey == "" {
-		return "", fmt.Errorf("no API key provided")
+		logrus.Warn("🚨 AI_SERVICE: No API key provided")
+		return s.getFallbackResponse(userInput), nil
+	}
+	
+	// Validate API key format
+	if err := s.validateAPIKeyFormat(apiKey); err != nil {
+		logrus.WithError(err).Warn("🚨 AI_SERVICE: Invalid API key format")
+		return s.getFallbackResponse(userInput), nil
 	}
 
 	// Check cache first
 	cacheKey := s.generateCacheKey(systemPrompt, userInput, conversationHistory)
 	if cachedResponse := s.getCachedResponse(cacheKey); cachedResponse != "" {
-		logrus.Debug("Returning cached AI response")
-		return cachedResponse, nil
+		// Validate cached response
+		if s.isValidResponse(cachedResponse) {
+			logrus.Debug("Returning cached AI response")
+			return cachedResponse, nil
+		} else {
+			logrus.Warn("🚨 AI_SERVICE: Invalid cached response, removing from cache")
+			s.removeCachedResponse(cacheKey)
+		}
 	}
 
 	// Acquire semaphore for rate limiting
@@ -79,7 +98,8 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, con
 	case s.semaphore <- struct{}{}:
 		defer func() { <-s.semaphore }()
 	case <-time.After(10 * time.Second):
-		return "", fmt.Errorf("request timeout: too many concurrent AI requests")
+		logrus.Error("🚨 AI_SERVICE: Request timeout due to too many concurrent requests")
+		return s.getFallbackResponse(userInput), nil
 	}
 
 	// Build messages for OpenRouter
@@ -98,14 +118,23 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, con
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		response, err = s.makeOpenRouterRequest(request, apiKey)
-		if err == nil {
-			break
+		if err == nil && response != nil && len(response.Choices) > 0 {
+			content := response.Choices[0].Message.Content
+			if s.isValidResponse(content) {
+				break
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"attempt": attempt,
+					"content": content,
+				}).Warn("🔄 AI_SERVICE: Invalid response content, retrying")
+				err = fmt.Errorf("invalid response content: %s", content)
+			}
 		}
 
 		logrus.WithFields(logrus.Fields{
 			"attempt": attempt,
-			"error":   err.Error(),
-		}).Warn("OpenRouter API call failed, retrying")
+			"error":   err,
+		}).Warn("🔄 AI_SERVICE: API call failed, retrying")
 
 		if attempt < maxRetries {
 			time.Sleep(retryDelay * time.Duration(attempt))
@@ -113,28 +142,34 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, con
 	}
 
 	if err != nil {
-		logrus.WithError(err).Error("All OpenRouter API attempts failed")
+		logrus.WithError(err).Error("🚨 AI_SERVICE: All API attempts failed")
 		return s.getFallbackResponse(userInput), nil
 	}
 
-	// Extract response content
-	if len(response.Choices) == 0 {
+	// Final validation of response
+	if response == nil || len(response.Choices) == 0 {
+		logrus.Error("🚨 AI_SERVICE: Empty response from API")
 		return s.getFallbackResponse(userInput), nil
 	}
 
 	content := response.Choices[0].Message.Content
-	if content == "" {
+	if !s.isValidResponse(content) {
+		logrus.WithFields(logrus.Fields{
+			"raw_content": content,
+			"content_length": len(content),
+		}).Warn("🚨 AI_SERVICE: Invalid response content after all retries")
 		return s.getFallbackResponse(userInput), nil
 	}
 
-	// Cache the response
+	// Cache the valid response
 	s.setCachedResponse(cacheKey, content)
 
 	logrus.WithFields(logrus.Fields{
 		"model":         response.Model,
 		"prompt_tokens": response.Usage.PromptTokens,
 		"total_tokens":  response.Usage.TotalTokens,
-	}).Info("OpenRouter API call successful")
+		"content_length": len(content),
+	}).Info("🎯 AI_SERVICE: Valid response generated successfully")
 
 	return content, nil
 }
@@ -398,6 +433,11 @@ func (s *AIService) ValidateAPIKey(apiKey string) error {
 	if apiKey == "" {
 		return fmt.Errorf("API key is required")
 	}
+	
+	// Validate API key format first
+	if err := s.validateAPIKeyFormat(apiKey); err != nil {
+		return err
+	}
 
 	// Make a simple test request
 	testRequest := models.OpenRouterRequest{
@@ -411,12 +451,78 @@ func (s *AIService) ValidateAPIKey(apiKey string) error {
 		Stream: false,
 	}
 
-	_, err := s.makeOpenRouterRequest(testRequest, apiKey)
+	response, err := s.makeOpenRouterRequest(testRequest, apiKey)
 	if err != nil {
 		return fmt.Errorf("API key validation failed: %w", err)
 	}
+	
+	// Validate response structure
+	if response == nil || len(response.Choices) == 0 {
+		return fmt.Errorf("API key validation failed: invalid response structure")
+	}
+	
+	content := response.Choices[0].Message.Content
+	if !s.isValidResponse(content) {
+		return fmt.Errorf("API key validation failed: invalid response content")
+	}
 
 	return nil
+}
+
+// validateAPIKeyFormat validates the format of an API key
+func (s *AIService) validateAPIKeyFormat(apiKey string) error {
+	if apiKey == "" {
+		return fmt.Errorf("API key is required")
+	}
+	
+	// Basic format validation for OpenAI API keys
+	if strings.HasPrefix(apiKey, "sk-") && len(apiKey) > 20 {
+		return nil
+	}
+	
+	// For other API keys, just check if it's not empty and has reasonable length
+	if len(apiKey) > 10 {
+		return nil
+	}
+	
+	return fmt.Errorf("API key format appears to be invalid")
+}
+
+// isValidResponse validates if the AI response is valid and meaningful
+func (s *AIService) isValidResponse(response string) bool {
+	if response == "" {
+		return false
+	}
+	
+	// Check for common invalid responses
+	invalidResponses := []string{"<nil>", "null", "nil", "undefined", "NULL", "NIL", "<null>", "[null]"}
+	for _, invalid := range invalidResponses {
+		if response == invalid {
+			return false
+		}
+	}
+	
+	// Check if response is just whitespace
+	trimmed := strings.TrimSpace(response)
+	if trimmed == "" {
+		return false
+	}
+	
+	// Check for minimum meaningful length
+	if len(trimmed) < 2 {
+		return false
+	}
+	
+	// Check for common error patterns
+	errorPatterns := []string{"error:", "failed:", "exception:", "<error>", "[error]", "api error", "invalid request"}
+	lowerResponse := strings.ToLower(trimmed)
+	for _, pattern := range errorPatterns {
+		if strings.Contains(lowerResponse, pattern) {
+			return false
+		}
+	}
+	
+	return true
 }
 
 // GetSupportedModels returns a list of supported models

@@ -250,8 +250,36 @@ func (s *Service) continueExistingConversation(execution *models.AIWhatsapp, use
 		// Continue flow execution
 		return s.executeFlow(execution, userInput)
 	} else {
-		// Continue AI conversation
-		return s.processAIConversation(execution.ProspectNum, userInput, execution.IDDevice)
+		// Check if device has flows configured - if so, start flow execution
+		defaultFlow, err := s.flowService.GetDefaultFlowForDevice(execution.IDDevice)
+		if err != nil {
+			logrus.WithError(err).Warn("⚠️ FLOW: Failed to check for default flow, falling back to AI conversation")
+			return s.processAIConversation(execution.ProspectNum, userInput, execution.IDDevice)
+		}
+
+		if defaultFlow != nil {
+			// Device has flows configured, convert existing record to flow execution
+			logrus.WithFields(logrus.Fields{
+				"phone_number": execution.ProspectNum,
+				"device_id":    execution.IDDevice,
+				"flow_id":      defaultFlow.ID,
+			}).Info("🔄 FLOW: Converting existing AI conversation to flow execution")
+
+			// Start flow execution on existing record
+			variables := make(map[string]interface{})
+			updatedExecution, err := s.aiWhatsappService.StartFlowExecution(execution.ProspectNum, execution.IDDevice, defaultFlow.ID, variables)
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to convert to flow execution, falling back to AI conversation")
+				return s.processAIConversation(execution.ProspectNum, userInput, execution.IDDevice)
+			}
+
+			// Execute the flow with updated execution record
+			return s.executeFlow(updatedExecution, userInput)
+		} else {
+			// No flows configured, continue AI conversation
+			logrus.Info("🤖 FLOW: No flows configured for device, continuing AI conversation")
+			return s.processAIConversation(execution.ProspectNum, userInput, execution.IDDevice)
+		}
 	}
 }
 

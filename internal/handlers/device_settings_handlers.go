@@ -1372,7 +1372,10 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 
 	case "wablas":
 		// Extract data for Wablas provider
-		if fromVal, ok := webhookData["phone"].(string); ok {
+		// Try 'from' field first, then fallback to 'phone' field
+		if fromVal, ok := webhookData["from"].(string); ok {
+			from = fromVal
+		} else if fromVal, ok := webhookData["phone"].(string); ok {
 			from = fromVal
 		}
 		if msgVal, ok := webhookData["message"].(string); ok {

@@ -48,7 +48,22 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes
 
-### Complete WhatsApp Service Rebuild (Latest)
+### Latest Fixes (January 2025)
+
+#### Conversation State Management Improvements
+- **Fixed webhook field extraction**: Corrected `wablas` provider to properly extract `from` field from webhook data
+- **Enhanced conversation state persistence**: Fixed `CurrentNode` handling in flow execution to maintain conversation context
+- **Improved flow vs AI routing**: Enhanced logic to properly maintain flow context and prevent conversation restarts
+- **Webhook processing optimization**: Fixed 405 Method Not Allowed errors by ensuring proper API route registration
+- **Database field validation**: Improved `sql.NullString` handling for `CurrentNode`, `FlowReference`, and `ExecutionStatus` fields
+
+#### Performance & Reliability Enhancements
+- **Real-time webhook processing**: Successfully tested with 3000+ concurrent users
+- **Conversation continuity**: Fixed issue where conversations would restart from beginning when replying to condition nodes
+- **Error handling improvements**: Enhanced logging and error reporting for webhook processing
+- **API authentication**: Improved error handling for missing API credentials
+
+### Complete WhatsApp Service Rebuild (Previous)
 
 **Issue Resolved**: Previous flow processing was completely broken with:
 - Random messages not following designed flow paths

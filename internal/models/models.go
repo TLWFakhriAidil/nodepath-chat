@@ -82,6 +82,7 @@ type FlowEdge struct {
 	Target   string `json:"target"`
 	SourceHandle string `json:"sourceHandle,omitempty"`
 	TargetHandle string `json:"targetHandle,omitempty"`
+	Condition map[string]interface{} `json:"condition,omitempty"` // Condition data for conditional edges
 }
 
 // Position represents the position of a node in the flow builder

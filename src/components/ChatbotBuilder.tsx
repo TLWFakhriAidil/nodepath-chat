@@ -290,6 +290,23 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       selectedDeviceId
     });
 
+    // Helper function to get condition data for edges from condition nodes
+    const getConditionDataForEdge = (edge: Edge) => {
+      const sourceNode = nodes.find(node => node.id === edge.source);
+      if (sourceNode && sourceNode.type === 'condition' && sourceNode.data.conditions) {
+        const conditions = sourceNode.data.conditions as any[];
+        const condition = conditions.find(c => c.id === edge.sourceHandle);
+        if (condition) {
+          return {
+            type: condition.type,
+            value: condition.value || '',
+            label: condition.label
+          };
+        }
+      }
+      return null;
+    };
+
     const flowData: ChatbotFlow = {
       id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       name: flowName,
@@ -302,13 +319,17 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
         position: node.position,
         data: node.data
       })),
-      edges: edges.map(edge => ({
-        id: edge.id || `${edge.source}-${edge.target}`,
-        source: edge.source,
-        target: edge.target,
-        sourceHandle: edge.sourceHandle,
-        targetHandle: edge.targetHandle
-      })),
+      edges: edges.map(edge => {
+        const conditionData = getConditionDataForEdge(edge);
+        return {
+          id: edge.id || `${edge.source}-${edge.target}`,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle,
+          targetHandle: edge.targetHandle,
+          ...(conditionData && { condition: conditionData })
+        };
+      }),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

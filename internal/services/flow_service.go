@@ -359,6 +359,24 @@ func (s *FlowService) GetAllNextNodes(flow *models.ChatbotFlow, currentNodeID st
 	return nextNodes, nil
 }
 
+// GetEdgesFromNode gets all edges that originate from a specific node
+func (s *FlowService) GetEdgesFromNode(flow *models.ChatbotFlow, nodeID string) ([]*models.FlowEdge, error) {
+	edges, err := s.GetFlowEdges(flow)
+	if err != nil {
+		return nil, err
+	}
+
+	var nodeEdges []*models.FlowEdge
+	// Find all edges that start from the specified node
+	for _, edge := range edges {
+		if edge.Source == nodeID {
+			nodeEdges = append(nodeEdges, edge)
+		}
+	}
+
+	return nodeEdges, nil
+}
+
 
 
 

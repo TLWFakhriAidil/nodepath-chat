@@ -470,8 +470,11 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 		systemPrompt = "You are a helpful AI assistant for WhatsApp conversations."
 	}
 
-	// Build the complete prompt content according to the custom instructions
+	// Build the complete prompt content with stronger JSON format enforcement
 	content := systemPrompt + "\n\n" +
+		"### CRITICAL: JSON OUTPUT REQUIRED ###\n" +
+		"You MUST respond ONLY in valid JSON format. Do NOT include any text before or after the JSON.\n" +
+		"Do NOT use markdown code blocks. Do NOT add explanations. ONLY return the JSON object.\n\n" +
 		"### Instructions:\n" +
 		"1. If the current stage is null or undefined, default to the first stage.\n" +
 		"2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" +
@@ -481,45 +484,29 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 		"   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" +
 		"   - The `Jenis` field is only added to `text` types within the `Response` array.\n" +
 		"   - If the directive is not present, omit the `Jenis` field entirely.\n\n" +
-		"### Response Format:\n" +
+		"### MANDATORY JSON RESPONSE FORMAT ###\n" +
+		"Your response MUST be a valid JSON object with this exact structure:\n" +
 		"{\n" +
-		"  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" +
+		"  \"Stage\": \"[Stage]\",\n" +
 		"  \"Response\": [\n" +
-		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the first response message here.\"},\n" +
-		"    {\"type\": \"image\", \"content\": \"https://example.com/image1.jpg\"},\n" +
-		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the second response message here.\"}\n" +
+		"    {\"type\": \"text\", \"content\": \"Your response message here\"}\n" +
 		"  ]\n" +
 		"}\n\n" +
-		"### Example Response:\n" +
-		"// If the directive is present\n" +
+		"### Example Valid JSON Response:\n" +
 		"{\n" +
 		"  \"Stage\": \"Problem Identification\",\n" +
 		"  \"Response\": [\n" +
-		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
-		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
+		"    {\"type\": \"text\", \"content\": \"I can help you with testing the flow routing. What specific aspect would you like to test?\"}\n" +
 		"  ]\n" +
 		"}\n\n" +
-		"// If the directive is NOT present\n" +
-		"{\n" +
-		"  \"Stage\": \"Problem Identification\",\n" +
-		"  \"Response\": [\n" +
-		"    {\"type\": \"text\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
-		"    {\"type\": \"text\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
-		"  ]\n" +
-		"}\n\n" +
-		"### Important Rules:\n" +
-		"1. **Include the `Stage` field in every response**:\n" +
-		"   - The `Stage` field must explicitly specify the current stage.\n" +
-		"   - If the stage is unclear or missing, default to first stage.\n\n" +
-		"2. **Use the Correct Response Format**:\n" +
-		"   - Divide long responses into multiple short \"text\" segments for better readability.\n" +
-		"   - Include all relevant images provided in the input, interspersed naturally with text responses.\n" +
-		"   - If multiple images are provided, create separate `image` entries for each.\n\n" +
-		"3. **Dynamic Field for [onemessage]**:\n" +
-		"   - If the input specifies \"I want this section in add response format [onemessage]\":\n" +
-		"      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" +
-		"   - If the directive is not present, omit the `Jenis` field entirely.\n" +
-		"   - Non-text types like `image` never include the `Jenis` field.\n\n"
+		"### CRITICAL RULES ###\n" +
+		"1. ALWAYS start your response with { and end with }\n" +
+		"2. NEVER include any text outside the JSON object\n" +
+		"3. NEVER use markdown code blocks like ```json\n" +
+		"4. The Stage field is MANDATORY in every response\n" +
+		"5. The Response array must contain at least one text object\n" +
+		"6. All JSON must be properly escaped and valid\n\n" +
+		"REMEMBER: Your entire response must be valid JSON that can be parsed directly.\n\n"
 
 	return content
 }
@@ -556,7 +543,25 @@ func (s *aiWhatsappService) getAIModel(idDevice, apiKeyOption string) string {
 
 // callAIAPI calls the AI API with the given payload
 func (s *aiWhatsappService) callAIAPI(apiURL, apiKey string, payload AIWhatsappPayload) (string, error) {
-	jsonPayload, err := json.Marshal(payload)
+	// Create different payload structures based on API type
+	var jsonPayload []byte
+	var err error
+	
+	// Check if this is OpenAI API (doesn't support repetition_penalty)
+	if strings.Contains(apiURL, "api.openai.com") {
+		// Create OpenAI-compatible payload without repetition_penalty
+		openAIPayload := map[string]interface{}{
+			"model":       payload.Model,
+			"messages":    payload.Messages,
+			"temperature": payload.Temperature,
+			"top_p":       payload.TopP,
+		}
+		jsonPayload, err = json.Marshal(openAIPayload)
+	} else {
+		// Use full payload for OpenRouter API
+		jsonPayload, err = json.Marshal(payload)
+	}
+	
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
