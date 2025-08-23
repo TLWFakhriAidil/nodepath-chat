@@ -97,11 +97,8 @@ func (e *FlowEngine) ExecuteFlow(execution *models.AIWhatsapp, userInput string)
 		}
 	}
 
-	// Save conversation history
-	err = e.saveConversationHistory(ctx)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to save conversation history")
-	}
+	// Note: Conversation history is saved by the AI conversation processing in whatsapp_service.go
+	// to prevent duplicate saves and data conflicts
 
 	return nil
 }
@@ -485,17 +482,5 @@ func (e *FlowEngine) sendSingleResponse(phoneNumber, deviceID, message string) e
 }
 
 // saveConversationHistory saves the conversation to history
-func (e *FlowEngine) saveConversationHistory(ctx *ExecutionContext) error {
-	responseText := ""
-	if len(ctx.Response) > 0 {
-		responseText = ctx.Response[0] // Use first response for history
-	}
-
-	return e.aiWhatsappService.SaveConversationHistory(
-		ctx.Execution.ProspectNum,
-		ctx.Execution.IDDevice,
-		ctx.UserInput,
-		responseText,
-		ctx.Execution.Stage,
-	)
-}
+// saveConversationHistory function removed to prevent duplicate conversation saves
+// Conversation history is now handled exclusively by AI conversation processing in whatsapp_service.go
