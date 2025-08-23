@@ -813,8 +813,17 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
 			"execution_id": executionID,
-		}).Error("❌ FLOW: Execution not found for flow continuation")
-		return fmt.Errorf("execution not found for phone %s and device %s", phoneNumber, deviceID)
+			"flow_id":      flowID,
+			"node_id":      nodeID,
+		}).Warn("⚠️ FLOW: Execution record not found for delayed message - skipping processing")
+		
+		// Don't return an error - just skip processing this delayed message
+		// This can happen when delayed messages are queued for flows that were never properly initialized
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Info("ℹ️ FLOW: Delayed message skipped - no execution record exists")
+		return nil
 	}
 	
 	// Reactivate execution if it was completed (for delayed message processing)
