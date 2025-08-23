@@ -2,10 +2,10 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -511,20 +511,68 @@ func (s *aiCronService) getFileType(fileURL string) string {
 }
 
 // sendWablasTextMessage sends text message via Wablas provider
+// Updated to match PHP implementation
 func (s *aiCronService) sendWablasTextMessage(to, message string, deviceSettings *models.DeviceSettings) error {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WABLAS: No instance available")
+		return fmt.Errorf("no instance available")
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"to": to,
 		"provider": "wablas",
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending text message via Wablas")
 
-	// TODO: Implement actual Wablas API call
-	// This should use the device settings to make HTTP request to Wablas API
-	logrus.Info("📤 WABLAS: Text message sent successfully")
+	// Wablas API endpoint for sending messages
+	apiURL := "https://my.wablas.com/api/send-message"
+
+	// Prepare form data to match PHP implementation
+	formData := url.Values{}
+	formData.Set("phone", to)
+	formData.Set("message", message)
+
+	// Create HTTP request with form data
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to create request")
+		return err
+	}
+
+	// Set headers as per PHP implementation
+	req.Header.Set("Authorization", deviceSettings.Instance.String)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Execute request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Request failed")
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to read response")
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"status_code": resp.StatusCode,
+		"response": string(body),
+	}).Info("📤 WABLAS: Text message sent")
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("wablas API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	return nil
 }
 
 // sendWhacenterTextMessage sends text message via Whacenter provider
+// Updated to match PHP implementation
 func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSettings *models.DeviceSettings) error {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WHACENTER: No instance available")
@@ -534,75 +582,65 @@ func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSetti
 	logrus.WithFields(logrus.Fields{
 		"to": to,
 		"provider": "whacenter",
-		"device_id": deviceSettings.Instance.String, // ✅ Use instance
+		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending text message via Whacenter")
 
 	// Whacenter API endpoint for sending messages
 	apiURL := "https://api.whacenter.com/api/send"
 
-	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
-	payload := map[string]interface{}{
-		"device_id": deviceSettings.Instance.String, // ✅ Use instance
-		"number": to,
-		"message": message,
-		"type": "text",
-	}
+	// Prepare form data to match PHP implementation
+	formData := url.Values{}
+	formData.Set("device_id", deviceSettings.Instance.String)
+	formData.Set("number", to)
+	formData.Set("message", message)
 
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
-		return fmt.Errorf("failed to marshal payload: %w", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	// Create HTTP request with form data
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
-		return fmt.Errorf("failed to create request: %w", err)
+		return err
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+	// Set content type as per PHP implementation (no Authorization header)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	// Send request
+	// Execute request
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		logrus.WithError(err).Error("❌ WHACENTER: Failed to send message")
-		return fmt.Errorf("failed to send message: %w", err)
+		logrus.WithError(err).Error("❌ WHACENTER: Request failed")
+		return err
 	}
 	defer resp.Body.Close()
 
-	// Read response body for error details
-	respBody, err := io.ReadAll(resp.Body)
+	// Read response
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logrus.WithError(err).Error("❌ WHACENTER: Failed to read response body")
-		return fmt.Errorf("failed to read response: %w", err)
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to read response")
+		return err
 	}
 
-	// Log response details
-	logFields := logrus.Fields{
-		"to": to,
+	logrus.WithFields(logrus.Fields{
 		"status_code": resp.StatusCode,
-		"response_body": string(respBody),
+		"response": string(body),
+	}).Info("📤 WHACENTER: Text message sent")
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("whacenter API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		logFields["status"] = "success"
-		logrus.WithFields(logFields).Info("📤 WHACENTER: Text message sent successfully")
-		return nil
-	} else {
-		logFields["status"] = "error"
-		logrus.WithFields(logFields).Error("❌ WHACENTER: Text message failed")
-		return fmt.Errorf("whacenter API error: status %d, body: %s", resp.StatusCode, string(respBody))
-	}
+	return nil
 }
 
 
 
 // sendWablasMultimediaMessage sends multimedia message via Wablas provider
 func (s *aiCronService) sendWablasMultimediaMessage(to, caption, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WABLAS: No instance available")
+		return fmt.Errorf("no instance available")
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"to": to,
 		"file_type": fileType,
@@ -610,9 +648,64 @@ func (s *aiCronService) sendWablasMultimediaMessage(to, caption, fileURL, fileTy
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending multimedia message via Wablas")
 
-	// TODO: Implement actual Wablas multimedia API call
-	// This should use the device settings to make HTTP request to Wablas API
-	logrus.Info("📤 WABLAS: Multimedia message sent successfully")
+	// Determine API endpoint and field name based on file type
+	var apiURL, fieldName string
+	switch {
+	case strings.Contains(fileURL, ".mp4"):
+		apiURL = "https://my.wablas.com/api/send-video"
+		fieldName = "video"
+	case strings.Contains(fileURL, ".mp3"):
+		apiURL = "https://my.wablas.com/api/send-audio"
+		fieldName = "audio"
+	default:
+		apiURL = "https://my.wablas.com/api/send-image"
+		fieldName = "image"
+	}
+
+	// Prepare form data payload to match PHP implementation
+	formData := url.Values{}
+	formData.Set("phone", to)
+	formData.Set(fieldName, fileURL)
+	formData.Set("caption", caption)
+
+	// Create HTTP request with form data
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to create request")
+		return err
+	}
+
+	// Set headers as per PHP implementation
+	req.Header.Set("Authorization", deviceSettings.Instance.String)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Execute request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Request failed")
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to read response")
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"status_code": resp.StatusCode,
+		"response": string(body),
+		"endpoint": apiURL,
+		"field_name": fieldName,
+	}).Info("📤 WABLAS: Multimedia message sent")
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("wablas API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	return nil
 }
 
@@ -630,38 +723,31 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, caption, fileURL, fil
 		"device_id": deviceSettings.Instance.String, // ✅ Use instance
 	}).Debug("Sending multimedia message via Whacenter")
 
-	// Whacenter API endpoint for sending media
-	apiURL := "https://api.whacenter.com/api/send-media"
+	// Whacenter API endpoint for sending media - using /api/send as per PHP implementation
+	apiURL := "https://api.whacenter.com/api/send"
 
-	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
-	payload := map[string]interface{}{
-		"device_id": deviceSettings.Instance.String, // ✅ Use instance
-		"number":    to,
-		"media_url": fileURL,
-		"type":      fileType,
-	}
-
-	// Add caption if provided
+	// Prepare form data payload to match PHP implementation
+	formData := url.Values{}
+	formData.Set("device_id", deviceSettings.Instance.String) // ✅ Use instance
+	formData.Set("number", to)
+	formData.Set("file", fileURL) // Use 'file' parameter as per PHP code
+	formData.Set("type", fileType)
+	
+	// Add message/caption if provided
 	if caption != "" {
-		payload["caption"] = caption
+		formData.Set("message", caption)
 	}
 
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
-		return fmt.Errorf("failed to marshal payload: %w", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	// Create HTTP request with form data
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+	// Set headers for form data
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Note: PHP code doesn't show Authorization header, removing it to match
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}

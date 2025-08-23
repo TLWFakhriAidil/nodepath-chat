@@ -1646,6 +1646,7 @@ func (h *Handlers) sendImageMessage(to, imageURL string, deviceSettings *models.
 }
 
 // sendWhacenterTextMessage sends text message via Whacenter API
+// Updated to match PHP implementation - uses form data instead of JSON
 func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *models.DeviceSettings) {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WHACENTER: No instance available")
@@ -1655,30 +1656,21 @@ func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *
 	// Whacenter API endpoint for sending messages
 	apiURL := "https://api.whacenter.com/api/send"
 
-	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
-	payload := map[string]interface{}{
-		"device_id": deviceSettings.Instance.String, // ✅ Use instance
-		"number": to,
-		"message": message,
-		"type": "text",
-	}
+	// Prepare form data payload to match PHP implementation
+	formData := url.Values{}
+	formData.Set("device_id", deviceSettings.Instance.String) // ✅ Use instance
+	formData.Set("number", to)
+	formData.Set("message", message)
 
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
-		return
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	// Create HTTP request with form data
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
 		return
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+	// Set headers - no Authorization header as per PHP implementation
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -1713,6 +1705,7 @@ func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *
 }
 
 // sendWablasTextMessage sends text message via Wablas API
+// Updated to match PHP implementation - removed isGroup parameter
 func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *models.DeviceSettings) {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WABLAS: No instance available")
@@ -1722,11 +1715,11 @@ func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *mod
 	// Wablas API endpoint for sending messages
 	apiURL := "https://my.wablas.com/api/send-message"
 
-	// Prepare form data
+	// Prepare form data to match PHP implementation
 	formData := url.Values{}
 	formData.Set("phone", to)
 	formData.Set("message", message)
-	formData.Set("isGroup", "false")
+	// Removed isGroup parameter as it's not in PHP implementation
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
@@ -1735,7 +1728,7 @@ func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *mod
 		return
 	}
 
-	// Set headers
+	// Set headers as per PHP implementation
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", deviceSettings.Instance.String)
 
@@ -1784,38 +1777,31 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType
 		return
 	}
 
-	// Whacenter API endpoint for sending media
-	apiURL := "https://api.whacenter.com/api/send-media"
+	// Whacenter API endpoint for sending media - using /api/send as per PHP implementation
+	apiURL := "https://api.whacenter.com/api/send"
 
-	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
-	payload := map[string]interface{}{
-		"device_id": deviceSettings.Instance.String, // ✅ Use instance
-		"number":    to,
-		"media_url": fileURL,
-		"type":      fileType,
-	}
-
-	// Add caption if provided
+	// Prepare form data payload to match PHP implementation
+	formData := url.Values{}
+	formData.Set("device_id", deviceSettings.Instance.String) // ✅ Use instance
+	formData.Set("number", to)
+	formData.Set("file", fileURL) // Use 'file' parameter as per PHP code
+	formData.Set("type", fileType)
+	
+	// Add message/caption if provided
 	if caption != "" {
-		payload["caption"] = caption
+		formData.Set("message", caption)
 	}
 
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
-		return
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	// Create HTTP request with form data
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
 		return
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+	// Set headers for form data
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Note: PHP code doesn't show Authorization header, removing it to match
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
