@@ -321,10 +321,14 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 	// Use the correct Whacenter media API endpoint
 	apiURL := "https://api.whacenter.com/api/send-media"
 	
+	// Determine file type from URL for proper media type detection
+	fileType := ps.getFileTypeFromURL(mediaURL)
+	
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
 		"media_url":    mediaURL,
+		"file_type":    fileType,
 		"caption_len":  len(caption),
 	}).Debug("[WHACENTER] Preparing media request")
 
@@ -338,7 +342,7 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 		"device_id": deviceSettings.Instance.String, // Use instance as device_id
 		"number":    phoneNumber,
 		"media_url": mediaURL, // Use media_url instead of file
-		"type":      "image",   // Default to image, could be enhanced to detect type
+		"type":      fileType,  // Use detected file type instead of hardcoded "image"
 	}
 
 	// Add caption if provided
