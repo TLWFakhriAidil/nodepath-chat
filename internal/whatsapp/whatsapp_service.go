@@ -801,16 +801,42 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 		"device_id":    deviceID,
 	}).Info("🔄 FLOW: Processing flow continuation")
 	
-	// Get execution record
-	execution, err := s.aiWhatsappService.GetAIWhatsappByProspectAndDevice(phoneNumber, deviceID)
+	// Get execution record - use GetFlowExecutionByProspectAndDevice to handle completed executions
+	execution, err := s.aiWhatsappService.GetFlowExecutionByProspectAndDevice(phoneNumber, deviceID)
 	if err != nil {
-		return err
+		logrus.WithError(err).Error("❌ FLOW: Failed to get execution record for flow continuation")
+		return fmt.Errorf("failed to get execution record: %w", err)
 	}
 	
 	if execution == nil {
-		return fmt.Errorf("execution not found")
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+			"execution_id": executionID,
+		}).Error("❌ FLOW: Execution not found for flow continuation")
+		return fmt.Errorf("execution not found for phone %s and device %s", phoneNumber, deviceID)
+	}
+	
+	// Reactivate execution if it was completed (for delayed message processing)
+	if execution.ExecutionStatus.Valid && execution.ExecutionStatus.String == "completed" {
+		logrus.WithFields(logrus.Fields{
+			"execution_id": execution.ExecutionID.String,
+			"phone_number": phoneNumber,
+		}).Info("🔄 FLOW: Reactivating completed execution for delayed message processing")
+		
+		// Update execution status to active for delayed processing
+		err = s.aiWhatsappService.UpdateFlowExecution(phoneNumber, deviceID, "", nil, "active")
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to reactivate execution")
+			return fmt.Errorf("failed to reactivate execution: %w", err)
+		}
 	}
 	
 	// Continue flow execution
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ExecutionID.String,
+		"current_node": execution.CurrentNode.String,
+	}).Info("✅ FLOW: Continuing flow execution with updated state")
+	
 	return s.executeFlow(execution, userInput)
 }
