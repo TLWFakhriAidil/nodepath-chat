@@ -316,8 +316,30 @@ func (s *Service) startNewConversation(phoneNumber, deviceID, userInput string) 
 		"flow_id":      defaultFlow.ID,
 	}).Info("✅ FLOW: New flow execution started")
 
-	// Execute the flow
-	return s.executeFlow(execution, userInput)
+	// For first-time users, execute the flow without user input first to send initial greeting
+	// This will process the start node and advance to the first message node
+	logrus.Info("🚀 FLOW: Executing initial flow to send greeting message")
+	err = s.executeFlow(execution, "")
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to execute initial flow")
+		// Don't return error, continue with user input processing
+	}
+
+	// Now process the user's actual input against the current flow state
+	if userInput != "" {
+		logrus.Info("📝 FLOW: Processing user input after initial greeting")
+		// Get updated execution state
+		updatedExecution, err := s.aiWhatsappService.GetAIWhatsappByProspectAndDevice(phoneNumber, deviceID)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to get updated execution state")
+			return err
+		}
+		
+		// Execute flow with user input
+		return s.executeFlow(updatedExecution, userInput)
+	}
+
+	return nil
 }
 
 // executeFlow executes the flow logic using the new FlowEngine
