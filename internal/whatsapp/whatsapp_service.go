@@ -398,8 +398,19 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"response_length": len(response),
 		}).Info("📤 FLOW: Sending response back to user")
 
-		// Send response back to user using specific device
-		err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+		// Create AI response structure to handle media extraction
+		aiResponse := &services.AIWhatsappResponse{
+			Stage: "flow_processing",
+			Response: []services.AIWhatsappResponseItem{
+				{
+					Type:    "text",
+					Content: response,
+				},
+			},
+		}
+
+		// Send response using sendAIResponse to handle media extraction
+		err = s.sendAIResponse(phoneNumber, deviceID, aiResponse)
 		if err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"device_id":    deviceID,
@@ -2125,7 +2136,19 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 			"response":     response,
 		}).Info("📤 FLOW: Sending delayed response to user")
 
-		err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+		// Create AI response structure to handle media extraction for delayed responses
+		aiResponse := &services.AIWhatsappResponse{
+			Stage: "flow_processing_delayed",
+			Response: []services.AIWhatsappResponseItem{
+				{
+					Type:    "text",
+					Content: response,
+				},
+			},
+		}
+
+		// Send delayed response using sendAIResponse to handle media extraction
+		err = s.sendAIResponse(phoneNumber, deviceID, aiResponse)
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to send delayed response")
 			return fmt.Errorf("failed to send response: %w", err)
