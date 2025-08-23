@@ -43,7 +43,7 @@ func NewHandlers(
 	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
 	
 	// Initialize AI WhatsApp handlers
-	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
+	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo, whatsappService)
 	
 	return &Handlers{
 		flowService:           flowService,
@@ -109,12 +109,12 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
 	deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
 
+	// AI WhatsApp routes - delegate to AIWhatsappHandlers (must be before general webhook routes)
+	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
+
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")
 	webhook.Post("/:id_device/:instance", h.HandleWebhook)
-
-	// AI WhatsApp routes - delegate to AIWhatsappHandlers
-	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
 }
 
 // Response helpers

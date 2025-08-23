@@ -8,6 +8,7 @@ import (
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/services"
+	"nodepath-chat/internal/whatsapp"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
@@ -18,6 +19,7 @@ type AIWhatsappHandlers struct {
 	AIWhatsappService services.AIWhatsappService
 	AIRepo            repository.AIWhatsappRepository
 	DeviceRepo        repository.DeviceSettingsRepository
+	WhatsappService   *whatsapp.Service // Add WhatsApp service for proper flow processing
 }
 
 // NewAIWhatsappHandlers creates a new AI WhatsApp handlers instance
@@ -25,11 +27,13 @@ func NewAIWhatsappHandlers(
 	aiWhatsappService services.AIWhatsappService,
 	aiRepo repository.AIWhatsappRepository,
 	deviceRepo repository.DeviceSettingsRepository,
+	whatsappService *whatsapp.Service,
 ) *AIWhatsappHandlers {
 	return &AIWhatsappHandlers{
 		AIWhatsappService: aiWhatsappService,
 		AIRepo:            aiRepo,
 		DeviceRepo:        deviceRepo,
+		WhatsappService:   whatsappService,
 	}
 }
 
@@ -434,6 +438,30 @@ func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, device
 		"provider":     provider,
 		"message":      message,
 	}).Info("Processing incoming message")
+
+	// Use WhatsApp service for proper flow processing instead of direct AI service
+	if h.WhatsappService != nil {
+		// Use the WhatsApp service's ProcessIncomingMessageFromWebhook which handles flow logic properly
+		err := h.WhatsappService.ProcessIncomingMessageFromWebhook(prospectNum, message, deviceID, provider)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process message through WhatsApp service")
+			// Fallback to direct AI processing if WhatsApp service fails
+			h.processDirectAIConversation(prospectNum, message, deviceID, provider)
+		}
+		return
+	}
+
+	// Fallback to direct AI processing if WhatsApp service is not available
+	h.processDirectAIConversation(prospectNum, message, deviceID, provider)
+}
+
+// processDirectAIConversation handles direct AI conversation processing (fallback)
+func (h *AIWhatsappHandlers) processDirectAIConversation(prospectNum, message, deviceID, provider string) {
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"device_id":    deviceID,
+		"provider":     provider,
+	}).Info("Processing direct AI conversation")
 
 	// Check if this is a device command
 	if strings.HasPrefix(message, "%") || strings.HasPrefix(message, "#") || strings.ToLower(message) == "cmd" {

@@ -184,6 +184,30 @@ func (e *FlowEngine) getCurrentOrStartNode(ctx *ExecutionContext) (*models.FlowN
 	if ctx.Execution.CurrentNode.Valid && ctx.Execution.CurrentNode.String != "" {
 		node, err := e.flowService.FindNodeByID(ctx.Flow, ctx.Execution.CurrentNode.String)
 		if err == nil && node != nil {
+			// Special handling for user_reply nodes - advance to next node when user sends input
+			if node.Type == models.NodeTypeUserReply {
+				logrus.WithField("node_id", node.ID).Info("📍 FLOW_ENGINE: User replied to user_reply node, advancing to next node")
+				
+				// Get the next node after user_reply
+				nextNode, err := e.flowService.GetNextNode(ctx.Flow, node.ID)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get next node after user_reply: %w", err)
+				}
+				
+				if nextNode != nil {
+					logrus.WithFields(logrus.Fields{
+						"from_node": node.ID,
+						"to_node": nextNode.ID,
+						"next_type": nextNode.Type,
+					}).Info("➡️ FLOW_ENGINE: Advanced from user_reply to next node")
+					return nextNode, nil
+				}
+				
+				// If no next node, flow is complete
+				logrus.WithField("node_id", node.ID).Info("🏁 FLOW_ENGINE: No next node after user_reply, flow complete")
+				return nil, nil
+			}
+			
 			logrus.WithField("node_id", node.ID).Info("📍 FLOW_ENGINE: Resuming from current node")
 			return node, nil
 		}
