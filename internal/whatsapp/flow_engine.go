@@ -3,6 +3,7 @@ package whatsapp
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -212,13 +213,33 @@ func (e *FlowEngine) getNextNode(ctx *ExecutionContext) (*models.FlowNode, error
 
 // getNextNodeFromCondition handles condition node logic
 func (e *FlowEngine) getNextNodeFromCondition(ctx *ExecutionContext) (*models.FlowNode, error) {
-	// TODO: Implement condition evaluation logic
-	// For now, just get the first available next node
-	return e.flowService.GetNextNode(ctx.Flow, ctx.CurrentNode.ID)
+	// Get all possible next nodes for this condition
+	nextNodes, err := e.flowService.GetAllNextNodes(ctx.Flow, ctx.CurrentNode.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get next nodes for condition: %w", err)
+	}
+	
+	if len(nextNodes) == 0 {
+		return nil, nil // End of flow
+	}
+	
+	// For now, return the first available node
+	// TODO: Implement proper condition evaluation based on user input and variables
+	logrus.WithFields(logrus.Fields{
+		"condition_node": ctx.CurrentNode.ID,
+		"available_paths": len(nextNodes),
+		"selected_path": nextNodes[0].ID,
+	}).Info("🔀 FLOW_ENGINE: Condition node - selecting first available path")
+	
+	return nextNodes[0], nil
 }
 
 // updateExecutionState updates the execution state in the database
 func (e *FlowEngine) updateExecutionState(ctx *ExecutionContext) error {
+	// Update current node in execution record
+	ctx.Execution.CurrentNode.String = ctx.CurrentNode.ID
+	ctx.Execution.CurrentNode.Valid = true
+	
 	// Update conversation stage if changed
 	if ctx.Execution.Stage != "" {
 		return e.aiWhatsappService.UpdateConversationStage(ctx.Execution.ProspectNum, ctx.Execution.Stage)
@@ -238,13 +259,16 @@ func (e *FlowEngine) completeFlowExecution(ctx *ExecutionContext) error {
 // sendFlowResponses sends all accumulated responses
 func (e *FlowEngine) sendFlowResponses(ctx *ExecutionContext) error {
 	for _, response := range ctx.Response {
-		if response != "" {
+		// Filter out empty, nil, or invalid responses
+		if response != "" && response != "<nil>" && response != "nil" && strings.TrimSpace(response) != "" {
 			err := e.sendSingleResponse(ctx.Execution.ProspectNum, ctx.Execution.IDDevice, response)
 			if err != nil {
 				return err
 			}
 			// Add small delay between messages
 			time.Sleep(500 * time.Millisecond)
+		} else {
+			logrus.WithField("response", response).Warn("🚫 FLOW_ENGINE: Filtered out invalid response")
 		}
 	}
 	return nil

@@ -320,57 +320,11 @@ func (s *Service) executeFlow(execution *models.AIWhatsapp, userInput string) er
 	return nil
 }
 
-// processFlowExecution processes flow execution with proper node sequence
+// processFlowExecution is deprecated - use FlowEngine.ExecuteFlow instead
+// This function is kept for backward compatibility but should not be used
 func (s *Service) processFlowExecution(flow *models.ChatbotFlow, execution *models.AIWhatsapp, userInput string) (string, error) {
-	logrus.WithFields(logrus.Fields{
-		"flow_id":      flow.ID,
-		"current_node": execution.CurrentNode.String,
-	}).Info("🎯 FLOW: Processing flow execution")
-
-	// Get current node or start node
-	currentNode, err := s.getCurrentOrStartNode(flow, execution)
-	if err != nil {
-		return "", err
-	}
-
-	// Process current node
-	response, shouldStop, err := s.processNode(flow, execution, currentNode, userInput)
-	if err != nil {
-		return "", err
-	}
-
-	// If node says to stop (like User Reply), stop here
-	if shouldStop {
-		logrus.WithFields(logrus.Fields{
-			"node_id":   currentNode.ID,
-			"node_type": currentNode.Type,
-		}).Info("🛑 FLOW: Node requested stop")
-		return response, nil
-	}
-
-	// Move to next node
-	nextNode, err := s.flowService.GetNextNode(flow, currentNode.ID)
-	if err != nil || nextNode == nil {
-		// End of flow
-		logrus.Info("🏁 FLOW: End of flow reached")
-		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
-		return response, nil
-	}
-
-	// Update execution to next node
-	execution.CurrentNode.String = nextNode.ID
-	err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
-	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to update execution")
-		return response, err
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"from_node": currentNode.ID,
-		"to_node":   nextNode.ID,
-	}).Info("➡️ FLOW: Advanced to next node")
-
-	return response, nil
+	logrus.Warn("⚠️ DEPRECATED: processFlowExecution called - use FlowEngine.ExecuteFlow instead")
+	return "", fmt.Errorf("deprecated function called - use FlowEngine.ExecuteFlow instead")
 }
 
 // getCurrentOrStartNode gets the current node or start node if none set
@@ -400,35 +354,11 @@ func (s *Service) getCurrentOrStartNode(flow *models.ChatbotFlow, execution *mod
 }
 
 // processNode processes a single node based on its type
+// processNode is deprecated - use FlowEngine node processors instead
+// This function is kept for backward compatibility but should not be used
 func (s *Service) processNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, bool, error) {
-	logrus.WithFields(logrus.Fields{
-		"node_id":   node.ID,
-		"node_type": node.Type,
-	}).Info("🎯 FLOW: Processing node")
-
-	switch node.Type {
-	case models.NodeTypeStart:
-		return s.processStartNode(flow, execution, node, userInput)
-	case models.NodeTypeMessage:
-		return s.processMessageNode(flow, execution, node, userInput)
-	case models.NodeTypeAIPrompt:
-		return s.processAIPromptNode(flow, execution, node, userInput)
-	case models.NodeTypeUserReply:
-		return s.processUserReplyNode(flow, execution, node, userInput)
-	case models.NodeTypeDelay:
-		return s.processDelayNode(flow, execution, node, userInput)
-	case models.NodeTypeCondition:
-		return s.processConditionNode(flow, execution, node, userInput)
-	case models.NodeTypeImage:
-		return s.processImageNode(flow, execution, node, userInput)
-	case models.NodeTypeAudio:
-		return s.processAudioNode(flow, execution, node, userInput)
-	case models.NodeTypeVideo:
-		return s.processVideoNode(flow, execution, node, userInput)
-	default:
-		logrus.WithField("node_type", node.Type).Warn("⚠️ FLOW: Unknown node type")
-		return "", false, nil
-	}
+	logrus.Warn("⚠️ DEPRECATED: processNode called - use FlowEngine node processors instead")
+	return "", false, fmt.Errorf("deprecated function called - use FlowEngine node processors instead")
 }
 
 // ============================================================================
@@ -554,7 +484,8 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 				return "", false, fmt.Errorf("failed to send image: %w", err)
 			}
 			
-			return caption, false, nil
+			// Caption is already sent with the media, no need to return as separate text response
+			return "", false, nil
 		}
 	}
 	
@@ -599,7 +530,8 @@ func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.A
 				return "", false, fmt.Errorf("failed to send video: %w", err)
 			}
 			
-			return caption, false, nil
+			// Caption is already sent with the media, no need to return as separate text response
+			return "", false, nil
 		}
 	}
 	
@@ -610,13 +542,16 @@ func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.A
 // HELPER FUNCTIONS
 // ============================================================================
 
-// sendFlowResponse sends the flow response to user
+// sendFlowResponse is deprecated - FlowEngine handles response sending internally
+// This function is kept for backward compatibility but should not be used
 func (s *Service) sendFlowResponse(phoneNumber, deviceID, response string) error {
-	logrus.WithFields(logrus.Fields{
-		"phone_number": phoneNumber,
-		"device_id":    deviceID,
-		"response":     response,
-	}).Info("📤 FLOW: Sending response")
+	logrus.Warn("⚠️ DEPRECATED: sendFlowResponse called - FlowEngine handles responses internally")
+	
+	// Filter out empty responses to prevent <nil> messages
+	if response == "" || response == "<nil>" || response == "nil" {
+		logrus.WithField("response", response).Warn("🚫 DEPRECATED: Filtered out invalid response")
+		return nil
+	}
 	
 	// Extract media URLs if present
 	mediaURL, cleanResponse := s.extractMediaURL(response)

@@ -126,11 +126,7 @@ func (e *FlowEngine) processImageNode(ctx *ExecutionContext) error {
 			"caption":   caption,
 		}).Info("📸 FLOW_ENGINE: Image sent")
 		
-		// Add caption as text response if available
-		if caption != "" {
-			caption = e.flowService.ReplaceVariables(caption, ctx.Variables)
-			ctx.Response = append(ctx.Response, caption)
-		}
+		// Caption is already sent with the media, no need to add as separate text response
 	}
 	
 	return nil
@@ -171,11 +167,7 @@ func (e *FlowEngine) processAudioNode(ctx *ExecutionContext) error {
 			"caption":   caption,
 		}).Info("🎵 FLOW_ENGINE: Audio sent")
 		
-		// Add caption as text response if available
-		if caption != "" {
-			caption = e.flowService.ReplaceVariables(caption, ctx.Variables)
-			ctx.Response = append(ctx.Response, caption)
-		}
+		// Caption is already sent with the media, no need to add as separate text response
 	}
 	
 	return nil
@@ -216,11 +208,7 @@ func (e *FlowEngine) processVideoNode(ctx *ExecutionContext) error {
 			"caption":   caption,
 		}).Info("🎬 FLOW_ENGINE: Video sent")
 		
-		// Add caption as text response if available
-		if caption != "" {
-			caption = e.flowService.ReplaceVariables(caption, ctx.Variables)
-			ctx.Response = append(ctx.Response, caption)
-		}
+		// Caption is already sent with the media, no need to add as separate text response
 	}
 	
 	return nil
