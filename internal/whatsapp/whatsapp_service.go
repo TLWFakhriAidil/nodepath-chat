@@ -207,12 +207,6 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 		return s.handlePersonalCommand(phoneNumber, content, deviceID)
 	}
 
-	// Get device settings
-	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
-	if err != nil {
-		return fmt.Errorf("failed to get device settings: %w", err)
-	}
-
 	// Check if there's an active flow for this device
 	flow, err := s.flowService.GetDefaultFlowForDevice(deviceID)
 	if err != nil {
@@ -309,7 +303,7 @@ func (s *Service) executeFlow(execution *models.AIWhatsapp, userInput string) er
 	// Create FlowEngine instance
 	flowEngine := NewFlowEngine(
 		s.flowService,
-		&s.aiWhatsappService,
+		s.aiWhatsappService,
 		s.aiService,
 		s.providerService,
 		s.deviceSettingsService,
@@ -685,12 +679,6 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 		"phone_number": phoneNumber,
 		"device_id":    deviceID,
 	}).Info("🤖 AI: Processing AI conversation")
-	
-	// Get device settings
-	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
-	if err != nil {
-		return fmt.Errorf("failed to get device settings: %w", err)
-	}
 	
 	// Get or create AI WhatsApp record
 	existingRecord, err := s.aiWhatsappService.GetAIWhatsappByProspectAndDevice(phoneNumber, deviceID)

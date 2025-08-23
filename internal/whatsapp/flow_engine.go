@@ -13,7 +13,7 @@ import (
 // FlowEngine handles the execution of chatbot flows with proper node sequencing
 type FlowEngine struct {
 	flowService           *services.FlowService
-	aiWhatsappService     *services.AIWhatsappService
+	aiWhatsappService     services.AIWhatsappService
 	aiService             *services.AIService
 	providerService       *services.ProviderService
 	deviceSettingsService *services.DeviceSettingsService
@@ -22,7 +22,7 @@ type FlowEngine struct {
 // NewFlowEngine creates a new flow engine instance
 func NewFlowEngine(
 	flowService *services.FlowService,
-	aiWhatsappService *services.AIWhatsappService,
+	aiWhatsappService services.AIWhatsappService,
 	aiService *services.AIService,
 	providerService *services.ProviderService,
 	deviceSettingsService *services.DeviceSettingsService,
@@ -219,32 +219,20 @@ func (e *FlowEngine) getNextNodeFromCondition(ctx *ExecutionContext) (*models.Fl
 
 // updateExecutionState updates the execution state in the database
 func (e *FlowEngine) updateExecutionState(ctx *ExecutionContext) error {
-	// Serialize variables
-	variablesJSON, err := json.Marshal(ctx.Variables)
-	if err != nil {
-		return fmt.Errorf("failed to serialize variables: %w", err)
+	// Update conversation stage if changed
+	if ctx.Execution.Stage != "" {
+		return e.aiWhatsappService.UpdateConversationStage(ctx.Execution.ProspectNum, ctx.Execution.Stage)
 	}
-
-	ctx.Execution.Variables = variablesJSON
-	ctx.Execution.CurrentNode.String = ctx.CurrentNode.ID
-	ctx.Execution.CurrentNode.Valid = true
-
-	// Update in database
-	return e.aiWhatsappService.UpdateFlowExecution(
-		ctx.Execution.ProspectNum,
-		ctx.Execution.IDDevice,
-		ctx.CurrentNode.ID,
-		ctx.Variables,
-		"active",
-	)
+	return nil
 }
 
 // completeFlowExecution marks the flow execution as completed
 func (e *FlowEngine) completeFlowExecution(ctx *ExecutionContext) error {
-	return e.aiWhatsappService.CompleteFlowExecution(
-		ctx.Execution.ProspectNum,
-		ctx.Execution.IDDevice,
-	)
+	// Update conversation stage to completed if needed
+	if ctx.Execution.Stage != "" {
+		return e.aiWhatsappService.UpdateConversationStage(ctx.Execution.ProspectNum, ctx.Execution.Stage)
+	}
+	return nil
 }
 
 // sendFlowResponses sends all accumulated responses
@@ -277,7 +265,7 @@ func (e *FlowEngine) sendSingleResponse(phoneNumber, deviceID, message string) e
 	}
 
 	// Send message using provider service
-	err = e.providerService.SendMessage(phoneNumber, message, deviceSettings)
+	err = e.providerService.SendMessage(deviceSettings, phoneNumber, message)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -297,6 +285,6 @@ func (e *FlowEngine) saveConversationHistory(ctx *ExecutionContext) error {
 		ctx.Execution.IDDevice,
 		ctx.UserInput,
 		responseText,
-		"", // Stage will be managed separately
+		ctx.Execution.Stage,
 	)
 }

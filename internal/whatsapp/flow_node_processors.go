@@ -3,7 +3,6 @@ package whatsapp
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
