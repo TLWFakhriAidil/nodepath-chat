@@ -15,15 +15,17 @@ import (
 
 // ChatService handles chatbot conversation execution
 type ChatService struct {
-	db    *sql.DB
-	redis *redis.Client
+	db          *sql.DB
+	redis       *redis.Client
+	flowService *FlowService
 }
 
 // NewChatService creates a new chat service
-func NewChatService(db *sql.DB, redis *redis.Client) *ChatService {
+func NewChatService(db *sql.DB, redis *redis.Client, flowService *FlowService) *ChatService {
 	return &ChatService{
-		db:    db,
-		redis: redis,
+		db:          db,
+		redis:       redis,
+		flowService: flowService,
 	}
 }
 
@@ -33,11 +35,27 @@ func (s *ChatService) StartExecution(flowReference, phoneNumber, idDevice string
 		return nil, fmt.Errorf("database not available")
 	}
 	
+	// Get the flow to determine the start node
+	flow, err := s.flowService.GetFlow(flowReference)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow: %w", err)
+	}
+	if flow == nil {
+		return nil, fmt.Errorf("flow not found: %s", flowReference)
+	}
+	
+	// Get the start node
+	startNode, err := s.flowService.GetStartNode(flow)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get start node: %w", err)
+	}
+	
 	execution := &models.ChatbotExecution{
 		ID:            uuid.New().String(),
 		FlowReference: flowReference,
 		PhoneNumber:   phoneNumber,
 		IDDevice:      idDevice,
+		CurrentNode:   startNode.ID, // Set the current node to start node
 		Status:        models.ExecutionStatusActive,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
@@ -55,7 +73,7 @@ func (s *ChatService) StartExecution(flowReference, phoneNumber, idDevice string
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := s.db.Exec(query,
+	_, err = s.db.Exec(query,
 		execution.ID, execution.FlowReference, execution.PhoneNumber, execution.IDDevice,
 		execution.ConvLast, execution.ConvCurrent, execution.CurrentNode,
 		execution.Variables, execution.Status, execution.CreatedAt, execution.UpdatedAt,

@@ -78,7 +78,7 @@ func main() {
 	}
 	
 	flowService := services.NewFlowService(db, concreteRedisClient)
-	chatService := services.NewChatService(db, concreteRedisClient)
+	chatService := services.NewChatService(db, concreteRedisClient, flowService)
 	aiService := services.NewAIService(cfg)
 	queueService := services.NewQueueService(redisClient)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
