@@ -21,7 +21,7 @@ const FlowBuilder = () => {
   const [showMinimap, setShowMinimap] = useState(true);
 
   const handleTestFlow = (flowId: string) => {
-    navigate(`/test-chat?flowId=${flowId}`);
+    console.log('Test chat removed - flowId:', flowId);
   };
 
 

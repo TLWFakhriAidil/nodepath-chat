@@ -29,104 +29,94 @@ import (
 
 func main() {
 	// Load environment variables from .env file if it exists
-	logrus.Info("🔧 DEPLOYMENT: Loading environment configuration...")
 	if err := godotenv.Load(); err != nil {
-		logrus.Info("📝 DEPLOYMENT: No .env file found, using environment variables")
-	} else {
-		logrus.Info("📝 DEPLOYMENT: .env file loaded successfully")
+		logrus.Println("No .env file found, using environment variables")
 	}
 
 	// Load configuration
 	cfg := config.Load()
-	logrus.Info("⚙️ DEPLOYMENT: Configuration loaded successfully")
 
 	// Initialize database (skip if MYSQL_URI is empty or connection fails)
 	var db *sql.DB
 	mysqlURI := os.Getenv("MYSQL_URI")
-	logrus.Info("💾 DEPLOYMENT: Initializing database connection...")
 	if mysqlURI == "" {
-		logrus.Warn("⚠️ DEPLOYMENT: MYSQL_URI is empty, running without database")
+		logrus.Warn("MYSQL_URI is empty, running without database")
 	} else {
-		logrus.Infof("🔗 DEPLOYMENT: Connecting to database: %s", mysqlURI[:20]+"...")
 		var err error
 		db, err = database.Initialize(cfg)
 		if err != nil {
-			logrus.WithError(err).Error("❌ DEPLOYMENT: Failed to initialize database, continuing without database")
+			logrus.WithError(err).Warn("Failed to initialize database, continuing without database")
 			db = nil
 		} else {
-			logrus.Info("✅ DEPLOYMENT: Database initialized successfully")
+			logrus.Info("Database initialized successfully")
 			
 			// Run migrations
-			logrus.Info("🔄 DEPLOYMENT: Running database migrations...")
 			if err := database.RunMigrations(db); err != nil {
-				logrus.WithError(err).Error("❌ DEPLOYMENT: Failed to run migrations, continuing anyway")
+				logrus.WithError(err).Warn("Failed to run migrations, continuing anyway")
 			} else {
-				logrus.Info("✅ DEPLOYMENT: Database migrations completed successfully")
+				logrus.Info("Database migrations completed")
 			}
 		}
 	}
 
 	// Initialize Redis with clustering support
-	logrus.Info("🔄 DEPLOYMENT: Initializing Redis connection...")
 	redisClient := services.InitializeRedis(cfg)
-	logrus.Info("✅ DEPLOYMENT: Redis initialized successfully")
+	logrus.Info("Redis initialized successfully")
 
 	// Initialize performance-optimized services
-	logrus.Info("🔧 DEPLOYMENT: Initializing core services...")
 	// Handle Redis client for services that need concrete type
 	var concreteRedisClient *redis.Client
 	if redisClient != nil {
 		var ok bool
 		concreteRedisClient, ok = redisClient.(*redis.Client)
 		if !ok {
-			logrus.Warn("⚠️ DEPLOYMENT: Redis client type assertion failed, using nil client")
+			logrus.Warn("Redis client type assertion failed, using nil client")
 			concreteRedisClient = nil
 		}
 	} else {
-		logrus.Warn("⚠️ DEPLOYMENT: Redis not available, services will run without caching")
+		logrus.Warn("Redis not available, services will run without caching")
 	}
 	
 	flowService := services.NewFlowService(db, concreteRedisClient)
-	logrus.Info("✅ DEPLOYMENT: Flow service initialized")
 	aiService := services.NewAIService(cfg)
-	logrus.Info("✅ DEPLOYMENT: AI service initialized")
 	queueService := services.NewQueueService(redisClient)
-	logrus.Info("✅ DEPLOYMENT: Queue service initialized")
 	deviceSettingsService := services.NewDeviceSettingsService(db)
-	logrus.Info("✅ DEPLOYMENT: Device settings service initialized")
+	
+	// Initialize repositories
+	aiWhatsappRepo := repository.NewAIWhatsappRepository(db)
+	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
+	logrus.Info("Repositories initialized successfully")
+	
+	// Initialize AI WhatsApp service
+	aiWhatsappService := services.NewAIWhatsappService(aiWhatsappRepo, deviceSettingsRepo, flowService)
+	logrus.Info("AI WhatsApp service initialized successfully")
 	
 	// Initialize WebSocket service for real-time communication
 	websocketService := services.NewWebSocketService(cfg.MaxConcurrentUsers)
-	logrus.Info("✅ DEPLOYMENT: WebSocket service initialized for real-time messaging")
+	logrus.Info("WebSocket service initialized for real-time messaging")
 	
 	// Initialize media service with CDN support
 	mediaService := services.NewMediaService(cfg.CDNEnabled, cfg.CDNBaseURL, "./media")
-	logrus.Info("✅ DEPLOYMENT: Media service initialized with CDN support")
+	logrus.Info("Media service initialized with CDN support")
 
-	// Initialize repositories for AI WhatsApp service
-	logrus.Info("🔧 DEPLOYMENT: Initializing repositories...")
-	aiRepo := repository.NewAIWhatsappRepository(db)
-	deviceRepo := repository.NewDeviceSettingsRepository(db)
-	logrus.Info("✅ DEPLOYMENT: Repositories initialized")
-	
-	// Initialize AI WhatsApp service
-	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
-	logrus.Info("✅ DEPLOYMENT: AI WhatsApp service initialized")
-	
-	// Initialize AI Cron service for background processing
-	aiCronService := services.NewAICronService(aiRepo, deviceRepo, aiWhatsappService, flowService)
-	logrus.Info("✅ DEPLOYMENT: AI Cron service initialized")
+	// Initialize provider service for message sending
+	providerService := services.NewProviderService()
+	logrus.Info("Provider service initialized for Wablas/Whacenter APIs")
 
 	// Initialize WhatsApp service with multi-device support
-	logrus.Info("📱 DEPLOYMENT: Initializing WhatsApp service...")
-	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService)
+	logrus.Info("🔧 MAIN: About to initialize WhatsApp service...")
+	logrus.Info("🔧 MAIN: Initializing WhatsApp service...")
+	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService)
 	if err != nil {
-		logrus.WithError(err).Fatal("❌ DEPLOYMENT: Failed to initialize WhatsApp service")
+		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
-	logrus.Info("✅ DEPLOYMENT: WhatsApp service initialized successfully")
+	logrus.Info("✅ MAIN: WhatsApp service initialized successfully")
+
+	// Set WhatsApp service dependency on queue service for flow continuation
+	queueService.SetWhatsAppService(whatsappService)
+	logrus.Info("✅ MAIN: Queue service configured with WhatsApp service dependency")
 
 	// Initialize handlers with all services
-	logrus.Info("🔧 DEPLOYMENT: Initializing HTTP handlers...")
 	handlers := handlers.NewHandlers(
 		flowService,
 		aiService,
@@ -135,10 +125,8 @@ func main() {
 		deviceSettingsService,
 		websocketService,
 		mediaService,
-		aiWhatsappService,
 		db,
 	)
-	logrus.Info("✅ DEPLOYMENT: HTTP handlers initialized")
 
 	// Initialize HTML template engine
 	engine := html.New("./templates", ".html")
@@ -273,58 +261,30 @@ func main() {
 	})
 
 	// Start background services
-	logrus.Info("🔄 DEPLOYMENT: Starting background services...")
 	go whatsappService.StartQueueProcessor()
-	logrus.Info("✅ DEPLOYMENT: WhatsApp queue processor started")
 	go func() {
-		logrus.Info("✅ DEPLOYMENT: Delayed message processor started")
 		for {
 			if err := queueService.ProcessDelayedMessages(); err != nil {
-				logrus.WithError(err).Error("❌ DEPLOYMENT: Error processing delayed messages")
+				logrus.WithError(err).Error("Error processing delayed messages")
 			}
 			time.Sleep(30 * time.Second)
 		}
 	}()
-	
-	// Start AI Cron service for background AI processing
-	logrus.Info("🤖 DEPLOYMENT: Starting AI Cron service...")
-	if err := aiCronService.Start(); err != nil {
-		logrus.WithError(err).Error("❌ DEPLOYMENT: Failed to start AI Cron service")
-	} else {
-		logrus.Info("✅ DEPLOYMENT: AI Cron service started successfully")
-	}
 
 	// Graceful shutdown
-	logrus.Info("🔧 DEPLOYMENT: Setting up graceful shutdown handlers...")
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-c
-		logrus.Info("🛑 DEPLOYMENT: Shutdown signal received, gracefully shutting down...")
-		whatsappService.Disconnect()
-		logrus.Info("✅ DEPLOYMENT: WhatsApp service disconnected")
-		if err := aiCronService.Stop(); err != nil {
-			logrus.WithError(err).Error("❌ DEPLOYMENT: Failed to stop AI Cron service")
-		} else {
-			logrus.Info("✅ DEPLOYMENT: AI Cron service stopped")
-		}
+		logrus.Info("Shutting down server...")
 		app.Shutdown()
-		logrus.Info("✅ DEPLOYMENT: Server shutdown completed")
 	}()
 
-	// Start server with enhanced deployment logging
-	logrus.Infof("🚀 DEPLOYMENT: Server starting on port %d", cfg.Port)
-	logrus.Infof("🌍 DEPLOYMENT: Environment: %s", cfg.AppEnv)
-	logrus.Infof("📊 DEPLOYMENT: Max concurrent users: %d", cfg.MaxConcurrentUsers)
-	logrus.Infof("💾 DEPLOYMENT: Database connected: %t", db != nil)
-	logrus.Infof("🔄 DEPLOYMENT: Redis connected: %t", redisClient != nil)
-	logrus.Infof("📡 DEPLOYMENT: CDN enabled: %t", cfg.CDNEnabled)
-	logrus.Info("✅ DEPLOYMENT: All services initialized successfully")
-	logrus.Info("🎯 DEPLOYMENT: Server ready to handle requests")
-	
+	// Start server
+	logrus.Infof("Server starting on port %d", cfg.Port)
 	if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
-		logrus.WithError(err).Fatal("❌ DEPLOYMENT: Failed to start server")
+		logrus.WithError(err).Fatal("Failed to start server")
 	}
 }
 

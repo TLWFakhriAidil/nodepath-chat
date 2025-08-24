@@ -45,13 +45,12 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 func RunMigrations(db *sql.DB) error {
 	logrus.Info("Running database migrations")
 
+// Test chat executions table removed from migrations
 	migrations := []string{
 		createFlowsTable,
-		
 		createDeviceSettingsTable,
 		createAIWhatsappTable,
-		createConversationLogsTable,
-		
+		createConversationLogTable,
 	}
 
 	for i, migration := range migrations {
@@ -94,7 +93,7 @@ CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-
+// Test chat executions table schema removed
 
 const createDeviceSettingsTable = `
 CREATE TABLE IF NOT EXISTS device_setting_nodepath (
@@ -146,26 +145,23 @@ CREATE TABLE IF NOT EXISTS ai_whatsapp_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-// Conversation logs table for tracking AI conversation history
-const createConversationLogsTable = `
-CREATE TABLE IF NOT EXISTS conversation_logs_nodepath (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+// Conversation log table for storing all AI conversation history
+const createConversationLogTable = `
+CREATE TABLE IF NOT EXISTS conversation_log_nodepath (
+    id VARCHAR(255) PRIMARY KEY,
     prospect_num VARCHAR(20) NOT NULL,
-    id_device VARCHAR(255) NOT NULL,
+    sender ENUM('user', 'bot', 'staff') NOT NULL,
     message TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
-    sender ENUM('user', 'bot') NOT NULL,
+    message_type ENUM('text', 'image', 'document', 'audio', 'video') DEFAULT 'text',
     stage VARCHAR(255),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ai_response JSON COMMENT 'Full AI response with stage and content',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_prospect_num (prospect_num),
-    INDEX idx_id_device (id_device),
     INDEX idx_sender (sender),
-    INDEX idx_timestamp (timestamp),
-    INDEX idx_prospect_device (prospect_num, id_device)
+    INDEX idx_created_at (created_at),
+    INDEX idx_stage (stage)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
-
-
 
 
 

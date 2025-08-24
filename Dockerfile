@@ -45,10 +45,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/server ./cmd/server
 
 # Build migration utility
-    RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/migrate ./debug/fix_database_schema.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/migrate ./debug/fix_production_schema.go
 
-    # Build verification utility
-    RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/verify_migration ./debug/verify_migration.go
+# Build the Railway migration runner
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/railway_migration_runner ./debug/railway_migration_runner.go
 
 # Final stage
 FROM alpine:latest
@@ -62,9 +62,9 @@ RUN mkdir -p /app
 # Copy binary from backend builder
 COPY --from=backend-builder /app/bin/server /app/server
 
-# Copy migration utility, verification utility, and SQL script
+# Copy migration utility, Railway migration runner, and SQL script
 COPY --from=backend-builder /app/bin/migrate /app/migrate
-COPY --from=backend-builder /app/bin/verify_migration /app/verify_migration
+COPY --from=backend-builder /app/bin/railway_migration_runner /app/railway_migration_runner
 COPY --from=backend-builder /src/production_fix_jam_column.sql /app/production_fix_jam_column.sql
 
 # Copy startup script

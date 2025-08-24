@@ -15,7 +15,6 @@ import (
 // Handlers contains all HTTP handlers
 type Handlers struct {
 	flowService           *services.FlowService
-	flowExecutionService  services.FlowExecutionService
 	aiService             *services.AIService
 	queueService          *services.QueueService
 	whatsappService       *whatsapp.Service
@@ -34,22 +33,20 @@ func NewHandlers(
 	deviceSettingsService *services.DeviceSettingsService,
 	websocketService *services.WebSocketService,
 	mediaService *services.MediaService,
-	aiWhatsappService services.AIWhatsappService,
 	db *sql.DB,
 ) *Handlers {
 	// Initialize repositories
 	aiRepo := repository.NewAIWhatsappRepository(db)
 	deviceRepo := repository.NewDeviceSettingsRepository(db)
 	
-	// Initialize flow execution service
-	flowExecutionService := services.NewFlowExecutionService(flowService)
+	// Initialize AI WhatsApp service
+	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
 	
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
 	
 	return &Handlers{
 		flowService:           flowService,
-		flowExecutionService:  flowExecutionService,
 		aiService:             aiService,
 		queueService:          queueService,
 		whatsappService:       whatsappService,
@@ -70,21 +67,16 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	flows.Put("/:id", h.UpdateFlow)
 	flows.Delete("/:id", h.DeleteFlow)
 
-	// Test chat routes - TODO: Implement these methods
-	// testChat := api.Group("/test-chat")
-	// testChat.Post("/start", h.StartTestChat)
-	// testChat.Post("/send", h.SendTestMessage)
-	// testChat.Get("/history/:execution_id", h.GetTestChatHistory)
-	// testChat.Post("/reset/:execution_id", h.ResetTestChat)
+	// Test chat routes removed
 
-	// Execution routes - TODO: Implement these methods
-	// executions := api.Group("/executions")
-	// executions.Get("/", h.GetExecutions)
-	// executions.Get("/:id", h.GetExecution)
-	// executions.Put("/:id/complete", h.CompleteExecution)
-	// executions.Delete("/:id", h.DeleteExecution)
+	// Execution routes
+	executions := api.Group("/executions")
+	executions.Get("/", h.GetExecutions)
+	executions.Get("/:id", h.GetExecution)
+	executions.Put("/:id/complete", h.CompleteExecution)
+	executions.Delete("/:id", h.DeleteExecution)
 
-	// WhatsApp routes
+	// WhatsApp routes - simplified for webhook-based system
 	whatsapp := api.Group("/whatsapp")
 	whatsapp.Post("/send", h.SendWhatsAppMessage)
 
@@ -98,10 +90,10 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	ai.Post("/validate-key", h.ValidateAPIKey)
 	ai.Get("/models", h.GetSupportedModels)
 
-	// Analytics routes - TODO: Implement these methods
-	// analytics := api.Group("/analytics")
-	// analytics.Get("/overview", h.GetAnalyticsOverview)
-	// analytics.Get("/flows/:id/stats", h.GetFlowStats)
+	// Analytics routes
+	analytics := api.Group("/analytics")
+	analytics.Get("/overview", h.GetAnalyticsOverview)
+	analytics.Get("/flows/:id/stats", h.GetFlowStats)
 
 	// Device settings routes
 	deviceSettings := api.Group("/device-settings")
@@ -120,8 +112,6 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")
 	webhook.Post("/:id_device/:instance", h.HandleWebhook)
-	// Test endpoint for webhook debugging
-	webhook.Post("/test/:id_device/:instance", h.HandleWebhookTest)
 
 	// AI WhatsApp routes - delegate to AIWhatsappHandlers
 	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
@@ -241,4 +231,6 @@ func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
 	return h.successMessageResponse(c, "Flow deleted successfully", nil)
 }
 
-// Test chat functionality has been removed as it depended on the deprecated ChatService
+// Test Chat handlers
+
+// Test chat handlers removed

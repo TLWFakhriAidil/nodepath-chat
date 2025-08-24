@@ -19,6 +19,7 @@ const (
 type NodeType string
 
 const (
+	NodeTypeStart            NodeType = "start"
 	NodeTypeAIPrompt         NodeType = "ai_prompt"
 	NodeTypeAdvancedAIPrompt NodeType = "advanced_ai_prompt"
 	NodeTypeManual           NodeType = "manual"
@@ -28,6 +29,7 @@ const (
 	NodeTypeVideo            NodeType = "video"
 	NodeTypeDelay            NodeType = "delay"
 	NodeTypeCondition        NodeType = "condition"
+	NodeTypeStage            NodeType = "stage"
 	NodeTypeUserReply        NodeType = "user_reply"
 	NodeTypeWaitingReplyTimes NodeType = "waiting_reply_times"
 )
@@ -169,38 +171,37 @@ type WebSocketMessage struct {
 	Data interface{} `json:"data"`
 }
 
-// TestChatMessage represents a message in the test chat
-type TestChatMessage struct {
-	ID            string    `json:"id"`
-	Role          string    `json:"role"`
-	Content       string    `json:"content"`
-	Timestamp     time.Time `json:"timestamp"`
-	NodeReference string    `json:"node_reference,omitempty"`
-}
+// Test chat message struct removed
 
-// AIWhatsapp represents an AI WhatsApp conversation record
+// AIWhatsapp represents an AI WhatsApp conversation record with flow execution capabilities
 type AIWhatsapp struct {
-	IDProspect   int             `json:"id_prospect" db:"id_prospect"`
-	IDDevice     string          `json:"id_device" db:"id_device"`
-	ProspectNum  string          `json:"prospect_num" db:"prospect_num"`
-	Stage        string          `json:"stage" db:"stage"`
-	DateOrder    *time.Time      `json:"date_order" db:"date_order"`
-	ConvLast     json.RawMessage `json:"conv_last" db:"conv_last"`
-	ConvCurrent  sql.NullString  `json:"conv_current" db:"conv_current"`
-	Jam          string          `json:"jam" db:"jam"`
-	Intro        string          `json:"intro" db:"intro"`
-	Human        int             `json:"human" db:"human"` // 0 = AI active, 1 = human takeover
-	CatatanStaff string          `json:"catatan_staff" db:"catatan_staff"`
-	Balas        int             `json:"balas" db:"balas"`
-	DataImage    string          `json:"data_image" db:"data_image"`
-	ConvStage    string          `json:"conv_stage" db:"conv_stage"`
-	Niche        string          `json:"niche" db:"niche"`
-	BotBalas     *time.Time      `json:"bot_balas" db:"bot_balas"`
-	KeywordIklan string          `json:"keywordiklan" db:"keywordiklan"`
-	Marketer     string          `json:"marketer" db:"marketer"`
-	UpdateToday  *time.Time      `json:"update_today" db:"update_today"`
-	CreatedAt    time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at" db:"updated_at"`
+	IDProspect      int             `json:"id_prospect" db:"id_prospect"`
+	IDDevice        string          `json:"id_device" db:"id_device"`
+	ProspectNum     string          `json:"prospect_num" db:"prospect_num"`
+	Stage           string          `json:"stage" db:"stage"`
+	DateOrder       *time.Time      `json:"date_order" db:"date_order"`
+	ConvLast        json.RawMessage `json:"conv_last" db:"conv_last"`
+	ConvCurrent     sql.NullString  `json:"conv_current" db:"conv_current"`
+	Jam             string          `json:"jam" db:"jam"`
+	Intro           string          `json:"intro" db:"intro"`
+	Human           int             `json:"human" db:"human"` // 0 = AI active, 1 = human takeover
+	CatatanStaff    string          `json:"catatan_staff" db:"catatan_staff"`
+	Balas           int             `json:"balas" db:"balas"`
+	DataImage       string          `json:"data_image" db:"data_image"`
+	ConvStage       string          `json:"conv_stage" db:"conv_stage"`
+	Niche           string          `json:"niche" db:"niche"`
+	BotBalas        *time.Time      `json:"bot_balas" db:"bot_balas"`
+	KeywordIklan    string          `json:"keywordiklan" db:"keywordiklan"`
+	Marketer        string          `json:"marketer" db:"marketer"`
+	UpdateToday     *time.Time      `json:"update_today" db:"update_today"`
+	// Flow execution fields for consolidating chatbot_executions_nodepath functionality
+	FlowReference   sql.NullString  `json:"flow_reference" db:"flow_reference"`   // Reference to chatbot flow being executed
+	CurrentNode     sql.NullString  `json:"current_node" db:"current_node"`       // Current node in the flow execution
+	Variables       json.RawMessage `json:"variables" db:"variables"`             // Flow execution variables (JSON)
+	ExecutionStatus sql.NullString  `json:"execution_status" db:"execution_status"` // Flow execution status (active, completed, failed)
+	ExecutionID     sql.NullString  `json:"execution_id" db:"execution_id"`       // Unique execution identifier
+	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 
@@ -215,17 +216,4 @@ type ConversationLog struct {
 	Stage       string    `json:"stage" db:"stage"`
 	Timestamp   time.Time `json:"timestamp" db:"timestamp"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-}
-
-// AIResponse represents the response from AI service (alias for compatibility)
-type AIResponse struct {
-	Stage    string         `json:"Stage"`
-	Response []ResponseItem `json:"Response"`
-}
-
-// ResponseItem represents individual response items (alias for compatibility)
-type ResponseItem struct {
-	Type    string `json:"type"`
-	Jenis   string `json:"Jenis,omitempty"`
-	Content string `json:"content"`
 }

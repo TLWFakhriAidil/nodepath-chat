@@ -58,7 +58,7 @@ const Dashboard = () => {
       title: 'Test Existing Flow',
       description: 'Test and debug your flows',
       icon: Play,
-      action: () => navigate('/test-chat'),
+      action: () => console.log('Test chat removed'),
       color: 'bg-gradient-to-r from-green-500 to-emerald-600',
       textColor: 'text-white'
     },

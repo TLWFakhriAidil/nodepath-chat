@@ -104,7 +104,21 @@
                 </div>
             </div>
             
-
+            <div class="col-md-3 mb-4">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 id="whatsapp-status">Disconnected</h4>
+                                <p class="mb-0">WhatsApp Status</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="bi bi-whatsapp fs-1"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <!-- Quick Actions -->
@@ -159,7 +173,12 @@
                                     <span class="badge bg-warning">Disconnected</span>
                                 </div>
                             </div>
-
+                            <div class="col-md-4 mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <span>Webhook Service</span>
+                                    <span class="badge bg-success" id="webhook-badge">Active</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -188,13 +207,19 @@
                     document.getElementById('active-executions').textContent = executions.length || 0;
                 }
                 
-
+                // Webhook service is always active in this system
+                const badgeElement = document.getElementById('webhook-badge');
+                if (badgeElement) {
+                    badgeElement.textContent = 'Active';
+                    badgeElement.className = 'badge bg-success';
+                }
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
             }
         }
         
-
+        // Webhook-based system doesn't need connection management
+        // Providers handle connections directly via their APIs
         
         // Load data on page load
         document.addEventListener('DOMContentLoaded', loadDashboardData);

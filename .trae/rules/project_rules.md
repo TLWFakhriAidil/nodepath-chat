@@ -79,6 +79,5 @@
 21. The system database type output will not used the json type except the chatbot_flows_nodepath database.
 22. The provider that used in this are Wablas and Whacenter only, this will get from the device_setting_nodepath columns of provider.
 23. The system will used the instance from the device_setting_nodepath columns of instance for sending message.
-24. for testing both localhost and railway used this id_device FakhriAidilTLW-001 and 60179645043 as the phone number.
-25. Do not create new table database without ask first.
+
 

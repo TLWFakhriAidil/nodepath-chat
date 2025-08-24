@@ -449,18 +449,13 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 	// Get the raw webhook payload
 	body := c.Body()
 	
-	// Enhanced logging for debugging webhook issues
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"instance": instance,
 		"content_type": c.Get("Content-Type"),
 		"user_agent": c.Get("User-Agent"),
 		"payload_size": len(body),
-		"raw_payload": string(body), // Add raw payload for debugging
-		"remote_ip": c.IP(),
-		"method": c.Method(),
-		"url": c.OriginalURL(),
-	}).Info("📨 WEBHOOK: Received webhook request with full details")
+	}).Info("📨 WEBHOOK: Received webhook request")
 	
 	// Verify the device exists in our database
 	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
@@ -508,54 +503,6 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 		"message": "Webhook received and processed",
 		"id_device": idDevice,
 		"provider": deviceSettings.Provider,
-	})
-}
-
-// HandleWebhookTest provides a test endpoint for debugging webhook functionality
-func (h *Handlers) HandleWebhookTest(c *fiber.Ctx) error {
-	idDevice := c.Params("id_device")
-	instance := c.Params("instance")
-	
-	// Get the raw webhook payload
-	body := c.Body()
-	
-	// Log everything for debugging
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"instance": instance,
-		"content_type": c.Get("Content-Type"),
-		"user_agent": c.Get("User-Agent"),
-		"payload_size": len(body),
-		"raw_payload": string(body),
-		"remote_ip": c.IP(),
-		"method": c.Method(),
-		"url": c.OriginalURL(),
-		"headers": c.GetReqHeaders(),
-	}).Info("🧪 WEBHOOK TEST: Received test webhook request")
-	
-	// Parse JSON if possible
-	var webhookData map[string]interface{}
-	if len(body) > 0 {
-		if err := json.Unmarshal(body, &webhookData); err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error": err.Error(),
-				"payload": string(body),
-			}).Warn("🧪 WEBHOOK TEST: Failed to parse JSON, treating as raw text")
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"parsed_data": webhookData,
-			}).Info("🧪 WEBHOOK TEST: Successfully parsed JSON payload")
-		}
-	}
-	
-	return h.successResponse(c, map[string]interface{}{
-		"success": true,
-		"message": "Test webhook received successfully",
-		"id_device": idDevice,
-		"instance": instance,
-		"payload_received": string(body),
-		"parsed_data": webhookData,
-		"timestamp": time.Now().Format(time.RFC3339),
 	})
 }
 
@@ -1395,13 +1342,13 @@ func (h *Handlers) DebugDevices(c *fiber.Ctx) error {
 }
 
 // Helper function to convert sql.NullString to string
-// processWebhookMessage processes incoming webhook messages and prioritizes chatbot flow over AI generation
+// processWebhookMessage processes incoming webhook messages and integrates with AI WhatsApp service
 func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idDevice, provider string) {
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"provider": provider,
 		"webhook_data": webhookData,
-	}).Info("🔄 WEBHOOK: Processing webhook message with flow priority")
+	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration")
 
 	// Extract message data based on provider
 	var from, message, messageType string
@@ -1484,13 +1431,6 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"from": from,
-		"message": message,
-		"provider": provider,
-	}).Info("🔄 WEBHOOK: Processing message with chatbot flow priority")
-
 	// Check if this is a device command (%, #, cmd)
 	if strings.HasPrefix(message, "%") || strings.HasPrefix(message, "#") || strings.ToLower(strings.TrimSpace(message)) == "cmd" {
 		logrus.WithFields(logrus.Fields{
@@ -1511,313 +1451,103 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
-	// Check chatbot flows first for AI prompt nodes
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"from": from,
-	}).Info("🔄 WEBHOOK: Checking chatbot flows for AI prompt nodes")
-
-	// Check ai_whatsapp_nodepath for existing phone number and device combination
-	var stage string
-	var isNewUser bool
-	
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"from": from,
-	}).Info("🔍 WEBHOOK: Checking ai_whatsapp_nodepath for existing phone number")
-	
-	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
-		// First check for existing record with this phone number and device
-		existingRecord, err := h.aiWhatsappHandlers.AIRepo.GetAIWhatsappByProspectAndDevice(from, idDevice)
-		if err != nil {
-			logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to get AI conversation by prospect and device")
-			isNewUser = true
-		} else if existingRecord != nil {
-			// Existing user found - continue with current stage
-			stage = existingRecord.Stage
-			isNewUser = false
-			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"from": from,
-				"current_stage": stage,
-			}).Info("✅ WEBHOOK: Found existing phone number record, continuing with current stage")
-		} else {
-			// New user - need to save phone number data first
-			isNewUser = true
-			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"from": from,
-			}).Info("📝 WEBHOOK: New phone number detected, will save data first")
-			
-			// Save new phone number data before proceeding
-			now := time.Now()
-			newRecord := &models.AIWhatsapp{
-				IDDevice:    idDevice,
-				ProspectNum: from,
-				Stage:       "start", // Default starting stage
-				ConvLast:    json.RawMessage(`"` + message + `"`), // Store as JSON string
-				Human:       0,
-				CreatedAt:   now,
-				UpdatedAt:   now,
-			}
-			
-			if err := h.aiWhatsappHandlers.AIRepo.CreateAIWhatsapp(newRecord); err != nil {
-				logrus.WithError(err).Error("❌ WEBHOOK: Failed to save new phone number data")
-				// Continue processing even if save fails
-			} else {
-				logrus.WithFields(logrus.Fields{
-					"id_device": idDevice,
-					"from": from,
-					"stage": "start",
-				}).Info("✅ WEBHOOK: Successfully saved new phone number data")
-			}
-		}
-	} else {
-		logrus.Error("❌ WEBHOOK: AI WhatsApp repository not available")
-		isNewUser = true
+	// Check if device has a configured flow - prioritize flow engine over AI conversation
+	flows, err := h.flowService.GetFlowsByDevice(idDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to check for device flows")
 	}
 
-	// Process flow execution based on user status
-	var flowResult *services.FlowExecutionResult
-	var flowErr error
-
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"from": from,
-		"is_new_user": isNewUser,
-		"current_stage": stage,
-	}).Info("🔄 WEBHOOK: Processing flow execution")
-
-	if isNewUser {
-		// Process flow for new user
+	// If device has configured flows, use the flow engine
+	if len(flows) > 0 {
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
 			"from": from,
-		}).Info("🆕 WEBHOOK: Processing flow for new user")
-		flowResult, flowErr = h.flowExecutionService.ProcessFlowForNewUser(idDevice, from)
-	} else {
-		// Process flow for existing user
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"stage": stage,
-		}).Info("👤 WEBHOOK: Processing flow for existing user")
-		flowResult, flowErr = h.flowExecutionService.ProcessFlowForExistingUser(idDevice, from, stage, message)
-	}
+			"message": message,
+			"provider": provider,
+			"flow_count": len(flows),
+		}).Info("🔄 WEBHOOK: Processing message through flow engine")
 
-	if flowErr != nil {
-		logrus.WithError(flowErr).Error("❌ WEBHOOK: Failed to process flow execution")
-		// Continue with fallback AI processing
-	} else if flowResult != nil {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"flow_id": flowResult.FlowID,
-			"node_id": flowResult.NodeID,
-			"should_use_ai": flowResult.ShouldUseAI,
-			"should_send_message": flowResult.ShouldSendMessage,
-		}).Info("✅ WEBHOOK: Flow execution completed successfully")
-	}
-
-	// Check if we should use flow-based AI prompt
-	if flowResult != nil && flowResult.ShouldUseAI && flowResult.AIPromptContent != "" {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"flow_id": flowResult.FlowID,
-			"node_id": flowResult.NodeID,
-			"current_stage": flowResult.CurrentStage,
-		}).Info("✅ WEBHOOK: Using flow-based AI prompt")
-
-		// Process AI conversation with flow-based prompt
-		if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIWhatsappService != nil {
-			// Use a custom AI processing method that accepts custom prompt
-			response, err := h.processFlowBasedAIConversation(from, idDevice, message, flowResult)
+		// Process message through WhatsApp service flow engine
+		if h.whatsappService != nil {
+			err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider)
 			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"id_device": idDevice,
-					"from": from,
-					"error": err.Error(),
-				}).Error("❌ WEBHOOK: Failed to process flow-based AI conversation")
-				return
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to process message through flow engine")
+				// Fallback to AI conversation if flow processing fails
+				h.processAIConversation(from, message, idDevice, provider)
 			}
-
-			// Send response if we have one
-			if response != nil {
-				h.handleAIResponse(from, idDevice, provider, message, response)
-				
-				// Save conversation history after AI response
-				if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
-					// Format AI response for saving
-					var aiResponseText string
-					if response != nil && len(response.Response) > 0 {
-						for _, item := range response.Response {
-							if item.Type == "text" {
-								aiResponseText += item.Content + " "
-							}
-						}
-						aiResponseText = strings.TrimSpace(aiResponseText)
-					}
-					if err := h.aiWhatsappHandlers.AIRepo.SaveConversationHistory(from, idDevice, message, aiResponseText, flowResult.CurrentStage); err != nil {
-						logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history after AI response")
-					} else {
-						logrus.WithFields(logrus.Fields{
-							"id_device": idDevice,
-							"from": from,
-							"stage": flowResult.CurrentStage,
-						}).Info("✅ WEBHOOK: Conversation history saved after AI response")
-					}
-				}
-			}
-			return
-		}
-	}
-
-	// Check if we should send predefined content from flow node
-	if flowResult != nil && flowResult.ShouldSendMessage && flowResult.Message != "" {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"flow_id": flowResult.FlowID,
-			"node_id": flowResult.NodeID,
-			"node_type": flowResult.NodeType,
-			"message_length": len(flowResult.Message),
-		}).Info("✅ WEBHOOK: Sending predefined content from flow node")
-
-		// Get device settings for sending message
-		deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
-		if err != nil {
-			logrus.WithError(err).Error("❌ WEBHOOK: Failed to get device settings for sending flow message")
-			return
-		}
-
-		// Send the predefined content based on node type
-		if flowResult.NodeType == "image" {
-			// Send as image message
-			h.sendImageMessage(from, flowResult.Message, deviceSettings, provider)
 		} else {
-			// Send as text message (default for message, text, and other node types)
-			h.sendTextMessage(from, flowResult.Message, deviceSettings, provider)
-		}
-
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"flow_id": flowResult.FlowID,
-			"node_id": flowResult.NodeID,
-		}).Info("✅ WEBHOOK: Successfully sent predefined flow content")
-		
-		// Save conversation history after sending predefined content
-		if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
-			if err := h.aiWhatsappHandlers.AIRepo.SaveConversationHistory(from, idDevice, message, flowResult.Message, flowResult.CurrentStage); err != nil {
-				logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history after predefined content")
-			} else {
-				logrus.WithFields(logrus.Fields{
-					"id_device": idDevice,
-					"from": from,
-					"stage": flowResult.CurrentStage,
-				}).Info("✅ WEBHOOK: Conversation history saved after predefined content")
-			}
+			logrus.Error("❌ WEBHOOK: WhatsApp service not available, falling back to AI conversation")
+			h.processAIConversation(from, message, idDevice, provider)
 		}
 		return
 	}
 
-	// No flow-based AI prompt found and no predefined content - stop processing
-	// AI should only trigger when there's a valid flow with AI prompt nodes
+	// No flows configured, use AI conversation system
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"from": from,
-		"flow_found": flowResult != nil,
-		"should_use_ai": flowResult != nil && flowResult.ShouldUseAI,
-		"has_ai_prompt": flowResult != nil && flowResult.AIPromptContent != "",
-		"should_send_message": flowResult != nil && flowResult.ShouldSendMessage,
-	}).Info("🚫 WEBHOOK: No valid flow with AI prompt nodes or predefined content found - stopping processing")
-	
-	// Log the reason for stopping
-	if flowResult == nil {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-		}).Info("📋 WEBHOOK: No flow found for this device - no response will be sent")
-	} else if !flowResult.ShouldUseAI && !flowResult.ShouldSendMessage {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"flow_id": flowResult.FlowID,
-			"current_stage": flowResult.CurrentStage,
-			"node_type": flowResult.NodeType,
-		}).Info("📋 WEBHOOK: Current flow node has no AI prompt or predefined content - no response will be sent")
-	} else if flowResult.AIPromptContent == "" && flowResult.Message == "" {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"flow_id": flowResult.FlowID,
-			"node_id": flowResult.NodeID,
-		}).Info("📋 WEBHOOK: Flow node has no content to send - no response will be sent")
-	}
-	
-	// No processing needed - message processing stops here
-	return
+		"message": message,
+		"provider": provider,
+	}).Info("🤖 WEBHOOK: No flows configured, processing message through AI conversation")
+
+	h.processAIConversation(from, message, idDevice, provider)
 }
 
-// sendWhatsappResponse sends AI response back to WhatsApp through the appropriate provider}
-
-// processFlowBasedAIConversation processes AI conversation using flow-based prompt
-func (h *Handlers) processFlowBasedAIConversation(prospectNum, idDevice, message string, flowResult *services.FlowExecutionResult) (*services.AIWhatsappResponse, error) {
-	logrus.WithFields(logrus.Fields{
-		"prospect_num": prospectNum,
-		"id_device": idDevice,
-		"flow_id": flowResult.FlowID,
-		"node_id": flowResult.NodeID,
-		"current_stage": flowResult.CurrentStage,
-	}).Info("🔄 FLOW: Processing flow-based AI conversation")
-
-	// Create a custom AI service call with flow-based prompt
-	return h.aiWhatsappHandlers.AIWhatsappService.ProcessAIConversationWithCustomPrompt(
-		prospectNum, 
-		idDevice, 
-		message, 
-		flowResult.CurrentStage,
-		flowResult.AIPromptContent,
-	)
-}
-
-// handleAIResponse handles the AI response by saving conversation history and sending the response
-func (h *Handlers) handleAIResponse(from, idDevice, provider, userMessage string, response *services.AIWhatsappResponse) {
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"from": from,
-		"response_stage": response.Stage,
-		"response_items": len(response.Response),
-	}).Info("✅ WEBHOOK: AI conversation processed successfully")
-	
-	// Extract bot response text from response array
-	var botResponseText string
-	for _, item := range response.Response {
-		if item.Type == "text" {
-			if botResponseText != "" {
-				botResponseText += " "
-			}
-			botResponseText += item.Content
+// processAIConversation handles message processing through the AI conversation system
+func (h *Handlers) processAIConversation(from, message, idDevice, provider string) {
+	// Get current conversation stage from AI WhatsApp repository
+	var stage string
+	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
+		aiConv, err := h.aiWhatsappHandlers.AIRepo.GetAIWhatsappByProspectNum(from)
+		if err != nil {
+			logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to get AI conversation stage")
+		} else if aiConv != nil {
+			stage = aiConv.Stage
 		}
 	}
 
-	// Save conversation history to conv_last field
-	err := h.aiWhatsappHandlers.AIWhatsappService.SaveConversationHistory(from, idDevice, userMessage, botResponseText, response.Stage)
-	if err != nil {
-		logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history")
+	// Process AI conversation through AI WhatsApp service
+	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIWhatsappService != nil {
+		response, err := h.aiWhatsappHandlers.AIWhatsappService.ProcessAIConversation(from, idDevice, message, stage)
+		if err != nil {
+			logrus.WithError(err).Error("❌ WEBHOOK: Failed to process AI conversation")
+			return
+		}
+
+		// Save conversation history and send response if we have a response
+		if response != nil {
+			// Extract bot response text from response array
+			var botResponseText string
+			for _, item := range response.Response {
+				if item.Type == "text" {
+					if botResponseText != "" {
+						botResponseText += " "
+					}
+					botResponseText += item.Content
+				}
+			}
+
+			// Save conversation history to conv_last field
+			err = h.aiWhatsappHandlers.AIWhatsappService.SaveConversationHistory(from, idDevice, message, botResponseText, response.Stage)
+			if err != nil {
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history")
+			}
+
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"to": from,
+				"provider": provider,
+			}).Info("📤 WEBHOOK: Sending AI response back to WhatsApp")
+
+			// Send response through the appropriate provider
+			h.sendWhatsappResponse(from, idDevice, provider, response)
+		}
+	} else {
+		logrus.Error("❌ WEBHOOK: AI WhatsApp service not available")
 	}
-
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"to": from,
-		"provider": provider,
-	}).Info("📤 WEBHOOK: Sending AI response")
-
-	// Send response through the appropriate provider
-	h.sendWhatsappResponse(from, idDevice, provider, response)
 }
 
+// sendWhatsappResponse sends AI response back to WhatsApp through the appropriate provider
 func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response interface{}) {
 	logrus.WithFields(logrus.Fields{
 		"to": to,
@@ -1832,44 +1562,26 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 		return
 	}
 
-	// Parse response data - handle both AIWhatsappResponse and AIResponse structs
-	var responseItems []services.AIWhatsappResponseItem
+	// Parse response data - handle AIWhatsappResponse struct
+	var aiResponse *services.AIWhatsappResponse
 	switch v := response.(type) {
 	case *services.AIWhatsappResponse:
-		responseItems = v.Response
+		aiResponse = v
 	case services.AIWhatsappResponse:
-		responseItems = v.Response
-	case *models.AIResponse:
-		// Convert models.AIResponse to services.AIWhatsappResponseItem format
-		for _, item := range v.Response {
-			responseItems = append(responseItems, services.AIWhatsappResponseItem{
-				Type:    item.Type,
-				Jenis:   item.Jenis,
-				Content: item.Content,
-			})
-		}
-	case models.AIResponse:
-		// Convert models.AIResponse to services.AIWhatsappResponseItem format
-		for _, item := range v.Response {
-			responseItems = append(responseItems, services.AIWhatsappResponseItem{
-				Type:    item.Type,
-				Jenis:   item.Jenis,
-				Content: item.Content,
-			})
-		}
+		aiResponse = &v
 	default:
 		logrus.WithField("response_type", fmt.Sprintf("%T", response)).Error("❌ WHATSAPP: Invalid response format")
 		return
 	}
 
 	// Validate response structure
-	if len(responseItems) == 0 {
+	if aiResponse == nil || len(aiResponse.Response) == 0 {
 		logrus.Error("❌ WHATSAPP: No response messages found")
 		return
 	}
 
 	// Send each response message
-	for _, respItem := range responseItems {
+	for _, respItem := range aiResponse.Response {
 		if respItem.Content == "" {
 			continue
 		}

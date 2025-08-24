@@ -46,7 +46,6 @@ type aiCronService struct {
 	aiRepo            repository.AIWhatsappRepository
 	deviceRepo        repository.DeviceSettingsRepository
 	aiWhatsappService AIWhatsappService
-	flowService       *FlowService
 	cronScheduler     *cron.Cron
 	ctx               context.Context
 	cancel            context.CancelFunc
@@ -67,7 +66,6 @@ func NewAICronService(
 	aiRepo repository.AIWhatsappRepository,
 	deviceRepo repository.DeviceSettingsRepository,
 	aiWhatsappService AIWhatsappService,
-	flowService *FlowService,
 ) AICronService {
 	ctx, cancel := context.WithCancel(context.Background())
 	
@@ -75,7 +73,6 @@ func NewAICronService(
 		aiRepo:            aiRepo,
 		deviceRepo:        deviceRepo,
 		aiWhatsappService: aiWhatsappService,
-		flowService:       flowService,
 		cronScheduler:     cron.New(cron.WithSeconds()),
 		ctx:               ctx,
 		cancel:            cancel,
@@ -366,69 +363,15 @@ func (s *aiCronService) ProcessPendingResponses() error {
 			}
 		}
 
-		// Check if there's a valid flow with AI prompt nodes before processing AI
-		logrus.WithFields(logrus.Fields{
-			"prospect_num": conv.ProspectNum,
-			"id_device": conv.IDDevice,
-			"stage": conv.Stage,
-		}).Debug("🔄 CRON: Checking flow for AI prompt nodes")
-		
-		// For cron processing, we need to check if current stage corresponds to an AI prompt node
-		// This requires flow execution service to validate the current state
-		flowExecutionService := NewFlowExecutionService(s.flowService)
-		
-		// Check flow for existing user (since this is cron processing of existing conversations)
-		flowResult, flowErr := flowExecutionService.ProcessFlowForExistingUser(
-			conv.IDDevice,
+		// Process AI conversation
+		response, err := s.aiWhatsappService.ProcessAIConversation(
 			conv.ProspectNum,
+			conv.IDDevice,
+			currentText,
 			conv.Stage,
-			currentText,
-		)
-		
-		if flowErr != nil {
-			logrus.WithError(flowErr).WithFields(logrus.Fields{
-				"prospect_num": conv.ProspectNum,
-				"id_device": conv.IDDevice,
-			}).Warn("⚠️ CRON: Failed to process flow execution")
-			// Skip this conversation - no valid flow means no AI processing
-			continue
-		}
-		
-		// Only process AI if we have a valid flow with AI prompt nodes
-		if flowResult == nil || !flowResult.ShouldUseAI || flowResult.AIPromptContent == "" {
-			logrus.WithFields(logrus.Fields{
-				"prospect_num": conv.ProspectNum,
-				"id_device": conv.IDDevice,
-				"flow_found": flowResult != nil,
-				"should_use_ai": flowResult != nil && flowResult.ShouldUseAI,
-				"has_ai_prompt": flowResult != nil && flowResult.AIPromptContent != "",
-			}).Info("🚫 CRON: No valid flow with AI prompt nodes - skipping AI processing")
-			
-			// Clear current message since we're not processing it
-			err = s.aiRepo.UpdateConvCurrent(conv.ProspectNum, "")
-			if err != nil {
-				logrus.WithError(err).Error("Failed to clear conv_current")
-			}
-			continue
-		}
-		
-		// Process AI conversation with flow-based prompt
-		logrus.WithFields(logrus.Fields{
-			"prospect_num": conv.ProspectNum,
-			"id_device": conv.IDDevice,
-			"flow_id": flowResult.FlowID,
-			"node_id": flowResult.NodeID,
-		}).Info("✅ CRON: Processing AI conversation with flow-based prompt")
-		
-		response, err := s.aiWhatsappService.ProcessAIConversationWithCustomPrompt(
-			conv.ProspectNum,
-			conv.IDDevice,
-			currentText,
-			flowResult.CurrentStage,
-			flowResult.AIPromptContent,
 		)
 		if err != nil {
-			logrus.WithError(err).WithField("prospect_num", conv.ProspectNum).Error("Failed to process flow-based AI conversation")
+			logrus.WithError(err).WithField("prospect_num", conv.ProspectNum).Error("Failed to process AI conversation")
 			continue
 		}
 

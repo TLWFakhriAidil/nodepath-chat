@@ -75,7 +75,48 @@
         {{block "content" .}}{{end}}
     </main>
 
-
+    <!-- WhatsApp Settings Modal -->
+    <div class="modal fade" id="whatsappModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-whatsapp text-success"></i>
+                        WhatsApp Settings
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Connection Status</label>
+                        <div class="d-flex align-items-center">
+                            <span id="whatsapp-status" class="badge bg-secondary">Checking...</span>
+                            <button id="refresh-status" class="btn btn-sm btn-outline-primary ms-2">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button id="connect-whatsapp" class="btn btn-success me-2">
+                            <i class="bi bi-play-circle"></i> Connect
+                        </button>
+                        <button id="disconnect-whatsapp" class="btn btn-danger me-2">
+                            <i class="bi bi-stop-circle"></i> Disconnect
+                        </button>
+                        <button id="get-qr-code" class="btn btn-info">
+                            <i class="bi bi-qr-code"></i> Get QR Code
+                        </button>
+                    </div>
+                    
+                    <div id="qr-code-container" class="text-center" style="display: none;">
+                        <div id="qr-code"></div>
+                        <p class="text-muted mt-2">Scan this QR code with WhatsApp</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- AI Settings Modal -->
     <div class="modal fade" id="aiSettingsModal" tabindex="-1">
