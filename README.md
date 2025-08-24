@@ -100,7 +100,24 @@ After setup, verify Redis connection:
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
-### ✅ Bracket Format Media URL Detection in Webhooks (January 2025)
+### ✅ Centralized Media Detection Service (January 2025)
+- **New Architecture**: Implemented centralized `MediaDetectionService` for unified media URL detection across the entire system
+- **Service Integration**: Integrated into AI WhatsApp service, WhatsApp service, and webhook handlers for consistent media processing
+- **Multiple Format Support**: Detects bracket format `[IMAGE: URL]`, `[AUDIO: URL]`, `[VIDEO: URL]` and plain URLs with media extensions
+- **Advanced Detection**: Uses regex patterns and file extension analysis for comprehensive media type identification
+- **Centralized Logic**: Moved all media detection logic from individual services to a single, reusable service
+- **Performance Optimization**: Eliminates duplicate detection code and provides consistent behavior across all components
+- **Files Created/Updated**:
+  - `internal/services/media_detection_service.go` - New centralized media detection service
+  - `internal/services/ai_whatsapp_service.go` - Updated to use centralized service, removed old `isMediaURL` and `isImageURL` methods
+  - `internal/whatsapp/whatsapp_service.go` - Integrated media detection service for flow responses
+  - `cmd/server/main.go` - Added media detection service initialization
+  - `internal/handlers/handlers.go` - Updated service dependencies
+- **Backward Compatibility**: Maintains support for existing bracket format detection while adding new capabilities
+- **Error Handling**: Robust error handling with comprehensive logging for media detection and processing
+- **Testing**: Successfully tested with server restart and compilation verification
+
+### ✅ Legacy Bracket Format Media URL Detection (January 2025)
 - **Enhanced**: Added automatic detection and processing of bracket-formatted media URLs in incoming webhook messages
 - **Supported Formats**: `[IMAGE: URL]`, `[AUDIO: URL]`, `[VIDEO: URL]` in user messages
 - **Backtick Support**: Now handles URLs with backticks: `[IMAGE: \`https://example.com\`]` and without: `[IMAGE: https://example.com]`

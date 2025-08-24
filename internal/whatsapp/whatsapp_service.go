@@ -2,7 +2,6 @@ package whatsapp
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +34,7 @@ type Service struct {
 	websocketService      *services.WebSocketService
 	deviceSettingsService *services.DeviceSettingsService
 	providerService       *services.ProviderService
+	mediaDetectionService *services.MediaDetectionService
 
 	// Message processing queue for performance
 	messageQueue chan *WebhookMessage
@@ -52,7 +52,7 @@ type WebhookMessage struct {
 }
 
 // NewService creates a new simplified WhatsApp service for webhook-based system
-func NewService(cfg *config.Config, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService services.AIWhatsappService, websocketService *services.WebSocketService, deviceSettingsService *services.DeviceSettingsService, providerService *services.ProviderService) (*Service, error) {
+func NewService(cfg *config.Config, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService services.AIWhatsappService, websocketService *services.WebSocketService, deviceSettingsService *services.DeviceSettingsService, providerService *services.ProviderService, mediaDetectionService *services.MediaDetectionService) (*Service, error) {
 	service := &Service{
 		cfg:                   cfg,
 		queueService:          queueService,
@@ -62,6 +62,7 @@ func NewService(cfg *config.Config, queueService *services.QueueService, flowSer
 		websocketService:      websocketService,
 		deviceSettingsService: deviceSettingsService,
 		providerService:       providerService,
+		mediaDetectionService: mediaDetectionService,
 		messageQueue:          make(chan *WebhookMessage, 1000), // Buffered queue for performance
 	}
 
@@ -351,52 +352,24 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"response_length": len(response),
 		}).Info("📤 FLOW: Sending response back to user")
 
-		// Check if response contains bracket format media URLs and extract them
-		if strings.Contains(response, "[IMAGE:") || strings.Contains(response, "[AUDIO:") || strings.Contains(response, "[VIDEO:") {
-			// Extract URL from bracket format
-			var mediaURL string
-			var mediaType string
-			
-			if strings.Contains(response, "[IMAGE:") {
-				re := regexp.MustCompile(`\[IMAGE:\s*([^\]]+)\]`)
-				matches := re.FindStringSubmatch(response)
-				if len(matches) > 1 {
-					mediaURL = strings.TrimSpace(matches[1])
-					mediaURL = strings.Trim(mediaURL, "`") // Remove backticks if present
-					mediaType = "image"
-				}
-			} else if strings.Contains(response, "[AUDIO:") {
-				re := regexp.MustCompile(`\[AUDIO:\s*([^\]]+)\]`)
-				matches := re.FindStringSubmatch(response)
-				if len(matches) > 1 {
-					mediaURL = strings.TrimSpace(matches[1])
-					mediaURL = strings.Trim(mediaURL, "`") // Remove backticks if present
-					mediaType = "audio"
-				}
-			} else if strings.Contains(response, "[VIDEO:") {
-				re := regexp.MustCompile(`\[VIDEO:\s*([^\]]+)\]`)
-				matches := re.FindStringSubmatch(response)
-				if len(matches) > 1 {
-					mediaURL = strings.TrimSpace(matches[1])
-					mediaURL = strings.Trim(mediaURL, "`") // Remove backticks if present
-					mediaType = "video"
-				}
-			}
-			
-			if mediaURL != "" {
+		// Check if response contains media URLs using the new detection service
+		if s.mediaDetectionService.HasMedia(response) {
+			mediaInfo := s.mediaDetectionService.ExtractFirstMedia(response)
+			if mediaInfo != nil {
 				logrus.WithFields(logrus.Fields{
-					"media_type": mediaType,
-					"media_url":  mediaURL,
-					"device_id":  deviceID,
-				}).Info("🖼️ FLOW: Extracted media URL from bracket format, sending as media message")
-				
-				// Send as media message instead of text
-				err = s.SendMediaMessage(deviceID, phoneNumber, "", mediaURL)
+				"media_type": mediaInfo.MediaType,
+				"media_url":  mediaInfo.MediaURL,
+				"device_id":  deviceID,
+			}).Info("🖼️ FLOW: Extracted media URL using new detection service, sending as media message")
+			
+			// Send as media message instead of text
+			err = s.SendMediaMessage(deviceID, phoneNumber, "", mediaInfo.MediaURL)
 				if err != nil {
 					logrus.WithError(err).WithFields(logrus.Fields{
 						"device_id":    deviceID,
 						"phone_number": phoneNumber,
-						"media_url":    mediaURL,
+						"media_url":    mediaInfo.MediaURL,
+				"media_type":   mediaInfo.MediaType,
 					}).Error("❌ FLOW: Failed to send media message")
 					return err
 				}

@@ -87,9 +87,7 @@ func main() {
 	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
 	logrus.Info("Repositories initialized successfully")
 	
-	// Initialize AI WhatsApp service
-	aiWhatsappService := services.NewAIWhatsappService(aiWhatsappRepo, deviceSettingsRepo, flowService)
-	logrus.Info("AI WhatsApp service initialized successfully")
+
 	
 	// Initialize WebSocket service for real-time communication
 	websocketService := services.NewWebSocketService(cfg.MaxConcurrentUsers)
@@ -103,10 +101,18 @@ func main() {
 	providerService := services.NewProviderService()
 	logrus.Info("Provider service initialized for Wablas/Whacenter APIs")
 
+	// Initialize media detection service for centralized media URL detection
+	mediaDetectionService := services.NewMediaDetectionService()
+	logrus.Info("Media detection service initialized for multiple format support")
+
+	// Initialize AI WhatsApp service with media detection service
+	aiWhatsappService := services.NewAIWhatsappService(aiWhatsappRepo, deviceSettingsRepo, flowService, mediaDetectionService)
+	logrus.Info("AI WhatsApp service initialized with media detection service")
+
 	// Initialize WhatsApp service with multi-device support
 	logrus.Info("🔧 MAIN: About to initialize WhatsApp service...")
 	logrus.Info("🔧 MAIN: Initializing WhatsApp service...")
-	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService)
+	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService, mediaDetectionService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}

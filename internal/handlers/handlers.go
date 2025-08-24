@@ -21,6 +21,7 @@ type Handlers struct {
 	deviceSettingsService *services.DeviceSettingsService
 	websocketService      *services.WebSocketService
 	mediaService          *services.MediaService
+	mediaDetectionService *services.MediaDetectionService
 	aiWhatsappHandlers    *AIWhatsappHandlers
 }
 
@@ -39,8 +40,11 @@ func NewHandlers(
 	aiRepo := repository.NewAIWhatsappRepository(db)
 	deviceRepo := repository.NewDeviceSettingsRepository(db)
 	
+	// Initialize media detection service
+	mediaDetectionService := services.NewMediaDetectionService()
+	
 	// Initialize AI WhatsApp service
-	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
+	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService, mediaDetectionService)
 	
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
@@ -53,6 +57,7 @@ func NewHandlers(
 		deviceSettingsService: deviceSettingsService,
 		websocketService:      websocketService,
 		mediaService:          mediaService,
+		mediaDetectionService: mediaDetectionService,
 		aiWhatsappHandlers:    aiWhatsappHandlers,
 	}
 }

@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/services"
-	"regexp"
+
 	"strings"
 	"time"
 
@@ -1422,7 +1422,44 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
-	// Only process text messages
+	// Check for media URLs BEFORE filtering message types
+	// This allows media detection even for non-text message types
+	if h.mediaDetectionService.HasMedia(message) {
+		mediaInfo := h.mediaDetectionService.ExtractFirstMedia(message)
+		if mediaInfo != nil {
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"media_type": mediaInfo.MediaType,
+				"media_url": mediaInfo.MediaURL,
+			}).Info("📎 WEBHOOK: Detected media URL using new detection service")
+
+			// Send media message through WhatsApp service
+			if h.whatsappService != nil {
+				err := h.whatsappService.SendMediaMessage(idDevice, from, "", mediaInfo.MediaURL)
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{
+					"id_device": idDevice,
+					"to": from,
+					"media_url": mediaInfo.MediaURL,
+					"media_type": mediaInfo.MediaType,
+				}).Error("❌ WEBHOOK: Failed to send media message")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"id_device": idDevice,
+					"to": from,
+					"media_url": mediaInfo.MediaURL,
+					"media_type": mediaInfo.MediaType,
+				}).Info("✅ WEBHOOK: Successfully sent media message")
+				}
+			} else {
+				logrus.Error("❌ WEBHOOK: WhatsApp service not available")
+			}
+			return // Don't process as text after sending media
+		}
+	}
+
+	// Only process text messages for non-media content
 	if messageType != "text" && messageType != "" {
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
@@ -1452,48 +1489,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
-	// Check if message contains bracket format media URLs [IMAGE:], [AUDIO:], [VIDEO:]
-	// Updated pattern to handle backticks around URLs: [IMAGE: `https://...`] or [IMAGE: https://...]
-	mediaURLPattern := regexp.MustCompile(`\[(IMAGE|AUDIO|VIDEO):\s*`+"`"+`?([^\]`+"`"+`]+)`+"`"+`?\]`)
-	if mediaURLPattern.MatchString(message) {
-		matches := mediaURLPattern.FindAllStringSubmatch(message, -1)
-		for _, match := range matches {
-			if len(match) >= 3 {
-				mediaType := strings.ToLower(match[1])
-				mediaURL := strings.TrimSpace(match[2])
-				
-				logrus.WithFields(logrus.Fields{
-					"id_device": idDevice,
-					"from": from,
-					"media_type": mediaType,
-					"media_url": mediaURL,
-				}).Info("📎 WEBHOOK: Detected bracket format media URL")
 
-				// Send media message through WhatsApp service
-				if h.whatsappService != nil {
-					err := h.whatsappService.SendMediaMessage(idDevice, from, "", mediaURL)
-					if err != nil {
-						logrus.WithError(err).WithFields(logrus.Fields{
-							"id_device": idDevice,
-							"to": from,
-							"media_url": mediaURL,
-							"media_type": mediaType,
-						}).Error("❌ WEBHOOK: Failed to send media message")
-					} else {
-						logrus.WithFields(logrus.Fields{
-							"id_device": idDevice,
-							"to": from,
-							"media_url": mediaURL,
-							"media_type": mediaType,
-						}).Info("✅ WEBHOOK: Successfully sent media message")
-					}
-				} else {
-					logrus.Error("❌ WEBHOOK: WhatsApp service not available")
-				}
-			}
-		}
-		return // Don't process as text after sending media
-	}
 
 	// Check if device has a configured flow - prioritize flow engine over AI conversation
 	flows, err := h.flowService.GetFlowsByDevice(idDevice)
