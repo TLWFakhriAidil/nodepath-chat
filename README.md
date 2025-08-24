@@ -100,6 +100,22 @@ After setup, verify Redis connection:
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
+### ✅ Bracket Format Media URL Detection in Webhooks (January 2025)
+- **Enhanced**: Added automatic detection and processing of bracket-formatted media URLs in incoming webhook messages
+- **Supported Formats**: `[IMAGE: URL]`, `[AUDIO: URL]`, `[VIDEO: URL]` in user messages
+- **Automatic Processing**: System now extracts media URLs from bracket format and sends them as proper media messages
+- **Media Type Detection**: Automatic media type detection based on file extensions (.jpg, .png, .mp3, .mp4, etc.)
+- **Provider Integration**: Works with both Wablas and Whacenter providers using existing media sending functions
+- **Comprehensive Logging**: Added detailed logging for bracket format media detection and processing
+- **Error Handling**: Robust error handling for media URL extraction and sending failures
+- **Performance**: Prevents bracket format media from being processed as text messages
+- **Functions Updated**:
+  - `processWebhookMessage()` in `device_settings_handlers.go` - Added regex-based media URL detection
+  - Added `regexp` import for pattern matching
+  - Integration with `h.whatsappService.SendMediaMessage()` for proper media delivery
+- **User Experience**: Users can now send media URLs in bracket format and they will be automatically converted to media messages
+- **Regex Pattern**: `\[(IMAGE|AUDIO|VIDEO):\s*([^\]]+)\]` for detecting bracket format media URLs
+
 ### ✅ WhatsApp Connection Checking Removal (January 2025)
 - **Removed**: Unnecessary device connection validation from message sending functions
 - **Simplified**: Flow-based message processing no longer requires connection status checks
