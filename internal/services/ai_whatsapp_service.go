@@ -614,9 +614,54 @@ func (s *aiWhatsappService) parseAIResponse(responseText string) (*AIWhatsappRes
 		return nil, fmt.Errorf("empty response from AI")
 	}
 
-	// Post-process response items to ensure proper image URL handling
+	// Post-process response items to ensure proper media URL handling
 	for i := range aiResponse.Response {
 		item := &aiResponse.Response[i]
+		
+		// Extract URL from bracket format if present (e.g., "[IMAGE: URL]" -> "URL")
+		if item.Type == "text" {
+			// Check for [IMAGE: URL], [AUDIO: URL], [VIDEO: URL] format
+			if strings.Contains(item.Content, "[IMAGE:") {
+				if start := strings.Index(item.Content, "[IMAGE:"); start != -1 {
+					if end := strings.Index(item.Content[start:], "]"); end != -1 {
+						url := strings.TrimSpace(strings.TrimPrefix(item.Content[start:start+end], "[IMAGE:"))
+						logrus.WithFields(logrus.Fields{
+							"original_content": item.Content,
+							"extracted_url": url,
+							"item_index": i,
+						}).Info("🔧 AI RESPONSE: EXTRACTING IMAGE URL FROM BRACKET FORMAT")
+						item.Content = url
+						item.Type = "image"
+					}
+				}
+			} else if strings.Contains(item.Content, "[AUDIO:") {
+				if start := strings.Index(item.Content, "[AUDIO:"); start != -1 {
+					if end := strings.Index(item.Content[start:], "]"); end != -1 {
+						url := strings.TrimSpace(strings.TrimPrefix(item.Content[start:start+end], "[AUDIO:"))
+						logrus.WithFields(logrus.Fields{
+							"original_content": item.Content,
+							"extracted_url": url,
+							"item_index": i,
+						}).Info("🔧 AI RESPONSE: EXTRACTING AUDIO URL FROM BRACKET FORMAT")
+						item.Content = url
+						item.Type = "audio"
+					}
+				}
+			} else if strings.Contains(item.Content, "[VIDEO:") {
+				if start := strings.Index(item.Content, "[VIDEO:"); start != -1 {
+					if end := strings.Index(item.Content[start:], "]"); end != -1 {
+						url := strings.TrimSpace(strings.TrimPrefix(item.Content[start:start+end], "[VIDEO:"))
+						logrus.WithFields(logrus.Fields{
+							"original_content": item.Content,
+							"extracted_url": url,
+							"item_index": i,
+						}).Info("🔧 AI RESPONSE: EXTRACTING VIDEO URL FROM BRACKET FORMAT")
+						item.Content = url
+						item.Type = "video"
+					}
+				}
+			}
+		}
 		
 		// Auto-detect media URLs (image, audio, video) and correct the type if needed
 		if item.Type == "text" {

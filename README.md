@@ -1993,5 +1993,12 @@ go run cmd/server/main.go
   - Resolved issue where AI responses and flow delays were taking 30 seconds instead of expected 5 seconds
   - Improved real-time responsiveness for all delayed message operations
   - Enhanced user experience with faster message delivery timing
+- ✅ **CRITICAL FIX**: Media URL bracket format processing
+  - Fixed issue where AI responses with bracket format `[IMAGE: URL]`, `[AUDIO: URL]`, `[VIDEO: URL]` were sent as text instead of media
+  - Added preprocessing to extract URLs from bracket format before auto-detection in `parseAIResponse` function
+  - Enhanced media URL detection to handle both bracket format and plain URLs
+  - Implemented comprehensive logging for bracket format extraction debugging
+  - Ensures proper media message delivery regardless of AI response format
+  - Maintains backward compatibility with existing plain URL auto-detection
 
 **Final Status**: 🟢 **FULLY OPERATIONAL PRODUCTION SYSTEM** - Ready for users with no critical issues or blockers
