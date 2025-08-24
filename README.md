@@ -48,8 +48,66 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ##### 🔧 Recent Updates & Fixes (Latest)
 
-### 🧹 Complete WhatsApp Connection Handler Cleanup (Latest)
+### 🔍 Enhanced WhatsApp Webhook Debugging & Tracing (Latest)
 **Date**: Current Session
+
+#### ✅ Changes Made:
+- **Enhanced Webhook Logging**: Added comprehensive logging with raw payload, headers, IP, and URL details
+- **AI Processing Tracing**: Added detailed logging for AI conversation processing stages
+- **Test Webhook Endpoint**: Created `/webhook/test/:id_device/:instance` for debugging webhook functionality
+- **Structured Log Fields**: All webhook logs now include device ID, phone number, message content, and processing stages
+- **Error Context**: Enhanced error logging with full context for easier debugging
+
+#### 🛠️ How to Trace WhatsApp Messages:
+
+**1. Monitor Server Logs:**
+```bash
+# Look for these log patterns:
+📨 WEBHOOK: Received webhook request with full details
+🔄 WEBHOOK: Processing webhook message with flow priority
+🤖 WEBHOOK: Processing message through AI service
+🔄 WEBHOOK: Starting AI conversation processing
+✅ WEBHOOK: AI conversation processed successfully
+📤 WEBHOOK: Sending AI fallback response
+```
+
+**2. Test Webhook Endpoint:**
+```bash
+# Use the test endpoint to verify webhook reception:
+POST http://localhost:8080/api/webhook/test/FakhriAidilTLW-001/your_instance
+Content-Type: application/json
+
+{
+  "from": "60179645043",
+  "message": "Hello test",
+  "message_type": "text"
+}
+```
+
+**3. Check for Common Issues:**
+- ⚠️ Device not found in database
+- ⚠️ Instance mismatch
+- ⚠️ Missing required fields (from or message)
+- ❌ Failed to process AI conversation
+- ❌ AI WhatsApp service not available
+
+**4. Webhook URL Format:**
+```
+POST http://your-domain.com/api/webhook/{id_device}/{instance}
+```
+
+#### 🎯 Benefits:
+- **Real-time Debugging**: See exactly what data is received and how it's processed
+- **Complete Traceability**: Track message flow from webhook receipt to AI response
+- **Easy Troubleshooting**: Identify issues quickly with structured logging
+- **Test Environment**: Dedicated test endpoint for webhook validation
+
+#### 🛠️ Files Modified:
+- **`internal/handlers/device_settings_handlers.go`**: Enhanced webhook logging and added test endpoint
+- **`internal/handlers/handlers.go`**: Added test webhook route
+
+### 🧹 Complete WhatsApp Connection Handler Cleanup
+**Date**: Previous Session
 
 #### ✅ Changes Made:
 - **Removed Redundant Backend Handlers**: Eliminated `GetWhatsAppStatus`, `GetWhatsAppQR`, `DisconnectWhatsApp`, and `ConnectWhatsApp` functions from `handlers_extended.go`

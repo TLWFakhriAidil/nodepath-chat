@@ -449,13 +449,18 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 	// Get the raw webhook payload
 	body := c.Body()
 	
+	// Enhanced logging for debugging webhook issues
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"instance": instance,
 		"content_type": c.Get("Content-Type"),
 		"user_agent": c.Get("User-Agent"),
 		"payload_size": len(body),
-	}).Info("📨 WEBHOOK: Received webhook request")
+		"raw_payload": string(body), // Add raw payload for debugging
+		"remote_ip": c.IP(),
+		"method": c.Method(),
+		"url": c.OriginalURL(),
+	}).Info("📨 WEBHOOK: Received webhook request with full details")
 	
 	// Verify the device exists in our database
 	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
@@ -503,6 +508,54 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 		"message": "Webhook received and processed",
 		"id_device": idDevice,
 		"provider": deviceSettings.Provider,
+	})
+}
+
+// HandleWebhookTest provides a test endpoint for debugging webhook functionality
+func (h *Handlers) HandleWebhookTest(c *fiber.Ctx) error {
+	idDevice := c.Params("id_device")
+	instance := c.Params("instance")
+	
+	// Get the raw webhook payload
+	body := c.Body()
+	
+	// Log everything for debugging
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"instance": instance,
+		"content_type": c.Get("Content-Type"),
+		"user_agent": c.Get("User-Agent"),
+		"payload_size": len(body),
+		"raw_payload": string(body),
+		"remote_ip": c.IP(),
+		"method": c.Method(),
+		"url": c.OriginalURL(),
+		"headers": c.GetReqHeaders(),
+	}).Info("🧪 WEBHOOK TEST: Received test webhook request")
+	
+	// Parse JSON if possible
+	var webhookData map[string]interface{}
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &webhookData); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error": err.Error(),
+				"payload": string(body),
+			}).Warn("🧪 WEBHOOK TEST: Failed to parse JSON, treating as raw text")
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"parsed_data": webhookData,
+			}).Info("🧪 WEBHOOK TEST: Successfully parsed JSON payload")
+		}
+	}
+	
+	return h.successResponse(c, map[string]interface{}{
+		"success": true,
+		"message": "Test webhook received successfully",
+		"id_device": idDevice,
+		"instance": instance,
+		"payload_received": string(body),
+		"parsed_data": webhookData,
+		"timestamp": time.Now().Format(time.RFC3339),
 	})
 }
 
@@ -1477,14 +1530,32 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 
 	// Process AI conversation through AI WhatsApp service
 	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIWhatsappService != nil {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"message": message,
+			"stage": stage,
+		}).Info("🔄 WEBHOOK: Starting AI conversation processing")
+		
 		response, err := h.aiWhatsappHandlers.AIWhatsappService.ProcessAIConversation(from, idDevice, message, stage)
 		if err != nil {
-			logrus.WithError(err).Error("❌ WEBHOOK: Failed to process AI conversation")
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"message": message,
+				"error": err.Error(),
+			}).Error("❌ WEBHOOK: Failed to process AI conversation")
 			return
 		}
 
 		// Save conversation history and send response if we have a response
 		if response != nil {
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"response_stage": response.Stage,
+				"response_items": len(response.Response),
+			}).Info("✅ WEBHOOK: AI conversation processed successfully")
 			// Extract bot response text from response array
 			var botResponseText string
 			for _, item := range response.Response {

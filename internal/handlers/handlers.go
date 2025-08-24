@@ -115,6 +115,8 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")
 	webhook.Post("/:id_device/:instance", h.HandleWebhook)
+	// Test endpoint for webhook debugging
+	webhook.Post("/test/:id_device/:instance", h.HandleWebhookTest)
 
 	// AI WhatsApp routes - delegate to AIWhatsappHandlers
 	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
