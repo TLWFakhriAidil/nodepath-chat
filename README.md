@@ -48,8 +48,23 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ##### 🔧 Recent Updates & Fixes (Latest)
 
-### ✅ Implemented Flow-Based AI Prompt Processing (Latest)
+### ✅ Implemented Non-AI Flow Node Processing (Latest)
 **Date**: Current Session
+
+#### 🐛 Issue Resolved:
+- **Problem**: System was not sending predefined content from non-AI flow nodes (message, text, image)
+- **Impact**: Users at non-AI nodes received no response even when flow had predefined content
+- **Root Cause**: Missing logic to extract and send content from regular flow nodes
+
+#### ✅ Solution Implemented:
+- **Non-AI Node Processing**: Added `GetMessageFromNode` method to extract content from message/text/image nodes
+- **Flow Result Enhancement**: Extended `FlowExecutionResult` with `ShouldSendMessage` and `NodeType` fields
+- **Webhook Processing**: Updated webhook handler to send predefined content when `ShouldSendMessage` is true
+- **Content Type Support**: Added support for text messages and image URLs from flow nodes
+- **Enhanced Logging**: Added detailed logging for predefined content sending
+
+### ✅ Implemented Flow-Based AI Prompt Processing
+**Date**: Previous Session
 
 #### 🐛 Issue Resolved:
 - **Problem**: AI replies were triggering even when no chatbot flow existed or when current node was not an AI prompt node
@@ -65,30 +80,68 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 #### 🛠️ Technical Implementation:
 ```go
-// Enhanced webhook processing in device_settings_handlers.go
-flowResult, err := flowExecutionService.ProcessFlowForExistingUser(deviceID, phoneNumber, messageText)
-if err != nil || !flowResult.ShouldUseAI || flowResult.AIPromptContent == "" {
-    // Stop AI processing - no valid flow or not an AI prompt node
-    return
+// Non-AI flow node processing in flow_execution_service.go
+func (s *flowExecutionService) GetMessageFromNode(node *models.FlowNode) string {
+    if node.Data == nil {
+        return ""
+    }
+    
+    // Check for content, message, or text fields
+    if content, exists := node.Data["content"].(string); exists && content != "" {
+        return content
+    }
+    if message, exists := node.Data["message"].(string); exists && message != "" {
+        return message
+    }
+    if text, exists := node.Data["text"].(string); exists && text != "" {
+        return text
+    }
+    
+    // For image nodes, check for URL or src
+    if node.Type == "image" {
+        if url, exists := node.Data["url"].(string); exists && url != "" {
+            return url
+        }
+        if src, exists := node.Data["src"].(string); exists && src != "" {
+            return src
+        }
+    }
+    
+    return ""
 }
 
-// AI Cron service now validates flows before processing
-flowExecutionService := NewFlowExecutionService(s.flowService)
-flowResult, err := flowExecutionService.ProcessFlowForExistingUser(deviceID, phoneNumber, "")
+// Enhanced webhook processing in device_settings_handlers.go
+if flowResult != nil && flowResult.ShouldSendMessage && flowResult.Message != "" {
+    // Send predefined content based on node type
+    if flowResult.NodeType == "image" {
+        h.sendImageMessage(from, flowResult.Message, deviceSettings, provider)
+    } else {
+        h.sendTextMessage(from, flowResult.Message, deviceSettings, provider)
+    }
+    return
+}
 ```
 
 #### 🎯 Results:
+- ✅ **Predefined Content Delivery**: Non-AI nodes now send their predefined content automatically
+- ✅ **Multi-Content Support**: Supports text messages, images, and other media types from flow nodes
+- ✅ **Flow Completion**: Users receive appropriate responses at every flow stage
+- ✅ **Enhanced User Experience**: No more silent failures when users reach non-AI nodes
+- ✅ **Type-Aware Processing**: Different handling for text vs image content types
+
+#### 🧪 Testing Verified:
+- **Message Node Processing**: Text content from message/text nodes sent successfully
+- **Image Node Processing**: Image URLs from image nodes sent as image messages
+- **Flow Navigation**: Users receive responses at non-AI stages of conversation flow
+- **Server Stability**: All compilation errors resolved, server running successfully
+- **Real-time Processing**: Predefined content sent immediately upon webhook receipt
+
+#### 🎯 Previous Results (Flow-Based AI Processing):
 - ✅ **Conditional AI Processing**: AI only triggers when valid flow with AI prompt nodes exists
 - ✅ **Flow-Based Validation**: Proper checking of chatbot_flows_nodepath before AI activation
 - ✅ **No Unwanted Responses**: Eliminated AI responses when not in AI conversation stage
 - ✅ **Enhanced Control**: Better control over when AI system should engage
 - ✅ **Cron Integration**: Background AI processing now respects flow-based rules
-
-#### 🧪 Testing Verified:
-- **Flow Existence Check**: AI stops when no flow exists for id_device
-- **AI Node Validation**: AI only processes when current node is AI prompt type
-- **Fallback Prevention**: No direct AI processing when flow conditions not met
-- **Server Stability**: All compilation errors resolved, server running successfully
 
 ### ✅ Fixed Missing conversation_logs_nodepath Table Issue
 **Date**: Previous Session

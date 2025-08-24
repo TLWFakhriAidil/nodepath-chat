@@ -1581,7 +1581,43 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		}
 	}
 
-	// No flow-based AI prompt found - stop processing
+	// Check if we should send predefined content from flow node
+	if flowResult != nil && flowResult.ShouldSendMessage && flowResult.Message != "" {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"flow_id": flowResult.FlowID,
+			"node_id": flowResult.NodeID,
+			"node_type": flowResult.NodeType,
+			"message_length": len(flowResult.Message),
+		}).Info("✅ WEBHOOK: Sending predefined content from flow node")
+
+		// Get device settings for sending message
+		deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
+		if err != nil {
+			logrus.WithError(err).Error("❌ WEBHOOK: Failed to get device settings for sending flow message")
+			return
+		}
+
+		// Send the predefined content based on node type
+		if flowResult.NodeType == "image" {
+			// Send as image message
+			h.sendImageMessage(from, flowResult.Message, deviceSettings, provider)
+		} else {
+			// Send as text message (default for message, text, and other node types)
+			h.sendTextMessage(from, flowResult.Message, deviceSettings, provider)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"flow_id": flowResult.FlowID,
+			"node_id": flowResult.NodeID,
+		}).Info("✅ WEBHOOK: Successfully sent predefined flow content")
+		return
+	}
+
+	// No flow-based AI prompt found and no predefined content - stop processing
 	// AI should only trigger when there's a valid flow with AI prompt nodes
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
@@ -1589,31 +1625,33 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		"flow_found": flowResult != nil,
 		"should_use_ai": flowResult != nil && flowResult.ShouldUseAI,
 		"has_ai_prompt": flowResult != nil && flowResult.AIPromptContent != "",
-	}).Info("🚫 WEBHOOK: No valid flow with AI prompt nodes found - stopping AI processing")
+		"should_send_message": flowResult != nil && flowResult.ShouldSendMessage,
+	}).Info("🚫 WEBHOOK: No valid flow with AI prompt nodes or predefined content found - stopping processing")
 	
 	// Log the reason for stopping
 	if flowResult == nil {
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
 			"from": from,
-		}).Info("📋 WEBHOOK: No flow found for this device - AI will not be triggered")
-	} else if !flowResult.ShouldUseAI {
+		}).Info("📋 WEBHOOK: No flow found for this device - no response will be sent")
+	} else if !flowResult.ShouldUseAI && !flowResult.ShouldSendMessage {
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
 			"from": from,
 			"flow_id": flowResult.FlowID,
 			"current_stage": flowResult.CurrentStage,
-		}).Info("📋 WEBHOOK: Current flow node is not an AI prompt node - AI will not be triggered")
-	} else if flowResult.AIPromptContent == "" {
+			"node_type": flowResult.NodeType,
+		}).Info("📋 WEBHOOK: Current flow node has no AI prompt or predefined content - no response will be sent")
+	} else if flowResult.AIPromptContent == "" && flowResult.Message == "" {
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
 			"from": from,
 			"flow_id": flowResult.FlowID,
 			"node_id": flowResult.NodeID,
-		}).Info("📋 WEBHOOK: AI prompt content is empty - AI will not be triggered")
+		}).Info("📋 WEBHOOK: Flow node has no content to send - no response will be sent")
 	}
 	
-	// No fallback AI processing - message processing stops here
+	// No processing needed - message processing stops here
 	return
 }
 

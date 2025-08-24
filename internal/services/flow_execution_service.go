@@ -19,6 +19,9 @@ type FlowExecutionService interface {
 	// GetAIPromptFromNode extracts AI prompt content from a flow node
 	GetAIPromptFromNode(node *models.FlowNode) (string, error)
 	
+	// GetMessageFromNode extracts message content from a non-AI flow node
+	GetMessageFromNode(node *models.FlowNode) (string, error)
+	
 	// HasAIPromptNodes checks if a flow contains any AI prompt nodes
 	HasAIPromptNodes(flow *models.ChatbotFlow) bool
 }
@@ -32,6 +35,8 @@ type FlowExecutionResult struct {
 	FlowID          string `json:"flow_id,omitempty"`
 	NodeID          string `json:"node_id,omitempty"`
 	Message         string `json:"message,omitempty"`
+	ShouldSendMessage bool `json:"should_send_message"`
+	NodeType        string `json:"node_type,omitempty"`
 }
 
 // flowExecutionService implements FlowExecutionService
@@ -129,23 +134,52 @@ func (s *flowExecutionService) ProcessFlowForNewUser(idDevice, prospectNum strin
 			CurrentStage:    startNode.ID,
 			FlowID:          defaultFlow.ID,
 			NodeID:          startNode.ID,
+			NodeType:        string(startNode.Type),
 		}, nil
 	}
 
-	// Start node is not an AI prompt, check if we should navigate to next AI prompt node
+	// Start node is not an AI prompt, check if it has content to send
 	logrus.WithFields(logrus.Fields{
 		"flow_id":        defaultFlow.ID,
 		"start_node_id":  startNode.ID,
 		"start_node_type": startNode.Type,
-	}).Info("ℹ️ FLOW: Start node is not AI prompt, looking for next AI prompt node")
+	}).Info("ℹ️ FLOW: Start node is not AI prompt, checking for predefined content")
 
-	// For now, return the start node as current stage without AI processing
-	// This can be extended later to navigate through the flow
+	// Try to extract message content from non-AI node
+	messageContent, err := s.GetMessageFromNode(startNode)
+	if err == nil && messageContent != "" {
+		logrus.WithFields(logrus.Fields{
+			"flow_id":   defaultFlow.ID,
+			"node_id":   startNode.ID,
+			"node_type": startNode.Type,
+			"message_length": len(messageContent),
+		}).Info("✅ FLOW: Found predefined content in start node")
+
+		return &FlowExecutionResult{
+			ShouldUseAI:       false,
+			ShouldSendMessage: true,
+			Message:           messageContent,
+			CurrentStage:      startNode.ID,
+			FlowID:            defaultFlow.ID,
+			NodeID:            startNode.ID,
+			NodeType:          string(startNode.Type),
+		}, nil
+	}
+
+	// No content found in start node
+	logrus.WithFields(logrus.Fields{
+		"flow_id":        defaultFlow.ID,
+		"start_node_id":  startNode.ID,
+		"start_node_type": startNode.Type,
+	}).Info("ℹ️ FLOW: Start node has no content to send")
+
 	return &FlowExecutionResult{
-		ShouldUseAI:  false,
-		CurrentStage: startNode.ID,
-		FlowID:       defaultFlow.ID,
-		NodeID:       startNode.ID,
+		ShouldUseAI:       false,
+		ShouldSendMessage: false,
+		CurrentStage:      startNode.ID,
+		FlowID:            defaultFlow.ID,
+		NodeID:            startNode.ID,
+		NodeType:          string(startNode.Type),
 	}, nil
 }
 
@@ -224,21 +258,52 @@ func (s *flowExecutionService) ProcessFlowForExistingUser(idDevice, prospectNum,
 			CurrentStage:    currentStage,
 			FlowID:          targetFlow.ID,
 			NodeID:          currentNode.ID,
+			NodeType:        string(currentNode.Type),
 		}, nil
 	}
 
-	// Current node is not an AI prompt, return without AI processing
+	// Current node is not an AI prompt, check if it has content to send
 	logrus.WithFields(logrus.Fields{
 		"flow_id":   targetFlow.ID,
 		"node_id":   currentNode.ID,
 		"node_type": currentNode.Type,
-	}).Info("ℹ️ FLOW: Current node is not AI prompt")
+	}).Info("ℹ️ FLOW: Current node is not AI prompt, checking for predefined content")
+
+	// Try to extract message content from non-AI node
+	messageContent, err := s.GetMessageFromNode(currentNode)
+	if err == nil && messageContent != "" {
+		logrus.WithFields(logrus.Fields{
+			"flow_id":   targetFlow.ID,
+			"node_id":   currentNode.ID,
+			"node_type": currentNode.Type,
+			"message_length": len(messageContent),
+		}).Info("✅ FLOW: Found predefined content in current node")
+
+		return &FlowExecutionResult{
+			ShouldUseAI:       false,
+			ShouldSendMessage: true,
+			Message:           messageContent,
+			CurrentStage:      currentStage,
+			FlowID:            targetFlow.ID,
+			NodeID:            currentNode.ID,
+			NodeType:          string(currentNode.Type),
+		}, nil
+	}
+
+	// No content found in current node
+	logrus.WithFields(logrus.Fields{
+		"flow_id":   targetFlow.ID,
+		"node_id":   currentNode.ID,
+		"node_type": currentNode.Type,
+	}).Info("ℹ️ FLOW: Current node has no content to send")
 
 	return &FlowExecutionResult{
-		ShouldUseAI:  false,
-		CurrentStage: currentStage,
-		FlowID:       targetFlow.ID,
-		NodeID:       currentNode.ID,
+		ShouldUseAI:       false,
+		ShouldSendMessage: false,
+		CurrentStage:      currentStage,
+		FlowID:            targetFlow.ID,
+		NodeID:            currentNode.ID,
+		NodeType:          string(currentNode.Type),
 	}, nil
 }
 
@@ -289,6 +354,73 @@ func (s *flowExecutionService) GetAIPromptFromNode(node *models.FlowNode) (strin
 	}).Debug("🔍 FLOW: Extracted AI prompt from node")
 
 	return systemPrompt, nil
+}
+
+// GetMessageFromNode extracts message content from a non-AI flow node
+func (s *flowExecutionService) GetMessageFromNode(node *models.FlowNode) (string, error) {
+	if node == nil {
+		return "", fmt.Errorf("node is nil")
+	}
+
+	if node.Data == nil {
+		return "", fmt.Errorf("node data is nil")
+	}
+
+	// Extract message content from node data based on node type
+	var messageContent string
+
+	// Check for common content fields
+	if contentData, exists := node.Data["content"]; exists {
+		if contentStr, ok := contentData.(string); ok {
+			messageContent = contentStr
+		}
+	}
+
+	// Check for 'message' field as fallback
+	if messageContent == "" {
+		if messageData, exists := node.Data["message"]; exists {
+			if messageStr, ok := messageData.(string); ok {
+				messageContent = messageStr
+			}
+		}
+	}
+
+	// Check for 'text' field as another fallback
+	if messageContent == "" {
+		if textData, exists := node.Data["text"]; exists {
+			if textStr, ok := textData.(string); ok {
+				messageContent = textStr
+			}
+		}
+	}
+
+	// For image nodes, check for 'url' or 'src' field
+	if messageContent == "" && node.Type == "image" {
+		if urlData, exists := node.Data["url"]; exists {
+			if urlStr, ok := urlData.(string); ok {
+				messageContent = urlStr
+			}
+		}
+		if messageContent == "" {
+			if srcData, exists := node.Data["src"]; exists {
+				if srcStr, ok := srcData.(string); ok {
+					messageContent = srcStr
+				}
+			}
+		}
+	}
+
+	if messageContent == "" {
+		return "", fmt.Errorf("no message content found in node %s", node.ID)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"node_id":   node.ID,
+		"node_type": node.Type,
+		"content_length": len(messageContent),
+	}).Debug("🔍 FLOW: Extracted message content from node")
+
+	return messageContent, nil
 }
 
 // HasAIPromptNodes checks if a flow contains any AI prompt nodes
