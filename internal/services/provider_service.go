@@ -341,18 +341,23 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 		mediaType = "video"
 	} else if strings.Contains(mediaURL, ".mp3") {
 		mediaType = "audio"
+	} else {
+		mediaType = "image"
 	}
-	// For images, no type parameter is needed (as per PHP code)
 
 	// Prepare form data exactly as specified by user PHP code
 	data := url.Values{}
 	data.Set("device_id", instance)    // device_id from instance
 	data.Set("number", phoneNumber)    // recipient number
-	data.Set("message", caption)       // message/caption content
 	data.Set("file", mediaURL)         // media file URL
 	
+	// Add caption if provided
+	if caption != "" {
+		data.Set("message", caption)
+	}
+	
 	// Add type parameter for video and audio only (as per PHP code)
-	if mediaType != "" {
+	if mediaType != "" && mediaType != "image" {
 		data.Set("type", mediaType)
 	}
 
