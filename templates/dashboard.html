@@ -104,21 +104,7 @@
                 </div>
             </div>
             
-            <div class="col-md-3 mb-4">
-                <div class="card bg-warning text-white">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <h4 id="whatsapp-status">Disconnected</h4>
-                                <p class="mb-0">WhatsApp Status</p>
-                            </div>
-                            <div class="align-self-center">
-                                <i class="bi bi-whatsapp fs-1"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
         </div>
         
         <!-- Quick Actions -->
@@ -135,11 +121,7 @@
                                     <i class="bi bi-plus-circle"></i> Create New Flow
                                 </a>
                             </div>
-                            <div class="col-md-3 mb-2">
-                                <button class="btn btn-success w-100" onclick="connectWhatsApp()">
-                                    <i class="bi bi-whatsapp"></i> Connect WhatsApp
-                                </button>
-                            </div>
+
                             <div class="col-md-3 mb-2">
                                 <a href="/test-chat" class="btn btn-info w-100">
                                     <i class="bi bi-chat-text"></i> Test Chat
@@ -177,12 +159,7 @@
                                     <span class="badge bg-warning">Disconnected</span>
                                 </div>
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <div class="d-flex justify-content-between">
-                                    <span>WhatsApp</span>
-                                    <span class="badge bg-secondary" id="whatsapp-badge">Disconnected</span>
-                                </div>
-                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -211,46 +188,13 @@
                     document.getElementById('active-executions').textContent = executions.length || 0;
                 }
                 
-                // Load WhatsApp status
-                const whatsappResponse = await fetch('/api/whatsapp/status');
-                if (whatsappResponse.ok) {
-                    const status = await whatsappResponse.json();
-                    const statusElement = document.getElementById('whatsapp-status');
-                    const badgeElement = document.getElementById('whatsapp-badge');
-                    
-                    if (status.connected) {
-                        statusElement.textContent = 'Connected';
-                        badgeElement.textContent = 'Connected';
-                        badgeElement.className = 'badge bg-success';
-                    } else {
-                        statusElement.textContent = 'Disconnected';
-                        badgeElement.textContent = 'Disconnected';
-                        badgeElement.className = 'badge bg-secondary';
-                    }
-                }
+
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
             }
         }
         
-        // Connect WhatsApp
-        async function connectWhatsApp() {
-            try {
-                const response = await fetch('/api/whatsapp/connect', {
-                    method: 'POST'
-                });
-                
-                if (response.ok) {
-                    alert('WhatsApp connection initiated. Please check the QR code.');
-                    loadDashboardData();
-                } else {
-                    alert('Failed to initiate WhatsApp connection.');
-                }
-            } catch (error) {
-                console.error('Error connecting WhatsApp:', error);
-                alert('Error connecting WhatsApp.');
-            }
-        }
+
         
         // Load data on page load
         document.addEventListener('DOMContentLoaded', loadDashboardData);

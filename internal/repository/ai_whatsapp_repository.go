@@ -121,27 +121,7 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	return nil
 }
 
-// CreateConversationLog creates a new conversation log entry
-func (r *aiWhatsappRepository) CreateConversationLog(log *models.ConversationLog) error {
-	log.CreatedAt = time.Now()
 
-	query := `
-		INSERT INTO conversation_log_nodepath (
-			prospect_num, id_device, message, sender, stage, created_at
-		) VALUES (?, ?, ?, ?, ?, ?)
-	`
-
-	_, err := r.db.Exec(query,
-		log.ProspectNum, log.IDDevice, log.Message, log.Sender, log.Stage, log.CreatedAt,
-	)
-
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create conversation log")
-		return fmt.Errorf("failed to create conversation log: %w", err)
-	}
-
-	return nil
-}
 
 // GetAIWhatsappByProspectNum retrieves AI WhatsApp conversation by prospect number
 func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*models.AIWhatsapp, error) {
@@ -746,76 +726,9 @@ func (r *aiWhatsappRepository) GetActiveAIConversations() ([]models.AIWhatsapp, 
 	return conversations, nil
 }
 
-// GetConversationHistory retrieves conversation history for a prospect
-func (r *aiWhatsappRepository) GetConversationHistory(prospectNum string, limit int) ([]models.ConversationLog, error) {
-	query := `
-		SELECT id, prospect_num, id_device, message, sender, stage, created_at
-		FROM conversation_log_nodepath 
-		WHERE prospect_num = ?
-		ORDER BY created_at DESC
-		LIMIT ?
-	`
 
-	rows, err := r.db.Query(query, prospectNum, limit)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return nil, fmt.Errorf("failed to get conversation history: %w", err)
-	}
-	defer rows.Close()
 
-	var logs []models.ConversationLog
-	for rows.Next() {
-		log := models.ConversationLog{}
-		err := rows.Scan(
-			&log.ID, &log.ProspectNum, &log.IDDevice, &log.Message, 
-			&log.Sender, &log.Stage, &log.CreatedAt,
-		)
 
-		if err != nil {
-			logrus.WithError(err).Error("Failed to scan conversation log")
-			continue
-		}
-
-		logs = append(logs, log)
-	}
-
-	return logs, nil
-}
-
-// GetConversationLogsByStage retrieves conversation logs by stage
-func (r *aiWhatsappRepository) GetConversationLogsByStage(stage string) ([]models.ConversationLog, error) {
-	query := `
-		SELECT id, prospect_num, id_device, message, sender, stage, created_at
-		FROM conversation_log_nodepath 
-		WHERE stage = ?
-		ORDER BY created_at DESC
-	`
-
-	rows, err := r.db.Query(query, stage)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation logs by stage")
-		return nil, fmt.Errorf("failed to get conversation logs: %w", err)
-	}
-	defer rows.Close()
-
-	var logs []models.ConversationLog
-	for rows.Next() {
-		log := models.ConversationLog{}
-		err := rows.Scan(
-			&log.ID, &log.ProspectNum, &log.IDDevice, &log.Message, 
-			&log.Sender, &log.Stage, &log.CreatedAt,
-		)
-
-		if err != nil {
-			logrus.WithError(err).Error("Failed to scan conversation log")
-			continue
-		}
-
-		logs = append(logs, log)
-	}
-
-	return logs, nil
-}
 
 // UpdateAIWhatsapp updates an existing AI WhatsApp conversation
 // Saves NULL instead of empty string when there's no conversation data
@@ -1195,19 +1108,7 @@ func (r *aiWhatsappRepository) DeleteAIWhatsapp(id int) error {
 	return nil
 }
 
-// DeleteConversationLogs deletes all conversation logs for a prospect
-func (r *aiWhatsappRepository) DeleteConversationLogs(prospectNum string) error {
-	query := `DELETE FROM conversation_log_nodepath WHERE prospect_num = ?`
 
-	_, err := r.db.Exec(query, prospectNum)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to delete conversation logs")
-		return fmt.Errorf("failed to delete conversation logs: %w", err)
-	}
-
-	logrus.WithField("prospect_num", prospectNum).Info("Conversation logs deleted successfully")
-	return nil
-}
 
 // GetConversationStats returns conversation statistics for a device
 func (r *aiWhatsappRepository) GetConversationStats(idDevice string) (map[string]int, error) {

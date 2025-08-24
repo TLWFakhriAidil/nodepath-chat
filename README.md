@@ -46,10 +46,35 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 • AI Response Caching: 5-minute TTL for common queries
 ```
 
-## 🔧 Recent Updates & Fixes (Latest)
+##### 🔧 Recent Updates & Fixes (Latest)
 
-### 🐛 WhatsApp API Error Debugging Enhancement (Latest)
+### 🧹 Complete WhatsApp Connection Handler Cleanup (Latest)
 **Date**: Current Session
+
+#### ✅ Changes Made:
+- **Removed Redundant Backend Handlers**: Eliminated `GetWhatsAppStatus`, `GetWhatsAppQR`, `DisconnectWhatsApp`, and `ConnectWhatsApp` functions from `handlers_extended.go`
+- **Cleaned Up API Routes**: Removed `/whatsapp/status`, `/whatsapp/connect`, `/whatsapp/disconnect`, and `/whatsapp/qr` endpoints from routing
+- **Frontend Template Cleanup**: Removed all WhatsApp connection UI elements and JavaScript functions from dashboard, index, and base templates
+- **Streamlined Architecture**: Connection management now exclusively handled through Device Settings interface
+- **Preserved Core Functionality**: Kept `/whatsapp/send` endpoint and `whatsappService` for message delivery
+
+#### 🎯 Benefits:
+- **Simplified API**: Reduced from 5 to 1 WhatsApp endpoint, focusing on core message delivery
+- **Cleaner UI**: Removed redundant connection buttons and status displays from templates
+- **Centralized Management**: All device connections now managed through the Device Settings sidebar
+- **Better User Experience**: Single interface for device connection management instead of scattered controls
+- **Reduced Maintenance**: Fewer endpoints and UI elements to maintain and debug
+
+#### 🛠️ Files Modified:
+- **`internal/handlers/handlers_extended.go`**: Removed 4 unused WhatsApp connection handler functions
+- **`internal/handlers/handlers.go`**: Cleaned up WhatsApp routing, kept only `/send` endpoint
+- **`templates/dashboard.html`**: Removed Connect WhatsApp button and status displays
+- **`templates/index.html`**: Removed WhatsApp status monitoring elements
+- **`templates/base.html`**: Removed entire WhatsApp Settings modal
+- **`README.md`**: Updated documentation to reflect streamlined API structure
+
+### 🐛 WhatsApp API Error Debugging Enhancement
+**Date**: Previous Session
 
 #### ✅ Changes Made:
 - **Enhanced Error Logging**: Added detailed response body capture for WhatsApp API failures
@@ -202,9 +227,8 @@ Completed comprehensive database schema migration to rename `id_staff` columns t
 
 #### 🎯 Tables Migrated:
 - **ai_whatsapp_nodepath**: `id_staff` → `id_device`
-- **conversation_log_nodepath**: `id_staff` → `id_device` 
-- **conversation_log_nodepath_backup**: `id_staff` → `id_device`
-- **chatbot_executions_nodepath**: `staff_id` → `id_device`
+- **device_setting_nodepath**: `id_staff` → `id_device`
+- **chatbot_flows_nodepath**: `id_staff` → `id_device`
 
 #### 🛠️ Migration Tools Created:
 - **`debug/migrate_id_staff_to_id_device.go`**: Standalone migration script for local execution
@@ -241,7 +265,7 @@ Completed comprehensive database schema migration to rename `id_staff` columns t
 - **Standardized to IDDevice**: All operations now use `id_device` for consistent device identification
 - **Updated Database Schema**: 
   - Modified `ai_whatsapp_nodepath` table to use `id_device` instead of `id_staff`
-  - Updated `conversation_log_nodepath` table schema
+  - Updated `device_setting_nodepath` table schema
   - Fixed `conv_last` column type from JSON to TEXT in `ai_whatsapp_nodepath` table
   - Removed deprecated `ai_settings_nodepath` table
 - **Repository Layer Updates**: Updated all SQL queries and scan operations in `ai_whatsapp_repository.go`
@@ -258,7 +282,7 @@ Completed comprehensive database schema migration to rename `id_staff` columns t
 
 #### 🔧 Technical Details:
 - **Files Modified**: 15+ files across handlers, services, repositories, and models
-- **Database Tables Updated**: `ai_whatsapp_nodepath`, `conversation_log_nodepath`
+- **Database Tables Updated**: `ai_whatsapp_nodepath`, `device_setting_nodepath`
 - **Migration Status**: ✅ Complete - All compilation errors resolved
 - **Server Status**: ✅ Running successfully on port 8080
 
@@ -451,7 +475,7 @@ git push origin main  # Triggers Railway deployment with migration
 ### Database Schema Updates
 - **AI WhatsApp Integration**: Complete ai_whatsapp_nodepath table with conversation tracking
 - **Device Settings Management**: Enhanced device_setting_nodepath table with API key configurations
-- **Conversation Logging**: Comprehensive conversation_log_nodepath table for message history
+- **Flow Management**: Comprehensive chatbot_flows_nodepath table for conversation flow management
 - **Performance Optimization**: Indexed tables for 3000+ concurrent user support
 
 ### Service Architecture Enhancements
@@ -634,9 +658,9 @@ src/
 
 internal/
 ├── models/
-│   ├── ai_whatsapp.go       # AI conversation models
+│   ├── ai_settings.go       # AI configuration models
 │   ├── device_settings.go   # Device configuration models
-│   └── conversation_log.go  # Conversation history models
+│   └── models.go            # Core data models
 ├── repository/
 │   ├── ai_whatsapp_repository.go     # AI conversation data access
 │   └── device_settings_repository.go # Device settings data access
@@ -688,14 +712,12 @@ internal/
 
 4. **WhatsApp Integration** (100% Working)
    - ✅ WhatsApp Web API connection
-   - ✅ QR code authentication
    - ✅ Message sending and receiving
    - ✅ Media file support (images, audio, video)
    - ✅ Group chat support
-   - ✅ Connection status monitoring
-   - ✅ **NEW**: Multi-provider WhatsApp API support
-   - ✅ **NEW**: Real-time QR code generation and display
-   - ✅ **NEW**: Device connection status tracking
+   - ✅ **NEW**: Multi-provider WhatsApp API support (Wablas, Whacenter)
+   - ✅ **NEW**: Device connection status tracking via provider APIs
+   - ✅ **NEW**: Streamlined API endpoints focused on message delivery
 
 5. **AI & Automation** (100% Working)
    - ✅ OpenRouter API integration
@@ -986,26 +1008,6 @@ CREATE TABLE chatbot_flows_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-#### `chatbot_executions_nodepath` ✅ **OPERATIONAL**
-```sql
-CREATE TABLE chatbot_executions_nodepath (
-  id VARCHAR(255) PRIMARY KEY,
-  flow_reference VARCHAR(255) NOT NULL,
-  phone_number VARCHAR(20),
-  staff_id VARCHAR(255),
-  conv_last JSON,
-  conv_current TEXT COLLATE utf8mb4_unicode_ci,
-  current_node VARCHAR(255),
-  variables JSON,
-  status ENUM('active', 'completed', 'failed') DEFAULT 'active',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_flow_reference (flow_reference),
-  INDEX idx_phone_number (phone_number),
-  INDEX idx_staff_id (staff_id),
-  INDEX idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
 
 #### `device_setting_nodepath` ✅ **OPERATIONAL**
 ```sql
@@ -1460,21 +1462,6 @@ CREATE TABLE device_setting_nodepath (
 );
 ```
 
-### Conversation Log Table
-```sql
-CREATE TABLE conversation_log_nodepath (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    prospect_num VARCHAR(255) NOT NULL,
-    sender ENUM('user', 'bot') NOT NULL,
-    message TEXT NOT NULL,
-    stage VARCHAR(255) NULL,
-    ai_response JSON NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_prospect_num (prospect_num),
-    INDEX idx_created_at (created_at),
-    INDEX idx_sender (sender)
-);
-```
 
 ### AI Conversation Features
 

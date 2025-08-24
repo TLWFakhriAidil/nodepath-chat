@@ -157,13 +157,7 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-6">
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="status-indicator bg-secondary me-2" id="whatsapp-indicator"></div>
-                            <span>WhatsApp</span>
-                            <span id="whatsapp-status-text" class="badge bg-secondary ms-auto">Checking...</span>
-                        </div>
-                    </div>
+
                     <div class="col-6">
                         <div class="d-flex align-items-center mb-3">
                             <div class="status-indicator bg-success me-2"></div>
@@ -330,22 +324,7 @@ function loadFlows() {
 }
 
 function loadSystemStatus() {
-    // Check WhatsApp status
-    $.get('/api/whatsapp/status')
-        .done(function(data) {
-            if (data.success) {
-                const connected = data.data.connected;
-                $('#whatsapp-indicator').removeClass('bg-success bg-danger bg-secondary')
-                    .addClass(connected ? 'bg-success' : 'bg-danger');
-                $('#whatsapp-status-text').removeClass('bg-success bg-danger bg-secondary')
-                    .addClass(connected ? 'bg-success' : 'bg-danger')
-                    .text(connected ? 'Connected' : 'Disconnected');
-            }
-        })
-        .fail(function() {
-            $('#whatsapp-indicator').removeClass('bg-success bg-danger bg-secondary').addClass('bg-danger');
-            $('#whatsapp-status-text').removeClass('bg-success bg-danger bg-secondary').addClass('bg-danger').text('Error');
-        });
+    // System status monitoring - WhatsApp connection managed via Device Settings
 }
 
 function loadQueueStatus() {

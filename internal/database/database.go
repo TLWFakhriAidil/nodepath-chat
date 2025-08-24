@@ -47,10 +47,10 @@ func RunMigrations(db *sql.DB) error {
 
 	migrations := []string{
 		createFlowsTable,
-		createExecutionsTable,
+		
 		createDeviceSettingsTable,
 		createAIWhatsappTable,
-		createConversationLogTable,
+		
 	}
 
 	for i, migration := range migrations {
@@ -93,25 +93,7 @@ CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-const createExecutionsTable = `
-CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
-    id VARCHAR(255) PRIMARY KEY,
-    flow_reference VARCHAR(255) NOT NULL,
-    phone_number VARCHAR(20),
-    id_device VARCHAR(255),
-    conv_last TEXT COLLATE utf8mb4_unicode_ci,
-    conv_current TEXT COLLATE utf8mb4_unicode_ci,
-    current_node VARCHAR(255),
-    variables JSON,
-    status ENUM('active', 'completed', 'failed') DEFAULT 'active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_flow_reference (flow_reference),
-    INDEX idx_phone_number (phone_number),
-    INDEX idx_id_device (id_device),
-    INDEX idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`
+
 
 const createDeviceSettingsTable = `
 CREATE TABLE IF NOT EXISTS device_setting_nodepath (
@@ -163,23 +145,7 @@ CREATE TABLE IF NOT EXISTS ai_whatsapp_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-// Conversation log table for storing all AI conversation history
-const createConversationLogTable = `
-CREATE TABLE IF NOT EXISTS conversation_log_nodepath (
-    id VARCHAR(255) PRIMARY KEY,
-    prospect_num VARCHAR(20) NOT NULL,
-    sender ENUM('user', 'bot', 'staff') NOT NULL,
-    message TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
-    message_type ENUM('text', 'image', 'document', 'audio', 'video') DEFAULT 'text',
-    stage VARCHAR(255),
-    ai_response JSON COMMENT 'Full AI response with stage and content',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_prospect_num (prospect_num),
-    INDEX idx_sender (sender),
-    INDEX idx_created_at (created_at),
-    INDEX idx_stage (stage)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`
+
 
 
 
