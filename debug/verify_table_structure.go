@@ -55,8 +55,8 @@ func main() {
 	// Test multiple record insertions to verify AUTO_INCREMENT works
 	fmt.Println("\nTesting multiple record insertions...")
 	for i := 1; i <= 3; i++ {
-		result, err := db.Exec("INSERT INTO conversation_log_nodepath (prospect_num, sender, message, message_type, stage, id_staff) VALUES (?, ?, ?, ?, ?, ?)", 
-			fmt.Sprintf("test%d", i), "user", fmt.Sprintf("Test message %d", i), "text", "initial", "staff001")
+		result, err := db.Exec("INSERT INTO conversation_log_nodepath (prospect_num, sender, message, message_type, stage, id_device) VALUES (?, ?, ?, ?, ?, ?)", 
+			fmt.Sprintf("test%d", i), "user", fmt.Sprintf("Test message %d", i), "text", "initial", "FakhriAidilTLW-001")
 		if err != nil {
 			fmt.Printf("❌ Error inserting record %d: %v\n", i, err)
 		} else {

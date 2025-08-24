@@ -101,8 +101,8 @@ func main() {
 
 	// Test record insertion without specifying id
 	fmt.Println("\nTesting record insertion without specifying id...")
-	result, err := db.Exec("INSERT INTO conversation_log_nodepath (prospect_num, sender, message, stage, id_staff) VALUES (?, ?, ?, ?, ?)", 
-		"test123", "user", "Test message", "initial", "staff001")
+	result, err := db.Exec("INSERT INTO conversation_log_nodepath (prospect_num, sender, message, stage, id_device) VALUES (?, ?, ?, ?, ?)",
+		"test123", "user", "Test message", "initial", "FakhriAidilTLW-001")
 	if err != nil {
 		fmt.Printf("❌ Error inserting test record: %v\n", err)
 	} else {

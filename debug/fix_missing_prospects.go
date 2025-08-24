@@ -168,7 +168,7 @@ func main() {
 	
 	testLogSQL := `
 		INSERT INTO conversation_log_nodepath (
-			prospect_num, id_staff, message, sender, stage, created_at
+			prospect_num, id_device, message, sender, stage, created_at
 		) VALUES (?, ?, ?, ?, ?, ?)
 	`
 	

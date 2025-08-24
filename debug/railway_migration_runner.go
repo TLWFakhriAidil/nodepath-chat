@@ -56,7 +56,7 @@ func createMissingTables(db *sql.DB) error {
 			sql: `CREATE TABLE IF NOT EXISTS conversation_log_nodepath (
 				id INT AUTO_INCREMENT PRIMARY KEY,
 				prospect_num VARCHAR(255) NOT NULL,
-				id_staff VARCHAR(255) NOT NULL,
+				id_device VARCHAR(255) NOT NULL,
 				message TEXT NOT NULL,
 				sender VARCHAR(10) NOT NULL COMMENT 'user or bot',
 				stage VARCHAR(255) DEFAULT NULL,
@@ -64,7 +64,7 @@ func createMissingTables(db *sql.DB) error {
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				
 				INDEX idx_prospect_num (prospect_num),
-				INDEX idx_id_staff (id_staff),
+				INDEX idx_id_device (id_device),
 				INDEX idx_sender (sender),
 				INDEX idx_stage (stage),
 				INDEX idx_timestamp (timestamp),
@@ -324,15 +324,15 @@ func main() {
 	} else if conversationTableExists {
 		log.Println("✅ conversation_log_nodepath table exists")
 		
-		// Test id_staff column specifically
-		var idStaffExists bool
-		err = db.QueryRow("SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'conversation_log_nodepath' AND column_name = 'id_staff'").Scan(&idStaffExists)
+		// Test id_device column specifically
+		var idDeviceExists bool
+		err = db.QueryRow("SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'conversation_log_nodepath' AND column_name = 'id_device'").Scan(&idDeviceExists)
 		if err != nil {
-			log.Printf("⚠️ Failed to check id_staff column: %v", err)
-		} else if idStaffExists {
-			log.Println("✅ id_staff column exists in conversation_log_nodepath")
+			log.Printf("⚠️ Failed to check id_device column: %v", err)
+		} else if idDeviceExists {
+			log.Println("✅ id_device column exists in conversation_log_nodepath")
 		} else {
-			log.Println("❌ id_staff column missing in conversation_log_nodepath")
+			log.Println("❌ id_device column missing in conversation_log_nodepath")
 		}
 	} else {
 		log.Println("❌ conversation_log_nodepath table does not exist")
@@ -380,8 +380,8 @@ func main() {
 
 	// Test conversation_log_nodepath table and id_staff column
 	if conversationTableExists {
-		log.Println("🧪 Testing conversation_log_nodepath id_staff column...")
-		_, err = db.Query("SELECT id_staff, prospect_num, message FROM conversation_log_nodepath LIMIT 1")
+		log.Println("🧪 Testing conversation_log_nodepath id_device column...")
+		_, err = db.Query("SELECT id_device, prospect_num, message FROM conversation_log_nodepath LIMIT 1")
 		if err != nil {
 			log.Printf("❌ conversation_log_nodepath test failed: %v", err)
 		} else {

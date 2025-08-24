@@ -169,14 +169,14 @@ func main() {
 		CREATE TABLE conversation_log_nodepath (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			prospect_num VARCHAR(255) NOT NULL,
-			id_staff VARCHAR(255) NOT NULL,
+			id_device VARCHAR(255) NOT NULL,
 			message TEXT NOT NULL,
 			sender VARCHAR(10) NOT NULL COMMENT 'user or bot',
 			stage VARCHAR(255) DEFAULT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			
 			INDEX idx_prospect_num (prospect_num),
-			INDEX idx_id_staff (id_staff),
+			INDEX idx_id_device (id_device),
 			INDEX idx_sender (sender),
 			INDEX idx_stage (stage),
 			INDEX idx_created_at (created_at)
@@ -196,10 +196,10 @@ func main() {
 	
 	// Test insertion with the exact query from the application
 	testQuery := `INSERT INTO conversation_log_nodepath (
-					prospect_num, id_staff, message, sender, stage, created_at
+					prospect_num, id_device, message, sender, stage, created_at
 				) VALUES (?, ?, ?, ?, ?, NOW())`
 	
-	result, err := db.Exec(testQuery, "601234567890", "test_staff", "Test message", "user", "test_stage")
+	result, err := db.Exec(testQuery, "601234567890", "FakhriAidilTLW-001", "Test message", "user", "test_stage")
 	if err != nil {
 		fmt.Printf("❌ Error inserting test record: %v\n", err)
 	} else {

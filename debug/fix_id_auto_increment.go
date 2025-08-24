@@ -82,8 +82,8 @@ func main() {
 
 	// Test record insertion
 	fmt.Println("\nTesting record insertion...")
-	result, err := db.Exec("INSERT INTO conversation_log_nodepath (prospect_num, sender, message, message_type, stage, id_staff) VALUES (?, ?, ?, ?, ?, ?)", 
-		"test123", "user", "Test message", "text", "initial", "staff001")
+	result, err := db.Exec("INSERT INTO conversation_log_nodepath (prospect_num, sender, message, message_type, stage, id_device) VALUES (?, ?, ?, ?, ?, ?)", 
+		"test123", "user", "Test message", "text", "initial", "FakhriAidilTLW-001")
 	if err != nil {
 		fmt.Printf("❌ Error inserting test record: %v\n", err)
 	} else {

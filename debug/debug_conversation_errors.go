@@ -90,10 +90,10 @@ func main() {
 	// 2. Check if AUTO_INCREMENT is working
 	fmt.Println("\n=== TESTING AUTO_INCREMENT FUNCTIONALITY ===")
 	testQuery := `INSERT INTO conversation_log_nodepath 
-				  (id_device, prospect_num, id_staff, stage, message_type, message_content, sender_type, timestamp) 
-				  VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`
+				  (prospect_num, id_device, message, sender, stage, created_at) 
+				  VALUES (?, ?, ?, ?, ?, NOW())`
 	
-	result, err := db.Exec(testQuery, "TEST-DEVICE", "601234567890", "test_staff", "test_stage", "text", "Test message for AUTO_INCREMENT", "user")
+	result, err := db.Exec(testQuery, "601234567890", "TEST-DEVICE", "Test message for AUTO_INCREMENT", "user", "test_stage")
 	if err != nil {
 		fmt.Printf("❌ Error inserting test record: %v\n", err)
 	} else {
