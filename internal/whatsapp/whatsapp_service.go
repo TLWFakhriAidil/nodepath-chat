@@ -462,7 +462,7 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 	return nil
 }
 
-// sendAIResponse sends AI response with multiple message types (text and images)
+// sendAIResponse sends AI response with multiple message types (text, images, audio, and video)
 func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *services.AIWhatsappResponse) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
@@ -512,6 +512,26 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
 			if err != nil {
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send image message")
+				return err
+			}
+			// Add 5 second delay between messages
+			time.Sleep(5000 * time.Millisecond)
+
+		case "audio":
+			// Send audio message - item.Content contains the audio URL
+			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
+			if err != nil {
+				logrus.WithError(err).WithField("item_index", i).Error("Failed to send audio message")
+				return err
+			}
+			// Add 5 second delay between messages
+			time.Sleep(5000 * time.Millisecond)
+
+		case "video":
+			// Send video message - item.Content contains the video URL
+			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
+			if err != nil {
+				logrus.WithError(err).WithField("item_index", i).Error("Failed to send video message")
 				return err
 			}
 			// Add 5 second delay between messages

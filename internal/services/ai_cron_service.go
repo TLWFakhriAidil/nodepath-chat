@@ -105,6 +105,7 @@ func (s *aiCronService) Start() error {
 
 // sendAIResponse sends the AI response using the appropriate WhatsApp provider
 // This function mimics the PHP cron job's sendChatMessage and sendMessage functionality
+// Supports text, image, audio, and video message types
 func (s *aiCronService) sendAIResponse(prospectNum, deviceID string, response *AIWhatsappResponse) error {
 	// Get device settings to determine provider and credentials
 	deviceSettings, err := s.deviceRepo.GetDeviceSettingsByDevice(deviceID)
@@ -135,6 +136,20 @@ func (s *aiCronService) sendAIResponse(prospectNum, deviceID string, response *A
 			if err != nil {
 				logrus.WithError(err).Error("Failed to send image message")
 				return fmt.Errorf("failed to send image message: %w", err)
+			}
+		case "audio":
+			// Use sendChatMessage for audio messages
+			err = s.sendChatMessage(prospectNum, "", msg.Content, deviceSettings, provider)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to send audio message")
+				return fmt.Errorf("failed to send audio message: %w", err)
+			}
+		case "video":
+			// Use sendChatMessage for video messages
+			err = s.sendChatMessage(prospectNum, "", msg.Content, deviceSettings, provider)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to send video message")
+				return fmt.Errorf("failed to send video message: %w", err)
 			}
 		default:
 			// Default to text message

@@ -1591,6 +1591,12 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 			h.sendTextMessage(to, respItem.Content, deviceSettings, provider)
 		case "image":
 			h.sendImageMessage(to, respItem.Content, deviceSettings, provider)
+		case "audio":
+			// Send audio message using sendChatMessage for multimedia support
+			h.sendChatMessage(to, "", respItem.Content, deviceSettings, 1*time.Second)
+		case "video":
+			// Send video message using sendChatMessage for multimedia support
+			h.sendChatMessage(to, "", respItem.Content, deviceSettings, 1*time.Second)
 		default:
 			// Default to text message
 			h.sendTextMessage(to, respItem.Content, deviceSettings, provider)

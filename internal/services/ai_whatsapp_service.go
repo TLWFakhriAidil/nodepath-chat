@@ -614,6 +614,34 @@ func (s *aiWhatsappService) parseAIResponse(responseText string) (*AIWhatsappRes
 		return nil, fmt.Errorf("empty response from AI")
 	}
 
+	// Post-process response items to ensure proper image URL handling
+	for i := range aiResponse.Response {
+		item := &aiResponse.Response[i]
+		
+		// Auto-detect media URLs (image, audio, video) and correct the type if needed
+		if item.Type == "text" {
+			if isMedia, mediaType := s.isMediaURL(item.Content); isMedia {
+				logrus.WithFields(logrus.Fields{
+					"original_type": "text",
+					"corrected_type": mediaType,
+					"content": item.Content,
+					"item_index": i,
+				}).Info("🔧 AI RESPONSE: AUTO-CORRECTING TEXT TO MEDIA TYPE FOR URL")
+				
+				item.Type = mediaType
+			}
+		}
+		
+		// Ensure media URLs are properly formatted
+		if (item.Type == "image" || item.Type == "audio" || item.Type == "video") && !strings.HasPrefix(item.Content, "http") {
+			logrus.WithFields(logrus.Fields{
+				"type": item.Type,
+				"content": item.Content,
+				"item_index": i,
+			}).Warn("⚠️ AI RESPONSE: MEDIA TYPE WITH NON-HTTP URL")
+		}
+	}
+
 	// Console log for tracing parsed AI response items
 	logrus.WithFields(logrus.Fields{
 		"stage": aiResponse.Stage,
@@ -625,7 +653,13 @@ func (s *aiWhatsappService) parseAIResponse(responseText string) (*AIWhatsappRes
 					"index": i,
 					"type": item.Type,
 					"content_length": len(item.Content),
-					"is_image_url": strings.HasPrefix(item.Content, "http") && item.Type == "image",
+					"is_media_url": strings.HasPrefix(item.Content, "http") && (item.Type == "image" || item.Type == "audio" || item.Type == "video"),
+					"media_type": func() string {
+						if isMedia, mediaType := s.isMediaURL(item.Content); isMedia {
+							return mediaType
+						}
+						return "none"
+					}(),
 					"content_preview": func() string {
 						if len(item.Content) > 100 {
 							return item.Content[:100] + "..."
@@ -649,9 +683,111 @@ func (s *aiWhatsappService) formatResponseForLogging(responses []AIWhatsappRespo
 			parts = append(parts, resp.Content)
 		} else if resp.Type == "image" {
 			parts = append(parts, "[Image: "+resp.Content+"]")
+		} else if resp.Type == "audio" {
+			parts = append(parts, "[Audio: "+resp.Content+"]")
+		} else if resp.Type == "video" {
+			parts = append(parts, "[Video: "+resp.Content+"]")
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// isMediaURL checks if a URL points to media (image, audio, video) based on common patterns
+func (s *aiWhatsappService) isMediaURL(url string) (bool, string) {
+	// Check if it's a valid HTTP/HTTPS URL
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return false, ""
+	}
+	
+	// Convert to lowercase for case-insensitive matching
+	lowerURL := strings.ToLower(url)
+	
+	// Check for image file extensions
+	imageExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico", ".tiff", ".tif"}
+	for _, ext := range imageExtensions {
+		if strings.Contains(lowerURL, ext) {
+			return true, "image"
+		}
+	}
+	
+	// Check for audio file extensions
+	audioExtensions := []string{".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma", ".m4a", ".opus", ".aiff", ".au"}
+	for _, ext := range audioExtensions {
+		if strings.Contains(lowerURL, ext) {
+			return true, "audio"
+		}
+	}
+	
+	// Check for video file extensions
+	videoExtensions := []string{".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mkv", ".m4v", ".3gp", ".ogv", ".ts", ".mts"}
+	for _, ext := range videoExtensions {
+		if strings.Contains(lowerURL, ext) {
+			return true, "video"
+		}
+	}
+	
+	// Check for specific media hosting patterns
+	mediaPatterns := []string{
+		"/images/",
+		"/img/",
+		"/photos/",
+		"/pictures/",
+		"/media/",
+		"/audio/",
+		"/video/",
+		"/uploads/",
+		"chatgpt/", // Specific pattern for the user's URL
+	}
+	for _, pattern := range mediaPatterns {
+		if strings.Contains(lowerURL, pattern) {
+			// Try to determine type based on context
+			if strings.Contains(pattern, "audio") {
+				return true, "audio"
+			} else if strings.Contains(pattern, "video") {
+				return true, "video"
+			} else {
+				return true, "image" // Default to image for generic media patterns
+			}
+		}
+	}
+	
+	// Check for common media hosting domains
+	mediaHosts := []string{
+		"imgur.com",
+		"i.imgur.com",
+		"images.unsplash.com",
+		"cdn.pixabay.com",
+		"images.pexels.com",
+		"growrvsb.com", // Specific domain for the user's URL
+		"youtube.com",
+		"youtu.be",
+		"vimeo.com",
+		"soundcloud.com",
+		"spotify.com",
+		"drive.google.com",
+		"dropbox.com",
+		"onedrive.live.com",
+	}
+	for _, host := range mediaHosts {
+		if strings.Contains(lowerURL, host) {
+			// Determine type based on domain context
+			if strings.Contains(host, "youtube") || strings.Contains(host, "vimeo") {
+				return true, "video"
+			} else if strings.Contains(host, "soundcloud") || strings.Contains(host, "spotify") {
+				return true, "audio"
+			} else {
+				return true, "image" // Default to image for generic hosting
+			}
+		}
+	}
+	
+	return false, ""
+}
+
+// isImageURL checks if a URL points to an image (backward compatibility)
+func (s *aiWhatsappService) isImageURL(url string) bool {
+	isMedia, mediaType := s.isMediaURL(url)
+	return isMedia && mediaType == "image"
 }
 
 // CreateAIWhatsappRecord creates a new AI WhatsApp record for prospect tracking
