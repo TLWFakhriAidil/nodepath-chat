@@ -15,6 +15,7 @@ import (
 // Handlers contains all HTTP handlers
 type Handlers struct {
 	flowService           *services.FlowService
+	flowExecutionService  services.FlowExecutionService
 	aiService             *services.AIService
 	queueService          *services.QueueService
 	whatsappService       *whatsapp.Service
@@ -40,11 +41,15 @@ func NewHandlers(
 	aiRepo := repository.NewAIWhatsappRepository(db)
 	deviceRepo := repository.NewDeviceSettingsRepository(db)
 	
+	// Initialize flow execution service
+	flowExecutionService := services.NewFlowExecutionService(flowService)
+	
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
 	
 	return &Handlers{
 		flowService:           flowService,
+		flowExecutionService:  flowExecutionService,
 		aiService:             aiService,
 		queueService:          queueService,
 		whatsappService:       whatsappService,

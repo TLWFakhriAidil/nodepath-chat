@@ -50,6 +50,7 @@ func RunMigrations(db *sql.DB) error {
 		
 		createDeviceSettingsTable,
 		createAIWhatsappTable,
+		createConversationLogsTable,
 		
 	}
 
@@ -142,6 +143,25 @@ CREATE TABLE IF NOT EXISTS ai_whatsapp_nodepath (
     INDEX idx_stage (stage),
     INDEX idx_human (human),
     UNIQUE KEY unique_prospect_device (prospect_num, id_device)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
+// Conversation logs table for tracking AI conversation history
+const createConversationLogsTable = `
+CREATE TABLE IF NOT EXISTS conversation_logs_nodepath (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    prospect_num VARCHAR(20) NOT NULL,
+    id_device VARCHAR(255) NOT NULL,
+    message TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
+    sender ENUM('user', 'bot') NOT NULL,
+    stage VARCHAR(255),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_prospect_num (prospect_num),
+    INDEX idx_id_device (id_device),
+    INDEX idx_sender (sender),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_prospect_device (prospect_num, id_device)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 

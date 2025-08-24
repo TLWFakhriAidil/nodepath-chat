@@ -97,6 +97,10 @@ func main() {
 	// Initialize AI WhatsApp service
 	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
 	logrus.Info("AI WhatsApp service initialized")
+	
+	// Initialize AI Cron service for background processing
+	aiCronService := services.NewAICronService(aiRepo, deviceRepo, aiWhatsappService, flowService)
+	logrus.Info("AI Cron service initialized")
 
 	// Initialize WhatsApp service with multi-device support
 	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService)
@@ -259,6 +263,13 @@ func main() {
 			time.Sleep(30 * time.Second)
 		}
 	}()
+	
+	// Start AI Cron service for background AI processing
+	if err := aiCronService.Start(); err != nil {
+		logrus.WithError(err).Error("Failed to start AI Cron service")
+	} else {
+		logrus.Info("AI Cron service started successfully")
+	}
 
 	// Graceful shutdown
 	c := make(chan os.Signal, 1)
@@ -268,6 +279,9 @@ func main() {
 		<-c
 		logrus.Info("Shutting down server...")
 		whatsappService.Disconnect()
+		if err := aiCronService.Stop(); err != nil {
+			logrus.WithError(err).Error("Failed to stop AI Cron service")
+		}
 		app.Shutdown()
 	}()
 

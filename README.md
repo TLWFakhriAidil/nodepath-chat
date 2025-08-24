@@ -48,8 +48,90 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ##### 🔧 Recent Updates & Fixes (Latest)
 
-### 🔍 Enhanced WhatsApp Webhook Debugging & Tracing (Latest)
+### ✅ Implemented Flow-Based AI Prompt Processing (Latest)
 **Date**: Current Session
+
+#### 🐛 Issue Resolved:
+- **Problem**: AI replies were triggering even when no chatbot flow existed or when current node was not an AI prompt node
+- **Impact**: Unwanted AI responses were being sent when users were not in an AI conversation stage
+- **Root Cause**: Missing validation for chatbot_flows_nodepath and AI prompt node checking
+
+#### ✅ Solution Implemented:
+- **Flow Validation**: Added comprehensive checking for chatbot_flows_nodepath before AI processing
+- **AI Prompt Node Detection**: Only trigger AI when current node is specifically an AI prompt node
+- **Fallback Removal**: Removed direct AI fallback when no valid flow exists
+- **Cron Service Integration**: Updated AI cron service to use flow-based validation
+- **Enhanced Logging**: Added detailed logging for flow processing decisions
+
+#### 🛠️ Technical Implementation:
+```go
+// Enhanced webhook processing in device_settings_handlers.go
+flowResult, err := flowExecutionService.ProcessFlowForExistingUser(deviceID, phoneNumber, messageText)
+if err != nil || !flowResult.ShouldUseAI || flowResult.AIPromptContent == "" {
+    // Stop AI processing - no valid flow or not an AI prompt node
+    return
+}
+
+// AI Cron service now validates flows before processing
+flowExecutionService := NewFlowExecutionService(s.flowService)
+flowResult, err := flowExecutionService.ProcessFlowForExistingUser(deviceID, phoneNumber, "")
+```
+
+#### 🎯 Results:
+- ✅ **Conditional AI Processing**: AI only triggers when valid flow with AI prompt nodes exists
+- ✅ **Flow-Based Validation**: Proper checking of chatbot_flows_nodepath before AI activation
+- ✅ **No Unwanted Responses**: Eliminated AI responses when not in AI conversation stage
+- ✅ **Enhanced Control**: Better control over when AI system should engage
+- ✅ **Cron Integration**: Background AI processing now respects flow-based rules
+
+#### 🧪 Testing Verified:
+- **Flow Existence Check**: AI stops when no flow exists for id_device
+- **AI Node Validation**: AI only processes when current node is AI prompt type
+- **Fallback Prevention**: No direct AI processing when flow conditions not met
+- **Server Stability**: All compilation errors resolved, server running successfully
+
+### ✅ Fixed Missing conversation_logs_nodepath Table Issue
+**Date**: Previous Session
+
+#### 🐛 Issue Resolved:
+- **Error**: `Table 'admin_railway.conversation_logs_nodepath' doesn't exist`
+- **Impact**: AI conversations were failing because conversation history couldn't be retrieved or saved
+- **Root Cause**: Missing table definition in database migration
+
+#### ✅ Solution Implemented:
+- **Added Missing Table**: Created `conversation_logs_nodepath` table definition in `database.go`
+- **Database Migration**: Added SQL creation script and integrated into migrations array
+- **Server Restart**: Applied migration by restarting server with proper environment variables
+- **Verification**: Tested webhook functionality with correct instance validation
+
+#### 🛠️ Technical Details:
+```sql
+-- Added to database.go
+CREATE TABLE IF NOT EXISTS conversation_logs_nodepath (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    prospect_num VARCHAR(20) NOT NULL,
+    id_device VARCHAR(50) NOT NULL,
+    conv_last TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_prospect_device (prospect_num, id_device)
+);
+```
+
+#### 🎯 Results:
+- ✅ **Conversation History**: Now successfully saving and retrieving conversation logs
+- ✅ **AI Processing**: AI conversations processing correctly through all stages
+- ✅ **WhatsApp Integration**: Messages being sent successfully via Whacenter provider
+- ✅ **Database Integrity**: All required tables now exist and functioning
+
+#### 🧪 Testing Verified:
+- **Webhook Reception**: Proper validation of device and instance
+- **Message Processing**: AI conversation flow working end-to-end
+- **Response Delivery**: WhatsApp messages sent successfully
+- **Database Operations**: Conversation history saved without errors
+
+### 🔍 Enhanced WhatsApp Webhook Debugging & Tracing
+**Date**: Previous Session
 
 #### ✅ Changes Made:
 - **Enhanced Webhook Logging**: Added comprehensive logging with raw payload, headers, IP, and URL details

@@ -20,6 +20,9 @@ type AIWhatsappService interface {
 	// Process AI conversation
 	ProcessAIConversation(prospectNum, idDevice, currentText, stage string) (*AIWhatsappResponse, error)
 	
+	// ProcessAIConversationWithCustomPrompt processes AI conversation with custom prompt from flow nodes
+	ProcessAIConversationWithCustomPrompt(prospectNum, idDevice, currentText, stage, customPrompt string) (*AIWhatsappResponse, error)
+	
 	// Get AI settings
 	GetAISettings(idDevice string) (*models.AISettings, error)
 	
@@ -218,7 +221,6 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 	convHistory, err := s.aiRepo.GetConversationHistory(prospectNum, 10)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get conversation history")
-		return nil, fmt.Errorf("failed to get conversation history: %w", err)
 	}
 
 	// Build AI prompt content
@@ -288,6 +290,204 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 	}
 
 	return parsedResponse, nil
+}
+
+// ProcessAIConversationWithCustomPrompt processes AI conversation with custom prompt from flow nodes
+func (s *aiWhatsappService) ProcessAIConversationWithCustomPrompt(prospectNum, idDevice, currentText, stage, customPrompt string) (*AIWhatsappResponse, error) {
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"id_device": idDevice,
+		"stage": stage,
+		"custom_prompt_length": len(customPrompt),
+	}).Info("🤖 AI: Processing conversation with custom flow prompt")
+
+	// Check for device commands first
+	if strings.HasPrefix(currentText, "%") || strings.HasPrefix(currentText, "#") || strings.HasPrefix(currentText, "cmd") {
+		logrus.Info("Device command detected, processing command")
+		err := s.ProcessDeviceCommand(prospectNum, currentText, idDevice)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process device command")
+		}
+		return nil, fmt.Errorf("device command processed")
+	}
+
+	// Check if human takeover is active
+	humanActive, err := s.IsHumanTakeoverActive(prospectNum)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to check human takeover status")
+	}
+	if humanActive {
+		logrus.Info("Human takeover is active, skipping AI response")
+		return nil, fmt.Errorf("human takeover active")
+	}
+
+	// Get or create AI conversation record
+	aiConv, err := s.aiRepo.GetAIWhatsappByProspectNum(prospectNum)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get AI conversation")
+		return nil, err
+	}
+
+	// If new prospect, create record with provided stage
+	if aiConv == nil {
+		logrus.Info("Creating new AI conversation record with flow-based stage")
+		aiConv = &models.AIWhatsapp{
+			ProspectNum: prospectNum,
+			IDDevice:    idDevice,
+			Stage:       stage,
+			Niche:       "flow-based", // Indicate this is from flow
+			Human:       0,
+		}
+		err = s.aiRepo.CreateAIWhatsapp(aiConv)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create AI conversation")
+			return nil, err
+		}
+	}
+
+	// Get device settings for API configuration
+	deviceSettings, err := s.deviceRepo.GetDeviceSettingsByID(idDevice)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get device settings")
+		return nil, err
+	}
+
+	// Get conversation history
+	convHistory, err := s.aiRepo.GetConversationHistory(prospectNum, 10)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get conversation history")
+	}
+
+	// Build AI prompt content using custom prompt from flow
+	promptContent := s.buildCustomAIPromptContent(customPrompt, stage)
+
+	// Get last AI response for context
+	lastAIResponse := s.getLastAIResponse(convHistory)
+
+	// Determine API URL and model based on device
+	apiURL := s.getAPIURL(idDevice)
+	model := s.getAIModel(idDevice, deviceSettings.APIKeyOption)
+
+	// Create AI payload
+	payload := AIWhatsappPayload{
+		Model: model,
+		Messages: []AIWhatsappMessage{
+			{Role: "system", Content: promptContent},
+			{Role: "assistant", Content: lastAIResponse},
+			{Role: "user", Content: currentText},
+		},
+		Temperature:       0.67,
+		TopP:              1,
+		RepetitionPenalty: 1,
+	}
+
+	// Get API key
+	var apiKey string
+	if deviceSettings.APIKey.Valid {
+		apiKey = deviceSettings.APIKey.String
+	}
+	if idDevice == "SCHQ-S94" || idDevice == "SCHQ-S12" {
+		apiKey = "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"
+	}
+
+	// Call AI API
+	responseText, err := s.callAIAPI(apiURL, apiKey, payload)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to call AI API")
+		return nil, err
+	}
+
+	// Parse AI response
+	parsedResponse, err := s.parseAIResponse(responseText)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to parse AI response")
+		return nil, err
+	}
+
+	// Update conversation stage if it changed
+	if parsedResponse.Stage != "" && parsedResponse.Stage != aiConv.Stage {
+		logrus.WithFields(logrus.Fields{
+			"old_stage": aiConv.Stage,
+			"new_stage": parsedResponse.Stage,
+		}).Info("Updating conversation stage")
+		err = s.UpdateConversationStage(prospectNum, parsedResponse.Stage)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update conversation stage")
+		}
+	}
+
+	// Log user message
+	err = s.LogConversation(prospectNum, idDevice, currentText, "user", aiConv.Stage)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to log user message")
+	}
+
+	// Log AI response
+	responseForLogging := s.formatResponseForLogging(parsedResponse.Response)
+	err = s.LogConversation(prospectNum, idDevice, responseForLogging, "ai", parsedResponse.Stage)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to log AI response")
+	}
+
+	return parsedResponse, nil
+}
+
+// buildCustomAIPromptContent builds AI prompt content using custom prompt from flow nodes
+func (s *aiWhatsappService) buildCustomAIPromptContent(customPrompt, stage string) string {
+	// Use the custom prompt from flow node as the base
+	content := customPrompt + "\n\n"
+
+	// Add standard instructions as per system requirements
+	content += "### Instructions:\n" +
+		"1. If the current stage is null or undefined, default to the first stage.\n" +
+		"2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" +
+		"3. Follow all rules and steps strictly. Do not skip or ignore any rules or instructions.\n\n" +
+		"4. **Do not repeat the same sentences or phrases that have been used in the recent conversation history.**\n" +
+		"5. If the input contains the phrase \"I want this section in add response format [onemessage]\":\n" +
+		"   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" +
+		"   - The `Jenis` field is only added to `text` types within the `Response` array.\n" +
+		"   - If the directive is not present, omit the `Jenis` field entirely.\n\n" +
+		"### Response Format:\n" +
+		"{\n" +
+		"  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the first response message here.\"},\n" +
+		"    {\"type\": \"image\", \"content\": \"https://example.com/image1.jpg\"},\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the second response message here.\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"### Example Response:\n" +
+		"// If the directive is present\n" +
+		"{\n" +
+		"  \"Stage\": \"Problem Identification\",\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"// If the directive is NOT present\n" +
+		"{\n" +
+		"  \"Stage\": \"Problem Identification\",\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
+		"    {\"type\": \"text\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"### Important Rules:\n" +
+		"1. **Include the `Stage` field in every response**:\n" +
+		"   - The `Stage` field must explicitly specify the current stage.\n" +
+		"   - If the stage is unclear or missing, default to first stage.\n\n" +
+		"2. **Use the Correct Response Format**:\n" +
+		"   - Divide long responses into multiple short \"text\" segments for better readability.\n" +
+		"   - Include all relevant images provided in the input, interspersed naturally with text responses.\n" +
+		"   - If multiple images are provided, create separate `image` entries for each.\n\n" +
+		"3. **Dynamic Field for [onemessage]**:\n" +
+		"   - If the input specifies \"I want this section in add response format [onemessage]\":\n" +
+		"      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" +
+		"   - If the directive is not present, omit the `Jenis` field entirely.\n" +
+		"   - Non-text types like `image` never include the `Jenis` field.\n\n"
+
+	return content
 }
 
 // GetAISettings retrieves AI settings for a staff member
