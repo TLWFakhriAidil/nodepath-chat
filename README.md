@@ -2085,4 +2085,31 @@ go run cmd/server/main.go
   - **Automatic Type Detection**: File extension-based routing to appropriate API endpoints
   - **Consistent Device Identification**: Both providers use instance field for device mapping
 
+- ✅ **FLOW MEDIA MESSAGE PROCESSING FIX**: Fixed critical issue where flow-generated media URLs were sent as plain text
+  - **Root Cause**: `processAdvancedAIPromptNode` function was not parsing AI JSON responses for media URLs
+  - **Solution**: Integrated `ParseAIResponse` function to handle JSON parsing and media extraction
+  - **Enhanced Flow Processing**: Advanced AI prompt nodes now properly detect and send media messages
+    - Text responses: Sent via `SendMessageFromDevice`
+    - Media responses (image, audio, video): Sent via `SendMediaMessage`
+    - Added 2-second delay between multiple response items for better UX
+    - Automatic conversation stage updates when provided in AI response
+  - **Fallback Handling**: If JSON parsing fails, falls back to plain text processing
+  - **Comprehensive Logging**: Added detailed logging for media detection and processing in flow nodes
+
+- ✅ **PROVIDER SERVICE STANDARDIZATION**: Fixed inconsistencies between Whacenter and Wablas media APIs
+  - **Whacenter API Standardization**: 
+    - Corrected endpoint from `/api/send-media` to `/api/send` across all services
+    - Standardized to form data format (`application/x-www-form-urlencoded`)
+    - Unified field names: `device_id`, `number`, `file`, `message` (for caption)
+    - Removed inconsistent Authorization headers
+    - Added proper media type detection for video (.mp4) and audio (.mp3)
+  - **Wablas API Consistency**: 
+    - Maintained existing `sendWablasImageMessage` function with proper type detection
+    - Uses appropriate endpoints: `/send-image`, `/send-video`, `/send-audio`
+    - Form data format with Authorization header via instance
+  - **Cross-Service Alignment**: 
+    - Provider service, handlers, and AI cron service now use identical API formats
+    - Eliminated JSON vs form data inconsistencies
+    - Standardized error handling and logging across all services
+
 **Final Status**: 🟢 **FULLY OPERATIONAL PRODUCTION SYSTEM** - Ready for users with no critical issues or blockers

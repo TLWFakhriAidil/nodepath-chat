@@ -1824,37 +1824,43 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType
 	}
 
 	// Whacenter API endpoint for sending media
-	apiURL := "https://api.whacenter.com/api/send-media"
+	apiURL := "https://api.whacenter.com/api/send"
 
-	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
-	payload := map[string]interface{}{
-		"device_id": deviceSettings.Instance.String, // ✅ Use instance
-		"number":    to,
-		"media_url": fileURL,
-		"type":      fileType,
+	// Detect media type based on file extension (as per PHP code)
+	mediaType := ""
+	if strings.Contains(fileURL, ".mp4") {
+		mediaType = "video"
+	} else if strings.Contains(fileURL, ".mp3") {
+		mediaType = "audio"
+	} else {
+		mediaType = "image"
 	}
 
+	// Prepare form data exactly as specified by user PHP code
+	data := url.Values{}
+	data.Set("device_id", deviceSettings.Instance.String) // device_id from instance
+	data.Set("number", to)                               // recipient number
+	data.Set("file", fileURL)                           // media file URL
+	
 	// Add caption if provided
 	if caption != "" {
-		payload["caption"] = caption
+		data.Set("message", caption)
 	}
-
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
-		return
+	
+	// Add type parameter for video and audio only (as per PHP code)
+	if mediaType != "" && mediaType != "image" {
+		data.Set("type", mediaType)
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
 		return
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
+	// Set headers (form data, no authorization header as per user example)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}

@@ -773,10 +773,73 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
 
 	// Generate AI response with advanced JSON parsing
-	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, []models.ConversationMessage{})
+	rawResponse, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, []models.ConversationMessage{})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate advanced AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
+	}
+
+	// Parse the AI response JSON to extract media URLs and handle multiple response items
+	var response string
+	parsedResponse, err := s.aiWhatsappService.ParseAIResponse(rawResponse)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"raw_response": rawResponse,
+			"node_id": node.ID,
+		}).Warn("🧠 ADVANCED_AI: Failed to parse JSON response, treating as plain text")
+		// Fallback to plain text if JSON parsing fails
+		response = rawResponse
+	} else {
+		// Successfully parsed JSON response - handle multiple response items
+		logrus.WithFields(logrus.Fields{
+			"stage": parsedResponse.Stage,
+			"response_count": len(parsedResponse.Response),
+			"node_id": node.ID,
+		}).Info("🧠 ADVANCED_AI: Successfully parsed JSON response with multiple items")
+		
+		// Process each response item and send them individually
+		for i, item := range parsedResponse.Response {
+			logrus.WithFields(logrus.Fields{
+				"item_index": i,
+				"item_type": item.Type,
+				"content_length": len(item.Content),
+			}).Info("🧠 ADVANCED_AI: Processing response item")
+			
+			switch item.Type {
+			case "text":
+				err := s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, item.Content)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to send text message from advanced AI")
+				}
+			case "image", "audio", "video":
+				err := s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, "", item.Content)
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"media_type": item.Type,
+						"media_url": item.Content,
+					}).Error("Failed to send media message from advanced AI")
+				}
+			default:
+				logrus.WithField("type", item.Type).Warn("Unknown response type in advanced AI")
+			}
+			
+			// Add delay between messages for better user experience
+			if i < len(parsedResponse.Response)-1 {
+				time.Sleep(2 * time.Second)
+			}
+		}
+		
+		// Update conversation stage if provided
+		if parsedResponse.Stage != "" {
+			err = s.aiWhatsappService.UpdateConversationStage(execution.ProspectNum, parsedResponse.Stage)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to update conversation stage")
+			}
+		}
+		
+		// For JSON responses, we've already sent all messages, so return empty string
+		// to prevent duplicate sending in the main flow processing logic
+		response = ""
 	}
 
 	// Check if next node exists and advance to it
