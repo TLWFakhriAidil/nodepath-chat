@@ -56,7 +56,7 @@ type AIWhatsappService interface {
 	// Get AI WhatsApp record by prospect and device
 	GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error)
 	
-	// Flow execution methods - consolidating chatbot_executions_nodepath functionality
+	// Flow execution methods
 	// Start a new flow execution
 	StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error)
 	
@@ -864,7 +864,7 @@ func (s *aiWhatsappService) GetAIWhatsappByProspectAndDevice(prospectNum, idDevi
 	return s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
 }
 
-// Flow execution methods - consolidating chatbot_executions_nodepath functionality
+// Flow execution methods
 
 // StartFlowExecution starts a new flow execution in ai_whatsapp_nodepath
 func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error) {

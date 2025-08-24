@@ -119,9 +119,7 @@ func main() {
 	log.Println("\n🔄 Executing ID Staff to ID Device migration...")
 	executeIDStaffMigration(db)
 
-	// Execute chatbot executions migration
-	log.Println("\n🔄 Executing chatbot executions migration...")
-	executeChatbotExecutionsMigration(db)
+
 
 	// Execute JSON to TEXT column migration
 	log.Println("\n🔄 Executing JSON to TEXT migration...")
@@ -279,94 +277,7 @@ func executeIDStaffMigration(db *sql.DB) {
 	}
 }
 
-// executeChatbotExecutionsMigration performs the migration for chatbot_executions_nodepath table
-func executeChatbotExecutionsMigration(db *sql.DB) {
-	log.Println("Starting chatbot executions migration...")
-	
-	tableName := "chatbot_executions_nodepath"
-	
-	log.Printf("\n=== Migrating table: %s ===", tableName)
-	
-	// Check if id_staff column exists
-	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM information_schema.columns 
-						 WHERE table_schema = DATABASE() 
-						 AND table_name = ? 
-						 AND column_name = 'id_staff'`, tableName).Scan(&count)
-	if err != nil {
-		log.Printf("❌ Error checking id_staff column in %s: %v", tableName, err)
-		return
-	}
-	
-	if count == 0 {
-		log.Printf("ℹ️  Column id_staff does not exist in table %s, skipping", tableName)
-		return
-	}
-	
-	// Check if id_device column already exists
-	err = db.QueryRow(`SELECT COUNT(*) FROM information_schema.columns 
-						 WHERE table_schema = DATABASE() 
-						 AND table_name = ? 
-						 AND column_name = 'id_device'`, tableName).Scan(&count)
-	if err != nil {
-		log.Printf("❌ Error checking id_device column in %s: %v", tableName, err)
-		return
-	}
-	
-	if count > 0 {
-		log.Printf("⚠️  Column id_device already exists in table %s, dropping id_staff", tableName)
-		_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN id_staff", tableName))
-		if err != nil {
-			log.Printf("❌ Error dropping id_staff column in %s: %v", tableName, err)
-			return
-		}
-		log.Printf("✅ Dropped id_staff column from %s", tableName)
-		return
-	}
-	
-	// Get column definition for id_staff
-	var columnType, isNullable, columnDefault, extra sql.NullString
-	err = db.QueryRow(`SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, EXTRA 
-						 FROM information_schema.columns 
-						 WHERE table_schema = DATABASE() 
-						 AND table_name = ? 
-						 AND column_name = 'id_staff'`, tableName).Scan(&columnType, &isNullable, &columnDefault, &extra)
-	if err != nil {
-		log.Printf("❌ Error getting column definition for %s: %v", tableName, err)
-		return
-	}
-	
-	// Build column definition
-	definition := columnType.String
-	if isNullable.String == "NO" {
-		definition += " NOT NULL"
-	}
-	if columnDefault.Valid && columnDefault.String != "" {
-		if columnDefault.String == "CURRENT_TIMESTAMP" {
-			definition += " DEFAULT CURRENT_TIMESTAMP"
-		} else {
-			definition += fmt.Sprintf(" DEFAULT '%s'", columnDefault.String)
-		}
-	}
-	if extra.Valid && extra.String != "" {
-		definition += " " + extra.String
-	}
-	
-	log.Printf("Current column definition: id_staff %s", definition)
-	
-	// Rename column from id_staff to id_device
-	renameQuery := fmt.Sprintf("ALTER TABLE %s CHANGE COLUMN id_staff id_device %s", tableName, definition)
-	log.Printf("Executing: %s", renameQuery)
-	
-	_, err = db.Exec(renameQuery)
-	if err != nil {
-		log.Printf("❌ Error renaming column in %s: %v", tableName, err)
-		return
-	}
-	
-	log.Printf("✅ Successfully migrated %s.id_staff to %s.id_device", tableName, tableName)
-	log.Println("🎉 Chatbot executions migration completed successfully!")
-}
+
 
 // executeJSONToTextMigration converts JSON columns to TEXT in ai_whatsapp_nodepath table
 func executeJSONToTextMigration(db *sql.DB) {

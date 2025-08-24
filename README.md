@@ -1289,26 +1289,6 @@ CREATE TABLE chatbot_flows_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-#### `chatbot_executions_nodepath` ✅ **OPERATIONAL**
-```sql
-CREATE TABLE chatbot_executions_nodepath (
-  id VARCHAR(255) PRIMARY KEY,
-  flow_reference VARCHAR(255) NOT NULL,
-  phone_number VARCHAR(20),
-  staff_id VARCHAR(255),
-  conv_last JSON,
-  conv_current TEXT COLLATE utf8mb4_unicode_ci,
-  current_node VARCHAR(255),
-  variables JSON,
-  status ENUM('active', 'completed', 'failed') DEFAULT 'active',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_flow_reference (flow_reference),
-  INDEX idx_phone_number (phone_number),
-  INDEX idx_staff_id (staff_id),
-  INDEX idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
 
 #### `device_setting_nodepath` ✅ **OPERATIONAL**
 ```sql

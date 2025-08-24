@@ -50,39 +50,7 @@ export type Database = {
         }
         Relationships: []
       }
-      chatbot_executions_nodepath: {
-        Row: {
-          conv_current: string | null
-          conv_last: Json | null
-          created_at: string | null
-          id: string
-          instance: string | null
-          open_router_key: string | null
-          system_prompt: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          conv_current?: string | null
-          conv_last?: Json | null
-          created_at?: string | null
-          id: string
-          instance?: string | null
-          open_router_key?: string | null
-          system_prompt?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          conv_current?: string | null
-          conv_last?: Json | null
-          created_at?: string | null
-          id?: string
-          instance?: string | null
-          open_router_key?: string | null
-          system_prompt?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
+
       chatbot_flows: {
         Row: {
           created_at: string

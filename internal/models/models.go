@@ -181,7 +181,7 @@ type AIWhatsapp struct {
 	KeywordIklan    string          `json:"keywordiklan" db:"keywordiklan"`
 	Marketer        string          `json:"marketer" db:"marketer"`
 	UpdateToday     *time.Time      `json:"update_today" db:"update_today"`
-	// Flow execution fields for consolidating chatbot_executions_nodepath functionality
+	// Flow execution fields
 	FlowReference   sql.NullString  `json:"flow_reference" db:"flow_reference"`   // Reference to chatbot flow being executed
 	CurrentNode     sql.NullString  `json:"current_node" db:"current_node"`       // Current node in the flow execution
 	Variables       json.RawMessage `json:"variables" db:"variables"`             // Flow execution variables (JSON)

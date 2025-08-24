@@ -88,7 +88,7 @@ func createMissingTables(db *sql.DB) error {
 				INDEX idx_created_at (created_at)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		},
-// chatbot_executions_nodepath table removed - functionality consolidated into ai_whatsapp_nodepath
+
 		{
 			name: "device_setting_nodepath",
 			sql: `CREATE TABLE IF NOT EXISTS device_setting_nodepath (

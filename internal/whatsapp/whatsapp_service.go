@@ -362,7 +362,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			}).Info("🖼️ FLOW: Extracted media URL using new detection service, sending as media message")
 			
 			// Send as media message instead of text
-			err = s.SendMediaMessage(deviceID, phoneNumber, "", mediaInfo.MediaURL)
+			err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
 				if err != nil {
 					logrus.WithError(err).WithFields(logrus.Fields{
 						"device_id":    deviceID,
@@ -544,7 +544,7 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 
 		case "image":
 			// Send image message - item.Content contains the image URL
-			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
+			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content)
 			if err != nil {
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send image message")
 				return err
@@ -554,7 +554,7 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 
 		case "audio":
 			// Send audio message - item.Content contains the audio URL
-			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
+			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content)
 			if err != nil {
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send audio message")
 				return err
@@ -564,7 +564,7 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 
 		case "video":
 			// Send video message - item.Content contains the video URL
-			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
+			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content)
 			if err != nil {
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send video message")
 				return err
@@ -811,7 +811,7 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 					logrus.WithError(err).Error("Failed to send text message from advanced AI")
 				}
 			case "image", "audio", "video":
-				err := s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, "", item.Content)
+				err := s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, item.Content)
 				if err != nil {
 					logrus.WithError(err).WithFields(logrus.Fields{
 						"media_type": item.Type,
@@ -1907,7 +1907,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 				}).Info("🖼️ FLOW: Extracted media URL from delayed response, sending as media message")
 				
 				// Send as media message instead of text
-				err = s.SendMediaMessage(deviceID, phoneNumber, "", mediaInfo.MediaURL)
+				err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
 				if err != nil {
 					logrus.WithError(err).WithFields(logrus.Fields{
 						"device_id":    deviceID,

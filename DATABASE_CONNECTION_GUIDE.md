@@ -25,7 +25,7 @@ The system currently uses the following tables:
 
 #### Core Application Tables
 - `chatbot_flows_nodepath` - Stores chatbot flow configurations
-- `chatbot_executions_nodepath` - Tracks flow execution instances
+
 - `chatbot_leads` - Lead management data
 - `leads` - Additional lead information
 - `leads_ai` - AI-processed lead data
@@ -196,10 +196,6 @@ SET nodes = JSON_ARRAY(
 ) 
 WHERE id = 'flow_001';
 
--- Query execution variables
-SELECT id, phone_number, JSON_EXTRACT(variables, '$.user_name') as user_name
-FROM chatbot_executions_nodepath 
-WHERE JSON_EXTRACT(variables, '$.user_name') IS NOT NULL;
 
 -- Search within JSON arrays (MySQL 5.7.8+)
 SELECT * FROM chatbot_flows_nodepath 
@@ -223,8 +219,6 @@ WHERE JSON_SEARCH(nodes, 'one', 'message', NULL, '$[*].type') IS NOT NULL;
 -- Get all chatbot flows
 SELECT * FROM chatbot_flows_nodepath;
 
--- Get active executions
-SELECT * FROM chatbot_executions_nodepath WHERE status = 'active';
 
 -- Get recent WhatsApp messages
 SELECT * FROM whatsapp_messages ORDER BY created_at DESC LIMIT 10;
@@ -251,17 +245,10 @@ UPDATE chatbot_flows_nodepath
 SET nodes = '[{"id":"start","type":"message"}]', updated_at = NOW() 
 WHERE id = 'flow_001';
 
--- Update execution status
-UPDATE chatbot_executions_nodepath 
-SET status = 'completed', updated_at = NOW() 
-WHERE id = 'exec_001';
 ```
 
 #### DELETE Operations
 ```sql
--- Delete old executions
-DELETE FROM chatbot_executions_nodepath 
-WHERE status = 'completed' AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY);
 
 -- Delete test flows
 DELETE FROM chatbot_flows_nodepath WHERE name LIKE 'Test%';
@@ -352,7 +339,7 @@ db.SetConnMaxLifetime(5 * time.Minute) // Connection lifetime (prevents 5.7 time
 The system automatically creates and maintains the following core tables:
 
 - **chatbot_flows_nodepath**: Flow configurations with JSON nodes and edges
-- **chatbot_executions_nodepath**: Runtime execution tracking with variables and state
+
 
 Additional tables are managed by the WhatsApp integration and other system components.
 
@@ -367,7 +354,7 @@ Additional tables are managed by the WhatsApp integration and other system compo
 
 1. **JSON Support**: MySQL 5.7 introduced native JSON data type support
    - Used extensively in `chatbot_flows_nodepath.nodes` and `chatbot_flows_nodepath.edges`
-   - Used in `chatbot_executions_nodepath.variables` and `conv_last` fields
+
 
 2. **Character Set**: UTF8MB4 with unicode collation
    - All tables use `utf8mb4_unicode_ci` collation

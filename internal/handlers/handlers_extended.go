@@ -109,8 +109,9 @@ func (h *Handlers) SendWhatsAppMessage(c *fiber.Ctx) error {
 	}
 
 	var err error
-	if req.MediaURL != "" && req.MediaType != "" {
-		err = h.whatsappService.SendMediaMessage(req.PhoneNumber, req.Message, req.MediaURL, req.MediaType)
+	if req.MediaURL != "" {
+		// For media messages, we need a device ID - using empty string as fallback
+		err = h.whatsappService.SendMediaMessage("", req.PhoneNumber, req.MediaURL)
 	} else {
 		err = h.whatsappService.SendMessage(req.PhoneNumber, req.Message)
 	}
