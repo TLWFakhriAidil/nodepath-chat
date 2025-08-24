@@ -47,10 +47,11 @@ type Service struct {
 	currentDevices int
 	
 	// Services
-	chatService    *services.ChatService
-	queueService   *services.QueueService
-	flowService    *services.FlowService
-	aiService      *services.AIService
+	chatService      *services.ChatService
+	queueService     *services.QueueService
+	flowService      *services.FlowService
+	aiService        *services.AIService
+	aiWhatsappService *services.AIWhatsappService
 	websocketService *services.WebSocketService
 	
 	// Performance optimizations
@@ -60,7 +61,7 @@ type Service struct {
 }
 
 // NewService creates a new WhatsApp service with multi-device support and performance optimizations
-func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, websocketService *services.WebSocketService) (*Service, error) {
+func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService *services.AIWhatsappService, websocketService *services.WebSocketService) (*Service, error) {
 	service := &Service{
 		cfg:              cfg,
 		clients:          make(map[string]*whatsmeow.Client),
@@ -68,11 +69,12 @@ func NewService(cfg *config.Config, chatService *services.ChatService, queueServ
 		connections:      make(map[string]bool),
 		maxDevices:       cfg.WhatsAppMaxDevices,
 		storageDir:       cfg.WhatsAppStoragePath,
-		chatService:      chatService,
-		queueService:     queueService,
-		flowService:      flowService,
-		aiService:        aiService,
-		websocketService: websocketService,
+		chatService:       chatService,
+		queueService:      queueService,
+		flowService:       flowService,
+		aiService:         aiService,
+		aiWhatsappService: aiWhatsappService,
+		websocketService:  websocketService,
 		messageQueue:     make(chan *QueuedMessage, 1000), // Buffered queue for performance
 		isConnected:      false,
 	}
@@ -505,7 +507,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string) {
 	}
 
 	// Process the message through the flow
-	response, err := s.processFlowMessage(flow, execution, content)
+	response, err := s.ProcessFlowMessage(flow, execution, content)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process flow message")
 		return
@@ -527,8 +529,8 @@ func (s *Service) processIncomingMessage(phoneNumber, content string) {
 	}
 }
 
-// processFlowMessage processes a message through the flow logic
-func (s *Service) processFlowMessage(flow *models.ChatbotFlow, execution *models.ChatbotExecution, userInput string) (string, error) {
+// ProcessFlowMessage processes a message through the flow logic
+func (s *Service) ProcessFlowMessage(flow *models.ChatbotFlow, execution *models.ChatbotExecution, userInput string) (string, error) {
 	// Get current node
 	currentNode, err := s.flowService.FindNodeByID(flow, execution.CurrentNode)
 	if err != nil {
@@ -557,38 +559,20 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, execution *models
 	}
 }
 
-// processAIPromptNode processes an AI prompt node
+// processAIPromptNode processes an AI prompt node using AI WhatsApp service
 func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
 	// Get AI configuration from node data
-	var systemPrompt, instance, apiProvider string
+	var systemPrompt string
 
-	// Check node data for configuration
+	// Check node data for system prompt
 	if sp, ok := node.Data["system_prompt"].(string); ok {
 		systemPrompt = sp
 	}
-	if inst, ok := node.Data["instance"].(string); ok {
-		instance = inst
-	}
-	if ap, ok := node.Data["apiprovider"].(string); ok {
-		apiProvider = ap
-	}
 
-	// Use global settings as fallback
-	if apiProvider == "" {
-		apiProvider = flow.Niche
-	}
-
-	// Check if we have complete AI configuration
-	if systemPrompt == "" || instance == "" || apiProvider == "" {
+	// Check if we have system prompt configuration
+	if systemPrompt == "" {
 		// Fallback to manual response
 		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
-	}
-
-	// Get conversation history
-	history, err := s.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to get conversation history")
-		history = []models.ConversationMessage{}
 	}
 
 	// Get execution variables for prompt replacement
@@ -601,11 +585,33 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	// Replace variables in system prompt
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
 
-	// Generate AI response
-	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, history)
+	// Use AI WhatsApp service for consistent AI processing
+	// Get current stage from node ID or use default
+	currentStage := node.ID
+	if currentStage == "" {
+		currentStage = "ai_prompt"
+	}
+
+	// Process AI conversation using AI WhatsApp service
+	aiResponse, err := s.aiWhatsappService.ProcessAIConversation(execution.ProspectNum, execution.IDDevice, userInput, currentStage)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
+	}
+
+	// Build response from AI WhatsApp service response
+	var responseText string
+	if aiResponse != nil && len(aiResponse.Response) > 0 {
+		for _, item := range aiResponse.Response {
+			if item.Type == "text" {
+				if responseText != "" {
+					responseText += "\n"
+				}
+				responseText += item.Content
+			}
+		}
+	} else {
+		responseText = "I'm sorry, I couldn't generate a response. Please try again."
 	}
 
 	// Move to next node
@@ -618,44 +624,23 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		s.chatService.CompleteExecution(execution.ID)
 	}
 
-	return response, nil
+	return responseText, nil
 }
 
 // processAdvancedAIPromptNode processes an advanced AI prompt node with structured response
 func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, execution *models.ChatbotExecution, node *models.FlowNode, userInput string) (string, error) {
 	// Get AI configuration from node data
-	var systemPrompt, instance, apiProvider, closingPrompt string
+	var systemPrompt string
 
-	// Check node data for configuration
+	// Check node data for system prompt configuration
 	if sp, ok := node.Data["system_prompt"].(string); ok {
 		systemPrompt = sp
 	}
-	if inst, ok := node.Data["instance"].(string); ok {
-		instance = inst
-	}
-	if ap, ok := node.Data["apiprovider"].(string); ok {
-		apiProvider = ap
-	}
-	if cp, ok := node.Data["closing_prompt"].(string); ok {
-		closingPrompt = cp
-	}
 
-	// Use global settings as fallback
-	if apiProvider == "" {
-		apiProvider = flow.Niche
-	}
-
-	// Check if we have complete AI configuration
-	if systemPrompt == "" || instance == "" || apiProvider == "" {
+	// Check if we have system prompt configuration
+	if systemPrompt == "" {
 		// Fallback to manual response
 		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
-	}
-
-	// Get conversation history
-	history, err := s.chatService.GetConversationHistory(execution)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to get conversation history")
-		history = []models.ConversationMessage{}
 	}
 
 	// Get execution variables for prompt replacement
@@ -665,30 +650,32 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 		variables = make(map[string]interface{})
 	}
 
-	// Replace variables in system prompt and closing prompt
+	// Replace variables in system prompt
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
-	if closingPrompt != "" {
-		closingPrompt = s.flowService.ReplaceVariables(closingPrompt, variables)
-	}
 
-	// Generate advanced AI response
-	response, err := s.aiService.GenerateAdvancedResponse(systemPrompt, userInput, apiProvider, history, closingPrompt)
+	// Use AI WhatsApp service to process the conversation
+	aiResponse, err := s.aiWhatsappService.ProcessAIConversation(
+		execution.PhoneNumber,
+		execution.DeviceID,
+		userInput,
+		node.ID, // Use node ID as current stage
+	)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to generate advanced AI response")
+		logrus.WithError(err).Error("Failed to process AI conversation")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
 	}
 
-	// Update execution stage if provided
-	if response.Stage != "" && response.Stage != "error" {
-		// Store the stage in execution variables for future reference
-		err := s.chatService.SetExecutionVariable(execution, "current_stage", response.Stage)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to update execution stage variable")
+	// Build response text from AI response
+	var responseText string
+	if aiResponse != nil && len(aiResponse.Response) > 0 {
+		for _, item := range aiResponse.Response {
+			if item.Type == "text" {
+				responseText += item.Content
+			}
 		}
+	} else {
+		responseText = "I'm sorry, I couldn't generate a response. Please try again."
 	}
-
-	// Process response parts and build final message
-	finalResponse := s.buildResponseFromParts(response.Response)
 
 	// Move to next node
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
@@ -700,7 +687,7 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 		s.chatService.CompleteExecution(execution.ID)
 	}
 
-	return finalResponse, nil
+	return responseText, nil
 }
 
 // buildResponseFromParts builds a final response string from AI response parts
@@ -788,7 +775,7 @@ func (s *Service) processDefaultNode(flow *models.ChatbotFlow, execution *models
 	if err == nil && nextNode != nil {
 		execution.CurrentNode = nextNode.ID
 		s.chatService.UpdateExecution(execution)
-		return s.processFlowMessage(flow, execution, userInput)
+		return s.ProcessFlowMessage(flow, execution, userInput)
 	}
 
 	// End of flow
@@ -804,7 +791,7 @@ func (s *Service) processUserReplyNode(flow *models.ChatbotFlow, execution *mode
 	if err == nil && nextNode != nil {
 		execution.CurrentNode = nextNode.ID
 		s.chatService.UpdateExecution(execution)
-		return s.processFlowMessage(flow, execution, userInput)
+		return s.ProcessFlowMessage(flow, execution, userInput)
 	}
 
 	// End of flow
@@ -834,7 +821,7 @@ func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, executi
 	if err == nil && nextNode != nil {
 		execution.CurrentNode = nextNode.ID
 		s.chatService.UpdateExecution(execution)
-		return s.processFlowMessage(flow, execution, userInput)
+		return s.ProcessFlowMessage(flow, execution, userInput)
 	}
 
 	// End of flow

@@ -37,14 +37,12 @@ func NewHandlers(
 	deviceSettingsService *services.DeviceSettingsService,
 	websocketService *services.WebSocketService,
 	mediaService *services.MediaService,
+	aiWhatsappService *services.AIWhatsappService,
 	db *sql.DB,
 ) *Handlers {
 	// Initialize repositories
 	aiRepo := repository.NewAIWhatsappRepository(db)
 	deviceRepo := repository.NewDeviceSettingsRepository(db)
-	
-	// Initialize AI WhatsApp service
-	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
 	
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)

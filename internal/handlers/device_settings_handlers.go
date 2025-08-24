@@ -1342,13 +1342,13 @@ func (h *Handlers) DebugDevices(c *fiber.Ctx) error {
 }
 
 // Helper function to convert sql.NullString to string
-// processWebhookMessage processes incoming webhook messages and integrates with AI WhatsApp service
+// processWebhookMessage processes incoming webhook messages and prioritizes chatbot flow over AI generation
 func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idDevice, provider string) {
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"provider": provider,
 		"webhook_data": webhookData,
-	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration")
+	}).Info("🔄 WEBHOOK: Processing webhook message with flow priority")
 
 	// Extract message data based on provider
 	var from, message, messageType string
@@ -1436,7 +1436,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		"from": from,
 		"message": message,
 		"provider": provider,
-	}).Info("🤖 WEBHOOK: Processing message for AI conversation")
+	}).Info("🔄 WEBHOOK: Processing message with chatbot flow priority")
 
 	// Check if this is a device command (%, #, cmd)
 	if strings.HasPrefix(message, "%") || strings.HasPrefix(message, "#") || strings.ToLower(strings.TrimSpace(message)) == "cmd" {
@@ -1457,6 +1457,150 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		}
 		return
 	}
+
+	// PRIORITY 1: Check for active chatbot flow execution first
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"from": from,
+	}).Info("🔍 WEBHOOK: Checking for active chatbot flow execution")
+
+	execution, err := h.chatService.GetActiveExecution(from, idDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to get active execution, falling back to AI")
+	} else if execution != nil {
+		// Active chatbot flow found - process through flow engine
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"execution_id": execution.ID,
+			"flow_reference": execution.FlowReference,
+			"current_node": execution.CurrentNode,
+		}).Info("✅ WEBHOOK: Found active chatbot flow, processing through flow engine")
+
+		// Get the flow
+		flow, err := h.flowService.GetFlow(execution.FlowReference)
+		if err != nil {
+			logrus.WithError(err).Error("❌ WEBHOOK: Failed to get flow, falling back to AI")
+		} else if flow != nil {
+			// Add user message to conversation
+			err = h.chatService.AddConversationMessage(execution, "USER", message)
+			if err != nil {
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to add user message")
+			}
+
+			// Process the message through the flow using WhatsApp service
+			if h.whatsappService != nil {
+				response, err := h.whatsappService.ProcessFlowMessage(flow, execution, message)
+				if err != nil {
+					logrus.WithError(err).Error("❌ WEBHOOK: Failed to process flow message")
+				} else if response != "" {
+					// Send response back through webhook
+					logrus.WithFields(logrus.Fields{
+						"id_device": idDevice,
+						"to": from,
+						"provider": provider,
+						"response": response,
+					}).Info("📤 WEBHOOK: Sending chatbot flow response")
+
+					// Convert text response to AI response format for consistency
+					aiResponse := &models.AIResponse{
+						Stage: "chatbot_flow",
+						Response: []models.ResponseItem{
+							{Type: "text", Content: response},
+						},
+					}
+
+					// Send response through the appropriate provider
+					h.sendWhatsappResponse(from, idDevice, provider, aiResponse)
+
+					// Add bot response to conversation
+					err = h.chatService.AddConversationMessage(execution, "BOT", response)
+					if err != nil {
+						logrus.WithError(err).Error("❌ WEBHOOK: Failed to add bot message")
+					}
+					return
+				}
+			} else {
+				logrus.Error("❌ WEBHOOK: WhatsApp service not available")
+			}
+		} else {
+			logrus.WithField("flow_reference", execution.FlowReference).Error("❌ WEBHOOK: Flow not found")
+		}
+	} else {
+		// No active execution found - check if we should start a default flow
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+		}).Info("🔍 WEBHOOK: No active execution found, checking for default flow")
+
+		// Try to get default flow for device
+		defaultFlow, err := h.flowService.GetDefaultFlowForDevice(idDevice)
+		if err == nil && defaultFlow != nil {
+			// Start new execution with default flow
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"flow_id": defaultFlow.ID,
+			}).Info("🚀 WEBHOOK: Starting new execution with default flow")
+
+			newExecution, err := h.chatService.StartExecution(defaultFlow.ID, from, idDevice)
+			if err != nil {
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to start new execution")
+			} else {
+				// Process message through new execution
+				err = h.chatService.AddConversationMessage(newExecution, "USER", message)
+				if err != nil {
+					logrus.WithError(err).Error("❌ WEBHOOK: Failed to add user message to new execution")
+				}
+
+				if h.whatsappService != nil {
+					response, err := h.whatsappService.ProcessFlowMessage(defaultFlow, newExecution, message)
+					if err != nil {
+						logrus.WithError(err).Error("❌ WEBHOOK: Failed to process flow message in new execution")
+					} else if response != "" {
+						// Send response back through webhook
+						logrus.WithFields(logrus.Fields{
+							"id_device": idDevice,
+							"to": from,
+							"provider": provider,
+							"response": response,
+						}).Info("📤 WEBHOOK: Sending new flow response")
+
+						// Convert text response to AI response format for consistency
+						aiResponse := &models.AIResponse{
+							Stage: "chatbot_flow",
+							Response: []models.ResponseItem{
+								{Type: "text", Content: response},
+							},
+						}
+
+						// Send response through the appropriate provider
+						h.sendWhatsappResponse(from, idDevice, provider, aiResponse)
+
+						// Add bot response to conversation
+						err = h.chatService.AddConversationMessage(newExecution, "BOT", response)
+						if err != nil {
+							logrus.WithError(err).Error("❌ WEBHOOK: Failed to add bot message to new execution")
+						}
+						return
+					}
+				} else {
+					logrus.Error("❌ WEBHOOK: WhatsApp service not available for new execution")
+				}
+			}
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"error": err,
+			}).Info("🔍 WEBHOOK: No default flow found, falling back to AI generation")
+		}
+	}
+
+	// PRIORITY 2: Fall back to AI generation only if no chatbot flow is active
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"from": from,
+	}).Info("🤖 WEBHOOK: No active chatbot flow, falling back to AI generation")
 
 	// Get current conversation stage from AI WhatsApp repository
 	var stage string
@@ -1500,7 +1644,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 				"id_device": idDevice,
 				"to": from,
 				"provider": provider,
-			}).Info("📤 WEBHOOK: Sending AI response back to WhatsApp")
+			}).Info("📤 WEBHOOK: Sending AI fallback response")
 
 			// Send response through the appropriate provider
 			h.sendWhatsappResponse(from, idDevice, provider, response)

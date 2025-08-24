@@ -22,6 +22,7 @@ import (
 	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/database"
 	"nodepath-chat/internal/handlers"
+	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/services"
 	"nodepath-chat/internal/whatsapp"
 )
@@ -90,8 +91,16 @@ func main() {
 	mediaService := services.NewMediaService(cfg.CDNEnabled, cfg.CDNBaseURL, "./media")
 	logrus.Info("Media service initialized with CDN support")
 
+	// Initialize repositories for AI WhatsApp service
+	aiRepo := repository.NewAIWhatsappRepository(db)
+	deviceRepo := repository.NewDeviceSettingsRepository(db)
+	
+	// Initialize AI WhatsApp service
+	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
+	logrus.Info("AI WhatsApp service initialized")
+
 	// Initialize WhatsApp service with multi-device support
-	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, websocketService)
+	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, aiWhatsappService, websocketService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
@@ -106,6 +115,7 @@ func main() {
 		deviceSettingsService,
 		websocketService,
 		mediaService,
+		aiWhatsappService,
 		db,
 	)
 
