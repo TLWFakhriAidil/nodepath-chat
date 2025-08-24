@@ -37,7 +37,7 @@ func NewHandlers(
 	deviceSettingsService *services.DeviceSettingsService,
 	websocketService *services.WebSocketService,
 	mediaService *services.MediaService,
-	aiWhatsappService *services.AIWhatsappService,
+	aiWhatsappService services.AIWhatsappService,
 	db *sql.DB,
 ) *Handlers {
 	// Initialize repositories

@@ -51,7 +51,7 @@ type Service struct {
 	queueService     *services.QueueService
 	flowService      *services.FlowService
 	aiService        *services.AIService
-	aiWhatsappService *services.AIWhatsappService
+	aiWhatsappService services.AIWhatsappService
 	websocketService *services.WebSocketService
 	
 	// Performance optimizations
@@ -61,7 +61,7 @@ type Service struct {
 }
 
 // NewService creates a new WhatsApp service with multi-device support and performance optimizations
-func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService *services.AIWhatsappService, websocketService *services.WebSocketService) (*Service, error) {
+func NewService(cfg *config.Config, chatService *services.ChatService, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService services.AIWhatsappService, websocketService *services.WebSocketService) (*Service, error) {
 	service := &Service{
 		cfg:              cfg,
 		clients:          make(map[string]*whatsmeow.Client),
@@ -593,7 +593,7 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	}
 
 	// Process AI conversation using AI WhatsApp service
-	aiResponse, err := s.aiWhatsappService.ProcessAIConversation(execution.ProspectNum, execution.IDDevice, userInput, currentStage)
+	aiResponse, err := s.aiWhatsappService.ProcessAIConversation(execution.PhoneNumber, execution.IDDevice, userInput, currentStage)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
@@ -656,7 +656,7 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 	// Use AI WhatsApp service to process the conversation
 	aiResponse, err := s.aiWhatsappService.ProcessAIConversation(
 		execution.PhoneNumber,
-		execution.DeviceID,
+		execution.IDDevice,
 		userInput,
 		node.ID, // Use node ID as current stage
 	)

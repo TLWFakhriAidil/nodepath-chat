@@ -216,3 +216,16 @@ type ConversationLog struct {
 	Timestamp   time.Time `json:"timestamp" db:"timestamp"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
+
+// AIResponse represents the response from AI service (alias for compatibility)
+type AIResponse struct {
+	Stage    string         `json:"Stage"`
+	Response []ResponseItem `json:"Response"`
+}
+
+// ResponseItem represents individual response items (alias for compatibility)
+type ResponseItem struct {
+	Type    string `json:"type"`
+	Jenis   string `json:"Jenis,omitempty"`
+	Content string `json:"content"`
+}
