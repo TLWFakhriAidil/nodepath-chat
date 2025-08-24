@@ -23,13 +23,23 @@ const (
 	openRouterBaseURL = "https://openrouter.ai/api/v1"
 	defaultModel      = "openai/gpt-4o"
 	maxRetries        = 3
-	retryDelay       = time.Second * 2
+	retryDelay       = time.Second * 1 // Reduced from 2s for faster retries
+	circuitBreakerThreshold = 5 // Number of consecutive failures before circuit opens
+	circuitBreakerTimeout   = 30 * time.Second // Time to wait before trying again
 )
 
 // CachedResponse represents a cached AI response
 type CachedResponse struct {
 	Response  string
 	Timestamp time.Time
+}
+
+// CircuitBreaker represents the state of a circuit breaker
+type CircuitBreaker struct {
+	failureCount    int
+	lastFailureTime time.Time
+	isOpen          bool
+	mutex           sync.RWMutex
 }
 
 // AIService handles AI/OpenRouter integration with caching and concurrency optimization
@@ -42,23 +52,40 @@ type AIService struct {
 	cacheTTL  time.Duration
 	// Rate limiting for concurrent requests
 	semaphore chan struct{}
+	// Circuit breaker for API failure handling
+	circuitBreaker *CircuitBreaker
+	// Advanced rate limiter for API calls
+	rateLimiter *APIRateLimiter
 }
 
 // NewAIService creates a new AI service with performance optimizations
 func NewAIService(cfg *config.Config) *AIService {
+	// Initialize rate limiter configuration
+	rateLimiterConfig := &RateLimiterConfig{
+		RequestsPerMinute: 100,
+		BurstSize:         20,
+		TimeWindow:        time.Minute,
+	}
+
+	rateLimiter := NewAPIRateLimiter(rateLimiterConfig)
+	// Start cleanup routine for inactive device limiters
+	rateLimiter.StartCleanupRoutine()
+
 	return &AIService{
 		cfg: cfg,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 15 * time.Second, // Reduced from 30s for better real-time performance
 		},
 		cache:     make(map[string]*CachedResponse),
 		cacheTTL:  5 * time.Minute, // Cache responses for 5 minutes
 		semaphore: make(chan struct{}, 100), // Limit concurrent AI requests
+		circuitBreaker: &CircuitBreaker{}, // Initialize circuit breaker
+		rateLimiter:    rateLimiter,       // Initialize rate limiter
 	}
 }
 
 // GenerateResponse generates an AI response using OpenRouter with caching and concurrency control
-func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, conversationHistory []models.ConversationMessage) (string, error) {
+func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey, deviceID string, conversationHistory []models.ConversationMessage) (string, error) {
 	if apiKey == "" {
 		apiKey = s.cfg.OpenRouterDefaultKey
 	}
@@ -97,7 +124,7 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, con
 	var err error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		response, err = s.makeOpenRouterRequest(request, apiKey)
+		response, err = s.makeOpenRouterRequest(request, apiKey, deviceID)
 		if err == nil {
 			break
 		}
@@ -140,7 +167,7 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey string, con
 }
 
 // GenerateAdvancedResponse generates an AI response with structured JSON output for advanced AI prompt nodes
-func (s *AIService) GenerateAdvancedResponse(systemPrompt, userInput, apiKey string, conversationHistory []models.ConversationMessage, closingPrompt string) (*models.AIPromptResponse, error) {
+func (s *AIService) GenerateAdvancedResponse(systemPrompt, userInput, apiKey, deviceID string, conversationHistory []models.ConversationMessage, closingPrompt string) (*models.AIPromptResponse, error) {
 	if apiKey == "" {
 		apiKey = s.cfg.OpenRouterDefaultKey
 	}
@@ -167,7 +194,7 @@ func (s *AIService) GenerateAdvancedResponse(systemPrompt, userInput, apiKey str
 	var err error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		response, err = s.makeOpenRouterRequest(request, apiKey)
+		response, err = s.makeOpenRouterRequest(request, apiKey, deviceID)
 		if err == nil {
 			break
 		}
@@ -256,17 +283,40 @@ func (s *AIService) buildMessages(systemPrompt, userInput string, conversationHi
 	return messages
 }
 
-// makeOpenRouterRequest makes the actual HTTP request to OpenRouter
-func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiKey string) (*models.OpenRouterResponse, error) {
+// makeOpenRouterRequest makes the actual HTTP request to OpenRouter with circuit breaker and rate limiting protection
+func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiKey, deviceID string) (*models.OpenRouterResponse, error) {
+	// Check circuit breaker before making request
+	if s.isCircuitBreakerOpen() {
+		return nil, fmt.Errorf("circuit breaker is open, API temporarily unavailable")
+	}
+
+	// Determine provider based on API key or device ID
+	provider := "openrouter"
+	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
+		provider = "openai"
+	}
+
+	// Check rate limits before making request
+	if err := s.rateLimiter.CheckRateLimit(provider, deviceID); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider":  provider,
+			"device_id": deviceID,
+			"error":     err.Error(),
+		}).Warn("Rate limit exceeded for API request")
+		return nil, fmt.Errorf("rate limit exceeded: %w", err)
+	}
+
 	// Marshal request
 	requestBody, err := json.Marshal(request)
 	if err != nil {
+		s.recordAPIFailure()
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", openRouterBaseURL+"/chat/completions", bytes.NewBuffer(requestBody))
 	if err != nil {
+		s.recordAPIFailure()
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -279,6 +329,7 @@ func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiK
 	// Make request
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		s.recordAPIFailure()
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -286,11 +337,13 @@ func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiK
 	// Read response
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		s.recordAPIFailure()
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// Check status code
 	if resp.StatusCode != http.StatusOK {
+		s.recordAPIFailure()
 		logrus.WithFields(logrus.Fields{
 			"status_code": resp.StatusCode,
 			"response":    string(responseBody),
@@ -302,9 +355,12 @@ func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiK
 	var response models.OpenRouterResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
+		s.recordAPIFailure()
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
+	// Record successful API call
+	s.recordAPISuccess()
 	return &response, nil
 }
 
@@ -411,7 +467,7 @@ func (s *AIService) ValidateAPIKey(apiKey string) error {
 		Stream: false,
 	}
 
-	_, err := s.makeOpenRouterRequest(testRequest, apiKey)
+	_, err := s.makeOpenRouterRequest(testRequest, apiKey, "validation")
 	if err != nil {
 		return fmt.Errorf("API key validation failed: %w", err)
 	}
@@ -435,6 +491,52 @@ func (s *AIService) GetSupportedModels() []string {
 func (s *AIService) EstimateTokens(text string) int {
 	// Rough estimation: ~4 characters per token
 	return len(text) / 4
+}
+
+// isCircuitBreakerOpen checks if the circuit breaker is open
+func (s *AIService) isCircuitBreakerOpen() bool {
+	s.circuitBreaker.mutex.RLock()
+	defer s.circuitBreaker.mutex.RUnlock()
+	
+	if !s.circuitBreaker.isOpen {
+		return false
+	}
+	
+	// Check if enough time has passed to try again
+	if time.Since(s.circuitBreaker.lastFailureTime) > circuitBreakerTimeout {
+		s.circuitBreaker.mutex.RUnlock()
+		s.circuitBreaker.mutex.Lock()
+		s.circuitBreaker.isOpen = false
+		s.circuitBreaker.failureCount = 0
+		s.circuitBreaker.mutex.Unlock()
+		s.circuitBreaker.mutex.RLock()
+		return false
+	}
+	
+	return true
+}
+
+// recordAPISuccess records a successful API call
+func (s *AIService) recordAPISuccess() {
+	s.circuitBreaker.mutex.Lock()
+	defer s.circuitBreaker.mutex.Unlock()
+	
+	s.circuitBreaker.failureCount = 0
+	s.circuitBreaker.isOpen = false
+}
+
+// recordAPIFailure records a failed API call
+func (s *AIService) recordAPIFailure() {
+	s.circuitBreaker.mutex.Lock()
+	defer s.circuitBreaker.mutex.Unlock()
+	
+	s.circuitBreaker.failureCount++
+	s.circuitBreaker.lastFailureTime = time.Now()
+	
+	if s.circuitBreaker.failureCount >= circuitBreakerThreshold {
+		s.circuitBreaker.isOpen = true
+		logrus.WithField("failure_count", s.circuitBreaker.failureCount).Warn("Circuit breaker opened due to consecutive API failures")
+	}
 }
 
 // TruncateToTokenLimit truncates text to fit within token limits

@@ -66,11 +66,12 @@ func InitializeRedis(cfg *config.Config) redis.Cmdable {
 	return client
 }
 
-// QueueService handles Redis-based job queuing with clustering support
+// QueueService handles Redis-based job queuing with clustering support and monitoring
 type QueueService struct {
 	redis redis.Cmdable // Interface to support both single and cluster clients
 	// WhatsApp service interface for flow continuation
 	whatsappService WhatsAppServiceInterface
+	queueMonitor *QueueMonitor
 }
 
 // WhatsAppServiceInterface defines the interface for WhatsApp service methods needed by queue service
@@ -78,10 +79,11 @@ type WhatsAppServiceInterface interface {
 	ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumber, deviceID, userInput string) error
 }
 
-// NewQueueService creates a new queue service
-func NewQueueService(redis redis.Cmdable) *QueueService {
+// NewQueueService creates a new queue service with monitoring
+func NewQueueService(redis redis.Cmdable, queueMonitor *QueueMonitor) *QueueService {
 	return &QueueService{
 		redis: redis,
+		queueMonitor: queueMonitor,
 	}
 }
 
@@ -118,12 +120,14 @@ const (
 	queueKeyDelay    = "queue:delay"
 )
 
-// EnqueueOutboundMessage queues an outbound WhatsApp message
+// EnqueueOutboundMessage queues an outbound WhatsApp message with monitoring
 func (s *QueueService) EnqueueOutboundMessage(phoneNumber, content, mediaURL, mediaType string, metadata map[string]interface{}) error {
 	if s.redis == nil {
 		logrus.Warn("Redis not available, message will be sent immediately")
 		return nil
 	}
+
+	startTime := time.Now()
 
 	message := QueueMessage{
 		ID:          fmt.Sprintf("msg_%d", time.Now().UnixNano()),
@@ -140,47 +144,80 @@ func (s *QueueService) EnqueueOutboundMessage(phoneNumber, content, mediaURL, me
 
 	messageJSON, err := json.Marshal(message)
 	if err != nil {
+		if s.queueMonitor != nil {
+			s.queueMonitor.RecordError()
+		}
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
 
 	ctx := context.Background()
 	err = s.redis.LPush(ctx, queueKeyOutbound, messageJSON).Err()
 	if err != nil {
+		if s.queueMonitor != nil {
+			s.queueMonitor.RecordError()
+		}
 		return fmt.Errorf("failed to enqueue message: %w", err)
+	}
+
+	// Record queue metrics
+	if s.queueMonitor != nil {
+		s.queueMonitor.RecordProcessingTime(time.Since(startTime))
+		// Get current queue size
+		queueSize, _ := s.redis.LLen(ctx, queueKeyOutbound).Result()
+		s.queueMonitor.RecordQueueSize(queueKeyOutbound, queueSize)
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"message_id":   message.ID,
 		"phone_number": phoneNumber,
 		"content_len":  len(content),
+		"enqueue_time": time.Since(startTime),
 	}).Info("Message queued for sending")
 
 	return nil
 }
 
-// DequeueOutboundMessage dequeues the next outbound message
+// DequeueOutboundMessage dequeues the next outbound message with monitoring
 func (s *QueueService) DequeueOutboundMessage() (*QueueMessage, error) {
 	if s.redis == nil {
 		return nil, nil
 	}
 
+	startTime := time.Now()
 	ctx := context.Background()
 	result, err := s.redis.BRPop(ctx, 5*time.Second, queueKeyOutbound).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return nil, nil // No messages available
 		}
+		if s.queueMonitor != nil {
+			s.queueMonitor.RecordError()
+		}
 		return nil, fmt.Errorf("failed to dequeue message: %w", err)
 	}
 
 	if len(result) < 2 {
+		if s.queueMonitor != nil {
+			s.queueMonitor.RecordError()
+		}
 		return nil, fmt.Errorf("invalid queue result")
 	}
 
 	var message QueueMessage
 	err = json.Unmarshal([]byte(result[1]), &message)
 	if err != nil {
+		if s.queueMonitor != nil {
+			s.queueMonitor.RecordError()
+		}
 		return nil, fmt.Errorf("failed to unmarshal message: %w", err)
+	}
+
+	// Record queue metrics
+	if s.queueMonitor != nil {
+		s.queueMonitor.RecordProcessingTime(time.Since(startTime))
+		// Get current queue size after dequeue
+		queueSize, _ := s.redis.LLen(ctx, queueKeyOutbound).Result()
+		s.queueMonitor.RecordQueueSize(queueKeyOutbound, queueSize)
 	}
 
 	return &message, nil

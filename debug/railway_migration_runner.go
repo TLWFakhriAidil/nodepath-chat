@@ -88,28 +88,7 @@ func createMissingTables(db *sql.DB) error {
 				INDEX idx_created_at (created_at)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		},
-		{
-			name: "chatbot_executions_nodepath",
-			sql: `CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
-				id VARCHAR(255) PRIMARY KEY,
-				flow_reference VARCHAR(255) NOT NULL,
-				phone_number VARCHAR(255) NOT NULL,
-				id_device VARCHAR(255) NOT NULL,
-				conv_last JSON DEFAULT NULL,
-				conv_current TEXT DEFAULT NULL,
-				current_node VARCHAR(255) DEFAULT NULL,
-				variables JSON DEFAULT NULL,
-				status ENUM('active', 'completed', 'failed') DEFAULT 'active',
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-				
-				INDEX idx_flow_reference (flow_reference),
-				INDEX idx_phone_number (phone_number),
-				INDEX idx_id_device (id_device),
-				INDEX idx_status (status),
-				INDEX idx_created_at (created_at)
-			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		},
+// chatbot_executions_nodepath table removed - functionality consolidated into ai_whatsapp_nodepath
 		{
 			name: "device_setting_nodepath",
 			sql: `CREATE TABLE IF NOT EXISTS device_setting_nodepath (

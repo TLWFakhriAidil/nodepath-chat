@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"nodepath-chat/internal/models"
+	"nodepath-chat/internal/utils"
 
 	"github.com/sirupsen/logrus"
 )
@@ -47,6 +48,9 @@ type AIWhatsappRepository interface {
 
 	// Data table operations
 	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string) ([]models.AIWhatsapp, int, error)
+	
+	// Database access for transactions
+	GetDB() *sql.DB
 }
 
 // aiWhatsappRepository implements AIWhatsappRepository interface
@@ -59,6 +63,11 @@ func NewAIWhatsappRepository(db *sql.DB) AIWhatsappRepository {
 	return &aiWhatsappRepository{
 		db: db,
 	}
+}
+
+// GetDB returns the database connection for transaction handling
+func (r *aiWhatsappRepository) GetDB() *sql.DB {
+	return r.db
 }
 
 // CreateAIWhatsapp creates a new AI WhatsApp conversation record
@@ -1079,106 +1088,115 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 // SaveConversationHistory saves conversation history to conv_last field as plain text
 // If record exists, it updates the conv_last field; otherwise, it creates a new record
 // Saves NULL instead of empty string when there's no conversation data
+// Uses database transactions to ensure data consistency
 func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error {
-	// Check if record exists
-	existingRecord, err := r.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
-	if err != nil {
-		return fmt.Errorf("failed to check existing record: %w", err)
-	}
+	return utils.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Check if record exists within transaction
+		var existingID *int
+		var existingConvLast []byte
+		checkQuery := `
+			SELECT id_prospect, conv_last 
+			FROM ai_whatsapp_nodepath 
+			WHERE prospect_num = ? AND id_device = ?
+			FOR UPDATE
+		`
+		err := tx.QueryRow(checkQuery, prospectNum, idDevice).Scan(&existingID, &existingConvLast)
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("failed to check existing record: %w", err)
+		}
 
-	// Get existing conversation history as plain text
-	var convHistory string
-	if existingRecord != nil && existingRecord.ConvLast != nil {
-		// Check if existing data is JSON format (for backward compatibility)
-		var existingHistory interface{}
-		if err := json.Unmarshal(existingRecord.ConvLast, &existingHistory); err == nil {
-			// Convert JSON format to plain text format
-			if historySlice, ok := existingHistory.([]interface{}); ok {
-				for _, item := range historySlice {
-					if itemMap, ok := item.(map[string]interface{}); ok {
-						for k, v := range itemMap {
-							if str, ok := v.(string); ok {
-								if k == "user" {
-									if convHistory != "" {
-										convHistory += "\n"
+		// Get existing conversation history as plain text
+		var convHistory string
+		if existingID != nil && existingConvLast != nil {
+			// Check if existing data is JSON format (for backward compatibility)
+			var existingHistory interface{}
+			if err := json.Unmarshal(existingConvLast, &existingHistory); err == nil {
+				// Convert JSON format to plain text format
+				if historySlice, ok := existingHistory.([]interface{}); ok {
+					for _, item := range historySlice {
+						if itemMap, ok := item.(map[string]interface{}); ok {
+							for k, v := range itemMap {
+								if str, ok := v.(string); ok {
+									if k == "user" {
+										if convHistory != "" {
+											convHistory += "\n"
+										}
+										convHistory += "USER:" + str
+									} else if k == "bot" {
+										if convHistory != "" {
+											convHistory += "\n"
+										}
+										convHistory += "BOT:" + str
 									}
-									convHistory += "USER:" + str
-								} else if k == "bot" {
-									if convHistory != "" {
-										convHistory += "\n"
-									}
-									convHistory += "BOT:" + str
 								}
 							}
 						}
 					}
 				}
+			} else {
+				// Already in plain text format
+				convHistory = string(existingConvLast)
 			}
+		}
+
+		// Add new conversation entries in plain text format
+		if userMessage != "" {
+			if convHistory != "" {
+				convHistory += "\n"
+			}
+			convHistory += "USER:" + userMessage
+		}
+		if botResponse != "" {
+			if convHistory != "" {
+				convHistory += "\n"
+			}
+			convHistory += "BOT:" + botResponse
+		}
+
+		// Determine conv_last value - use NULL if empty, otherwise use the conversation history
+		var convLastValue interface{}
+		if convHistory == "" {
+			convLastValue = nil // This will be stored as NULL in the database
 		} else {
-			// Already in plain text format
-			convHistory = string(existingRecord.ConvLast)
+			convLastValue = convHistory
 		}
-	}
 
-	// Add new conversation entries in plain text format
-	if userMessage != "" {
-		if convHistory != "" {
-			convHistory += "\n"
-		}
-		convHistory += "USER:" + userMessage
-	}
-	if botResponse != "" {
-		if convHistory != "" {
-			convHistory += "\n"
-		}
-		convHistory += "BOT:" + botResponse
-	}
-
-	// Determine conv_last value - use NULL if empty, otherwise use the conversation history
-	var convLastValue interface{}
-	if convHistory == "" {
-		convLastValue = nil // This will be stored as NULL in the database
-	} else {
-		convLastValue = convHistory
-	}
-
-	if existingRecord != nil {
-		// Update existing record
-		query := `
-			UPDATE ai_whatsapp_nodepath 
-			SET conv_last = ?, stage = ?, updated_at = ?
-			WHERE prospect_num = ? AND id_device = ?
-		`
-		_, err = r.db.Exec(query, convLastValue, stage, time.Now(), prospectNum, idDevice)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to update conversation history")
-			return fmt.Errorf("failed to update conversation history: %w", err)
-		}
-		logrus.WithFields(logrus.Fields{
-			"prospect_num": prospectNum,
-			"id_device": idDevice,
-		}).Info("Conversation history updated successfully")
-	} else {
-		// Create new record
 		now := time.Now()
-		query := `
-			INSERT INTO ai_whatsapp_nodepath (
-				id_device, prospect_num, stage, conv_last, human, 
-				created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?)
-		`
-		_, err = r.db.Exec(query, idDevice, prospectNum, stage, convLastValue, 0, now, now)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to create new conversation record")
-			return fmt.Errorf("failed to create new conversation record: %w", err)
+		if existingID != nil {
+			// Update existing record within transaction
+			updateQuery := `
+				UPDATE ai_whatsapp_nodepath 
+				SET conv_last = ?, stage = ?, updated_at = ?
+				WHERE prospect_num = ? AND id_device = ?
+			`
+			_, err = tx.Exec(updateQuery, convLastValue, stage, now, prospectNum, idDevice)
+			if err != nil {
+				return fmt.Errorf("failed to update conversation history: %w", err)
+			}
+			logrus.WithFields(logrus.Fields{
+				"prospect_num": prospectNum,
+				"id_device": idDevice,
+			}).Info("Conversation history updated successfully")
+		} else {
+			// Create new record within transaction
+			insertQuery := `
+				INSERT INTO ai_whatsapp_nodepath (
+					id_device, prospect_num, stage, conv_last, human, 
+					created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?)
+			`
+			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stage, convLastValue, 0, now, now)
+			if err != nil {
+				return fmt.Errorf("failed to create new conversation record: %w", err)
+			}
+			logrus.WithFields(logrus.Fields{
+				"prospect_num": prospectNum,
+				"id_device": idDevice,
+			}).Info("New conversation record created successfully")
 		}
-		logrus.WithFields(logrus.Fields{
-			"prospect_num": prospectNum,
-			"id_device": idDevice,
-		}).Info("New conversation record created successfully")
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // DeleteAIWhatsapp deletes an AI WhatsApp conversation by ID

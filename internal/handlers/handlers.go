@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 
 	"nodepath-chat/internal/models"
@@ -22,6 +23,7 @@ type Handlers struct {
 	websocketService      *services.WebSocketService
 	mediaService          *services.MediaService
 	mediaDetectionService *services.MediaDetectionService
+	healthService         *services.HealthService
 	aiWhatsappHandlers    *AIWhatsappHandlers
 }
 
@@ -34,6 +36,7 @@ func NewHandlers(
 	deviceSettingsService *services.DeviceSettingsService,
 	websocketService *services.WebSocketService,
 	mediaService *services.MediaService,
+	healthService *services.HealthService,
 	db *sql.DB,
 ) *Handlers {
 	// Initialize repositories
@@ -58,6 +61,7 @@ func NewHandlers(
 		websocketService:      websocketService,
 		mediaService:          mediaService,
 		mediaDetectionService: mediaDetectionService,
+		healthService:         healthService,
 		aiWhatsappHandlers:    aiWhatsappHandlers,
 	}
 }
@@ -99,6 +103,15 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	analytics := api.Group("/analytics")
 	analytics.Get("/overview", h.GetAnalyticsOverview)
 	analytics.Get("/flows/:id/stats", h.GetFlowStats)
+
+	// Health check routes for system monitoring
+	health := api.Group("/health")
+	health.Get("/", h.HandleHealthCheck)
+	health.Get("/live", h.HandleLivenessProbe)
+	health.Get("/ready", h.HandleReadinessProbe)
+	health.Get("/components/:component", h.HandleComponentHealth)
+	health.Get("/metrics", h.HandleHealthMetrics)
+	health.Delete("/cache", h.HandleClearHealthCache)
 
 	// Device settings routes
 	deviceSettings := api.Group("/device-settings")
@@ -236,6 +249,91 @@ func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
 	return h.successMessageResponse(c, "Flow deleted successfully", nil)
 }
 
-// Test Chat handlers
+// Health Check handlers
 
-// Test chat handlers removed
+// HandleHealthCheck returns overall system health status
+func (h *Handlers) HandleHealthCheck(c *fiber.Ctx) error {
+	ctx := context.Background()
+	health := h.healthService.GetSystemHealth(ctx)
+
+	status := fiber.StatusOK
+	if !h.healthService.IsHealthy(ctx) {
+		status = fiber.StatusServiceUnavailable
+	}
+
+	return c.Status(status).JSON(health)
+}
+
+// HandleLivenessProbe returns simple liveness status for Kubernetes
+func (h *Handlers) HandleLivenessProbe(c *fiber.Ctx) error {
+	ctx := context.Background()
+	isAlive := h.healthService.IsHealthy(ctx)
+	
+	if !isAlive {
+		return c.Status(503).JSON(fiber.Map{"status": "unhealthy"})
+	}
+	
+	return c.JSON(fiber.Map{"status": "healthy"})
+}
+
+// HandleReadinessProbe returns readiness probe for Kubernetes
+func (h *Handlers) HandleReadinessProbe(c *fiber.Ctx) error {
+	ctx := context.Background()
+	isReady := h.healthService.IsHealthy(ctx)
+	
+	if !isReady {
+		return c.Status(503).JSON(fiber.Map{"status": "unhealthy"})
+	}
+	
+	return c.JSON(fiber.Map{"status": "healthy"})
+}
+
+// HandleComponentHealth returns health status for a specific component
+func (h *Handlers) HandleComponentHealth(c *fiber.Ctx) error {
+	component := c.Params("component")
+	if component == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Component name is required",
+		})
+	}
+
+	ctx := context.Background()
+	health := h.healthService.GetComponentHealth(ctx, component)
+	if health == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Component not found",
+		})
+	}
+
+	status := fiber.StatusOK
+	if health.Status != "healthy" {
+		status = fiber.StatusServiceUnavailable
+	}
+
+	return c.Status(status).JSON(health)
+}
+
+// HandleHealthMetrics returns health metrics for monitoring systems
+func (h *Handlers) HandleHealthMetrics(c *fiber.Ctx) error {
+	ctx := context.Background()
+	health := h.healthService.GetSystemHealth(ctx)
+	
+	// Create metrics from health data
+	metrics := fiber.Map{
+		"status":     health.Status,
+		"timestamp":  health.Timestamp,
+		"uptime":     health.Uptime.Seconds(),
+		"version":    health.Version,
+		"components": health.Components,
+	}
+	
+	return c.JSON(metrics)
+}
+
+// HandleClearHealthCache clears the health check cache
+func (h *Handlers) HandleClearHealthCache(c *fiber.Ctx) error {
+	h.healthService.ClearCache()
+	return c.JSON(fiber.Map{
+		"message": "Health check cache cleared successfully",
+	})
+}

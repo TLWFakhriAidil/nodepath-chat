@@ -79,7 +79,8 @@ func main() {
 	
 	flowService := services.NewFlowService(db, concreteRedisClient)
 	aiService := services.NewAIService(cfg)
-	queueService := services.NewQueueService(redisClient)
+	queueMonitor := services.NewQueueMonitor()
+	queueService := services.NewQueueService(redisClient, queueMonitor)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
 	
 	// Initialize repositories
@@ -104,6 +105,10 @@ func main() {
 	// Initialize media detection service for centralized media URL detection
 	mediaDetectionService := services.NewMediaDetectionService()
 	logrus.Info("Media detection service initialized for multiple format support")
+
+	// Initialize health service for comprehensive system monitoring
+	healthService := services.NewHealthService(db, concreteRedisClient, "1.0.0")
+	logrus.Info("Health service initialized for system monitoring")
 
 	// Initialize AI WhatsApp service with media detection service
 	aiWhatsappService := services.NewAIWhatsappService(aiWhatsappRepo, deviceSettingsRepo, flowService, mediaDetectionService)
@@ -131,6 +136,7 @@ func main() {
 		deviceSettingsService,
 		websocketService,
 		mediaService,
+		healthService,
 		db,
 	)
 

@@ -53,6 +53,9 @@ type aiCronService struct {
 	mu                sync.RWMutex
 	isRunning         bool
 	followUpJobs      map[string]cron.EntryID // Track follow-up jobs
+	queueMonitor      *QueueMonitor           // Monitor for performance bottlenecks
+	workerPool        chan struct{}           // Worker pool for concurrent processing
+	maxWorkers        int                     // Maximum number of concurrent workers
 }
 
 // FollowUpJob represents a scheduled follow-up job
@@ -69,6 +72,7 @@ func NewAICronService(
 	aiWhatsappService AIWhatsappService,
 ) AICronService {
 	ctx, cancel := context.WithCancel(context.Background())
+	maxWorkers := 50 // Configurable worker pool size for 3000+ concurrent users
 	
 	return &aiCronService{
 		aiRepo:            aiRepo,
@@ -78,6 +82,9 @@ func NewAICronService(
 		ctx:               ctx,
 		cancel:            cancel,
 		followUpJobs:      make(map[string]cron.EntryID),
+		queueMonitor:      NewQueueMonitor(),
+		workerPool:        make(chan struct{}, maxWorkers),
+		maxWorkers:        maxWorkers,
 	}
 }
 
@@ -90,6 +97,9 @@ func (s *aiCronService) Start() error {
 		return fmt.Errorf("cron service is already running")
 	}
 
+	// Start queue monitor for performance tracking
+	s.queueMonitor.Start()
+
 	// Schedule periodic jobs
 	err := s.schedulePeriodicJobs()
 	if err != nil {
@@ -100,7 +110,10 @@ func (s *aiCronService) Start() error {
 	s.cronScheduler.Start()
 	s.isRunning = true
 
-	logrus.Info("AI Cron Service started successfully")
+	logrus.WithFields(logrus.Fields{
+		"max_workers": s.maxWorkers,
+		"monitoring_enabled": true,
+	}).Info("AI cron service started with performance monitoring")
 	return nil
 }
 
@@ -176,6 +189,9 @@ func (s *aiCronService) Stop() error {
 	if !s.isRunning {
 		return fmt.Errorf("cron service is not running")
 	}
+
+	// Stop queue monitor
+	s.queueMonitor.Stop()
 
 	// Stop the cron scheduler
 	s.cronScheduler.Stop()
@@ -332,84 +348,140 @@ func (s *aiCronService) executeFollowUp(prospectNum, message string) {
 	logrus.WithField("prospect_num", prospectNum).Info("Follow-up message executed successfully")
 }
 
-// ProcessPendingResponses processes any pending AI responses
+// ProcessPendingResponses processes any pending AI responses with concurrent processing and monitoring
 // Equivalent to the PHP cron job that processes AI conversations and sends replies
 func (s *aiCronService) ProcessPendingResponses() error {
-	logrus.Debug("Processing pending AI responses")
+	startTime := time.Now()
+	logrus.Debug("Processing pending AI responses with performance monitoring")
 
 	// Get all active AI conversations that need processing
 	conversations, err := s.aiRepo.GetActiveAIConversations()
 	if err != nil {
+		s.queueMonitor.RecordError()
 		return fmt.Errorf("failed to get active conversations: %w", err)
 	}
 
-	processedCount := 0
+	// Record queue size for monitoring
+	s.queueMonitor.RecordQueueSize("pending_responses", int64(len(conversations)))
+
+	// Process conversations concurrently using worker pool
+	var wg sync.WaitGroup
+	processedCount := int64(0)
+	errorCount := int64(0)
+	var countMutex sync.Mutex
+
 	for _, conv := range conversations {
 		// Skip if human takeover is active
 		if conv.Human == 1 {
 			continue
 		}
 
-		// Check if conversation needs processing (similar to PHP time difference check)
-		// Note: Balas is an int field, not a time field, so we skip this check for now
-		// TODO: Implement proper time-based checking if needed
-
 		// Check if there's a current message to process
 		if !conv.ConvCurrent.Valid || conv.ConvCurrent.String == "" {
 			continue
 		}
 
-		// Check for stage command in current text
-		currentText := conv.ConvCurrent.String
-		if strings.Contains(strings.ToLower(currentText), "stage:") {
-			// Extract and update stage
-			parts := strings.Split(currentText, ":")
-			if len(parts) > 1 {
-				newStage := strings.TrimSpace(parts[1])
-				err := s.aiRepo.UpdateConversationStage(conv.ProspectNum, newStage)
-				if err != nil {
-					logrus.WithError(err).Error("Failed to update conversation stage")
-				}
-				// Clear current message after processing stage command
-				err = s.aiRepo.UpdateConvCurrent(conv.ProspectNum, "")
-				if err != nil {
-					logrus.WithError(err).Error("Failed to clear conv_current")
-				}
-				continue
-			}
-		}
+		// Acquire worker from pool
+		s.workerPool <- struct{}{}
+		wg.Add(1)
 
-		// Process AI conversation
-		response, err := s.aiWhatsappService.ProcessAIConversation(
-			conv.ProspectNum,
-			conv.IDDevice,
-			currentText,
-			conv.Stage,
-		)
-		if err != nil {
-			logrus.WithError(err).WithField("prospect_num", conv.ProspectNum).Error("Failed to process AI conversation")
-			continue
-		}
+		go func(conversation models.AIWhatsapp) {
+			defer func() {
+				<-s.workerPool // Release worker
+				wg.Done()
+			}()
 
-		// Send the AI response using sendChatMessage and sendMessage functions
-		if response != nil && len(response.Response) > 0 {
-			err = s.sendAIResponse(conv.ProspectNum, conv.IDDevice, response)
+			processingStart := time.Now()
+			err := s.processConversation(conversation)
+			processingTime := time.Since(processingStart)
+
+			// Record processing metrics
+			s.queueMonitor.RecordProcessingTime(processingTime)
+
+			countMutex.Lock()
 			if err != nil {
-				logrus.WithError(err).WithField("prospect_num", conv.ProspectNum).Error("Failed to send AI response")
-				continue
+				errorCount++
+				s.queueMonitor.RecordError()
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"prospect_num": conversation.ProspectNum,
+					"processing_time": processingTime,
+				}).Error("Failed to process conversation")
+			} else {
+				processedCount++
 			}
-		}
-
-		// Clear current message after processing
-		err = s.aiRepo.UpdateConvCurrent(conv.ProspectNum, "")
-		if err != nil {
-			logrus.WithError(err).Error("Failed to clear conv_current")
-		}
-
-		processedCount++
+			countMutex.Unlock()
+		}(conv)
 	}
 
-	logrus.WithField("processed_count", processedCount).Debug("Completed processing pending AI responses")
+	// Wait for all workers to complete
+	wg.Wait()
+
+	// Calculate and record worker utilization
+	activeWorkers := len(s.workerPool)
+	utilization := float64(activeWorkers) / float64(s.maxWorkers) * 100
+	s.queueMonitor.RecordWorkerUtilization("ai_processing", utilization)
+
+	totalProcessingTime := time.Since(startTime)
+	logrus.WithFields(logrus.Fields{
+		"processed_count": processedCount,
+		"error_count": errorCount,
+		"total_conversations": len(conversations),
+		"total_processing_time": totalProcessingTime,
+		"worker_utilization": utilization,
+		"avg_time_per_conversation": totalProcessingTime / time.Duration(len(conversations)),
+	}).Info("Completed processing pending AI responses")
+
+	return nil
+}
+
+// processConversation processes a single conversation with detailed monitoring
+func (s *aiCronService) processConversation(conv models.AIWhatsapp) error {
+	currentText := conv.ConvCurrent.String
+
+	// Check for stage command in current text
+	if strings.Contains(strings.ToLower(currentText), "stage:") {
+		// Extract and update stage
+		parts := strings.Split(currentText, ":")
+		if len(parts) > 1 {
+			newStage := strings.TrimSpace(parts[1])
+			err := s.aiRepo.UpdateConversationStage(conv.ProspectNum, newStage)
+			if err != nil {
+				return fmt.Errorf("failed to update conversation stage: %w", err)
+			}
+			// Clear current message after processing stage command
+			err = s.aiRepo.UpdateConvCurrent(conv.ProspectNum, "")
+			if err != nil {
+				return fmt.Errorf("failed to clear conv_current: %w", err)
+			}
+			return nil
+		}
+	}
+
+	// Process AI conversation
+	response, err := s.aiWhatsappService.ProcessAIConversation(
+		conv.ProspectNum,
+		conv.IDDevice,
+		currentText,
+		conv.Stage,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to process AI conversation: %w", err)
+	}
+
+	// Send the AI response
+	if response != nil && len(response.Response) > 0 {
+		err = s.sendAIResponse(conv.ProspectNum, conv.IDDevice, response)
+		if err != nil {
+			return fmt.Errorf("failed to send AI response: %w", err)
+		}
+	}
+
+	// Clear current message after processing
+	err = s.aiRepo.UpdateConvCurrent(conv.ProspectNum, "")
+	if err != nil {
+		return fmt.Errorf("failed to clear conv_current: %w", err)
+	}
+
 	return nil
 }
 

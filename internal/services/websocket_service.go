@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 // WebSocketService handles real-time messaging for high-performance communication
 type WebSocketService struct {
 	// Connection management
-	connections map[string]*websocket.Conn
+	connections map[string]*ConnectionInfo
 	connMutex   sync.RWMutex
 	
 	// Message broadcasting
@@ -22,6 +23,23 @@ type WebSocketService struct {
 	maxConnections int
 	currentConns   int
 	connCountMutex sync.RWMutex
+	
+	// Graceful shutdown support
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
+	
+	// Connection cleanup
+	cleanupTicker *time.Ticker
+}
+
+// ConnectionInfo holds connection details with metadata for leak prevention
+type ConnectionInfo struct {
+	Conn      *websocket.Conn
+	LastPing  time.Time
+	LastPong  time.Time
+	CreatedAt time.Time
+	cancel    context.CancelFunc
 }
 
 // BroadcastMessage represents a message to be broadcast
@@ -42,14 +60,23 @@ type WebSocketMessage struct {
 
 // NewWebSocketService creates a new WebSocket service optimized for high concurrency
 func NewWebSocketService(maxConnections int) *WebSocketService {
+	ctx, cancel := context.WithCancel(context.Background())
+	
 	ws := &WebSocketService{
-		connections:    make(map[string]*websocket.Conn),
+		connections:    make(map[string]*ConnectionInfo),
 		broadcast:      make(chan *BroadcastMessage, 1000), // Buffered channel for performance
 		maxConnections: maxConnections,
+		ctx:            ctx,
+		cancel:         cancel,
+		done:           make(chan struct{}),
+		cleanupTicker:  time.NewTicker(30 * time.Second), // Cleanup every 30 seconds
 	}
 	
 	// Start the broadcast handler
 	go ws.handleBroadcasts()
+	
+	// Start connection cleanup routine
+	go ws.cleanupStaleConnections()
 	
 	return ws
 }
@@ -100,35 +127,73 @@ func (ws *WebSocketService) HandleWebSocket(c *fiber.Ctx) error {
 	})(c)
 }
 
-// registerConnection adds a new WebSocket connection
+// registerConnection adds a new WebSocket connection with proper metadata tracking
 func (ws *WebSocketService) registerConnection(deviceID string, conn *websocket.Conn) {
 	ws.connMutex.Lock()
 	defer ws.connMutex.Unlock()
 	
 	// Close existing connection if any
-	if existingConn, exists := ws.connections[deviceID]; exists {
-		existingConn.Close()
+	if existingConnInfo, exists := ws.connections[deviceID]; exists {
+		existingConnInfo.Conn.Close()
+		if existingConnInfo.cancel != nil {
+			existingConnInfo.cancel()
+		}
 	}
 	
-	ws.connections[deviceID] = conn
+	// Create connection context for graceful shutdown
+	connCtx, connCancel := context.WithCancel(ws.ctx)
+	
+	// Create connection info with metadata
+	connInfo := &ConnectionInfo{
+		Conn:      conn,
+		LastPing:  time.Now(),
+		LastPong:  time.Now(),
+		CreatedAt: time.Now(),
+		cancel:    connCancel,
+	}
+	
+	ws.connections[deviceID] = connInfo
 	
 	// Update connection count
 	ws.connCountMutex.Lock()
 	ws.currentConns++
 	ws.connCountMutex.Unlock()
+	
+	// Set up ping/pong handlers for this connection
+	conn.SetPongHandler(func(string) error {
+		ws.connMutex.Lock()
+		if connInfo, exists := ws.connections[deviceID]; exists {
+			connInfo.LastPong = time.Now()
+		}
+		ws.connMutex.Unlock()
+		return nil
+	})
+	
+	// Start ping routine for this connection
+	go ws.pingConnection(deviceID, connCtx)
 }
 
-// unregisterConnection removes a WebSocket connection
+// unregisterConnection removes a WebSocket connection with proper cleanup
 func (ws *WebSocketService) unregisterConnection(deviceID string) {
 	ws.connMutex.Lock()
 	defer ws.connMutex.Unlock()
 	
-	if _, exists := ws.connections[deviceID]; exists {
+	if connInfo, exists := ws.connections[deviceID]; exists {
+		// Cancel the connection context
+		if connInfo.cancel != nil {
+			connInfo.cancel()
+		}
+		
+		// Close the connection gracefully
+		connInfo.Conn.Close()
+		
 		delete(ws.connections, deviceID)
 		
 		// Update connection count
 		ws.connCountMutex.Lock()
-		ws.currentConns--
+		if ws.currentConns > 0 {
+			ws.currentConns--
+		}
 		ws.connCountMutex.Unlock()
 		
 		logrus.WithField("device_id", deviceID).Info("WebSocket connection closed")
@@ -146,6 +211,24 @@ func (ws *WebSocketService) BroadcastMessage(msg *BroadcastMessage) {
 	}
 }
 
+// BroadcastMessage sends a message to a specific device or all devices
+func (ws *WebSocketService) BroadcastMessageBytes(deviceID string, message []byte) {
+	ws.connMutex.RLock()
+	defer ws.connMutex.RUnlock()
+
+	if deviceID == "" {
+		// Broadcast to all devices
+		for _, connInfo := range ws.connections {
+			ws.sendToConnectionBytes(connInfo, message)
+		}
+	} else {
+		// Send to specific device
+		if connInfo, exists := ws.connections[deviceID]; exists {
+			ws.sendToConnectionBytes(connInfo, message)
+		}
+	}
+}
+
 // handleBroadcasts processes broadcast messages in a separate goroutine
 func (ws *WebSocketService) handleBroadcasts() {
 	for msg := range ws.broadcast {
@@ -154,14 +237,14 @@ func (ws *WebSocketService) handleBroadcasts() {
 		if len(msg.Targets) > 0 {
 			// Send to specific targets
 			for _, deviceID := range msg.Targets {
-				if conn, exists := ws.connections[deviceID]; exists {
-					ws.sendToConnection(conn, msg, deviceID)
+				if connInfo, exists := ws.connections[deviceID]; exists {
+					ws.sendToConnection(connInfo, msg, deviceID)
 				}
 			}
 		} else {
 			// Broadcast to all connections
-			for deviceID, conn := range ws.connections {
-				ws.sendToConnection(conn, msg, deviceID)
+			for deviceID, connInfo := range ws.connections {
+				ws.sendToConnection(connInfo, msg, deviceID)
 			}
 		}
 		
@@ -170,15 +253,47 @@ func (ws *WebSocketService) handleBroadcasts() {
 }
 
 // sendToConnection sends a message to a specific WebSocket connection
-func (ws *WebSocketService) sendToConnection(conn *websocket.Conn, msg *BroadcastMessage, deviceID string) {
+func (ws *WebSocketService) sendToConnection(connInfo *ConnectionInfo, msg *BroadcastMessage, deviceID string) {
 	// Set write deadline for performance
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	connInfo.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	
-	err := conn.WriteJSON(msg)
+	err := connInfo.Conn.WriteJSON(msg)
 	if err != nil {
 		logrus.WithError(err).WithField("device_id", deviceID).Error("Failed to send WebSocket message")
 		// Remove the problematic connection
 		go ws.unregisterConnection(deviceID)
+	}
+}
+
+// sendToConnectionBytes sends a message to a specific connection with proper error handling
+func (ws *WebSocketService) sendToConnectionBytes(connInfo *ConnectionInfo, message []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Connection might be closed, ignore the error
+		}
+	}()
+
+	// Set write deadline to prevent hanging
+	connInfo.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	err := connInfo.Conn.WriteMessage(websocket.TextMessage, message)
+	if err != nil {
+		// Connection is probably closed, we should unregister it
+		// Find the device ID for this connection and unregister
+		ws.connMutex.Lock()
+		for deviceID, conn := range ws.connections {
+			if conn == connInfo {
+				delete(ws.connections, deviceID)
+				// Update connection count
+				ws.connCountMutex.Lock()
+				if ws.currentConns > 0 {
+					ws.currentConns--
+				}
+				ws.connCountMutex.Unlock()
+				break
+			}
+		}
+		ws.connMutex.Unlock()
+		connInfo.Conn.Close()
 	}
 }
 
@@ -211,6 +326,95 @@ func (ws *WebSocketService) handleIncomingMessage(msg *WebSocketMessage) {
 	default:
 		logrus.WithField("type", msg.Type).Warn("Unknown WebSocket message type")
 	}
+}
+
+// pingConnection sends periodic ping messages to maintain connection health
+func (ws *WebSocketService) pingConnection(deviceID string, ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second) // Ping every 30 seconds
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ws.connMutex.RLock()
+			connInfo, exists := ws.connections[deviceID]
+			ws.connMutex.RUnlock()
+
+			if !exists {
+				return
+			}
+
+			// Send ping
+			connInfo.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			err := connInfo.Conn.WriteMessage(websocket.PingMessage, []byte{})
+			if err != nil {
+				// Connection is dead, unregister it
+				ws.unregisterConnection(deviceID)
+				return
+			}
+
+			// Update last ping time
+			ws.connMutex.Lock()
+			if connInfo, exists := ws.connections[deviceID]; exists {
+				connInfo.LastPing = time.Now()
+			}
+			ws.connMutex.Unlock()
+		}
+	}
+}
+
+// cleanupStaleConnections removes connections that haven't responded to pings
+func (ws *WebSocketService) cleanupStaleConnections() {
+	ticker := time.NewTicker(60 * time.Second) // Check every minute
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ws.ctx.Done():
+			return
+		case <-ticker.C:
+			ws.connMutex.Lock()
+			staleConnections := make([]string, 0)
+			now := time.Now()
+
+			for deviceID, connInfo := range ws.connections {
+				// If no pong received for 2 minutes, consider connection stale
+				if now.Sub(connInfo.LastPong) > 2*time.Minute {
+					staleConnections = append(staleConnections, deviceID)
+				}
+			}
+			ws.connMutex.Unlock()
+
+			// Remove stale connections
+			for _, deviceID := range staleConnections {
+				ws.unregisterConnection(deviceID)
+			}
+		}
+	}
+}
+
+// Shutdown gracefully shuts down the WebSocket service
+func (ws *WebSocketService) Shutdown() {
+	// Cancel the context to stop all goroutines
+	ws.cancel()
+
+	// Close all connections
+	ws.connMutex.Lock()
+	for deviceID, connInfo := range ws.connections {
+		if connInfo.cancel != nil {
+			connInfo.cancel()
+		}
+		connInfo.Conn.Close()
+		delete(ws.connections, deviceID)
+	}
+	ws.connMutex.Unlock()
+
+	// Reset connection count
+	ws.connCountMutex.Lock()
+	ws.currentConns = 0
+	ws.connCountMutex.Unlock()
 }
 
 // GetConnectionCount returns the current number of WebSocket connections

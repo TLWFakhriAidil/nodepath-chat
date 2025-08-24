@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"nodepath-chat/internal/models"
+	"nodepath-chat/internal/utils"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -148,28 +149,167 @@ func (s *DeviceSettingsService) GetByIDDevice(idDevice string) (*models.DeviceSe
 }
 
 // Upsert creates a new device setting or updates existing one based on id_device
+// Uses database transactions to ensure data consistency during upsert operations
 func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) (*models.DeviceSettings, error) {
-	// Check if a device setting already exists for this id_device
-	existing, err := s.GetByIDDevice(req.IDDevice)
-	if err == nil {
-		// Device setting exists, update it
-		updateReq := &models.UpdateDeviceSettingsRequest{
-			DeviceID:     req.DeviceID,
-			APIKeyOption: req.APIKeyOption,
-			WebhookID:    req.WebhookID,
-			Provider:     req.Provider,
-			PhoneNumber:  req.PhoneNumber,
-			APIKey:       req.APIKey,
-			IDDevice:     req.IDDevice,
-			IDERP:        req.IDERP,
-			IDAdmin:      req.IDAdmin,
-			Instance:     req.Instance,
+	var resultID string
+	
+	err := utils.WithTransaction(s.db, func(tx *sql.Tx) error {
+		// Check if a device setting already exists for this id_device within transaction
+		var existingID string
+		checkQuery := `
+			SELECT id 
+			FROM device_setting_nodepath 
+			WHERE id_device = ?
+			FOR UPDATE
+		`
+		err := tx.QueryRow(checkQuery, req.IDDevice).Scan(&existingID)
+		
+		if err == nil {
+			// Device setting exists, update it within transaction
+			now := time.Now()
+			
+			// Set defaults if not provided
+			apiKeyOption := req.APIKeyOption
+			if apiKeyOption == "" {
+				apiKeyOption = "openai/gpt-4.1"
+			}
+			
+			provider := req.Provider
+			if provider == "" {
+				provider = "wablas"
+			}
+			
+			// Convert strings to sql.NullString for nullable fields
+			var deviceID, webhookID, phoneNumber, apiKey, idERP, idAdmin, instance sql.NullString
+			
+			if req.DeviceID != "" {
+				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
+			}
+			if req.WebhookID != "" {
+				webhookID = sql.NullString{String: req.WebhookID, Valid: true}
+			}
+			if req.PhoneNumber != "" {
+				phoneNumber = sql.NullString{String: req.PhoneNumber, Valid: true}
+			}
+			if req.APIKey != "" {
+				apiKey = sql.NullString{String: req.APIKey, Valid: true}
+			}
+			if req.IDERP != "" {
+				idERP = sql.NullString{String: req.IDERP, Valid: true}
+			}
+			if req.IDAdmin != "" {
+				idAdmin = sql.NullString{String: req.IDAdmin, Valid: true}
+			}
+			if req.Instance != "" {
+				instance = sql.NullString{String: req.Instance, Valid: true}
+			}
+			
+			updateQuery := `
+				UPDATE device_setting_nodepath 
+				SET device_id = ?, api_key_option = ?, webhook_id = ?, provider = ?, phone_number = ?, api_key = ?, 
+				    id_erp = ?, id_admin = ?, instance = ?, updated_at = ?
+				WHERE id = ?
+			`
+			
+			_, err = tx.Exec(updateQuery,
+				deviceID, apiKeyOption, webhookID, provider, phoneNumber, apiKey,
+				idERP, idAdmin, instance, now, existingID,
+			)
+			
+			if err != nil {
+				return fmt.Errorf("failed to update device setting: %w", err)
+			}
+			
+			resultID = existingID
+			logrus.WithFields(logrus.Fields{
+				"id":         existingID,
+				"device_id":  req.DeviceID,
+				"id_device":  req.IDDevice,
+				"id_erp":     req.IDERP,
+				"id_admin":   req.IDAdmin,
+			}).Info("Device setting updated")
+			
+		} else if err == sql.ErrNoRows {
+			// Device setting doesn't exist, create new one within transaction
+			id := uuid.New().String()
+			now := time.Now()
+			
+			// Set defaults if not provided
+			apiKeyOption := req.APIKeyOption
+			if apiKeyOption == "" {
+				apiKeyOption = "openai/gpt-4.1"
+			}
+			
+			provider := req.Provider
+			if provider == "" {
+				provider = "wablas"
+			}
+			
+			// Convert strings to sql.NullString for nullable fields
+			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
+			
+			if req.DeviceID != "" {
+				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
+			}
+			if req.WebhookID != "" {
+				webhookID = sql.NullString{String: req.WebhookID, Valid: true}
+			}
+			if req.PhoneNumber != "" {
+				phoneNumber = sql.NullString{String: req.PhoneNumber, Valid: true}
+			}
+			if req.APIKey != "" {
+				apiKey = sql.NullString{String: req.APIKey, Valid: true}
+			}
+			if req.IDDevice != "" {
+				idDevice = sql.NullString{String: req.IDDevice, Valid: true}
+			}
+			if req.IDERP != "" {
+				idERP = sql.NullString{String: req.IDERP, Valid: true}
+			}
+			if req.IDAdmin != "" {
+				idAdmin = sql.NullString{String: req.IDAdmin, Valid: true}
+			}
+			if req.Instance != "" {
+				instance = sql.NullString{String: req.Instance, Valid: true}
+			}
+			
+			insertQuery := `
+				INSERT INTO device_setting_nodepath 
+				(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, instance, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`
+			
+			_, err = tx.Exec(insertQuery,
+				id, deviceID, apiKeyOption, webhookID, provider, phoneNumber, apiKey,
+				idDevice, idERP, idAdmin, instance, now, now,
+			)
+			
+			if err != nil {
+				return fmt.Errorf("failed to create device setting: %w", err)
+			}
+			
+			resultID = id
+			logrus.WithFields(logrus.Fields{
+				"id":         id,
+				"device_id":  req.DeviceID,
+				"id_device":  req.IDDevice,
+				"id_erp":     req.IDERP,
+				"id_admin":   req.IDAdmin,
+			}).Info("Device setting created")
+			
+		} else {
+			return fmt.Errorf("failed to check existing device setting: %w", err)
 		}
-		return s.Update(existing.ID, updateReq)
+		
+		return nil
+	})
+	
+	if err != nil {
+		return nil, err
 	}
 	
-	// Device setting doesn't exist, create new one
-	return s.Create(req)
+	// Return the created/updated device setting
+	return s.GetByID(resultID)
 }
 
 // Create creates a new device setting

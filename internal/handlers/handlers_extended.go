@@ -86,14 +86,6 @@ func (h *Handlers) DeleteExecution(c *fiber.Ctx) error {
 
 // WhatsApp handlers
 
-// GetWhatsAppStatus - REMOVED: Not needed for webhook-based system
-
-// ConnectWhatsApp - REMOVED: Not needed for webhook-based system
-
-// DisconnectWhatsApp - REMOVED: Not needed for webhook-based system
-
-// GetWhatsAppQR - REMOVED: Not needed for webhook-based system
-
 type SendWhatsAppMessageRequest struct {
 	PhoneNumber string `json:"phone_number"`
 	Message     string `json:"message"`

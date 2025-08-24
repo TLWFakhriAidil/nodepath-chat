@@ -52,9 +52,9 @@ func main() {
 
 	fmt.Println("Connected to database successfully")
 
-	// Check if device_settings_nodepath table exists, create if not
+	// Check if device_setting_nodepath table exists, create if not
 	createTableQuery := `
-		CREATE TABLE IF NOT EXISTS device_settings_nodepath (
+		CREATE TABLE IF NOT EXISTS device_setting_nodepath (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			id_device VARCHAR(255) UNIQUE NOT NULL,
 			api_key TEXT,
@@ -66,7 +66,7 @@ func main() {
 
 	_, err = db.Exec(createTableQuery)
 	if err != nil {
-		log.Printf("Warning: Failed to create device_settings_nodepath table: %v", err)
+		log.Printf("Warning: Failed to create device_setting_nodepath table: %v", err)
 	} else {
 		fmt.Println("Device settings table created/verified successfully")
 	}
@@ -119,7 +119,7 @@ func main() {
 
 	// Insert test device SCHQ-S94
 	query := `
-		INSERT INTO device_settings_nodepath (
+		INSERT INTO device_setting_nodepath (
 			id_device, api_key, api_key_option, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE 

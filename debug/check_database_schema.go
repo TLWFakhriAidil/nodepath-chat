@@ -141,7 +141,7 @@ func main() {
 	tables := []string{
 		"ai_whatsapp_nodepath",
 		"conversation_log_nodepath",
-		"conversation_log_nodepath_backup",
+		// conversation_log_nodepath_backup removed - table no longer needed
 	}
 	
 	// Check each table

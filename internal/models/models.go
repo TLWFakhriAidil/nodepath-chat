@@ -90,20 +90,7 @@ type Position struct {
 	Y float64 `json:"y"`
 }
 
-// ChatbotExecution represents a flow execution instance
-type ChatbotExecution struct {
-	ID            string           `json:"id" db:"id"`
-	FlowReference string           `json:"flow_reference" db:"flow_reference"`
-	PhoneNumber   string           `json:"phone_number" db:"phone_number"`
-	IDDevice      string           `json:"id_device" db:"id_device"`
-	ConvLast      json.RawMessage  `json:"conv_last" db:"conv_last"`
-	ConvCurrent   string           `json:"conv_current" db:"conv_current"`
-	CurrentNode   string           `json:"current_node" db:"current_node"`
-	Variables     json.RawMessage  `json:"variables" db:"variables"`
-	Status        ExecutionStatus  `json:"status" db:"status"`
-	CreatedAt     time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt     time.Time        `json:"updated_at" db:"updated_at"`
-}
+// ChatbotExecution struct removed - functionality consolidated into AIWhatsapp
 
 // ConversationMessage represents a single message in a conversation
 type ConversationMessage struct {

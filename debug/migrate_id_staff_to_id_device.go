@@ -208,11 +208,7 @@ func main() {
 			OldColumn: "id_staff",
 			NewColumn: "id_device",
 		},
-		{
-			TableName: "conversation_log_nodepath_backup",
-			OldColumn: "id_staff",
-			NewColumn: "id_device",
-		},
+		// conversation_log_nodepath_backup migration removed - table no longer needed
 	}
 	
 	// Execute migrations

@@ -8,12 +8,20 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
+	"nodepath-chat/internal/utils"
 
 	"github.com/sirupsen/logrus"
+)
+
+// Circuit breaker constants for AI WhatsApp service
+const (
+	whatsappCircuitBreakerThreshold = 5 // Number of consecutive failures before circuit opens
+	whatsappCircuitBreakerTimeout   = 30 * time.Second // Time to wait before trying again
 )
 
 // AIWhatsappService interface defines methods for AI WhatsApp conversation management
@@ -108,6 +116,14 @@ type AIWhatsappAPIResponse struct {
 	} `json:"choices"`
 }
 
+// CircuitBreakerWhatsapp represents the state of a circuit breaker for WhatsApp AI service
+type CircuitBreakerWhatsapp struct {
+	failureCount    int
+	lastFailureTime time.Time
+	isOpen          bool
+	mutex           sync.RWMutex
+}
+
 // aiWhatsappService implements AIWhatsappService interface
 type aiWhatsappService struct {
 	aiRepo                repository.AIWhatsappRepository
@@ -115,18 +131,34 @@ type aiWhatsappService struct {
 	flowService           *FlowService
 	mediaDetectionService *MediaDetectionService
 	httpClient            *http.Client
+	circuitBreaker        *CircuitBreakerWhatsapp
+	// Advanced rate limiter for API calls
+	rateLimiter           *APIRateLimiter
 }
 
 // NewAIWhatsappService creates a new instance of AIWhatsappService
 func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo repository.DeviceSettingsRepository, flowService *FlowService, mediaDetectionService *MediaDetectionService) AIWhatsappService {
+	// Initialize rate limiter configuration for WhatsApp AI service
+	rateLimiterConfig := &RateLimiterConfig{
+		RequestsPerMinute: 120, // Higher limit for WhatsApp service
+		BurstSize:         30,
+		TimeWindow:        time.Minute,
+	}
+
+	rateLimiter := NewAPIRateLimiter(rateLimiterConfig)
+	// Start cleanup routine for inactive device limiters
+	rateLimiter.StartCleanupRoutine()
+
 	return &aiWhatsappService{
 		aiRepo:                aiRepo,
 		deviceRepo:            deviceRepo,
 		flowService:           flowService,
 		mediaDetectionService: mediaDetectionService,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 15 * time.Second, // Reduced from 30s for better real-time performance
 		},
+		circuitBreaker: &CircuitBreakerWhatsapp{}, // Initialize circuit breaker
+		rateLimiter:    rateLimiter,
 	}
 }
 
@@ -280,7 +312,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 	if deviceSettings.APIKey.Valid {
 		apiKey = deviceSettings.APIKey.String
 	}
-	aiResponse, err := s.callAIAPI(apiURL, apiKey, payload)
+	aiResponse, err := s.callAIAPI(apiURL, apiKey, idDevice, payload)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to call AI API")
 		return nil, fmt.Errorf("failed to call AI API: %w", err)
@@ -540,14 +572,31 @@ func (s *aiWhatsappService) getAIModel(idDevice, apiKeyOption string) string {
 }
 
 // callAIAPI calls the AI API with the given payload
-func (s *aiWhatsappService) callAIAPI(apiURL, apiKey string, payload AIWhatsappPayload) (string, error) {
+func (s *aiWhatsappService) callAIAPI(apiURL, apiKey, deviceID string, payload AIWhatsappPayload) (string, error) {
+	// Check circuit breaker status
+	if s.isCircuitBreakerOpen() {
+		return "", fmt.Errorf("WhatsApp AI service circuit breaker is open, API calls temporarily disabled")
+	}
+
+	// Check rate limiting
+	provider := "openrouter"
+	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
+		provider = "openai"
+	}
+
+	if err := s.rateLimiter.CheckRateLimit(provider, deviceID); err != nil {
+		return "", fmt.Errorf("rate limit exceeded for device %s on provider %s: %w", deviceID, provider, err)
+	}
+
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
+		s.recordAPIFailure()
 		return "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonPayload))
 	if err != nil {
+		s.recordAPIFailure()
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -556,30 +605,37 @@ func (s *aiWhatsappService) callAIAPI(apiURL, apiKey string, payload AIWhatsappP
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		s.recordAPIFailure()
 		return "", fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		s.recordAPIFailure()
 		return "", fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		s.recordAPIFailure()
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var apiResponse AIWhatsappAPIResponse
 	err = json.Unmarshal(body, &apiResponse)
 	if err != nil {
+		s.recordAPIFailure()
 		return "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
 	if len(apiResponse.Choices) == 0 {
+		s.recordAPIFailure()
 		return "", fmt.Errorf("no choices in API response")
 	}
 
+	// Record successful API call
+	s.recordAPISuccess()
 	return apiResponse.Choices[0].Message.Content, nil
 }
 
@@ -724,6 +780,7 @@ func (s *aiWhatsappService) formatResponseForLogging(responses []AIWhatsappRespo
 
 
 // CreateAIWhatsappRecord creates a new AI WhatsApp record for prospect tracking
+// Uses transaction to ensure both AI WhatsApp record and conversation history are created atomically
 func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMessage, niche string) error {
 	logrus.WithFields(logrus.Fields{
 		"prospect_num": prospectNum,
@@ -731,39 +788,75 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		"niche":        niche,
 	}).Info("Creating new AI WhatsApp record for prospect tracking")
 	
-	// Create new AI WhatsApp conversation record
-	now := time.Now()
-	newAIConv := &models.AIWhatsapp{
-		IDDevice:    idDevice,
-		ProspectNum: prospectNum,
-		Stage:       "welcome", // Default initial stage
-		Human:       0,         // AI is active by default
-		Niche:       niche,
-		DateOrder:   &now,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-	
-	err := s.aiRepo.CreateAIWhatsapp(newAIConv)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create AI WhatsApp record")
-		return fmt.Errorf("failed to create AI WhatsApp record: %w", err)
-	}
-	
-	// Save initial conversation history
-	err = s.SaveConversationHistory(prospectNum, idDevice, userMessage, "", "welcome")
-	if err != nil {
-		logrus.WithError(err).Error("Failed to save initial conversation history")
-		// Don't return error here as the main record was created successfully
-	}
-	
-	logrus.WithFields(logrus.Fields{
-		"prospect_num": prospectNum,
-		"id_device":    idDevice,
-		"niche":        niche,
-	}).Info("AI WhatsApp record created successfully")
-	
-	return nil
+	// Use transaction to ensure atomicity of AI record creation and conversation logging
+	return utils.WithTransaction(s.aiRepo.GetDB(), func(tx *sql.Tx) error {
+		// Create new AI WhatsApp conversation record
+		now := time.Now()
+		newAIConv := &models.AIWhatsapp{
+			IDDevice:    idDevice,
+			ProspectNum: prospectNum,
+			Stage:       "welcome", // Default initial stage
+			Human:       0,         // AI is active by default
+			Niche:       niche,
+			DateOrder:   &now,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		
+		// Create AI WhatsApp record within transaction
+		query := `
+			INSERT INTO ai_whatsapp_nodepath (
+				id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
+				conv_current, human, niche, jam, intro, 
+				catatan_staff, balas, data_image, conv_stage, 
+				bot_balas, keywordiklan, marketer, update_today, 
+				created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
+		
+		// Handle ConvCurrent as sql.NullString
+		var convCurrentValue interface{}
+		if newAIConv.ConvCurrent.Valid {
+			convCurrentValue = newAIConv.ConvCurrent.String
+		} else {
+			convCurrentValue = nil
+		}
+		
+		_, err := tx.Exec(query,
+			newAIConv.IDProspect, newAIConv.IDDevice, newAIConv.ProspectNum, newAIConv.Stage, newAIConv.DateOrder, nil,
+			convCurrentValue, newAIConv.Human, newAIConv.Niche, newAIConv.Jam, newAIConv.Intro,
+			newAIConv.CatatanStaff, newAIConv.Balas, newAIConv.DataImage, newAIConv.ConvStage,
+			newAIConv.BotBalas, newAIConv.KeywordIklan, newAIConv.Marketer, newAIConv.UpdateToday,
+			newAIConv.CreatedAt, newAIConv.UpdatedAt,
+		)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create AI WhatsApp record in transaction")
+			return fmt.Errorf("failed to create AI WhatsApp record: %w", err)
+		}
+		
+		// Create initial conversation log within transaction
+		convLogQuery := `
+			INSERT INTO conversation_log_nodepath (
+				prospect_num, id_device, message, sender, stage, created_at
+			) VALUES (?, ?, ?, ?, ?, ?)
+		`
+		
+		_, err = tx.Exec(convLogQuery,
+			prospectNum, idDevice, userMessage, "user", "welcome", now,
+		)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create initial conversation log in transaction")
+			return fmt.Errorf("failed to create initial conversation log: %w", err)
+		}
+		
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"id_device":    idDevice,
+			"niche":        niche,
+		}).Info("AI WhatsApp record and conversation log created successfully in transaction")
+		
+		return nil
+	})
 }
 
 // GetAIWhatsappByProspectAndDevice retrieves AI WhatsApp record by prospect number and device ID
@@ -967,4 +1060,50 @@ func (s *aiWhatsappService) GetFlowExecutionVariables(prospectNum, idDevice stri
 	}
 
 	return variables, nil
+}
+
+// isCircuitBreakerOpen checks if the circuit breaker is open for WhatsApp AI service
+func (s *aiWhatsappService) isCircuitBreakerOpen() bool {
+	s.circuitBreaker.mutex.RLock()
+	defer s.circuitBreaker.mutex.RUnlock()
+	
+	if !s.circuitBreaker.isOpen {
+		return false
+	}
+	
+	// Check if enough time has passed to try again
+	if time.Since(s.circuitBreaker.lastFailureTime) > whatsappCircuitBreakerTimeout {
+		s.circuitBreaker.mutex.RUnlock()
+		s.circuitBreaker.mutex.Lock()
+		s.circuitBreaker.isOpen = false
+		s.circuitBreaker.failureCount = 0
+		s.circuitBreaker.mutex.Unlock()
+		s.circuitBreaker.mutex.RLock()
+		return false
+	}
+	
+	return true
+}
+
+// recordAPISuccess records a successful API call for WhatsApp AI service
+func (s *aiWhatsappService) recordAPISuccess() {
+	s.circuitBreaker.mutex.Lock()
+	defer s.circuitBreaker.mutex.Unlock()
+	
+	s.circuitBreaker.failureCount = 0
+	s.circuitBreaker.isOpen = false
+}
+
+// recordAPIFailure records a failed API call for WhatsApp AI service
+func (s *aiWhatsappService) recordAPIFailure() {
+	s.circuitBreaker.mutex.Lock()
+	defer s.circuitBreaker.mutex.Unlock()
+	
+	s.circuitBreaker.failureCount++
+	s.circuitBreaker.lastFailureTime = time.Now()
+	
+	if s.circuitBreaker.failureCount >= whatsappCircuitBreakerThreshold {
+		s.circuitBreaker.isOpen = true
+		logrus.WithField("failure_count", s.circuitBreaker.failureCount).Warn("WhatsApp AI circuit breaker opened due to consecutive API failures")
+	}
 }

@@ -27,10 +27,11 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 	}
 
 	// Configure connection pool for high concurrency (3000+ users)
-	db.SetMaxOpenConns(200) // Increased for high concurrency
-	db.SetMaxIdleConns(50)  // Increased idle connections
-	db.SetConnMaxLifetime(30 * time.Minute) // Longer lifetime for stability
-	db.SetConnMaxIdleTime(10 * time.Minute) // Maximum idle time before closing
+	// Optimized settings for handling 3000+ concurrent users with real-time messaging
+	db.SetMaxOpenConns(500)  // Increased significantly for 3000+ concurrent users
+	db.SetMaxIdleConns(100)  // Higher idle connections to reduce connection overhead
+	db.SetConnMaxLifetime(60 * time.Minute) // Longer lifetime to reduce connection churn
+	db.SetConnMaxIdleTime(15 * time.Minute) // Balanced idle time for resource efficiency
 
 	// Test the connection
 	if err := db.Ping(); err != nil {

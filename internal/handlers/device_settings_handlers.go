@@ -435,8 +435,9 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	})
 }
 
-// HandleWebhook processes incoming webhook requests from WhatsApp providers
+// HandleWebhook processes incoming webhook requests from WhatsApp providers with comprehensive monitoring
 func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
+	startTime := time.Now()
 	idDevice := c.Params("id_device")
 	instance := c.Params("instance")
 	
@@ -456,7 +457,8 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 		"content_type": c.Get("Content-Type"),
 		"user_agent": c.Get("User-Agent"),
 		"payload_size": len(body),
-	}).Info("📨 WEBHOOK: Received webhook request")
+		"request_start_time": startTime,
+	}).Info("📨 WEBHOOK: Received webhook request with monitoring")
 	
 	// Verify the device exists in our database
 	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
@@ -489,6 +491,18 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Invalid JSON payload")
 	}
 	
+	// Validate and sanitize webhook payload to prevent injection attacks
+	if err := h.validateWebhookPayload(webhookData); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"error": err.Error(),
+		}).Warn("⚠️ WEBHOOK: Invalid webhook payload")
+		return h.errorResponse(c, 400, "Invalid webhook payload")
+	}
+	
+	// Sanitize webhook data to prevent injection attacks
+	webhookData = h.sanitizeWebhookData(webhookData)
+	
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"provider": deviceSettings.Provider,
@@ -496,14 +510,66 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 		"webhook_data": webhookData,
 	}).Info("✅ WEBHOOK: Successfully processed webhook")
 	
-	// Process the webhook data based on provider type and integrate with AI WhatsApp
-	go h.processWebhookMessage(webhookData, idDevice, deviceSettings.Provider)
+	// Record webhook processing metrics
+	webhookProcessingTime := time.Since(startTime)
 	
+	// Process the webhook data based on provider type and integrate with AI WhatsApp
+	// Use goroutine with error handling, retry logic, and performance monitoring
+	go func() {
+		processingStartTime := time.Now()
+		var finalError error
+		
+		for retries := 0; retries < 3; retries++ {
+			retryStartTime := time.Now()
+			err := h.processWebhookMessageWithRetry(webhookData, idDevice, deviceSettings.Provider)
+			retryDuration := time.Since(retryStartTime)
+			
+			if err == nil {
+				// Success - log performance metrics
+				totalProcessingTime := time.Since(processingStartTime)
+				logrus.WithFields(logrus.Fields{
+					"id_device": idDevice,
+					"provider": deviceSettings.Provider,
+					"webhook_parse_time": webhookProcessingTime,
+					"message_processing_time": totalProcessingTime,
+					"retry_attempt": retries + 1,
+					"retry_duration": retryDuration,
+					"success": true,
+				}).Info("✅ WEBHOOK: Successfully processed webhook message")
+				break // Success, exit retry loop
+			}
+			
+			finalError = err
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"retry_attempt": retries + 1,
+				"retry_duration": retryDuration,
+				"error": err.Error(),
+			}).Warn("⚠️ WEBHOOK: Retrying webhook message processing")
+			
+			// Exponential backoff: 1s, 2s, 4s
+			time.Sleep(time.Duration(1<<retries) * time.Second)
+		}
+		
+		// Log final failure if all retries exhausted
+		if finalError != nil {
+			totalFailedTime := time.Since(processingStartTime)
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"provider": deviceSettings.Provider,
+				"total_failed_time": totalFailedTime,
+				"final_error": finalError.Error(),
+				"retries_exhausted": true,
+			}).Error("❌ WEBHOOK: Failed to process webhook after all retries")
+		}
+	}()
+
 	return h.successResponse(c, map[string]interface{}{
 		"success": true,
-		"message": "Webhook received and processed",
+		"message": "Webhook received and queued for processing",
 		"id_device": idDevice,
 		"provider": deviceSettings.Provider,
+		"webhook_processing_time_ms": webhookProcessingTime.Milliseconds(),
 	})
 }
 
@@ -1343,13 +1409,33 @@ func (h *Handlers) DebugDevices(c *fiber.Ctx) error {
 }
 
 // Helper function to convert sql.NullString to string
-// processWebhookMessage processes incoming webhook messages and integrates with AI WhatsApp service
-func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idDevice, provider string) {
+// processWebhookMessageWithRetry processes incoming webhook messages with error handling for retry logic
+func (h *Handlers) processWebhookMessageWithRetry(webhookData map[string]interface{}, idDevice, provider string) error {
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"panic": r,
+			}).Error("❌ WEBHOOK: Panic recovered in webhook processing")
+		}
+	}()
+	
+	err := h.processWebhookMessage(webhookData, idDevice, provider)
+	if err != nil {
+		return fmt.Errorf("webhook processing failed: %w", err)
+	}
+	return nil
+}
+
+// processWebhookMessage processes incoming webhook messages and integrates with AI WhatsApp service with performance monitoring
+func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idDevice, provider string) error {
+	startTime := time.Now()
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"provider": provider,
 		"webhook_data": webhookData,
-	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration")
+		"processing_start_time": startTime,
+	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration with monitoring")
 
 	// Extract message data based on provider
 	var from, message, messageType string
@@ -1410,7 +1496,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			"from": from,
 			"message": message,
 		}).Warn("⚠️ WEBHOOK: Missing required fields (from or message)")
-		return
+		return fmt.Errorf("missing required fields: from=%s, message=%s", from, message)
 	}
 
 	// Skip group messages if configured to do so
@@ -1419,7 +1505,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			"id_device": idDevice,
 			"from": from,
 		}).Info("📱 WEBHOOK: Skipping group message")
-		return
+		return nil // Successfully skipped group message
 	}
 
 	// Check for media URLs in bracket format and extract clean text for processing
@@ -1447,7 +1533,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 					"id_device": idDevice,
 					"from": from,
 				}).Info("📎 WEBHOOK: Message contained only media URLs, skipping text processing")
-				return
+				return nil // Successfully skipped media-only message
 			}
 		}
 	}
@@ -1459,7 +1545,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			"from": from,
 			"message_type": messageType,
 		}).Info("📱 WEBHOOK: Skipping non-text message")
-		return
+		return nil // Successfully skipped non-text message
 	}
 
 	// Check if this is a device command (%, #, cmd)
@@ -1475,44 +1561,72 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			err := h.aiWhatsappHandlers.AIWhatsappService.ProcessDeviceCommand(from, message, idDevice)
 			if err != nil {
 				logrus.WithError(err).Error("❌ WEBHOOK: Failed to process device command")
+				return fmt.Errorf("failed to process device command: %w", err)
 			}
 		} else {
 			logrus.Error("❌ WEBHOOK: AI WhatsApp service not available")
+			return fmt.Errorf("AI WhatsApp service not available")
 		}
-		return
+		return nil // Successfully processed device command
 	}
 
 
 
 	// Check if device has a configured flow - prioritize flow engine over AI conversation
+	flowCheckStart := time.Now()
 	flows, err := h.flowService.GetFlowsByDevice(idDevice)
+	flowCheckDuration := time.Since(flowCheckStart)
+	
 	if err != nil {
-		logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to check for device flows")
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"flow_check_duration": flowCheckDuration,
+			"error": err.Error(),
+		}).Warn("⚠️ WEBHOOK: Failed to check for device flows")
 	}
 
 	// If device has configured flows, use the flow engine
 	if len(flows) > 0 {
+		flowProcessingStart := time.Now()
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
 			"from": from,
 			"message": message,
 			"provider": provider,
 			"flow_count": len(flows),
+			"flow_check_duration": flowCheckDuration,
 		}).Info("🔄 WEBHOOK: Processing message through flow engine")
 
 		// Process message through WhatsApp service flow engine
 		if h.whatsappService != nil {
 			err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider)
+			flowProcessingDuration := time.Since(flowProcessingStart)
+			
 			if err != nil {
-				logrus.WithError(err).Error("❌ WEBHOOK: Failed to process message through flow engine")
+				logrus.WithFields(logrus.Fields{
+					"id_device": idDevice,
+					"flow_processing_duration": flowProcessingDuration,
+					"error": err.Error(),
+				}).Error("❌ WEBHOOK: Failed to process message through flow engine")
 				// Fallback to AI conversation if flow processing fails
-				h.processAIConversation(from, message, idDevice, provider)
+				h.processAIConversation(from, message, idDevice, provider, startTime)
+				return fmt.Errorf("flow processing failed, fallback to AI: %w", err)
 			}
+			
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"flow_processing_duration": flowProcessingDuration,
+				"total_processing_time": time.Since(startTime),
+			}).Info("✅ WEBHOOK: Successfully processed through flow engine")
 		} else {
-			logrus.Error("❌ WEBHOOK: WhatsApp service not available, falling back to AI conversation")
-			h.processAIConversation(from, message, idDevice, provider)
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"flow_processing_duration": time.Since(flowProcessingStart),
+			}).Error("❌ WEBHOOK: WhatsApp service not available, falling back to AI conversation")
+			h.processAIConversation(from, message, idDevice, provider, startTime)
+			return fmt.Errorf("WhatsApp service not available, using AI fallback")
 		}
-		return
+		return nil // Successfully processed through flow engine
 	}
 
 	// No flows configured, use AI conversation system
@@ -1521,29 +1635,57 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		"from": from,
 		"message": message,
 		"provider": provider,
+		"flow_check_duration": flowCheckDuration,
 	}).Info("🤖 WEBHOOK: No flows configured, processing message through AI conversation")
 
-	h.processAIConversation(from, message, idDevice, provider)
+	h.processAIConversation(from, message, idDevice, provider, startTime)
+	return nil // Successfully processed through AI conversation
 }
 
-// processAIConversation handles message processing through the AI conversation system
-func (h *Handlers) processAIConversation(from, message, idDevice, provider string) {
+// processAIConversation handles message processing through the AI conversation system with performance monitoring
+func (h *Handlers) processAIConversation(from, message, idDevice, provider string, requestStartTime time.Time) {
+	aiProcessingStart := time.Now()
+	
 	// Get current conversation stage from AI WhatsApp repository
 	var stage string
+	stageRetrievalStart := time.Now()
 	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
 		aiConv, err := h.aiWhatsappHandlers.AIRepo.GetAIWhatsappByProspectNum(from)
+		stageRetrievalDuration := time.Since(stageRetrievalStart)
+		
 		if err != nil {
-			logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to get AI conversation stage")
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"stage_retrieval_duration": stageRetrievalDuration,
+				"error": err.Error(),
+			}).Warn("⚠️ WEBHOOK: Failed to get AI conversation stage")
 		} else if aiConv != nil {
 			stage = aiConv.Stage
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"current_stage": stage,
+				"stage_retrieval_duration": stageRetrievalDuration,
+			}).Debug("📋 WEBHOOK: Retrieved AI conversation stage")
 		}
 	}
 
 	// Process AI conversation through AI WhatsApp service
 	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIWhatsappService != nil {
+		aiCallStart := time.Now()
 		response, err := h.aiWhatsappHandlers.AIWhatsappService.ProcessAIConversation(from, idDevice, message, stage)
+		aiCallDuration := time.Since(aiCallStart)
+		
 		if err != nil {
-			logrus.WithError(err).Error("❌ WEBHOOK: Failed to process AI conversation")
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"ai_call_duration": aiCallDuration,
+				"total_ai_processing_time": time.Since(aiProcessingStart),
+				"total_request_time": time.Since(requestStartTime),
+				"error": err.Error(),
+			}).Error("❌ WEBHOOK: Failed to process AI conversation")
 			return
 		}
 
@@ -1561,22 +1703,54 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider strin
 			}
 
 			// Save conversation history to conv_last field
+			historySaveStart := time.Now()
 			err = h.aiWhatsappHandlers.AIWhatsappService.SaveConversationHistory(from, idDevice, message, botResponseText, response.Stage)
+			historySaveDuration := time.Since(historySaveStart)
+			
 			if err != nil {
-				logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history")
+				logrus.WithFields(logrus.Fields{
+					"id_device": idDevice,
+					"from": from,
+					"history_save_duration": historySaveDuration,
+					"error": err.Error(),
+				}).Error("❌ WEBHOOK: Failed to save conversation history")
 			}
 
+			// Send response through the appropriate provider
+			responseSendStart := time.Now()
+			h.sendWhatsappResponse(from, idDevice, provider, response)
+			responseSendDuration := time.Since(responseSendStart)
+			
+			totalProcessingTime := time.Since(aiProcessingStart)
+			totalRequestTime := time.Since(requestStartTime)
+			
 			logrus.WithFields(logrus.Fields{
 				"id_device": idDevice,
 				"to": from,
 				"provider": provider,
-			}).Info("📤 WEBHOOK: Sending AI response back to WhatsApp")
-
-			// Send response through the appropriate provider
-			h.sendWhatsappResponse(from, idDevice, provider, response)
+				"ai_call_duration": aiCallDuration,
+				"history_save_duration": historySaveDuration,
+				"response_send_duration": responseSendDuration,
+				"total_ai_processing_time": totalProcessingTime,
+				"total_request_time": totalRequestTime,
+				"response_items_count": len(response.Response),
+				"new_stage": response.Stage,
+			}).Info("📤 WEBHOOK: Successfully processed and sent AI response")
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"ai_call_duration": aiCallDuration,
+				"total_ai_processing_time": time.Since(aiProcessingStart),
+				"total_request_time": time.Since(requestStartTime),
+			}).Warn("⚠️ WEBHOOK: AI conversation processed but no response generated")
 		}
 	} else {
-		logrus.Error("❌ WEBHOOK: AI WhatsApp service not available")
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"total_request_time": time.Since(requestStartTime),
+		}).Error("❌ WEBHOOK: AI WhatsApp service not available")
 	}
 }
 
@@ -2031,4 +2205,135 @@ func getStringFromNullString(ns sql.NullString) string {
 		return ns.String
 	}
 	return ""
+}
+
+// validateWebhookPayload validates webhook payload structure and content
+func (h *Handlers) validateWebhookPayload(data map[string]interface{}) error {
+	// Check payload size limit (1MB)
+	payloadBytes, _ := json.Marshal(data)
+	if len(payloadBytes) > 1024*1024 {
+		return fmt.Errorf("payload too large: %d bytes", len(payloadBytes))
+	}
+	
+	// Validate required fields based on common webhook structures
+	if len(data) == 0 {
+		return fmt.Errorf("empty payload")
+	}
+	
+	// Check for suspicious patterns that might indicate injection attempts
+	for key, value := range data {
+		if err := h.validateField(key, value); err != nil {
+			return fmt.Errorf("invalid field %s: %w", key, err)
+		}
+	}
+	
+	return nil
+}
+
+// validateField validates individual fields for security threats
+func (h *Handlers) validateField(key string, value interface{}) error {
+	// Convert value to string for validation
+	var strValue string
+	switch v := value.(type) {
+	case string:
+		strValue = v
+	case map[string]interface{}:
+		// Recursively validate nested objects
+		for nestedKey, nestedValue := range v {
+			if err := h.validateField(nestedKey, nestedValue); err != nil {
+				return err
+			}
+		}
+		return nil
+	case []interface{}:
+		// Validate array elements
+		for i, item := range v {
+			if err := h.validateField(fmt.Sprintf("%s[%d]", key, i), item); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		// For other types (numbers, booleans), convert to string
+		strValue = fmt.Sprintf("%v", v)
+	}
+	
+	// Check string length limit (10KB per field)
+	if len(strValue) > 10240 {
+		return fmt.Errorf("field too long: %d characters", len(strValue))
+	}
+	
+	// Check for SQL injection patterns
+	sqlPatterns := []string{
+		"'", "--", "/*", "*/", "xp_", "sp_", "union", "select", "insert", "update", "delete", "drop", "create", "alter",
+	}
+	lowerValue := strings.ToLower(strValue)
+	for _, pattern := range sqlPatterns {
+		if strings.Contains(lowerValue, pattern) {
+			logrus.WithFields(logrus.Fields{
+				"field": key,
+				"pattern": pattern,
+				"value_preview": strValue[:min(len(strValue), 50)],
+			}).Warn("⚠️ SECURITY: Potential SQL injection pattern detected")
+		}
+	}
+	
+	// Check for XSS patterns
+	xssPatterns := []string{
+		"<script", "javascript:", "onload=", "onerror=", "onclick=", "onmouseover=",
+	}
+	for _, pattern := range xssPatterns {
+		if strings.Contains(lowerValue, pattern) {
+			logrus.WithFields(logrus.Fields{
+				"field": key,
+				"pattern": pattern,
+				"value_preview": strValue[:min(len(strValue), 50)],
+			}).Warn("⚠️ SECURITY: Potential XSS pattern detected")
+		}
+	}
+	
+	return nil
+}
+
+// sanitizeWebhookData sanitizes webhook data to prevent injection attacks
+func (h *Handlers) sanitizeWebhookData(data map[string]interface{}) map[string]interface{} {
+	sanitized := make(map[string]interface{})
+	
+	for key, value := range data {
+		sanitized[key] = h.sanitizeValue(value)
+	}
+	
+	return sanitized
+}
+
+// sanitizeValue sanitizes individual values
+func (h *Handlers) sanitizeValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case string:
+		// Remove null bytes and control characters
+		sanitized := strings.ReplaceAll(v, "\x00", "")
+		sanitized = strings.ReplaceAll(sanitized, "\r", "")
+		// Limit string length to prevent memory exhaustion
+		if len(sanitized) > 10240 {
+			sanitized = sanitized[:10240]
+		}
+		return sanitized
+	case map[string]interface{}:
+		// Recursively sanitize nested objects
+		sanitizedMap := make(map[string]interface{})
+		for nestedKey, nestedValue := range v {
+			sanitizedMap[nestedKey] = h.sanitizeValue(nestedValue)
+		}
+		return sanitizedMap
+	case []interface{}:
+		// Sanitize array elements
+		sanitizedArray := make([]interface{}, len(v))
+		for i, item := range v {
+			sanitizedArray[i] = h.sanitizeValue(item)
+		}
+		return sanitizedArray
+	default:
+		// Return other types as-is (numbers, booleans, etc.)
+		return v
+	}
 }
