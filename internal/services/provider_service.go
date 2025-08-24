@@ -1,8 +1,6 @@
 package services
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,7 +37,7 @@ func (ps *ProviderService) SendMessage(deviceSettings *models.DeviceSettings, ph
 	provider := strings.ToLower(deviceSettings.Provider)
 	logrus.WithFields(logrus.Fields{
 		"provider":     provider,
-		"device_id":    deviceSettings.IDDevice.String,
+		"device_id":    deviceSettings.Instance.String,
 		"phone_number": phoneNumber,
 	}).Info("📤 MESSAGE: Sending message through provider")
 
@@ -63,7 +61,7 @@ func (ps *ProviderService) SendMediaMessage(deviceSettings *models.DeviceSetting
 	provider := strings.ToLower(deviceSettings.Provider)
 	logrus.WithFields(logrus.Fields{
 		"provider":     provider,
-		"device_id":    deviceSettings.IDDevice.String,
+		"device_id":    deviceSettings.Instance.String,
 		"phone_number": phoneNumber,
 		"media_url":    mediaURL,
 	}).Info("📤 MEDIA: Sending media message through provider")
@@ -79,6 +77,7 @@ func (ps *ProviderService) SendMediaMessage(deviceSettings *models.DeviceSetting
 }
 
 // sendWablasMessage sends a text message via Wablas API
+// Uses the exact API format specified by user requirements
 func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettings, phoneNumber, message string) error {
 	apiURL := "https://my.wablas.com/api/send-message"
 	
@@ -86,12 +85,21 @@ func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettin
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
 		"message_len":  len(message),
+		"device_id":    deviceSettings.Instance.String,
 	}).Debug("[WABLAS-TEXT] Preparing request")
 
-	// Prepare form data
+	// Get instance for authorization (as per user requirements)
+	instance := ""
+	if deviceSettings.Instance.Valid {
+		instance = deviceSettings.Instance.String
+	} else {
+		return fmt.Errorf("no instance found for Wablas device %s", deviceSettings.Instance.String)
+	}
+
+	// Prepare form data exactly as specified by user
 	data := url.Values{}
-	data.Set("phone", phoneNumber)
-	data.Set("message", message)
+	data.Set("phone", phoneNumber)    // Recipient phone number
+	data.Set("message", message)      // Message content
 
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
@@ -99,14 +107,8 @@ func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettin
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	if deviceSettings.APIKey.Valid {
-		req.Header.Set("Authorization", deviceSettings.APIKey.String)
-	} else if deviceSettings.Instance.Valid {
-		req.Header.Set("Authorization", deviceSettings.Instance.String)
-	} else {
-		return fmt.Errorf("no API key or instance found for Wablas")
-	}
+	// Set headers exactly as specified by user
+	req.Header.Set("Authorization", instance)  // Set the Authorization header
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send request
@@ -128,36 +130,70 @@ func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettin
 		"status_code": resp.StatusCode,
 		"response":    string(body),
 		"duration":    duration,
+		"instance":    instance,
 	}).Debug("[WABLAS-TEXT] Response received")
 
-	if resp.StatusCode != http.StatusOK {
+	// Check for success (200-299 status codes)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("wablas API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
 		"duration":     duration,
+		"device_id":    deviceSettings.Instance.String,
 	}).Info("[WABLAS-TEXT] ✅ Message sent successfully")
 
 	return nil
 }
 
-// sendWablasImageMessage sends an image message via Wablas API
-func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceSettings, phoneNumber, caption, imageURL string) error {
-	apiURL := "https://my.wablas.com/api/send-image"
+// sendWablasImageMessage sends a media message via Wablas API with type detection
+// Handles video, audio, and image files with appropriate API endpoints
+func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceSettings, phoneNumber, caption, mediaURL string) error {
+	// Detect media type based on file extension
+	mediaType := ""
+	var apiURL string
+	var fieldName string
+	
+	if strings.Contains(mediaURL, ".mp4") {
+		mediaType = "video"
+		apiURL = "https://my.wablas.com/api/send-video"
+		fieldName = "video"
+	} else if strings.Contains(mediaURL, ".mp3") {
+		mediaType = "audio"
+		apiURL = "https://my.wablas.com/api/send-audio"
+		fieldName = "audio"
+	} else {
+		// Default to image for all other file types
+		mediaType = "image"
+		apiURL = "https://my.wablas.com/api/send-image"
+		fieldName = "image"
+	}
 	
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
-		"image_url":    imageURL,
+		"media_url":    mediaURL,
+		"media_type":   mediaType,
 		"caption_len":  len(caption),
-	}).Debug("[WABLAS-IMAGE] Preparing request")
+		"device_id":    deviceSettings.Instance.String,
+	}).Debug("[WABLAS-MEDIA] Preparing request")
 
-	// Prepare form data
+	// Get instance for authorization (as per user requirements)
+	instance := ""
+	if deviceSettings.Instance.Valid {
+		instance = deviceSettings.Instance.String
+	} else {
+		return fmt.Errorf("no instance found for Wablas device %s", deviceSettings.Instance.String)
+	}
+
+	// Prepare form data with appropriate field name
 	data := url.Values{}
-	data.Set("phone", phoneNumber)
-	data.Set("image", imageURL)
-	data.Set("caption", caption)
+	data.Set("phone", phoneNumber)        // Recipient phone number
+	data.Set(fieldName, mediaURL)         // Media file URL with correct field name
+	if caption != "" {
+		data.Set("caption", caption)      // Caption/message content
+	}
 
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
@@ -165,14 +201,8 @@ func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceS
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	if deviceSettings.APIKey.Valid {
-		req.Header.Set("Authorization", deviceSettings.APIKey.String)
-	} else if deviceSettings.Instance.Valid {
-		req.Header.Set("Authorization", deviceSettings.Instance.String)
-	} else {
-		return fmt.Errorf("no API key or instance found for Wablas")
-	}
+	// Set headers (using instance for authorization as per user requirements)
+	req.Header.Set("Authorization", instance)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send request
@@ -194,21 +224,27 @@ func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceS
 		"status_code": resp.StatusCode,
 		"response":    string(body),
 		"duration":    duration,
-	}).Debug("[WABLAS-IMAGE] Response received")
+		"instance":    instance,
+		"media_type":  mediaType,
+	}).Debug("[WABLAS-MEDIA] Response received")
 
-	if resp.StatusCode != http.StatusOK {
+	// Check for success (200-299 status codes)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("wablas API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
 		"duration":     duration,
-	}).Info("[WABLAS-IMAGE] ✅ Image sent successfully")
+		"device_id":    deviceSettings.Instance.String,
+		"media_type":   mediaType,
+	}).Info("[WABLAS-MEDIA] ✅ Media sent successfully")
 
 	return nil
 }
 
 // sendWhacenterMessage sends a text message via Whacenter API
+// Uses the exact API format specified by user requirements
 func (ps *ProviderService) sendWhacenterMessage(deviceSettings *models.DeviceSettings, phoneNumber, message string) error {
 	apiURL := "https://api.whacenter.com/api/send"
 	
@@ -216,41 +252,31 @@ func (ps *ProviderService) sendWhacenterMessage(deviceSettings *models.DeviceSet
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
 		"message_len":  len(message),
+		"device_id":    deviceSettings.Instance.String,
 	}).Debug("[WHACENTER] Preparing request")
 
-	// Get device ID from instance or device_id
-	deviceID := ""
+	// Get instance for device_id (as per user requirements)
+	instance := ""
 	if deviceSettings.Instance.Valid {
-		deviceID = deviceSettings.Instance.String
-	} else if deviceSettings.IDDevice.Valid {
-		deviceID = deviceSettings.IDDevice.String
+		instance = deviceSettings.Instance.String
 	} else {
-		return fmt.Errorf("no device ID found for Whacenter")
+		return fmt.Errorf("no instance found for Whacenter device %s", deviceSettings.Instance.String)
 	}
 
-	// Prepare JSON payload
-	payload := map[string]interface{}{
-		"device_id": deviceID,
-		"number":    phoneNumber,
-		"message":   message,
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
+	// Prepare form data exactly as specified by user
+	data := url.Values{}
+	data.Set("device_id", instance)    // device_id from instance
+	data.Set("number", phoneNumber)    // recipient number
+	data.Set("message", message)       // message content
 
 	// Create request
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	if deviceSettings.APIKey.Valid {
-		req.Header.Set("Authorization", "Bearer "+deviceSettings.APIKey.String)
-	}
+	// Set headers (form data, no authorization header as per user example)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send request
 	startTime := time.Now()
@@ -271,21 +297,25 @@ func (ps *ProviderService) sendWhacenterMessage(deviceSettings *models.DeviceSet
 		"status_code": resp.StatusCode,
 		"response":    string(body),
 		"duration":    duration,
+		"instance":    instance,
 	}).Debug("[WHACENTER] Response received")
 
-	if resp.StatusCode != http.StatusOK {
+	// Check for success (200-299 status codes)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("whacenter API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
 		"duration":     duration,
+		"device_id":    deviceSettings.Instance.String,
 	}).Info("[WHACENTER] ✅ Message sent successfully")
 
 	return nil
 }
 
 // sendWhacenterMediaMessage sends a media message via Whacenter API
+// Uses the exact API format specified by user requirements with type detection
 func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.DeviceSettings, phoneNumber, caption, mediaURL string) error {
 	apiURL := "https://api.whacenter.com/api/send"
 	
@@ -294,42 +324,46 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 		"phone_number": phoneNumber,
 		"media_url":    mediaURL,
 		"caption_len":  len(caption),
+		"device_id":    deviceSettings.Instance.String,
 	}).Debug("[WHACENTER] Preparing media request")
 
-	// Get device ID from instance or device_id
-	deviceID := ""
+	// Get instance for device_id (as per user requirements)
+	instance := ""
 	if deviceSettings.Instance.Valid {
-		deviceID = deviceSettings.Instance.String
-	} else if deviceSettings.IDDevice.Valid {
-		deviceID = deviceSettings.IDDevice.String
+		instance = deviceSettings.Instance.String
 	} else {
-		return fmt.Errorf("no device ID found for Whacenter")
+		return fmt.Errorf("no instance found for Whacenter device %s", deviceSettings.Instance.String)
 	}
 
-	// Prepare JSON payload for media message
-	payload := map[string]interface{}{
-		"device_id": deviceID,
-		"number":    phoneNumber,
-		"message":   caption,
-		"file":      mediaURL,
+	// Detect media type based on file extension (as per PHP code)
+	mediaType := ""
+	if strings.Contains(mediaURL, ".mp4") {
+		mediaType = "video"
+	} else if strings.Contains(mediaURL, ".mp3") {
+		mediaType = "audio"
 	}
+	// For images, no type parameter is needed (as per PHP code)
 
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
+	// Prepare form data exactly as specified by user PHP code
+	data := url.Values{}
+	data.Set("device_id", instance)    // device_id from instance
+	data.Set("number", phoneNumber)    // recipient number
+	data.Set("message", caption)       // message/caption content
+	data.Set("file", mediaURL)         // media file URL
+	
+	// Add type parameter for video and audio only (as per PHP code)
+	if mediaType != "" {
+		data.Set("type", mediaType)
 	}
 
 	// Create request
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	if deviceSettings.APIKey.Valid {
-		req.Header.Set("Authorization", "Bearer "+deviceSettings.APIKey.String)
-	}
+	// Set headers (form data, no authorization header as per user example)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send request
 	startTime := time.Now()
@@ -350,15 +384,20 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 		"status_code": resp.StatusCode,
 		"response":    string(body),
 		"duration":    duration,
+		"instance":    instance,
+		"media_type":  mediaType,
 	}).Debug("[WHACENTER] Media response received")
 
-	if resp.StatusCode != http.StatusOK {
+	// Check for success (200-299 status codes)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("whacenter API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
 		"duration":     duration,
+		"device_id":    deviceSettings.Instance.String,
+		"media_type":   mediaType,
 	}).Info("[WHACENTER] ✅ Media sent successfully")
 
 	return nil

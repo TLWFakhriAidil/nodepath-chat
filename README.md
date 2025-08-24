@@ -2002,5 +2002,39 @@ go run cmd/server/main.go
   - Flow nodes (Image, Audio, Video) now properly send media messages instead of text
   - Ensures proper media message delivery regardless of AI or flow response format
   - Maintains backward compatibility with existing plain URL auto-detection
+- ✅ **PROVIDER API FORMAT UPDATE**: Wablas and Whacenter API implementation
+  - **Wablas API**: Updated to use exact format specified in requirements
+    - URL: `https://my.wablas.com/api/send-message`
+    - Method: POST with `application/x-www-form-urlencoded`
+    - Headers: `Authorization: {instance}`, `Content-Type: application/x-www-form-urlencoded`
+    - Form data: `phone` (recipient), `message` (content)
+    - Uses instance from device_settings_nodepath for authorization
+  - **Whacenter API**: Updated to use exact format specified in requirements
+    - URL: `https://api.whacenter.com/api/send`
+    - Method: POST with `application/x-www-form-urlencoded`
+    - Form data: `device_id` (from instance), `number` (recipient), `message` (content)
+    - No authorization header required as per specification
+  - Enhanced error handling with 200-299 status code validation
+   - Improved logging with device_id and instance tracking for debugging
+   - Both providers now use form data instead of JSON for text message sending
+   - **CORRECTION**: Updated all device identification to use `deviceSettings.Instance.String` consistently for both providers
+   - Ensures proper device instance mapping for Wablas and Whacenter API calls
+- ✅ **MEDIA MESSAGE ENHANCEMENT**: Comprehensive video, audio, and image support
+  - **Wablas Media API**: Enhanced to handle multiple media types with automatic endpoint detection
+    - Video: `https://my.wablas.com/api/send-video` with `video` field for .mp4 files
+    - Audio: `https://my.wablas.com/api/send-audio` with `audio` field for .mp3 files
+    - Image: `https://my.wablas.com/api/send-image` with `image` field for other file types
+    - Uses form data with `phone`, media field, and optional `caption`
+    - Authorization via instance from device_settings_nodepath
+  - **Whacenter Media API**: Updated to match PHP implementation exactly
+    - URL: `https://api.whacenter.com/api/send` for all media types
+    - Form data: `device_id`, `number`, `message`, `file`, and conditional `type` parameter
+    - Type detection: `video` for .mp4, `audio` for .mp3, no type for images
+    - Uses `deviceSettings.Instance.String` for device_id parameter
+    - No authorization header required (as per user PHP example)
+  - **Enhanced Error Handling**: Both providers now use 200-299 status code range for success
+  - **Comprehensive Logging**: Added media type detection and enhanced debugging information
+  - **Automatic Type Detection**: File extension-based routing to appropriate API endpoints
+  - **Consistent Device Identification**: Both providers use instance field for device mapping
 
 **Final Status**: 🟢 **FULLY OPERATIONAL PRODUCTION SYSTEM** - Ready for users with no critical issues or blockers
