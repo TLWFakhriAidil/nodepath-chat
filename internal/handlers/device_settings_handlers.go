@@ -1986,12 +1986,12 @@ func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *mod
 
 // sendWhacenterImageMessage sends image message via Whacenter API
 func (h *Handlers) sendWhacenterImageMessage(to, imageURL string, deviceSettings *models.DeviceSettings) {
-	h.sendWhacenterMultimediaMessage(to, "", imageURL, "image", deviceSettings)
+	h.sendWhacenterMultimediaMessage(to, imageURL, "image", deviceSettings)
 }
 
 // sendWhacenterMultimediaMessage sends multimedia messages (video, audio, image) via Whacenter API
 // Equivalent to PHP sendChatMessage function for Whacenter provider
-func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType string, deviceSettings *models.DeviceSettings) {
+func (h *Handlers) sendWhacenterMultimediaMessage(to, fileURL, fileType string, deviceSettings *models.DeviceSettings) {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WHACENTER: No instance available")
 		return
@@ -2015,11 +2015,6 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType
 	data.Set("device_id", deviceSettings.Instance.String) // device_id from instance
 	data.Set("number", to)                               // recipient number
 	data.Set("file", fileURL)                           // media file URL
-	
-	// Add caption if provided
-	if caption != "" {
-		data.Set("message", caption)
-	}
 	
 	// Add type parameter for video and audio only (as per PHP code)
 	if mediaType != "" && mediaType != "image" {
@@ -2071,12 +2066,12 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType
 
 // sendWablasImageMessage sends image message via Wablas API
 func (h *Handlers) sendWablasImageMessage(to, imageURL string, deviceSettings *models.DeviceSettings) {
-	h.sendWablasMultimediaMessage(to, "", imageURL, "image", deviceSettings)
+	h.sendWablasMultimediaMessage(to, imageURL, "image", deviceSettings)
 }
 
 // sendWablasMultimediaMessage sends multimedia messages (video, audio, image) via Wablas API
 // Equivalent to PHP sendChatMessage function for Wablas provider
-func (h *Handlers) sendWablasMultimediaMessage(to, caption, fileURL, fileType string, deviceSettings *models.DeviceSettings) {
+func (h *Handlers) sendWablasMultimediaMessage(to, fileURL, fileType string, deviceSettings *models.DeviceSettings) {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WABLAS: No instance available")
 		return
@@ -2102,9 +2097,6 @@ func (h *Handlers) sendWablasMultimediaMessage(to, caption, fileURL, fileType st
 	formData := url.Values{}
 	formData.Set("phone", to)
 	formData.Set(fieldName, fileURL)
-	if caption != "" {
-		formData.Set("caption", caption)
-	}
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
@@ -2143,7 +2135,7 @@ func (h *Handlers) determineProviderFromInstance(instance string) string {
 	return "whacenter"
 }
 
-// sendChatMessage sends multimedia messages (video, audio, image) with caption support
+// sendChatMessage sends multimedia messages (video, audio, image)
 // Equivalent to PHP sendChatMessage function
 func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *models.DeviceSettings, delay time.Duration) {
 	// Console log for tracing media URL in handlers
@@ -2166,9 +2158,9 @@ func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *mo
 
 	switch provider {
 	case "wablas":
-		h.sendWablasMultimediaMessage(to, reply, fileURL, fileType, deviceSettings)
+		h.sendWablasMultimediaMessage(to, fileURL, fileType, deviceSettings)
 	case "whacenter":
-		h.sendWhacenterMultimediaMessage(to, reply, fileURL, fileType, deviceSettings)
+		h.sendWhacenterMultimediaMessage(to, fileURL, fileType, deviceSettings)
 
 	default:
 		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for multimedia message")

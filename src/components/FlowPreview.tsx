@@ -47,7 +47,7 @@ const PreviewNode = ({ data, type }: { data: any; type: string }) => {
       case 'message':
         return data.message || 'No message set';
       case 'image':
-        return data.caption || data.imageUrl || 'No image set';
+        return data.imageUrl || 'No image set';
       case 'audio':
         return `Audio (${data.duration || 30}s)`;
       case 'video':

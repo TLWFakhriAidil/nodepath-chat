@@ -19,7 +19,7 @@ export interface FlowNode {
     imageUrl?: string
     audioUrl?: string
     videoUrl?: string
-    caption?: string
+
     duration?: number
     previewUrl?: string
     uploadedFile?: {

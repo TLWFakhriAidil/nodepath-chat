@@ -242,9 +242,9 @@ h.processAIConversation(phoneNumber, content, deviceID)
 **Node Types Supported**:
 - ✅ `start` - Flow entry point
 - ✅ `message` - Text message nodes
-- ✅ `image` - Image with caption nodes
+- ✅ `image` - Image nodes
 - ✅ `audio` - Audio file nodes
-- ✅ `video` - Video with caption nodes
+- ✅ `video` - Video nodes
 - ✅ `delay` - Timed delay nodes
 - ✅ `condition` - Conditional branching nodes
 - ✅ `stage` - Stage management nodes
@@ -273,7 +273,7 @@ h.processAIConversation(phoneNumber, content, deviceID)
 #### 🛠️ All Node Types Fixed:
 - **`internal/whatsapp/whatsapp_service.go`** - Applied delay mechanism fix to:
   - ✅ `processMessageNode()` - Text message nodes
-  - ✅ `processImageNode()` - Image nodes with captions
+  - ✅ `processImageNode()` - Image nodes
   - ✅ `processAudioNode()` - Audio file nodes (inherits via processMessageNode)
   - ✅ `processVideoNode()` - Video file nodes (inherits via processMessageNode)
   - ✅ `processAIPromptNode()` - AI response generation nodes
@@ -795,7 +795,7 @@ git push origin main  # Triggers Railway deployment with migration
 - **Message Node**: Send text messages to users
 - **Condition Node**: Branching logic based on user input
 - **Delay Node**: Add timing delays between messages
-- **Image Node**: Display images with captions
+- **Image Node**: Display images
 - **Video Node**: Embed videos with duration controls
 - **Audio Node**: Audio message support
 - **Prompt Node**: AI-powered responses with OpenRouter/GPT-4.1
@@ -2072,7 +2072,7 @@ go run cmd/server/main.go
     - Video: `https://my.wablas.com/api/send-video` with `video` field for .mp4 files
     - Audio: `https://my.wablas.com/api/send-audio` with `audio` field for .mp3 files
     - Image: `https://my.wablas.com/api/send-image` with `image` field for other file types
-    - Uses form data with `phone`, media field, and optional `caption`
+    - Uses form data with `phone` and media field
     - Authorization via instance from device_setting_nodepath
   - **Whacenter Media API**: Updated to match PHP implementation exactly
     - URL: `https://api.whacenter.com/api/send` for all media types
@@ -2100,7 +2100,7 @@ go run cmd/server/main.go
   - **Whacenter API Standardization**: 
     - Corrected endpoint from `/api/send-media` to `/api/send` across all services
     - Standardized to form data format (`application/x-www-form-urlencoded`)
-    - Unified field names: `device_id`, `number`, `file`, `message` (for caption)
+    - Unified field names: `device_id`, `number`, `file`, `message`
     - Removed inconsistent Authorization headers
     - Added proper media type detection for video (.mp4) and audio (.mp3)
   - **Wablas API Consistency**: 

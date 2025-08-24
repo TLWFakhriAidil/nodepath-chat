@@ -173,12 +173,11 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 }
 
 // SendMediaMessage sends a media message through the appropriate provider
-func (s *Service) SendMediaMessage(deviceID, phoneNumber, caption, mediaURL string) error {
+func (s *Service) SendMediaMessage(deviceID, phoneNumber, mediaURL string) error {
 	// Console log for tracing media URL extraction
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
-		"caption":      caption,
 		"media_url":    mediaURL,
 		"media_url_length": len(mediaURL),
 		"media_url_preview": func() string {
@@ -196,7 +195,7 @@ func (s *Service) SendMediaMessage(deviceID, phoneNumber, caption, mediaURL stri
 	}
 
 	// Send media message through provider service
-	err = s.providerService.SendMediaMessage(deviceSettings, phoneNumber, caption, mediaURL)
+	err = s.providerService.SendMediaMessage(deviceSettings, phoneNumber, mediaURL)
 	if err != nil {
 		return fmt.Errorf("failed to send media message through provider: %w", err)
 	}

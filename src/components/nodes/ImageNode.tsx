@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 export default function ImageNode({ data, id }: NodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [imageUrl, setImageUrl] = useState((data?.imageUrl as string) || '');
-  const [caption, setCaption] = useState((data?.caption as string) || 'Image caption...');
+
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,7 +30,6 @@ export default function ImageNode({ data, id }: NodeProps) {
         (data?.onUpdate as Function)?.(id, {
           imageUrl: base64,
           mediaUrl: base64,
-          caption,
           uploadedFile: {
             name: file.name,
             type: file.type,
@@ -64,7 +63,6 @@ export default function ImageNode({ data, id }: NodeProps) {
     // Update the node data with current values
     (data?.onUpdate as Function)?.(id, {
       imageUrl,
-      caption,
       uploadedFile: uploadedFile ? {
         name: uploadedFile.name,
         type: uploadedFile.type,
@@ -140,15 +138,7 @@ export default function ImageNode({ data, id }: NodeProps) {
                 placeholder="https://example.com/image.jpg"
               />
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Caption</label>
-              <Input
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                className="text-sm text-black bg-white border-gray-300"
-                placeholder="Image caption..."
-              />
-            </div>
+
             <Button size="sm" onClick={handleSave} className="w-full">
               Save
             </Button>
@@ -180,9 +170,7 @@ export default function ImageNode({ data, id }: NodeProps) {
                 )}
               </div>
             )}
-            <div className="bg-muted/50 rounded p-3 text-sm text-black">
-              {caption}
-            </div>
+
           </div>
         )}
       </div>

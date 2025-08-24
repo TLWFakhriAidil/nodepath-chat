@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 export default function VideoNode({ data, id }: NodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [videoUrl, setVideoUrl] = useState((data?.videoUrl as string) || '');
-  const [caption, setCaption] = useState((data?.caption as string) || 'Video caption...');
+
   const [duration, setDuration] = useState((data?.duration as number) || 60);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -31,7 +31,6 @@ export default function VideoNode({ data, id }: NodeProps) {
         (data?.onUpdate as Function)?.(id, {
           videoUrl: base64,
           mediaUrl: base64,
-          caption,
           duration,
           uploadedFile: {
             name: file.name,
@@ -66,7 +65,6 @@ export default function VideoNode({ data, id }: NodeProps) {
     // Update the node data with current values
     (data?.onUpdate as Function)?.(id, {
       videoUrl,
-      caption,
       duration,
       uploadedFile: uploadedFile ? {
         name: uploadedFile.name,
@@ -143,15 +141,7 @@ export default function VideoNode({ data, id }: NodeProps) {
                 placeholder="https://example.com/video.mp4"
               />
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Caption</label>
-              <Input
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                className="text-sm text-black bg-white border-gray-300"
-                placeholder="Video caption..."
-              />
-            </div>
+
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Duration (seconds)</label>
               <Input
@@ -192,7 +182,6 @@ export default function VideoNode({ data, id }: NodeProps) {
               </div>
             )}
             <div className="bg-muted/50 rounded p-3">
-              <div className="text-sm text-black mb-1">{caption}</div>
               <div className="text-xs text-gray-600">{duration}s duration</div>
             </div>
           </div>

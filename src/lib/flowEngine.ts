@@ -222,7 +222,7 @@ export class FlowEngine {
       const botMessage: ChatMessage = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substring(2)}`,
         type: 'bot',
-        content: node.data.caption || node.data.message || '',
+        content: node.data.message || '',
         mediaType: 'image',
         mediaUrl,
         timestamp: new Date().toISOString()
@@ -320,7 +320,7 @@ export class FlowEngine {
       const botMessage: ChatMessage = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substring(2)}`,
         type: 'bot',
-        content: node.data.caption || node.data.message || '',
+        content: node.data.message || '',
         mediaType: 'video',
         mediaUrl,
         timestamp: new Date().toISOString()

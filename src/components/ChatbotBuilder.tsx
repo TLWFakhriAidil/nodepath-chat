@@ -158,7 +158,7 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
           condition: type === 'condition' ? 'user_input contains "yes"' : undefined,
           delay: type === 'delay' ? 5 : undefined,
           imageUrl: type === 'image' ? '' : undefined,
-          caption: type === 'image' || type === 'video' ? 'Caption...' : undefined,
+
           audioUrl: type === 'audio' ? '' : undefined,
           videoUrl: type === 'video' ? '' : undefined,
           duration: type === 'audio' || type === 'video' ? (type === 'audio' ? 30 : 60) : undefined,

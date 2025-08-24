@@ -560,7 +560,7 @@ func (s *aiCronService) sendTextMessage(to, message string, deviceSettings *mode
 	}
 }
 
-// sendChatMessage sends multimedia messages (video, audio, image) with caption support
+// sendChatMessage sends multimedia messages (video, audio, image)
 // Equivalent to PHP sendChatMessage function
 func (s *aiCronService) sendChatMessage(to, reply, fileURL string, deviceSettings *models.DeviceSettings, provider string) error {
 	// Console log for tracing media URL in chat message
@@ -581,9 +581,9 @@ func (s *aiCronService) sendChatMessage(to, reply, fileURL string, deviceSetting
 
 	switch provider {
 	case "wablas":
-		return s.sendWablasMultimediaMessage(to, reply, fileURL, fileType, deviceSettings)
+		return s.sendWablasMultimediaMessage(to, fileURL, fileType, deviceSettings)
 	case "whacenter":
-		return s.sendWhacenterMultimediaMessage(to, reply, fileURL, fileType, deviceSettings)
+		return s.sendWhacenterMultimediaMessage(to, fileURL, fileType, deviceSettings)
 	default:
 		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for multimedia message")
 		return fmt.Errorf("unsupported provider: %s", provider)
@@ -719,7 +719,7 @@ func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSetti
 
 
 // sendWablasMultimediaMessage sends multimedia message via Wablas provider
-func (s *aiCronService) sendWablasMultimediaMessage(to, caption, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
+func (s *aiCronService) sendWablasMultimediaMessage(to, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
 	logrus.WithFields(logrus.Fields{
 		"to": to,
 		"file_type": fileType,
@@ -734,7 +734,7 @@ func (s *aiCronService) sendWablasMultimediaMessage(to, caption, fileURL, fileTy
 }
 
 // sendWhacenterMultimediaMessage sends multimedia message via Whacenter provider
-func (s *aiCronService) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
+func (s *aiCronService) sendWhacenterMultimediaMessage(to, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WHACENTER: No instance available")
 		return fmt.Errorf("no instance available")
@@ -765,11 +765,6 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, caption, fileURL, fil
 	data.Set("device_id", deviceSettings.Instance.String) // device_id from instance
 	data.Set("number", to)                               // recipient number
 	data.Set("file", fileURL)                           // media file URL
-	
-	// Add caption if provided
-	if caption != "" {
-		data.Set("message", caption)
-	}
 	
 	// Add type parameter for video and audio only (as per PHP code)
 	if mediaType != "" && mediaType != "image" {

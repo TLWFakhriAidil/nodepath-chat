@@ -52,7 +52,7 @@ func (ps *ProviderService) SendMessage(deviceSettings *models.DeviceSettings, ph
 }
 
 // SendMediaMessage sends a media message through the appropriate provider
-func (ps *ProviderService) SendMediaMessage(deviceSettings *models.DeviceSettings, phoneNumber, caption, mediaURL string) error {
+func (ps *ProviderService) SendMediaMessage(deviceSettings *models.DeviceSettings, phoneNumber, mediaURL string) error {
 	if deviceSettings == nil {
 		return fmt.Errorf("device settings cannot be nil")
 	}
@@ -68,9 +68,9 @@ func (ps *ProviderService) SendMediaMessage(deviceSettings *models.DeviceSetting
 
 	switch provider {
 	case "wablas":
-		return ps.sendWablasImageMessage(deviceSettings, phoneNumber, caption, mediaURL)
+		return ps.sendWablasImageMessage(deviceSettings, phoneNumber, mediaURL)
 	case "whacenter":
-		return ps.sendWhacenterMediaMessage(deviceSettings, phoneNumber, caption, mediaURL)
+		return ps.sendWhacenterMediaMessage(deviceSettings, phoneNumber, mediaURL)
 	default:
 		return fmt.Errorf("unsupported provider: %s", provider)
 	}
@@ -149,7 +149,7 @@ func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettin
 
 // sendWablasImageMessage sends a media message via Wablas API with type detection
 // Handles video, audio, and image files with appropriate API endpoints
-func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceSettings, phoneNumber, caption, mediaURL string) error {
+func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceSettings, phoneNumber, mediaURL string) error {
 	// Detect media type based on file extension
 	mediaType := ""
 	var apiURL string
@@ -175,7 +175,6 @@ func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceS
 		"phone_number": phoneNumber,
 		"media_url":    mediaURL,
 		"media_type":   mediaType,
-		"caption_len":  len(caption),
 		"device_id":    deviceSettings.Instance.String,
 	}).Debug("[WABLAS-MEDIA] Preparing request")
 
@@ -191,9 +190,6 @@ func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceS
 	data := url.Values{}
 	data.Set("phone", phoneNumber)        // Recipient phone number
 	data.Set(fieldName, mediaURL)         // Media file URL with correct field name
-	if caption != "" {
-		data.Set("caption", caption)      // Caption/message content
-	}
 
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
@@ -316,14 +312,13 @@ func (ps *ProviderService) sendWhacenterMessage(deviceSettings *models.DeviceSet
 
 // sendWhacenterMediaMessage sends a media message via Whacenter API
 // Uses the exact API format specified by user requirements with type detection
-func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.DeviceSettings, phoneNumber, caption, mediaURL string) error {
+func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.DeviceSettings, phoneNumber, mediaURL string) error {
 	apiURL := "https://api.whacenter.com/api/send"
 	
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
 		"media_url":    mediaURL,
-		"caption_len":  len(caption),
 		"device_id":    deviceSettings.Instance.String,
 	}).Debug("[WHACENTER] Preparing media request")
 
@@ -350,11 +345,6 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 	data.Set("device_id", instance)    // device_id from instance
 	data.Set("number", phoneNumber)    // recipient number
 	data.Set("file", mediaURL)         // media file URL
-	
-	// Add caption if provided
-	if caption != "" {
-		data.Set("message", caption)
-	}
 	
 	// Add type parameter for video and audio only (as per PHP code)
 	if mediaType != "" && mediaType != "image" {
