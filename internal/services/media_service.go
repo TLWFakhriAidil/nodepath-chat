@@ -135,12 +135,27 @@ func (ms *MediaService) UploadFile(fileHeader *multipart.FileHeader) (*MediaUplo
 	if ms.cdnEnabled && ms.cdnBaseURL != "" {
 		cdnURL = fmt.Sprintf("%s/%s", strings.TrimRight(ms.cdnBaseURL, "/"), fileName)
 	}
-	
+
+	// Console log for tracing URL generation
+	logrus.WithFields(logrus.Fields{
+		"file_name": fileName,
+		"local_url": localURL,
+		"cdn_url": cdnURL,
+		"cdn_enabled": ms.cdnEnabled,
+		"cdn_base_url": ms.cdnBaseURL,
+	}).Info("🔍 MEDIA SERVICE: URLs GENERATED FOR TRACING")
+
 	// Generate thumbnail for images
 	thumbnailURL := ""
 	if strings.HasPrefix(mimeType, "image/") {
 		if thumbPath, err := ms.generateThumbnail(optimizedData, fileName, mimeType); err == nil {
 			thumbnailURL = fmt.Sprintf("/media/thumbnails/%s", filepath.Base(thumbPath))
+			// Console log for tracing thumbnail URL generation
+			logrus.WithFields(logrus.Fields{
+				"file_name": fileName,
+				"thumbnail_url": thumbnailURL,
+				"thumbnail_path": thumbPath,
+			}).Info("🔍 MEDIA SERVICE: THUMBNAIL URL GENERATED FOR TRACING")
 		}
 	}
 	

@@ -1597,7 +1597,7 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 		}
 
 		// Add small delay between messages to avoid rate limiting
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(5000 * time.Millisecond)
 	}
 }
 
@@ -1927,6 +1927,15 @@ func (h *Handlers) determineProviderFromInstance(instance string) string {
 // sendChatMessage sends multimedia messages (video, audio, image) with caption support
 // Equivalent to PHP sendChatMessage function
 func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *models.DeviceSettings, delay time.Duration) {
+	// Console log for tracing media URL in handlers
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"file_url": fileURL,
+		"device_id": deviceSettings.IDDevice,
+		"file_url_length": len(fileURL),
+		"delay_ms": delay.Milliseconds(),
+	}).Info("🔍 HANDLERS: MEDIA URL RECEIVED FOR TRACING")
+
 	// Add delay before sending
 	time.Sleep(delay)
 
@@ -1949,12 +1958,25 @@ func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *mo
 
 // getFileType determines file type based on file extension
 func (h *Handlers) getFileType(fileURL string) string {
+	var fileType string
 	if strings.Contains(fileURL, ".mp4") {
-		return "video"
+		fileType = "video"
 	} else if strings.Contains(fileURL, ".mp3") {
-		return "audio"
+		fileType = "audio"
+	} else {
+		fileType = "image"
 	}
-	return "image"
+
+	// Console log for tracing file type determination
+	logrus.WithFields(logrus.Fields{
+		"file_url": fileURL,
+		"determined_type": fileType,
+		"has_mp4": strings.Contains(fileURL, ".mp4"),
+		"has_mp3": strings.Contains(fileURL, ".mp3"),
+		"default_to_image": !strings.Contains(fileURL, ".mp4") && !strings.Contains(fileURL, ".mp3"),
+	}).Info("🔍 HANDLERS: FILE TYPE DETERMINED FOR TRACING")
+
+	return fileType
 }
 
 

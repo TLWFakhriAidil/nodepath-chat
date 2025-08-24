@@ -172,12 +172,20 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 
 // SendMediaMessage sends a media message through the appropriate provider
 func (s *Service) SendMediaMessage(deviceID, phoneNumber, caption, mediaURL string) error {
+	// Console log for tracing media URL extraction
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"caption":      caption,
 		"media_url":    mediaURL,
-	}).Info("📤 MEDIA: Sending media message")
+		"media_url_length": len(mediaURL),
+		"media_url_preview": func() string {
+			if len(mediaURL) > 100 {
+				return mediaURL[:100] + "..."
+			}
+			return mediaURL
+		}(),
+	}).Info("📤 MEDIA: Sending media message - URL EXTRACTED FOR TRACING")
 
 	// Get device settings by device_id
 	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
@@ -473,8 +481,8 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send text message")
 				return err
 			}
-			// Add small delay between messages for better user experience
-			time.Sleep(500 * time.Millisecond)
+			// Add 5 second delay between messages for better user experience
+			time.Sleep(5000 * time.Millisecond)
 
 		case "image":
 			// Send image message
@@ -483,8 +491,8 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send image message")
 				return err
 			}
-			// Add small delay between messages
-			time.Sleep(500 * time.Millisecond)
+			// Add 5 second delay between messages
+			time.Sleep(5000 * time.Millisecond)
 
 		default:
 			logrus.WithField("type", item.Type).Warn("Unknown response type, skipping")
@@ -911,6 +919,27 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 		imageURL = url
 	}
 
+	// Console log for tracing image URL extraction
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"raw_image_url": imageURL,
+		"node_data_keys": func() []string {
+			keys := make([]string, 0, len(node.Data))
+			for k := range node.Data {
+				keys = append(keys, k)
+			}
+			return keys
+		}(),
+		"url_source": func() string {
+			if _, ok := node.Data["imageUrl"]; ok {
+				return "imageUrl"
+			} else if _, ok := node.Data["image"]; ok {
+				return "image"
+			}
+			return "none"
+		}(),
+	}).Info("🔍 IMAGE NODE: RAW URL EXTRACTED FOR TRACING")
+
 	// Replace variables in image URL
 	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
 	if err != nil {
@@ -918,6 +947,13 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 		variables = make(map[string]interface{})
 	}
 	imageURL = s.flowService.ReplaceVariables(imageURL, variables)
+
+	// Console log for tracing processed image URL
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"processed_image_url": imageURL,
+		"variables_count": len(variables),
+	}).Info("🔍 IMAGE NODE: PROCESSED URL EXTRACTED FOR TRACING")
 
 	logrus.WithFields(logrus.Fields{
 		"execution_id": execution.IDProspect,
@@ -1001,6 +1037,29 @@ func (s *Service) processAudioNode(flow *models.ChatbotFlow, execution *models.A
 		audioURL = url
 	}
 
+	// Console log for tracing audio URL extraction
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"raw_audio_url": audioURL,
+		"node_data_keys": func() []string {
+			keys := make([]string, 0, len(node.Data))
+			for k := range node.Data {
+				keys = append(keys, k)
+			}
+			return keys
+		}(),
+		"url_source": func() string {
+			if _, ok := node.Data["audioUrl"]; ok {
+				return "audioUrl"
+			} else if _, ok := node.Data["audio"]; ok {
+				return "audio"
+			} else if _, ok := node.Data["mediaUrl"]; ok {
+				return "mediaUrl"
+			}
+			return "none"
+		}(),
+	}).Info("🔍 AUDIO NODE: RAW URL EXTRACTED FOR TRACING")
+
 	// Replace variables in audio URL
 	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
 	if err != nil {
@@ -1008,6 +1067,13 @@ func (s *Service) processAudioNode(flow *models.ChatbotFlow, execution *models.A
 		variables = make(map[string]interface{})
 	}
 	audioURL = s.flowService.ReplaceVariables(audioURL, variables)
+
+	// Console log for tracing processed audio URL
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"processed_audio_url": audioURL,
+		"variables_count": len(variables),
+	}).Info("🔍 AUDIO NODE: PROCESSED URL EXTRACTED FOR TRACING")
 
 	logrus.WithFields(logrus.Fields{
 		"execution_id": execution.IDProspect,
@@ -1091,6 +1157,29 @@ func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.A
 		videoURL = url
 	}
 
+	// Console log for tracing video URL extraction
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"raw_video_url": videoURL,
+		"node_data_keys": func() []string {
+			keys := make([]string, 0, len(node.Data))
+			for k := range node.Data {
+				keys = append(keys, k)
+			}
+			return keys
+		}(),
+		"url_source": func() string {
+			if _, ok := node.Data["videoUrl"]; ok {
+				return "videoUrl"
+			} else if _, ok := node.Data["video"]; ok {
+				return "video"
+			} else if _, ok := node.Data["mediaUrl"]; ok {
+				return "mediaUrl"
+			}
+			return "none"
+		}(),
+	}).Info("🔍 VIDEO NODE: RAW URL EXTRACTED FOR TRACING")
+
 	// Replace variables in video URL
 	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
 	if err != nil {
@@ -1098,6 +1187,13 @@ func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.A
 		variables = make(map[string]interface{})
 	}
 	videoURL = s.flowService.ReplaceVariables(videoURL, variables)
+
+	// Console log for tracing processed video URL
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"processed_video_url": videoURL,
+		"variables_count": len(variables),
+	}).Info("🔍 VIDEO NODE: PROCESSED URL EXTRACTED FOR TRACING")
 
 	logrus.WithFields(logrus.Fields{
 		"execution_id": execution.IDProspect,

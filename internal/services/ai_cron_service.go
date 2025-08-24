@@ -145,8 +145,8 @@ func (s *aiCronService) sendAIResponse(prospectNum, deviceID string, response *A
 			}
 		}
 
-		// Add small delay between messages to avoid rate limiting
-		time.Sleep(500 * time.Millisecond)
+		// Add 5 second delay between messages to avoid rate limiting
+		time.Sleep(5000 * time.Millisecond)
 	}
 
 	return nil
@@ -475,6 +475,15 @@ func (s *aiCronService) sendTextMessage(to, message string, deviceSettings *mode
 // sendChatMessage sends multimedia messages (video, audio, image) with caption support
 // Equivalent to PHP sendChatMessage function
 func (s *aiCronService) sendChatMessage(to, reply, fileURL string, deviceSettings *models.DeviceSettings, provider string) error {
+	// Console log for tracing media URL in chat message
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"file_url": fileURL,
+		"provider": provider,
+		"device_id": deviceSettings.IDDevice,
+		"file_url_length": len(fileURL),
+	}).Info("🔍 AI CRON: MEDIA URL RECEIVED FOR TRACING")
+
 	// Add delay before sending
 	delay := 1 * time.Second
 	time.Sleep(delay)
@@ -495,19 +504,39 @@ func (s *aiCronService) sendChatMessage(to, reply, fileURL string, deviceSetting
 
 // getFileType determines file type based on URL extension
 func (s *aiCronService) getFileType(fileURL string) string {
+	var fileType string
 	if strings.Contains(fileURL, ".jpg") || strings.Contains(fileURL, ".jpeg") || strings.Contains(fileURL, ".png") {
-		return "image"
+		fileType = "image"
+	} else if strings.Contains(fileURL, ".mp4") || strings.Contains(fileURL, ".avi") {
+		fileType = "video"
+	} else if strings.Contains(fileURL, ".mp3") || strings.Contains(fileURL, ".wav") {
+		fileType = "audio"
+	} else if strings.Contains(fileURL, ".pdf") || strings.Contains(fileURL, ".doc") {
+		fileType = "document"
+	} else {
+		fileType = "image" // default to image
 	}
-	if strings.Contains(fileURL, ".mp4") || strings.Contains(fileURL, ".avi") {
-		return "video"
-	}
-	if strings.Contains(fileURL, ".mp3") || strings.Contains(fileURL, ".wav") {
-		return "audio"
-	}
-	if strings.Contains(fileURL, ".pdf") || strings.Contains(fileURL, ".doc") {
-		return "document"
-	}
-	return "image" // default to image
+
+	// Console log for tracing file type determination
+	logrus.WithFields(logrus.Fields{
+		"file_url": fileURL,
+		"determined_type": fileType,
+		"url_extensions_found": func() []string {
+			extensions := []string{}
+			if strings.Contains(fileURL, ".jpg") { extensions = append(extensions, ".jpg") }
+			if strings.Contains(fileURL, ".jpeg") { extensions = append(extensions, ".jpeg") }
+			if strings.Contains(fileURL, ".png") { extensions = append(extensions, ".png") }
+			if strings.Contains(fileURL, ".mp4") { extensions = append(extensions, ".mp4") }
+			if strings.Contains(fileURL, ".avi") { extensions = append(extensions, ".avi") }
+			if strings.Contains(fileURL, ".mp3") { extensions = append(extensions, ".mp3") }
+			if strings.Contains(fileURL, ".wav") { extensions = append(extensions, ".wav") }
+			if strings.Contains(fileURL, ".pdf") { extensions = append(extensions, ".pdf") }
+			if strings.Contains(fileURL, ".doc") { extensions = append(extensions, ".doc") }
+			return extensions
+		}(),
+	}).Info("🔍 AI CRON: FILE TYPE DETERMINED FOR TRACING")
+
+	return fileType
 }
 
 // sendWablasTextMessage sends text message via Wablas provider
