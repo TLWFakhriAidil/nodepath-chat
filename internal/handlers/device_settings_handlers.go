@@ -1517,37 +1517,106 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		"from": from,
 	}).Info("🔄 WEBHOOK: Checking chatbot flows for AI prompt nodes")
 
-	// Get current conversation stage from AI WhatsApp repository
+	// Check ai_whatsapp_nodepath for existing phone number and device combination
 	var stage string
 	var isNewUser bool
+	
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"from": from,
+	}).Info("🔍 WEBHOOK: Checking ai_whatsapp_nodepath for existing phone number")
+	
 	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
-		aiConv, err := h.aiWhatsappHandlers.AIRepo.GetAIWhatsappByProspectNum(from)
+		// First check for existing record with this phone number and device
+		existingRecord, err := h.aiWhatsappHandlers.AIRepo.GetAIWhatsappByProspectAndDevice(from, idDevice)
 		if err != nil {
-			logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to get AI conversation stage")
+			logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to get AI conversation by prospect and device")
 			isNewUser = true
-		} else if aiConv != nil {
-			stage = aiConv.Stage
+		} else if existingRecord != nil {
+			// Existing user found - continue with current stage
+			stage = existingRecord.Stage
 			isNewUser = false
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"current_stage": stage,
+			}).Info("✅ WEBHOOK: Found existing phone number record, continuing with current stage")
 		} else {
+			// New user - need to save phone number data first
 			isNewUser = true
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+			}).Info("📝 WEBHOOK: New phone number detected, will save data first")
+			
+			// Save new phone number data before proceeding
+			now := time.Now()
+			newRecord := &models.AIWhatsapp{
+				IDDevice:    idDevice,
+				ProspectNum: from,
+				Stage:       "start", // Default starting stage
+				ConvLast:    json.RawMessage(`"` + message + `"`), // Store as JSON string
+				Human:       0,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+			
+			if err := h.aiWhatsappHandlers.AIRepo.CreateAIWhatsapp(newRecord); err != nil {
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to save new phone number data")
+				// Continue processing even if save fails
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"id_device": idDevice,
+					"from": from,
+					"stage": "start",
+				}).Info("✅ WEBHOOK: Successfully saved new phone number data")
+			}
 		}
+	} else {
+		logrus.Error("❌ WEBHOOK: AI WhatsApp repository not available")
+		isNewUser = true
 	}
 
 	// Process flow execution based on user status
 	var flowResult *services.FlowExecutionResult
 	var flowErr error
 
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"from": from,
+		"is_new_user": isNewUser,
+		"current_stage": stage,
+	}).Info("🔄 WEBHOOK: Processing flow execution")
+
 	if isNewUser {
 		// Process flow for new user
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+		}).Info("🆕 WEBHOOK: Processing flow for new user")
 		flowResult, flowErr = h.flowExecutionService.ProcessFlowForNewUser(idDevice, from)
 	} else {
 		// Process flow for existing user
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"stage": stage,
+		}).Info("👤 WEBHOOK: Processing flow for existing user")
 		flowResult, flowErr = h.flowExecutionService.ProcessFlowForExistingUser(idDevice, from, stage, message)
 	}
 
 	if flowErr != nil {
 		logrus.WithError(flowErr).Error("❌ WEBHOOK: Failed to process flow execution")
 		// Continue with fallback AI processing
+	} else if flowResult != nil {
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"from": from,
+			"flow_id": flowResult.FlowID,
+			"node_id": flowResult.NodeID,
+			"should_use_ai": flowResult.ShouldUseAI,
+			"should_send_message": flowResult.ShouldSendMessage,
+		}).Info("✅ WEBHOOK: Flow execution completed successfully")
 	}
 
 	// Check if we should use flow-based AI prompt
@@ -1576,6 +1645,29 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			// Send response if we have one
 			if response != nil {
 				h.handleAIResponse(from, idDevice, provider, message, response)
+				
+				// Save conversation history after AI response
+				if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
+					// Format AI response for saving
+					var aiResponseText string
+					if response != nil && len(response.Response) > 0 {
+						for _, item := range response.Response {
+							if item.Type == "text" {
+								aiResponseText += item.Content + " "
+							}
+						}
+						aiResponseText = strings.TrimSpace(aiResponseText)
+					}
+					if err := h.aiWhatsappHandlers.AIRepo.SaveConversationHistory(from, idDevice, message, aiResponseText, flowResult.CurrentStage); err != nil {
+						logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history after AI response")
+					} else {
+						logrus.WithFields(logrus.Fields{
+							"id_device": idDevice,
+							"from": from,
+							"stage": flowResult.CurrentStage,
+						}).Info("✅ WEBHOOK: Conversation history saved after AI response")
+					}
+				}
 			}
 			return
 		}
@@ -1614,6 +1706,19 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			"flow_id": flowResult.FlowID,
 			"node_id": flowResult.NodeID,
 		}).Info("✅ WEBHOOK: Successfully sent predefined flow content")
+		
+		// Save conversation history after sending predefined content
+		if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
+			if err := h.aiWhatsappHandlers.AIRepo.SaveConversationHistory(from, idDevice, message, flowResult.Message, flowResult.CurrentStage); err != nil {
+				logrus.WithError(err).Error("❌ WEBHOOK: Failed to save conversation history after predefined content")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"id_device": idDevice,
+					"from": from,
+					"stage": flowResult.CurrentStage,
+				}).Info("✅ WEBHOOK: Conversation history saved after predefined content")
+			}
+		}
 		return
 	}
 
