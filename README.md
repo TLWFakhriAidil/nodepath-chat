@@ -1994,11 +1994,13 @@ go run cmd/server/main.go
   - Improved real-time responsiveness for all delayed message operations
   - Enhanced user experience with faster message delivery timing
 - ✅ **CRITICAL FIX**: Media URL bracket format processing
-  - Fixed issue where AI responses with bracket format `[IMAGE: URL]`, `[AUDIO: URL]`, `[VIDEO: URL]` were sent as text instead of media
-  - Added preprocessing to extract URLs from bracket format before auto-detection in `parseAIResponse` function
-  - Enhanced media URL detection to handle both bracket format and plain URLs
+  - Fixed issue where both AI responses and flow responses with bracket format `[IMAGE: URL]`, `[AUDIO: URL]`, `[VIDEO: URL]` were sent as text instead of media
+  - **AI Response Fix**: Added preprocessing to extract URLs from bracket format before auto-detection in `parseAIResponse` function
+  - **Flow Response Fix**: Added bracket format detection and extraction in `whatsapp_service.go` flow processing before sending messages
+  - Enhanced media URL detection to handle both bracket format and plain URLs in all response types
   - Implemented comprehensive logging for bracket format extraction debugging
-  - Ensures proper media message delivery regardless of AI response format
+  - Flow nodes (Image, Audio, Video) now properly send media messages instead of text
+  - Ensures proper media message delivery regardless of AI or flow response format
   - Maintains backward compatibility with existing plain URL auto-detection
 
 **Final Status**: 🟢 **FULLY OPERATIONAL PRODUCTION SYSTEM** - Ready for users with no critical issues or blockers

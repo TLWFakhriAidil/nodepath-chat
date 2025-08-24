@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -350,14 +351,76 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"response_length": len(response),
 		}).Info("📤 FLOW: Sending response back to user")
 
-		// Send response back to user using specific device
-		err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
-		if err != nil {
-			logrus.WithError(err).WithFields(logrus.Fields{
-				"device_id":    deviceID,
-				"phone_number": phoneNumber,
-			}).Error("❌ FLOW: Failed to send response message")
-			return err
+		// Check if response contains bracket format media URLs and extract them
+		if strings.Contains(response, "[IMAGE:") || strings.Contains(response, "[AUDIO:") || strings.Contains(response, "[VIDEO:") {
+			// Extract URL from bracket format
+			var mediaURL string
+			var mediaType string
+			
+			if strings.Contains(response, "[IMAGE:") {
+				re := regexp.MustCompile(`\[IMAGE:\s*([^\]]+)\]`)
+				matches := re.FindStringSubmatch(response)
+				if len(matches) > 1 {
+					mediaURL = strings.TrimSpace(matches[1])
+					mediaURL = strings.Trim(mediaURL, "`") // Remove backticks if present
+					mediaType = "image"
+				}
+			} else if strings.Contains(response, "[AUDIO:") {
+				re := regexp.MustCompile(`\[AUDIO:\s*([^\]]+)\]`)
+				matches := re.FindStringSubmatch(response)
+				if len(matches) > 1 {
+					mediaURL = strings.TrimSpace(matches[1])
+					mediaURL = strings.Trim(mediaURL, "`") // Remove backticks if present
+					mediaType = "audio"
+				}
+			} else if strings.Contains(response, "[VIDEO:") {
+				re := regexp.MustCompile(`\[VIDEO:\s*([^\]]+)\]`)
+				matches := re.FindStringSubmatch(response)
+				if len(matches) > 1 {
+					mediaURL = strings.TrimSpace(matches[1])
+					mediaURL = strings.Trim(mediaURL, "`") // Remove backticks if present
+					mediaType = "video"
+				}
+			}
+			
+			if mediaURL != "" {
+				logrus.WithFields(logrus.Fields{
+					"media_type": mediaType,
+					"media_url":  mediaURL,
+					"device_id":  deviceID,
+				}).Info("🖼️ FLOW: Extracted media URL from bracket format, sending as media message")
+				
+				// Send as media message instead of text
+				err = s.SendMediaMessage(deviceID, phoneNumber, "", mediaURL)
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"device_id":    deviceID,
+						"phone_number": phoneNumber,
+						"media_url":    mediaURL,
+					}).Error("❌ FLOW: Failed to send media message")
+					return err
+				}
+			} else {
+				// Fallback to text if extraction failed
+				err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"device_id":    deviceID,
+						"phone_number": phoneNumber,
+					}).Error("❌ FLOW: Failed to send response message")
+					return err
+				}
+			}
+		} else {
+			// Send response back to user using specific device (regular text)
+			err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+			if err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"device_id":    deviceID,
+					"phone_number": phoneNumber,
+				}).Error("❌ FLOW: Failed to send response message")
+				return err
+			}
 		}
 
 		logrus.WithFields(logrus.Fields{
