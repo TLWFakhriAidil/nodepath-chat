@@ -262,6 +262,27 @@ func (s *ChatService) CompleteExecution(executionID string) error {
 	return nil
 }
 
+// ResetExecutionsForContact completes all active executions for a phone number and device
+// This ensures a fresh start when beginning a new conversation flow
+func (s *ChatService) ResetExecutionsForContact(phoneNumber, idDevice string) error {
+	query := `UPDATE chatbot_executions_nodepath SET status = 'completed', updated_at = ? WHERE phone_number = ? AND id_device = ? AND status = 'active'`
+	result, err := s.db.Exec(query, time.Now(), phoneNumber, idDevice)
+	if err != nil {
+		return fmt.Errorf("failed to reset executions: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"id_device": idDevice,
+			"rows_affected": rowsAffected,
+		}).Info("Reset active executions for fresh start")
+	}
+
+	return nil
+}
+
 // FailExecution marks an execution as failed
 func (s *ChatService) FailExecution(executionID string) error {
 	query := `UPDATE chatbot_executions_nodepath SET status = 'failed', updated_at = ? WHERE id = ?`

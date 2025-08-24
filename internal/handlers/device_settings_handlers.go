@@ -1536,6 +1536,12 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		// Try to get default flow for device
 		defaultFlow, err := h.flowService.GetDefaultFlowForDevice(idDevice)
 		if err == nil && defaultFlow != nil {
+			// Reset any existing executions to ensure fresh start
+			err = h.chatService.ResetExecutionsForContact(from, idDevice)
+			if err != nil {
+				logrus.WithError(err).Warn("⚠️ WEBHOOK: Failed to reset existing executions")
+			}
+
 			// Start new execution with default flow
 			logrus.WithFields(logrus.Fields{
 				"id_device": idDevice,
