@@ -1669,26 +1669,44 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 		return
 	}
 
-	// Parse response data - handle AIWhatsappResponse struct
-	var aiResponse *services.AIWhatsappResponse
+	// Parse response data - handle both AIWhatsappResponse and AIResponse structs
+	var responseItems []services.AIWhatsappResponseItem
 	switch v := response.(type) {
 	case *services.AIWhatsappResponse:
-		aiResponse = v
+		responseItems = v.Response
 	case services.AIWhatsappResponse:
-		aiResponse = &v
+		responseItems = v.Response
+	case *models.AIResponse:
+		// Convert models.AIResponse to services.AIWhatsappResponseItem format
+		for _, item := range v.Response {
+			responseItems = append(responseItems, services.AIWhatsappResponseItem{
+				Type:    item.Type,
+				Jenis:   item.Jenis,
+				Content: item.Content,
+			})
+		}
+	case models.AIResponse:
+		// Convert models.AIResponse to services.AIWhatsappResponseItem format
+		for _, item := range v.Response {
+			responseItems = append(responseItems, services.AIWhatsappResponseItem{
+				Type:    item.Type,
+				Jenis:   item.Jenis,
+				Content: item.Content,
+			})
+		}
 	default:
 		logrus.WithField("response_type", fmt.Sprintf("%T", response)).Error("❌ WHATSAPP: Invalid response format")
 		return
 	}
 
 	// Validate response structure
-	if aiResponse == nil || len(aiResponse.Response) == 0 {
+	if len(responseItems) == 0 {
 		logrus.Error("❌ WHATSAPP: No response messages found")
 		return
 	}
 
 	// Send each response message
-	for _, respItem := range aiResponse.Response {
+	for _, respItem := range responseItems {
 		if respItem.Content == "" {
 			continue
 		}
