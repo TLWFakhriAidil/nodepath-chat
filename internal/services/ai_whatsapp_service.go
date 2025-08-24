@@ -614,6 +614,30 @@ func (s *aiWhatsappService) parseAIResponse(responseText string) (*AIWhatsappRes
 		return nil, fmt.Errorf("empty response from AI")
 	}
 
+	// Console log for tracing parsed AI response items
+	logrus.WithFields(logrus.Fields{
+		"stage": aiResponse.Stage,
+		"response_count": len(aiResponse.Response),
+		"parsed_items": func() []map[string]interface{} {
+			items := make([]map[string]interface{}, len(aiResponse.Response))
+			for i, item := range aiResponse.Response {
+				items[i] = map[string]interface{}{
+					"index": i,
+					"type": item.Type,
+					"content_length": len(item.Content),
+					"is_image_url": strings.HasPrefix(item.Content, "http") && item.Type == "image",
+					"content_preview": func() string {
+						if len(item.Content) > 100 {
+							return item.Content[:100] + "..."
+						}
+						return item.Content
+					}(),
+				}
+			}
+			return items
+		}(),
+	}).Info("🔍 AI RESPONSE: PARSED AI RESPONSE ITEMS FOR TRACING")
+
 	return &aiResponse, nil
 }
 

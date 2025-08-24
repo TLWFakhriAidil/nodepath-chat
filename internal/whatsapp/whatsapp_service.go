@@ -471,6 +471,29 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 		"response_count": len(response.Response),
 	}).Info("📤 AI: Sending AI response")
 
+	// Console log for tracing AI response items
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"phone_number": phoneNumber,
+		"response_items": func() []map[string]interface{} {
+			items := make([]map[string]interface{}, len(response.Response))
+			for i, item := range response.Response {
+				items[i] = map[string]interface{}{
+					"index": i,
+					"type": item.Type,
+					"content_length": len(item.Content),
+					"content_preview": func() string {
+						if len(item.Content) > 100 {
+							return item.Content[:100] + "..."
+						}
+						return item.Content
+					}(),
+				}
+			}
+			return items
+		}(),
+	}).Info("🔍 AI RESPONSE: PROCESSING RESPONSE ITEMS FOR TRACING")
+
 	// Send each response item in sequence
 	for i, item := range response.Response {
 		switch item.Type {
@@ -485,8 +508,8 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 			time.Sleep(5000 * time.Millisecond)
 
 		case "image":
-			// Send image message
-			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content, "image")
+			// Send image message - item.Content contains the image URL
+			err := s.SendMediaMessage(deviceID, phoneNumber, "", item.Content)
 			if err != nil {
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send image message")
 				return err
