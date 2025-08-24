@@ -315,68 +315,6 @@ func (s *FlowService) GetNextNode(flow *models.ChatbotFlow, currentNodeID string
 	return s.FindNodeByID(flow, nextNodeID)
 }
 
-// GetNextNodeByCondition finds the next node based on condition evaluation
-func (s *FlowService) GetNextNodeByCondition(flow *models.ChatbotFlow, currentNodeID string, conditionID string) (*models.FlowNode, error) {
-	edges, err := s.GetFlowEdges(flow)
-	if err != nil {
-		return nil, err
-	}
-
-	// Find the edge that starts from the current node with specific sourceHandle (condition ID)
-	var nextNodeID string
-	for _, edge := range edges {
-		if edge.Source == currentNodeID && edge.SourceHandle == conditionID {
-			nextNodeID = edge.Target
-			break
-		}
-	}
-
-	if nextNodeID == "" {
-		return nil, nil // No next node for this condition
-	}
-
-	return s.FindNodeByID(flow, nextNodeID)
-}
-
-// GetAllNextNodes finds all possible next nodes from a given node
-func (s *FlowService) GetAllNextNodes(flow *models.ChatbotFlow, currentNodeID string) ([]*models.FlowNode, error) {
-	edges, err := s.GetFlowEdges(flow)
-	if err != nil {
-		return nil, err
-	}
-
-	var nextNodes []*models.FlowNode
-	// Find all edges that start from the current node
-	for _, edge := range edges {
-		if edge.Source == currentNodeID {
-			nextNode, err := s.FindNodeByID(flow, edge.Target)
-			if err == nil && nextNode != nil {
-				nextNodes = append(nextNodes, nextNode)
-			}
-		}
-	}
-
-	return nextNodes, nil
-}
-
-// GetEdgesFromNode gets all edges that originate from a specific node
-func (s *FlowService) GetEdgesFromNode(flow *models.ChatbotFlow, nodeID string) ([]*models.FlowEdge, error) {
-	edges, err := s.GetFlowEdges(flow)
-	if err != nil {
-		return nil, err
-	}
-
-	var nodeEdges []*models.FlowEdge
-	// Find all edges that start from the specified node
-	for _, edge := range edges {
-		if edge.Source == nodeID {
-			nodeEdges = append(nodeEdges, edge)
-		}
-	}
-
-	return nodeEdges, nil
-}
-
 
 
 

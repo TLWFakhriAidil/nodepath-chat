@@ -22,6 +22,7 @@ import {
 import Dashboard from './pages/Dashboard';
 import FlowBuilder from './pages/FlowBuilder';
 import FlowManager from './pages/FlowManager';
+import TestChat from './pages/TestChat';
 import Analytics from './pages/Analytics';
 import DeviceSettings from './pages/DeviceSettings';
 
@@ -34,6 +35,7 @@ const App = () => {
     { name: 'Dashboard', href: '/', icon: Home, current: true },
     { name: 'Flow Builder', href: '/flow-builder', icon: Workflow, current: false },
     { name: 'Flow Manager', href: '/flow-manager', icon: Workflow, current: false },
+    { name: 'Test Chat', href: '/test-chat', icon: MessageSquare, current: false },
     { name: 'Analytics', href: '/analytics', icon: BarChart3, current: false },
     { name: 'Device Settings', href: '/device-settings', icon: Smartphone, current: false },
   ];
@@ -151,6 +153,7 @@ const App = () => {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/flow-builder" element={<FlowBuilder />} />
                   <Route path="/flow-manager" element={<FlowManager />} />
+                  <Route path="/test-chat" element={<TestChat />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/device-settings" element={<DeviceSettings />} />
                 </Routes>

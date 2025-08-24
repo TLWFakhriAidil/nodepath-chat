@@ -45,9 +45,9 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 func RunMigrations(db *sql.DB) error {
 	logrus.Info("Running database migrations")
 
-// Test chat executions table removed from migrations
 	migrations := []string{
 		createFlowsTable,
+		createExecutionsTable,
 		createDeviceSettingsTable,
 		createAIWhatsappTable,
 		createConversationLogTable,
@@ -93,7 +93,25 @@ CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-// Test chat executions table schema removed
+const createExecutionsTable = `
+CREATE TABLE IF NOT EXISTS chatbot_executions_nodepath (
+    id VARCHAR(255) PRIMARY KEY,
+    flow_reference VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(20),
+    id_device VARCHAR(255),
+    conv_last TEXT COLLATE utf8mb4_unicode_ci,
+    conv_current TEXT COLLATE utf8mb4_unicode_ci,
+    current_node VARCHAR(255),
+    variables JSON,
+    status ENUM('active', 'completed', 'failed') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_flow_reference (flow_reference),
+    INDEX idx_phone_number (phone_number),
+    INDEX idx_id_device (id_device),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
 
 const createDeviceSettingsTable = `
 CREATE TABLE IF NOT EXISTS device_setting_nodepath (

@@ -10,11 +10,11 @@ import { ChatbotFlow } from '@/types/chatbot';
 import {
   Edit,
   Trash2,
+  Play,
   Plus,
   RefreshCw,
   Calendar,
-  Workflow,
-  Play
+  Workflow
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -82,7 +82,9 @@ export default function FlowManager() {
     }
   };
 
-  // handleSimulation function removed - test functionality no longer available
+  const handleSimulation = (flowId: string) => {
+    navigate(`/test-chat?flowId=${flowId}`);
+  };
 
   const handleCreateNew = () => {
     navigate('/flow-builder');
@@ -236,7 +238,15 @@ export default function FlowManager() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
-                          {/* Test button removed */}
+                          <Button
+                            onClick={() => handleSimulation(flow.id)}
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3"
+                          >
+                            <Play className="w-3 h-3 mr-1" />
+                            Test
+                          </Button>
                           <Button
                             onClick={() => handleEdit(flow.id)}
                             variant="outline"

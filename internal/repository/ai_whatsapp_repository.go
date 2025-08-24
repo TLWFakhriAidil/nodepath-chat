@@ -86,23 +86,14 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		}
 	}
 
-	// Handle Variables JSON field
-	var variablesValue interface{}
-	if ai.Variables == nil || len(ai.Variables) == 0 {
-		variablesValue = nil
-	} else {
-		variablesValue = string(ai.Variables)
-	}
-
 	query := `
 		INSERT INTO ai_whatsapp_nodepath (
 			id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
 			conv_current, human, niche, jam, intro, 
 			catatan_staff, balas, data_image, conv_stage, 
 			bot_balas, keywordiklan, marketer, update_today, 
-			flow_reference, current_node, variables, execution_status, execution_id,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	// Handle ConvCurrent as sql.NullString
@@ -113,35 +104,11 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		convCurrentValue = nil
 	}
 
-	// Handle flow execution fields as sql.NullString
-	var flowReferenceValue, currentNodeValue, executionStatusValue, executionIDValue interface{}
-	if ai.FlowReference.Valid {
-		flowReferenceValue = ai.FlowReference.String
-	} else {
-		flowReferenceValue = nil
-	}
-	if ai.CurrentNode.Valid {
-		currentNodeValue = ai.CurrentNode.String
-	} else {
-		currentNodeValue = nil
-	}
-	if ai.ExecutionStatus.Valid {
-		executionStatusValue = ai.ExecutionStatus.String
-	} else {
-		executionStatusValue = nil
-	}
-	if ai.ExecutionID.Valid {
-		executionIDValue = ai.ExecutionID.String
-	} else {
-		executionIDValue = nil
-	}
-
 	_, err := r.db.Exec(query,
 		ai.IDProspect, ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, convLastValue,
 		convCurrentValue, ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
-		flowReferenceValue, currentNodeValue, variablesValue, executionStatusValue, executionIDValue,
 		ai.CreatedAt, ai.UpdatedAt,
 	)
 
@@ -183,7 +150,6 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
-		       flow_reference, current_node, variables, execution_status, execution_id,
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE prospect_num = ?
@@ -193,7 +159,6 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 
 	ai := &models.AIWhatsapp{}
 	var convLastJSON sql.NullString
-	var variablesJSON sql.NullString
 
 	var convCurrentSQL sql.NullString
 	err := row.Scan(
@@ -201,18 +166,10 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
-		&ai.FlowReference, &ai.CurrentNode, &variablesJSON, &ai.ExecutionStatus, &ai.ExecutionID,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
 
 	ai.ConvCurrent = convCurrentSQL
-
-	// Handle Variables JSON field
-	if variablesJSON.Valid && variablesJSON.String != "" {
-		ai.Variables = json.RawMessage(variablesJSON.String)
-	} else {
-		ai.Variables = nil
-	}
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -254,7 +211,6 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
-		       flow_reference, current_node, variables, execution_status, execution_id,
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE id_prospect = ?
@@ -264,26 +220,17 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 
 	ai := &models.AIWhatsapp{}
 	var convLastJSON sql.NullString
-	var convCurrentSQL sql.NullString
-	var variablesJSON sql.NullString
 
+	var convCurrentSQL sql.NullString
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
-		&ai.FlowReference, &ai.CurrentNode, &variablesJSON, &ai.ExecutionStatus, &ai.ExecutionID,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
 
 	ai.ConvCurrent = convCurrentSQL
-
-	// Handle Variables JSON field
-	if variablesJSON.Valid && variablesJSON.String != "" {
-		ai.Variables = json.RawMessage(variablesJSON.String)
-	} else {
-		ai.Variables = nil
-	}
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -325,7 +272,6 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
-		       flow_reference, current_node, variables, execution_status, execution_id,
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE id_device = ?
@@ -343,26 +289,17 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 	for rows.Next() {
 		ai := models.AIWhatsapp{}
 		var convLastJSON sql.NullString
-		var convCurrentSQL sql.NullString
-		var variablesJSON sql.NullString
 
+		var convCurrentSQL sql.NullString
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
-			&ai.FlowReference, &ai.CurrentNode, &variablesJSON, &ai.ExecutionStatus, &ai.ExecutionID,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
 
 		ai.ConvCurrent = convCurrentSQL
-
-		// Handle Variables JSON field
-		if variablesJSON.Valid && variablesJSON.String != "" {
-			ai.Variables = json.RawMessage(variablesJSON.String)
-		} else {
-			ai.Variables = nil
-		}
 
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan AI WhatsApp conversation")
@@ -405,7 +342,6 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
-		       flow_reference, current_node, variables, execution_status, execution_id,
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath
 	`
@@ -474,25 +410,16 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 		ai := models.AIWhatsapp{}
 		var convLastJSON sql.NullString
 		var convCurrentSQL sql.NullString
-		var variablesJSON sql.NullString
 
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
-			&ai.FlowReference, &ai.CurrentNode, &variablesJSON, &ai.ExecutionStatus, &ai.ExecutionID,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
 
 		ai.ConvCurrent = convCurrentSQL
-
-		// Handle Variables JSON field
-		if variablesJSON.Valid && variablesJSON.String != "" {
-			ai.Variables = json.RawMessage(variablesJSON.String)
-		} else {
-			ai.Variables = nil
-		}
 
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan AI WhatsApp conversation")
@@ -914,21 +841,12 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		}
 	}
 
-	// Handle Variables JSON field
-	var variablesValue interface{}
-	if ai.Variables == nil || len(ai.Variables) == 0 {
-		variablesValue = nil
-	} else {
-		variablesValue = string(ai.Variables)
-	}
-
 	query := `
 		UPDATE ai_whatsapp_nodepath SET 
 			id_device = ?, stage = ?, date_order = ?, conv_last = ?, conv_current = ?, 
 			human = ?, niche = ?, jam = ?, intro = ?, 
 			catatan_staff = ?, balas = ?, data_image = ?, conv_stage = ?, 
 			bot_balas = ?, keywordiklan = ?, marketer = ?, update_today = ?, 
-			flow_reference = ?, current_node = ?, variables = ?, execution_status = ?, execution_id = ?,
 			updated_at = ?
 		WHERE id_prospect = ?
 	`
@@ -941,35 +859,11 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		convCurrentValue = nil
 	}
 
-	// Handle flow execution fields as sql.NullString
-	var flowReferenceValue, currentNodeValue, executionStatusValue, executionIDValue interface{}
-	if ai.FlowReference.Valid {
-		flowReferenceValue = ai.FlowReference.String
-	} else {
-		flowReferenceValue = nil
-	}
-	if ai.CurrentNode.Valid {
-		currentNodeValue = ai.CurrentNode.String
-	} else {
-		currentNodeValue = nil
-	}
-	if ai.ExecutionStatus.Valid {
-		executionStatusValue = ai.ExecutionStatus.String
-	} else {
-		executionStatusValue = nil
-	}
-	if ai.ExecutionID.Valid {
-		executionIDValue = ai.ExecutionID.String
-	} else {
-		executionIDValue = nil
-	}
-
 	_, err := r.db.Exec(query,
 		ai.IDDevice, ai.Stage, ai.DateOrder, convLastValue, convCurrentValue,
 		ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
-		flowReferenceValue, currentNodeValue, variablesValue, executionStatusValue, executionIDValue,
 		ai.UpdatedAt, ai.IDProspect,
 	)
 
@@ -1128,7 +1022,6 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
-		       flow_reference, current_node, variables, execution_status, execution_id,
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE prospect_num = ? AND id_device = ?
@@ -1139,14 +1032,12 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 	ai := &models.AIWhatsapp{}
 	var convLastJSON sql.NullString
 	var convCurrentSQL sql.NullString
-	var variablesJSON sql.NullString
 
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
-		&ai.FlowReference, &ai.CurrentNode, &variablesJSON, &ai.ExecutionStatus, &ai.ExecutionID,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
 
@@ -1158,13 +1049,6 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 		}
 		logrus.WithError(err).Error("Failed to get AI WhatsApp conversation by prospect and device")
 		return nil, fmt.Errorf("failed to get AI WhatsApp conversation: %w", err)
-	}
-
-	// Handle variables JSON field
-	if variablesJSON.Valid && variablesJSON.String != "" {
-		ai.Variables = json.RawMessage(variablesJSON.String)
-	} else {
-		ai.Variables = json.RawMessage("{}")
 	}
 
 	// Handle conv_last data (both JSON and plain text formats)

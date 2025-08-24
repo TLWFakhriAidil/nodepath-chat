@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MessageSquare, GitBranch, Clock, Play, Download, Upload, Image, Mic, Video, Save, Sparkles, MessageCircle, Timer } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Play, Download, Upload, Image, Mic, Video, Save, Sparkles, X, Send, Bot, MessageCircle, Timer } from 'lucide-react';
 import { ChatbotFlow } from '@/types/chatbot';
 import { saveFlow, getFlows, getFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
@@ -290,23 +290,6 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
       selectedDeviceId
     });
 
-    // Helper function to get condition data for edges from condition nodes
-    const getConditionDataForEdge = (edge: Edge) => {
-      const sourceNode = nodes.find(node => node.id === edge.source);
-      if (sourceNode && sourceNode.type === 'condition' && sourceNode.data.conditions) {
-        const conditions = sourceNode.data.conditions as any[];
-        const condition = conditions.find(c => c.id === edge.sourceHandle);
-        if (condition) {
-          return {
-            type: condition.type,
-            value: condition.value || '',
-            label: condition.label
-          };
-        }
-      }
-      return null;
-    };
-
     const flowData: ChatbotFlow = {
       id: currentFlowId || `flow_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       name: flowName,
@@ -319,17 +302,13 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
         position: node.position,
         data: node.data
       })),
-      edges: edges.map(edge => {
-        const conditionData = getConditionDataForEdge(edge);
-        return {
-          id: edge.id || `${edge.source}-${edge.target}`,
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle,
-          targetHandle: edge.targetHandle,
-          ...(conditionData && { condition: conditionData })
-        };
-      }),
+      edges: edges.map(edge => ({
+        id: edge.id || `${edge.source}-${edge.target}`,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle
+      })),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -448,19 +427,31 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     input.click();
   }, [setNodes, setEdges, deleteNode, updateNodeData, toast]);
 
-  // Test modal functionality removed
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testMessages, setTestMessages] = useState<Array<{type: 'user' | 'bot', content: string}>>([]);
+  const [testInput, setTestInput] = useState('');
 
-  // Test flow functionality removed
+  const sendTestMessage = useCallback(() => {
+    if (!testInput.trim()) return;
+    
+    setTestMessages(prev => [...prev, { type: 'user', content: testInput }]);
+    
+    // Simple echo response for demo
+    setTimeout(() => {
+      setTestMessages(prev => [...prev, { type: 'bot', content: `Echo: ${testInput}` }]);
+    }, 500);
+    
+    setTestInput('');
+  }, [testInput]);
+
   const testFlow = useCallback(() => {
     if (!currentFlowId) {
       saveFlowToStorage();
       return;
     }
-    // Test functionality removed - use external test flow handler
-    if (onTestFlow && currentFlowId) {
-      onTestFlow(currentFlowId);
-    }
-  }, [currentFlowId, saveFlowToStorage, onTestFlow]);
+    setShowTestModal(true);
+    setTestMessages([{ type: 'bot', content: 'Test flow started. Type a message to begin.' }]);
+  }, [currentFlowId, saveFlowToStorage]);
 
   const nodeTypeButtons = [
     { type: 'message', label: 'Send Message', icon: MessageSquare, color: 'bg-gradient-to-r from-blue-500 to-cyan-500', gradient: 'gradient-primary' },
@@ -715,7 +706,54 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
             </ReactFlow>
           </div>
           
-          {/* Test modal functionality removed */}
+          {/* Test Modal */}
+          {showTestModal && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+              <Card className="w-96 max-h-96 overflow-y-auto bg-card/95 backdrop-blur-xl border-border/50 futuristic-border">
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold holographic-text">Test Flow</h3>
+                    <Button
+                      onClick={() => setShowTestModal(false)}
+                      variant="ghost"
+                      size="sm"
+                      className="hover:bg-destructive/20 hover:text-destructive transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
+                    {testMessages.map((msg, index) => (
+                      <div key={index} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-xs p-2 rounded-lg text-sm ${
+                          msg.type === 'user' 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {msg.type === 'bot' && <Bot className="w-3 h-3 inline mr-1" />}
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Type a message..."
+                      value={testInput}
+                      onChange={(e) => setTestInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && sendTestMessage()}
+                      className="flex-1"
+                    />
+                    <Button onClick={sendTestMessage} size="sm">
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -22,7 +22,6 @@ import (
 	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/database"
 	"nodepath-chat/internal/handlers"
-	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/services"
 	"nodepath-chat/internal/whatsapp"
 )
@@ -78,18 +77,10 @@ func main() {
 	}
 	
 	flowService := services.NewFlowService(db, concreteRedisClient)
+	chatService := services.NewChatService(db, concreteRedisClient)
 	aiService := services.NewAIService(cfg)
 	queueService := services.NewQueueService(redisClient)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
-	
-	// Initialize repositories
-	aiWhatsappRepo := repository.NewAIWhatsappRepository(db)
-	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
-	logrus.Info("Repositories initialized successfully")
-	
-	// Initialize AI WhatsApp service
-	aiWhatsappService := services.NewAIWhatsappService(aiWhatsappRepo, deviceSettingsRepo, flowService)
-	logrus.Info("AI WhatsApp service initialized successfully")
 	
 	// Initialize WebSocket service for real-time communication
 	websocketService := services.NewWebSocketService(cfg.MaxConcurrentUsers)
@@ -99,26 +90,16 @@ func main() {
 	mediaService := services.NewMediaService(cfg.CDNEnabled, cfg.CDNBaseURL, "./media")
 	logrus.Info("Media service initialized with CDN support")
 
-	// Initialize provider service for message sending
-	providerService := services.NewProviderService()
-	logrus.Info("Provider service initialized for Wablas/Whacenter APIs")
-
 	// Initialize WhatsApp service with multi-device support
-	logrus.Info("🔧 MAIN: About to initialize WhatsApp service...")
-	logrus.Info("🔧 MAIN: Initializing WhatsApp service...")
-	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService)
+	whatsappService, err := whatsapp.NewService(cfg, chatService, queueService, flowService, aiService, websocketService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
-	logrus.Info("✅ MAIN: WhatsApp service initialized successfully")
-
-	// Set WhatsApp service dependency on queue service for flow continuation
-	queueService.SetWhatsAppService(whatsappService)
-	logrus.Info("✅ MAIN: Queue service configured with WhatsApp service dependency")
 
 	// Initialize handlers with all services
 	handlers := handlers.NewHandlers(
 		flowService,
+		chatService,
 		aiService,
 		queueService,
 		whatsappService,
@@ -267,7 +248,7 @@ func main() {
 			if err := queueService.ProcessDelayedMessages(); err != nil {
 				logrus.WithError(err).Error("Error processing delayed messages")
 			}
-			time.Sleep(5 * time.Second)
+			time.Sleep(30 * time.Second)
 		}
 	}()
 
@@ -278,6 +259,7 @@ func main() {
 	go func() {
 		<-c
 		logrus.Info("Shutting down server...")
+		whatsappService.Disconnect()
 		app.Shutdown()
 	}()
 

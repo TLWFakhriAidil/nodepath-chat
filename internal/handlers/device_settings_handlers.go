@@ -1343,13 +1343,12 @@ func (h *Handlers) DebugDevices(c *fiber.Ctx) error {
 
 // Helper function to convert sql.NullString to string
 // processWebhookMessage processes incoming webhook messages and integrates with AI WhatsApp service
-// This function ensures all messages are routed through the flow engine for consistent processing
 func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idDevice, provider string) {
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
 		"provider": provider,
 		"webhook_data": webhookData,
-	}).Info("🔄 DEVICE_WEBHOOK: Processing webhook message for flow integration")
+	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration")
 
 	// Extract message data based on provider
 	var from, message, messageType string
@@ -1373,10 +1372,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 
 	case "wablas":
 		// Extract data for Wablas provider
-		// Try 'from' field first, then fallback to 'phone' field
-		if fromVal, ok := webhookData["from"].(string); ok {
-			from = fromVal
-		} else if fromVal, ok := webhookData["phone"].(string); ok {
+		if fromVal, ok := webhookData["phone"].(string); ok {
 			from = fromVal
 		}
 		if msgVal, ok := webhookData["message"].(string); ok {
@@ -1435,6 +1431,13 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"from": from,
+		"message": message,
+		"provider": provider,
+	}).Info("🤖 WEBHOOK: Processing message for AI conversation")
+
 	// Check if this is a device command (%, #, cmd)
 	if strings.HasPrefix(message, "%") || strings.HasPrefix(message, "#") || strings.ToLower(strings.TrimSpace(message)) == "cmd" {
 		logrus.WithFields(logrus.Fields{
@@ -1455,38 +1458,6 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
-	// Check if device has a configured flow - prioritize flow engine over AI conversation
-	flows, err := h.flowService.GetFlowsByDevice(idDevice)
-	if err != nil {
-		logrus.WithError(err).Warn("⚠️ DEVICE_WEBHOOK: Failed to check for device flows")
-	}
-
-	// Always process through WhatsApp service flow engine for consistency
-	// The flow engine will handle both flow execution and AI conversation fallback internally
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"from": from,
-		"message": message,
-		"provider": provider,
-		"flow_count": len(flows),
-	}).Info("🔄 DEVICE_WEBHOOK: Processing message through flow engine (handles both flows and AI)")
-
-	// Process message through WhatsApp service flow engine
-	if h.whatsappService != nil {
-		err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider)
-		if err != nil {
-			logrus.WithError(err).Error("❌ DEVICE_WEBHOOK: Failed to process message through flow engine")
-			// Log error but don't fallback - let the flow engine handle all routing decisions
-			return
-		}
-		logrus.Info("✅ DEVICE_WEBHOOK: Message processed successfully through flow engine")
-	} else {
-		logrus.Error("❌ DEVICE_WEBHOOK: WhatsApp service not available - message cannot be processed")
-	}
-}
-
-// processAIConversation handles message processing through the AI conversation system
-func (h *Handlers) processAIConversation(from, message, idDevice, provider string) {
 	// Get current conversation stage from AI WhatsApp repository
 	var stage string
 	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
@@ -1638,7 +1609,6 @@ func (h *Handlers) sendImageMessage(to, imageURL string, deviceSettings *models.
 }
 
 // sendWhacenterTextMessage sends text message via Whacenter API
-// Updated to match PHP implementation - uses form data instead of JSON
 func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *models.DeviceSettings) {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WHACENTER: No instance available")
@@ -1648,21 +1618,30 @@ func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *
 	// Whacenter API endpoint for sending messages
 	apiURL := "https://api.whacenter.com/api/send"
 
-	// Prepare form data payload to match PHP implementation
-	formData := url.Values{}
-	formData.Set("device_id", deviceSettings.Instance.String) // ✅ Use instance
-	formData.Set("number", to)
-	formData.Set("message", message)
+	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
+	payload := map[string]interface{}{
+		"device_id": deviceSettings.Instance.String, // ✅ Use instance
+		"number": to,
+		"message": message,
+		"type": "text",
+	}
 
-	// Create HTTP request with form data
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
+		return
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
 		return
 	}
 
-	// Set headers - no Authorization header as per PHP implementation
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -1697,7 +1676,6 @@ func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *
 }
 
 // sendWablasTextMessage sends text message via Wablas API
-// Updated to match PHP implementation - removed isGroup parameter
 func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *models.DeviceSettings) {
 	if !deviceSettings.Instance.Valid {
 		logrus.Error("❌ WABLAS: No instance available")
@@ -1707,11 +1685,11 @@ func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *mod
 	// Wablas API endpoint for sending messages
 	apiURL := "https://my.wablas.com/api/send-message"
 
-	// Prepare form data to match PHP implementation
+	// Prepare form data
 	formData := url.Values{}
 	formData.Set("phone", to)
 	formData.Set("message", message)
-	// Removed isGroup parameter as it's not in PHP implementation
+	formData.Set("isGroup", "false")
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
@@ -1720,7 +1698,7 @@ func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *mod
 		return
 	}
 
-	// Set headers as per PHP implementation
+	// Set headers
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", deviceSettings.Instance.String)
 
@@ -1769,31 +1747,38 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, caption, fileURL, fileType
 		return
 	}
 
-	// Whacenter API endpoint for sending media - using /api/send as per PHP implementation
-	apiURL := "https://api.whacenter.com/api/send"
+	// Whacenter API endpoint for sending media
+	apiURL := "https://api.whacenter.com/api/send-media"
 
-	// Prepare form data payload to match PHP implementation
-	formData := url.Values{}
-	formData.Set("device_id", deviceSettings.Instance.String) // ✅ Use instance
-	formData.Set("number", to)
-	formData.Set("file", fileURL) // Use 'file' parameter as per PHP code
-	formData.Set("type", fileType)
-	
-	// Add message/caption if provided
-	if caption != "" {
-		formData.Set("message", caption)
+	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
+	payload := map[string]interface{}{
+		"device_id": deviceSettings.Instance.String, // ✅ Use instance
+		"number":    to,
+		"media_url": fileURL,
+		"type":      fileType,
 	}
 
-	// Create HTTP request with form data
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(formData.Encode()))
+	// Add caption if provided
+	if caption != "" {
+		payload["caption"] = caption
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WHACENTER: Failed to marshal payload")
+		return
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WHACENTER: Failed to create request")
 		return
 	}
 
-	// Set headers for form data
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	// Note: PHP code doesn't show Authorization header, removing it to match
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+deviceSettings.Instance.String)
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}

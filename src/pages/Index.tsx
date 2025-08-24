@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
-import { Bot, Workflow } from 'lucide-react';
+import { Bot, Workflow, MessageSquare } from 'lucide-react';
 import ChatbotBuilder from '@/components/ChatbotBuilder';
-// Test chat functionality removed
+import ChatSimulation from '@/components/ChatSimulation';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('builder');
+  const [testFlowId, setTestFlowId] = useState<string | null>(null);
 
-  // Test chat functionality removed
   const handleTestFlow = (flowId: string) => {
-    console.log('Test flow functionality removed:', flowId);
+    setTestFlowId(flowId);
+    setActiveTab('simulation');
   };
 
   return (
@@ -30,12 +31,18 @@ const Index = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <TabsList className="grid w-[200px] grid-cols-1">
+              <TabsList className="grid w-[400px] grid-cols-2">
                 <TabsTrigger value="builder" className="flex items-center space-x-2">
                   <Workflow className="w-4 h-4" />
                   <span>Flow Builder</span>
                 </TabsTrigger>
+                <TabsTrigger value="simulation" className="flex items-center space-x-2">
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Test Chat</span>
+                </TabsTrigger>
               </TabsList>
+              
+
             </div>
           </div>
         </div>
@@ -44,6 +51,10 @@ const Index = () => {
         <div className="flex-1">
           <TabsContent value="builder" className="h-full m-0">
             <ChatbotBuilder onTestFlow={handleTestFlow} />
+          </TabsContent>
+          
+          <TabsContent value="simulation" className="h-full m-0">
+            <ChatSimulation key={testFlowId} preselectedFlowId={testFlowId} />
           </TabsContent>
         </div>
       </Tabs>

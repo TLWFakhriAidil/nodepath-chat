@@ -63,11 +63,6 @@ export interface FlowEdge {
   target: string
   sourceHandle?: string
   targetHandle?: string
-  condition?: {
-    type: string
-    value: string
-    label: string
-  }
 }
 
 export interface ChatbotFlow {

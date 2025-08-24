@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"database/sql"
+	"strconv"
+	"time"
 
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
@@ -15,6 +17,7 @@ import (
 // Handlers contains all HTTP handlers
 type Handlers struct {
 	flowService           *services.FlowService
+	chatService           *services.ChatService
 	aiService             *services.AIService
 	queueService          *services.QueueService
 	whatsappService       *whatsapp.Service
@@ -27,6 +30,7 @@ type Handlers struct {
 // NewHandlers creates a new handlers instance
 func NewHandlers(
 	flowService *services.FlowService,
+	chatService *services.ChatService,
 	aiService *services.AIService,
 	queueService *services.QueueService,
 	whatsappService *whatsapp.Service,
@@ -43,10 +47,11 @@ func NewHandlers(
 	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService)
 	
 	// Initialize AI WhatsApp handlers
-	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo, whatsappService)
+	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
 	
 	return &Handlers{
 		flowService:           flowService,
+		chatService:           chatService,
 		aiService:             aiService,
 		queueService:          queueService,
 		whatsappService:       whatsappService,
@@ -67,7 +72,12 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	flows.Put("/:id", h.UpdateFlow)
 	flows.Delete("/:id", h.DeleteFlow)
 
-	// Test chat routes removed
+	// Test chat routes
+	testChat := api.Group("/test-chat")
+	testChat.Post("/start", h.StartTestChat)
+	testChat.Post("/send", h.SendTestMessage)
+	testChat.Get("/history/:execution_id", h.GetTestChatHistory)
+	testChat.Post("/reset/:execution_id", h.ResetTestChat)
 
 	// Execution routes
 	executions := api.Group("/executions")
@@ -76,8 +86,12 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	executions.Put("/:id/complete", h.CompleteExecution)
 	executions.Delete("/:id", h.DeleteExecution)
 
-	// WhatsApp routes - simplified for webhook-based system
+	// WhatsApp routes
 	whatsapp := api.Group("/whatsapp")
+	whatsapp.Get("/status", h.GetWhatsAppStatus)
+	whatsapp.Post("/connect", h.ConnectWhatsApp)
+	whatsapp.Post("/disconnect", h.DisconnectWhatsApp)
+	whatsapp.Get("/qr", h.GetWhatsAppQR)
 	whatsapp.Post("/send", h.SendWhatsAppMessage)
 
 	// Queue management routes
@@ -109,12 +123,12 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
 	deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
 
-	// AI WhatsApp routes - delegate to AIWhatsappHandlers (must be before general webhook routes)
-	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
-
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")
 	webhook.Post("/:id_device/:instance", h.HandleWebhook)
+
+	// AI WhatsApp routes - delegate to AIWhatsappHandlers
+	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
 }
 
 // Response helpers
@@ -233,4 +247,145 @@ func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
 
 // Test Chat handlers
 
-// Test chat handlers removed
+type StartTestChatRequest struct {
+	FlowReference string `json:"flow_reference"`
+	PhoneNumber   string `json:"phone_number"`
+	StaffID       string `json:"staff_id"`
+}
+
+// StartTestChat starts a new test chat session
+func (h *Handlers) StartTestChat(c *fiber.Ctx) error {
+	var req StartTestChatRequest
+	if err := c.BodyParser(&req); err != nil {
+		return h.errorResponse(c, 400, "Invalid request body")
+	}
+
+	if req.FlowReference == "" {
+		return h.errorResponse(c, 400, "Flow reference is required")
+	}
+
+	// Use default values for test chat
+	if req.PhoneNumber == "" {
+		req.PhoneNumber = "test_" + strconv.FormatInt(time.Now().Unix(), 10)
+	}
+	if req.StaffID == "" {
+		req.StaffID = "test_staff"
+	}
+
+	execution, err := h.chatService.StartExecution(req.FlowReference, req.PhoneNumber, req.StaffID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to start test chat")
+		return h.errorResponse(c, 500, "Failed to start test chat")
+	}
+
+	return h.successMessageResponse(c, "Test chat started", execution)
+}
+
+type SendTestMessageRequest struct {
+	ExecutionID string `json:"execution_id"`
+	Message     string `json:"message"`
+}
+
+// SendTestMessage sends a message in test chat
+func (h *Handlers) SendTestMessage(c *fiber.Ctx) error {
+	var req SendTestMessageRequest
+	if err := c.BodyParser(&req); err != nil {
+		return h.errorResponse(c, 400, "Invalid request body")
+	}
+
+	if req.ExecutionID == "" || req.Message == "" {
+		return h.errorResponse(c, 400, "Execution ID and message are required")
+	}
+
+	// Get execution
+	execution, err := h.chatService.GetExecution(req.ExecutionID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get execution")
+		return h.errorResponse(c, 500, "Failed to get execution")
+	}
+
+	if execution == nil {
+		return h.errorResponse(c, 404, "Execution not found")
+	}
+
+	// Add user message
+	err = h.chatService.AddConversationMessage(execution, "USER", req.Message)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to add user message")
+		return h.errorResponse(c, 500, "Failed to add user message")
+	}
+
+	// Process message through flow
+	response, err := h.processTestChatMessage(execution, req.Message)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to process test chat message")
+		return h.errorResponse(c, 500, "Failed to process message")
+	}
+
+	// Add bot response
+	if response != "" {
+		err = h.chatService.AddConversationMessage(execution, "BOT", response)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to add bot message")
+		}
+	}
+
+	// Get updated conversation history
+	history, err := h.chatService.GetConversationHistory(execution)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get conversation history")
+		return h.errorResponse(c, 500, "Failed to get conversation history")
+	}
+
+	return h.successResponse(c, map[string]interface{}{
+		"execution": execution,
+		"history":   history,
+		"response":  response,
+	})
+}
+
+// GetTestChatHistory returns the conversation history for a test chat
+func (h *Handlers) GetTestChatHistory(c *fiber.Ctx) error {
+	executionID := c.Params("executionId")
+	if executionID == "" {
+		return h.errorResponse(c, 400, "Execution ID is required")
+	}
+
+	execution, err := h.chatService.GetExecution(executionID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get execution")
+		return h.errorResponse(c, 500, "Failed to get execution")
+	}
+
+	if execution == nil {
+		return h.errorResponse(c, 404, "Execution not found")
+	}
+
+	history, err := h.chatService.GetConversationHistory(execution)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get conversation history")
+		return h.errorResponse(c, 500, "Failed to get conversation history")
+	}
+
+	return h.successResponse(c, map[string]interface{}{
+		"execution": execution,
+		"history":   history,
+	})
+}
+
+// ResetTestChat resets a test chat session
+func (h *Handlers) ResetTestChat(c *fiber.Ctx) error {
+	executionID := c.Params("executionId")
+	if executionID == "" {
+		return h.errorResponse(c, 400, "Execution ID is required")
+	}
+
+	// Complete the current execution
+	err := h.chatService.CompleteExecution(executionID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to complete execution")
+		return h.errorResponse(c, 500, "Failed to reset test chat")
+	}
+
+	return h.successMessageResponse(c, "Test chat reset successfully", nil)
+}

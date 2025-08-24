@@ -7,15 +7,9 @@ import (
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load environment variables from .env file
-	if err := godotenv.Load(); err != nil {
-		log.Printf("Warning: Could not load .env file: %v", err)
-	}
-
 	// Get database URL from environment - using MYSQL_URI exclusively
 	dbURL := os.Getenv("MYSQL_URI")
 	if dbURL == "" {

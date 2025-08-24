@@ -69,13 +69,6 @@ func InitializeRedis(cfg *config.Config) redis.Cmdable {
 // QueueService handles Redis-based job queuing with clustering support
 type QueueService struct {
 	redis redis.Cmdable // Interface to support both single and cluster clients
-	// WhatsApp service interface for flow continuation
-	whatsappService WhatsAppServiceInterface
-}
-
-// WhatsAppServiceInterface defines the interface for WhatsApp service methods needed by queue service
-type WhatsAppServiceInterface interface {
-	ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumber, deviceID, userInput string) error
 }
 
 // NewQueueService creates a new queue service
@@ -83,11 +76,6 @@ func NewQueueService(redis redis.Cmdable) *QueueService {
 	return &QueueService{
 		redis: redis,
 	}
-}
-
-// SetWhatsAppService sets the WhatsApp service for flow continuation
-func (s *QueueService) SetWhatsAppService(whatsappService WhatsAppServiceInterface) {
-	s.whatsappService = whatsappService
 }
 
 // QueueMessage represents a queued message
@@ -103,13 +91,6 @@ type QueueMessage struct {
 	MaxRetries  int                    `json:"max_retries"`
 	CreatedAt   time.Time              `json:"created_at"`
 	ScheduledAt time.Time              `json:"scheduled_at,omitempty"`
-	// Additional fields for flow continuation
-	DeviceID    string        `json:"device_id,omitempty"`
-	MessageType string        `json:"message_type,omitempty"`
-	FlowID      string        `json:"flow_id,omitempty"`
-	ExecutionID string        `json:"execution_id,omitempty"`
-	NodeID      string        `json:"node_id,omitempty"`
-	Delay       time.Duration `json:"delay,omitempty"`
 }
 
 const (
@@ -242,45 +223,6 @@ func (s *QueueService) RequeueFailedMessage(message *QueueMessage, err error) er
 	return nil
 }
 
-// EnqueueDelayedMessage queues a message for delayed processing
-func (s *QueueService) EnqueueDelayedMessage(message *QueueMessage) error {
-	if s.redis == nil {
-		logrus.Warn("Redis not available, delayed message cannot be queued")
-		return fmt.Errorf("redis not available")
-	}
-
-	// Set scheduled time based on delay
-	message.ScheduledAt = time.Now().Add(message.Delay)
-	message.MaxRetries = 3
-	message.Retries = 0
-
-	messageJSON, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("failed to marshal delayed message: %w", err)
-	}
-
-	ctx := context.Background()
-	// Add to delay queue with score as timestamp
-	score := float64(message.ScheduledAt.Unix())
-	err = s.redis.ZAdd(ctx, queueKeyDelay, redis.Z{
-		Score:  score,
-		Member: string(messageJSON),
-	}).Err()
-
-	if err != nil {
-		return fmt.Errorf("failed to enqueue delayed message: %w", err)
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"message_id":     message.ID,
-		"execution_id":   message.ExecutionID,
-		"scheduled_time": message.ScheduledAt,
-		"delay_seconds":  message.Delay.Seconds(),
-	}).Info("🕐 QUEUE: Delayed message queued successfully")
-
-	return nil
-}
-
 // ProcessDelayedMessages moves ready delayed messages back to the main queue
 func (s *QueueService) ProcessDelayedMessages() error {
 	if s.redis == nil {
@@ -301,29 +243,11 @@ func (s *QueueService) ProcessDelayedMessages() error {
 	}
 
 	for _, messageJSON := range result {
-		// Parse message to check if it's a flow continuation
-		var message QueueMessage
-		err = json.Unmarshal([]byte(messageJSON), &message)
+		// Move message back to main queue
+		err = s.redis.LPush(ctx, queueKeyOutbound, messageJSON).Err()
 		if err != nil {
-			logrus.WithError(err).Error("Failed to unmarshal delayed message")
+			logrus.WithError(err).Error("Failed to move delayed message to main queue")
 			continue
-		}
-
-		// Handle flow continuation messages differently
-		if message.MessageType == "flow_continuation" {
-			// Process flow continuation directly
-			err = s.processFlowContinuation(&message)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to process flow continuation")
-				continue
-			}
-		} else {
-			// Move regular message back to main queue
-			err = s.redis.LPush(ctx, queueKeyOutbound, messageJSON).Err()
-			if err != nil {
-				logrus.WithError(err).Error("Failed to move delayed message to main queue")
-				continue
-			}
 		}
 
 		// Remove from delay queue
@@ -372,44 +296,6 @@ func (s *QueueService) GetQueueStats() (map[string]int64, error) {
 		"failed":   failed,
 		"delayed":  delayed,
 	}, nil
-}
-
-// processFlowContinuation processes a flow continuation message after delay
-func (s *QueueService) processFlowContinuation(message *QueueMessage) error {
-	logrus.WithFields(logrus.Fields{
-		"message_id":   message.ID,
-		"execution_id": message.ExecutionID,
-		"flow_id":      message.FlowID,
-		"node_id":      message.NodeID,
-	}).Info("🔄 QUEUE: Processing flow continuation after delay")
-
-	// Check if WhatsApp service is available
-	if s.whatsappService == nil {
-		logrus.Error("🔄 QUEUE: WhatsApp service not available for flow continuation")
-		return fmt.Errorf("whatsapp service not available")
-	}
-
-	// Call WhatsApp service to continue flow processing
-	err := s.whatsappService.ProcessFlowContinuation(
-		message.ExecutionID,
-		message.FlowID,
-		message.NodeID,
-		message.PhoneNumber,
-		message.DeviceID,
-		message.Content,
-	)
-
-	if err != nil {
-		logrus.WithError(err).Error("🔄 QUEUE: Failed to process flow continuation")
-		return fmt.Errorf("failed to process flow continuation: %w", err)
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"execution_id": message.ExecutionID,
-		"node_id":      message.NodeID,
-	}).Info("✅ QUEUE: Flow continuation processed successfully")
-
-	return nil
 }
 
 // ClearFailedMessages clears the failed message queue

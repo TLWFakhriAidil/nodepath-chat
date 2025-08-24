@@ -60,6 +60,13 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       current: location.pathname === '/flow-manager'
     },
     {
+      name: 'Test Chat',
+      href: '/test-chat',
+      icon: MessageSquare,
+      current: location.pathname === '/test-chat',
+      badge: notifications.messages
+    },
+    {
       name: 'Analytics',
       href: '/analytics',
       icon: BarChart3,
