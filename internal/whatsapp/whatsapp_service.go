@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"nodepath-chat/internal/config"
-	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/services"
 
 	"github.com/sirupsen/logrus"
@@ -467,24 +466,37 @@ func (s *Service) handleIncomingMessage(evt *events.Message) {
 	go s.processIncomingMessage(phoneNumber, content)
 }
 
-// processIncomingMessage processes an incoming message through the flow engine
+// processIncomingMessage processes an incoming message through the AI WhatsApp service
 func (s *Service) processIncomingMessage(phoneNumber, content string) {
 	// For now, use a default device ID - in a real implementation, you'd determine this based on routing logic
 	idDevice := "default"
 
 	// Process message directly through AI WhatsApp service
-	response, err := s.aiWhatsappService.ProcessMessage(phoneNumber, idDevice, content)
+	response, err := s.aiWhatsappService.ProcessAIConversation(phoneNumber, idDevice, content, "")
 	if err != nil {
-		logrus.WithError(err).Error("Failed to process flow message")
+		logrus.WithError(err).Error("Failed to process AI conversation")
 		return
 	}
 
-	if response != "" {
-		// Send response back to user
-		err = s.SendMessage(phoneNumber, response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to send response message")
-			return
+	if response != nil && len(response.Response) > 0 {
+		// Format response for sending
+		var responseText string
+		for _, resp := range response.Response {
+			if resp.Type == "text" {
+				if responseText != "" {
+					responseText += "\n"
+				}
+				responseText += resp.Content
+			}
+		}
+		
+		if responseText != "" {
+			// Send response back to user
+			err = s.SendMessage(phoneNumber, responseText)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to send response message")
+				return
+			}
 		}
 	}
 }

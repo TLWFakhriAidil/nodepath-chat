@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"strconv"
-	"time"
 
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
@@ -67,19 +65,19 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	flows.Put("/:id", h.UpdateFlow)
 	flows.Delete("/:id", h.DeleteFlow)
 
-	// Test chat routes
-	testChat := api.Group("/test-chat")
-	testChat.Post("/start", h.StartTestChat)
-	testChat.Post("/send", h.SendTestMessage)
-	testChat.Get("/history/:execution_id", h.GetTestChatHistory)
-	testChat.Post("/reset/:execution_id", h.ResetTestChat)
+	// Test chat routes - TODO: Implement these methods
+	// testChat := api.Group("/test-chat")
+	// testChat.Post("/start", h.StartTestChat)
+	// testChat.Post("/send", h.SendTestMessage)
+	// testChat.Get("/history/:execution_id", h.GetTestChatHistory)
+	// testChat.Post("/reset/:execution_id", h.ResetTestChat)
 
-	// Execution routes
-	executions := api.Group("/executions")
-	executions.Get("/", h.GetExecutions)
-	executions.Get("/:id", h.GetExecution)
-	executions.Put("/:id/complete", h.CompleteExecution)
-	executions.Delete("/:id", h.DeleteExecution)
+	// Execution routes - TODO: Implement these methods
+	// executions := api.Group("/executions")
+	// executions.Get("/", h.GetExecutions)
+	// executions.Get("/:id", h.GetExecution)
+	// executions.Put("/:id/complete", h.CompleteExecution)
+	// executions.Delete("/:id", h.DeleteExecution)
 
 	// WhatsApp routes
 	whatsapp := api.Group("/whatsapp")
@@ -95,10 +93,10 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	ai.Post("/validate-key", h.ValidateAPIKey)
 	ai.Get("/models", h.GetSupportedModels)
 
-	// Analytics routes
-	analytics := api.Group("/analytics")
-	analytics.Get("/overview", h.GetAnalyticsOverview)
-	analytics.Get("/flows/:id/stats", h.GetFlowStats)
+	// Analytics routes - TODO: Implement these methods
+	// analytics := api.Group("/analytics")
+	// analytics.Get("/overview", h.GetAnalyticsOverview)
+	// analytics.Get("/flows/:id/stats", h.GetFlowStats)
 
 	// Device settings routes
 	deviceSettings := api.Group("/device-settings")

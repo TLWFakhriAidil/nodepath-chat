@@ -1,12 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
-
-	"nodepath-chat/internal/models"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
 )
