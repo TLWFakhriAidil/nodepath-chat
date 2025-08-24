@@ -151,6 +151,15 @@ func (s *Service) SendMessage(phoneNumber, message string) error {
 
 // SendMessageFromDevice sends a message from a specific device through the appropriate provider
 func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) error {
+	// Convert <nil> to empty string
+	if message == "<nil>" {
+		message = ""
+		logrus.WithFields(logrus.Fields{
+			"device_id":    deviceID,
+			"phone_number": phoneNumber,
+		}).Warn("⚠️ MESSAGE: Converted <nil> message to empty string")
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
@@ -174,6 +183,20 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 
 // SendMediaMessage sends a media message through the appropriate provider
 func (s *Service) SendMediaMessage(deviceID, phoneNumber, caption, mediaURL string) error {
+	// Prevent sending <nil> values in captions
+	if caption == "<nil>" {
+		caption = "" // Convert <nil> to empty string for captions
+	}
+
+	// Convert <nil> media URL to empty string
+	if mediaURL == "<nil>" {
+		mediaURL = ""
+		logrus.WithFields(logrus.Fields{
+			"device_id":    deviceID,
+			"phone_number": phoneNumber,
+		}).Warn("⚠️ MEDIA: Converted <nil> media URL to empty string")
+	}
+
 	// Console log for tracing media URL extraction
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
@@ -532,6 +555,15 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 
 	// Send each response item in sequence
 	for i, item := range response.Response {
+		// Convert <nil> content to empty string
+		if item.Content == "<nil>" {
+			item.Content = ""
+			logrus.WithFields(logrus.Fields{
+				"item_index": i,
+				"item_type": item.Type,
+			}).Warn("⚠️ AI: Converted <nil> content to empty string")
+		}
+
 		switch item.Type {
 		case "text":
 			// Send text message
@@ -1152,6 +1184,10 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 		
 		// Combine responses if next node generated content
 		if nextResponse != "" {
+			// Ensure nextResponse is not nil to prevent <nil> output
+			if nextResponse == "<nil>" {
+				nextResponse = ""
+			}
 			return fmt.Sprintf("%s\n%s", imageURL, nextResponse), nil
 		}
 	} else {
@@ -1272,6 +1308,10 @@ func (s *Service) processAudioNode(flow *models.ChatbotFlow, execution *models.A
 		
 		// Combine responses if next node generated content
 		if nextResponse != "" {
+			// Ensure nextResponse is not nil to prevent <nil> output
+			if nextResponse == "<nil>" {
+				nextResponse = ""
+			}
 			return fmt.Sprintf("%s\n%s", audioURL, nextResponse), nil
 		}
 	} else {
@@ -1392,6 +1432,10 @@ func (s *Service) processVideoNode(flow *models.ChatbotFlow, execution *models.A
 		
 		// Combine responses if next node generated content
 		if nextResponse != "" {
+			// Ensure nextResponse is not nil to prevent <nil> output
+			if nextResponse == "<nil>" {
+				nextResponse = ""
+			}
 			return fmt.Sprintf("%s\n%s", videoURL, nextResponse), nil
 		}
 	} else {
@@ -1889,7 +1933,14 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 		return fmt.Errorf("failed to process flow: %w", err)
 	}
 
-	// Send response if available
+	// Convert <nil> to empty string and send response if available
+	if response == "<nil>" {
+		response = ""
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Warn("⚠️ FLOW: Converted <nil> response to empty string")
+	}
 	if response != "" {
 		logrus.WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
