@@ -2112,6 +2112,19 @@ go run cmd/server/main.go
     - Eliminated JSON vs form data inconsistencies
     - Standardized error handling and logging across all services
 
+- ✅ **DELAYED FLOW MEDIA MESSAGE FIX**: Fixed critical issue where delayed flow responses with media URLs were sent as text
+  - **Root Cause**: `ProcessFlowContinuation` function was using `SendMessageFromDevice` for all delayed responses, bypassing media detection
+  - **Solution**: Added comprehensive media detection logic to delayed response processing in `whatsapp_service.go`
+    - Integrated `mediaDetectionService.HasMedia()` check for delayed responses
+    - Added `mediaDetectionService.ExtractFirstMedia()` for URL extraction from responses with backticks
+    - Implemented proper routing to `SendMediaMessage` for media URLs in delayed flows
+    - Added fallback to text message if media extraction fails
+  - **Enhanced Logging**: Added detailed logging for delayed media message processing with emoji indicators
+  - **Comprehensive Coverage**: Now handles all media types (image, audio, video) in delayed flow responses
+  - **Backward Compatibility**: Maintains existing text message functionality for non-media responses
+  - **Error Handling**: Robust error handling with specific error messages for delayed media failures
+  - **Testing**: Removed conflicting test files and verified successful compilation
+
 - ✅ **COMPILATION FIXES**: Resolved build errors for successful deployment
   - **Missing Import Fix**: Added `net/url` import to `ai_cron_service.go` to resolve undefined `url` error
   - **ParseAIResponse Method**: Made `ParseAIResponse` method public in `AIWhatsappService` interface

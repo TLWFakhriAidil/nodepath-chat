@@ -1897,10 +1897,42 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 			"response":     response,
 		}).Info("📤 FLOW: Sending delayed response to user")
 
-		err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
-		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to send delayed response")
-			return fmt.Errorf("failed to send response: %w", err)
+		// Check if response contains media URLs using the new detection service
+		if s.mediaDetectionService.HasMedia(response) {
+			mediaInfo := s.mediaDetectionService.ExtractFirstMedia(response)
+			if mediaInfo != nil {
+				logrus.WithFields(logrus.Fields{
+					"media_type": mediaInfo.MediaType,
+					"media_url":  mediaInfo.MediaURL,
+					"device_id":  deviceID,
+				}).Info("🖼️ FLOW: Extracted media URL from delayed response, sending as media message")
+				
+				// Send as media message instead of text
+				err = s.SendMediaMessage(deviceID, phoneNumber, "", mediaInfo.MediaURL)
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"device_id":    deviceID,
+						"phone_number": phoneNumber,
+						"media_url":    mediaInfo.MediaURL,
+						"media_type":   mediaInfo.MediaType,
+					}).Error("❌ FLOW: Failed to send delayed media message")
+					return fmt.Errorf("failed to send delayed media message: %w", err)
+				}
+			} else {
+				// Fallback to text if extraction failed
+				err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+				if err != nil {
+					logrus.WithError(err).Error("❌ FLOW: Failed to send delayed response as text fallback")
+					return fmt.Errorf("failed to send delayed response: %w", err)
+				}
+			}
+		} else {
+			// Send as regular text message
+			err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to send delayed response")
+				return fmt.Errorf("failed to send response: %w", err)
+			}
 		}
 
 		// Add bot response to ai_whatsapp_nodepath conversation
