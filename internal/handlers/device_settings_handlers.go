@@ -1453,7 +1453,8 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	}
 
 	// Check if message contains bracket format media URLs [IMAGE:], [AUDIO:], [VIDEO:]
-	mediaURLPattern := regexp.MustCompile(`\[(IMAGE|AUDIO|VIDEO):\s*([^\]]+)\]`)
+	// Updated pattern to handle backticks around URLs: [IMAGE: `https://...`] or [IMAGE: https://...]
+	mediaURLPattern := regexp.MustCompile(`\[(IMAGE|AUDIO|VIDEO):\s*`+"`"+`?([^\]`+"`"+`]+)`+"`"+`?\]`)
 	if mediaURLPattern.MatchString(message) {
 		matches := mediaURLPattern.FindAllStringSubmatch(message, -1)
 		for _, match := range matches {

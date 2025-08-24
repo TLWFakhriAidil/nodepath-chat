@@ -103,6 +103,7 @@ After setup, verify Redis connection:
 ### ✅ Bracket Format Media URL Detection in Webhooks (January 2025)
 - **Enhanced**: Added automatic detection and processing of bracket-formatted media URLs in incoming webhook messages
 - **Supported Formats**: `[IMAGE: URL]`, `[AUDIO: URL]`, `[VIDEO: URL]` in user messages
+- **Backtick Support**: Now handles URLs with backticks: `[IMAGE: \`https://example.com\`]` and without: `[IMAGE: https://example.com]`
 - **Automatic Processing**: System now extracts media URLs from bracket format and sends them as proper media messages
 - **Media Type Detection**: Automatic media type detection based on file extensions (.jpg, .png, .mp3, .mp4, etc.)
 - **Provider Integration**: Works with both Wablas and Whacenter providers using existing media sending functions
@@ -110,11 +111,13 @@ After setup, verify Redis connection:
 - **Error Handling**: Robust error handling for media URL extraction and sending failures
 - **Performance**: Prevents bracket format media from being processed as text messages
 - **Functions Updated**:
-  - `processWebhookMessage()` in `device_settings_handlers.go` - Added regex-based media URL detection
+  - `processWebhookMessage()` in `device_settings_handlers.go` - Added regex-based media URL detection with backtick support
   - Added `regexp` import for pattern matching
   - Integration with `h.whatsappService.SendMediaMessage()` for proper media delivery
-- **User Experience**: Users can now send media URLs in bracket format and they will be automatically converted to media messages
-- **Regex Pattern**: `\[(IMAGE|AUDIO|VIDEO):\s*([^\]]+)\]` for detecting bracket format media URLs
+  - Fixed regex compilation errors and improved URL extraction
+- **User Experience**: Users can now send media URLs in bracket format with or without backticks and they will be automatically converted to media messages
+- **Regex Pattern**: Advanced pattern `\[(IMAGE|AUDIO|VIDEO):\s*\`?([^\]\`]+)\`?\]` for detecting bracket format media URLs with optional backticks
+- **Bug Fixes**: Resolved regex syntax errors and improved backtick handling for reliable URL extraction
 
 ### ✅ WhatsApp Connection Checking Removal (January 2025)
 - **Removed**: Unnecessary device connection validation from message sending functions
