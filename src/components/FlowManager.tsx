@@ -25,6 +25,9 @@ import {
   Clock,
   Edit
 } from 'lucide-react';
+
+// Ensure Play icon is properly imported
+const PlayIcon = Play;
 import { ChatbotFlow } from '@/types/chatbot';
 import { getFlows, deleteFlow } from '@/lib/localStorage';
 import { useToast } from '@/hooks/use-toast';
@@ -214,7 +217,7 @@ export default function FlowManager({ onCreateNew, onTestFlow }: FlowManagerProp
                           }}
                           className="h-6 px-2"
                         >
-                          <Play className="w-3 h-3" />
+                          <PlayIcon className="w-3 h-3" />
                         </Button>
                         
                         <Button
