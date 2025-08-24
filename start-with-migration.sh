@@ -11,9 +11,9 @@ if [ -z "$MYSQL_URI" ]; then
 else
     echo "📡 MYSQL_URI found, running comprehensive migration..."
     
-    # Run the Railway migration runner
+    # Run the database migration
     echo "🔄 Executing comprehensive database migration..."
-    /app/railway_migration_runner
+    /app/migrate
     
     migration_exit_code=$?
     if [ $migration_exit_code -eq 0 ]; then
