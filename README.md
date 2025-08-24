@@ -107,10 +107,16 @@ After setup, verify Redis connection:
 - **Advanced Detection**: Uses regex patterns and file extension analysis for comprehensive media type identification
 - **Centralized Logic**: Moved all media detection logic from individual services to a single, reusable service
 - **Performance Optimization**: Eliminates duplicate detection code and provides consistent behavior across all components
+- **Webhook Processing Fix**: Fixed critical issue where bracket format media URLs in user messages were incorrectly sent back as media instead of being processed as user input
+  - Now properly extracts clean text from bracket format messages for AI/flow processing
+  - Prevents infinite loops where media URLs are sent back to users
+  - Maintains proper conversation flow when users include media URLs in their messages
+  - Users can now send `[IMAGE: URL]` format and system processes the clean text content properly
 - **Files Created/Updated**:
   - `internal/services/media_detection_service.go` - New centralized media detection service
   - `internal/services/ai_whatsapp_service.go` - Updated to use centralized service, removed old `isMediaURL` and `isImageURL` methods
   - `internal/whatsapp/whatsapp_service.go` - Integrated media detection service for flow responses
+  - `internal/handlers/device_settings_handlers.go` - Fixed webhook processing logic to handle bracket format properly
   - `cmd/server/main.go` - Added media detection service initialization
   - `internal/handlers/handlers.go` - Updated service dependencies
 - **Backward Compatibility**: Maintains support for existing bracket format detection while adding new capabilities
@@ -2033,11 +2039,17 @@ go run cmd/server/main.go
   - Fixed issue where both AI responses and flow responses with bracket format `[IMAGE: URL]`, `[AUDIO: URL]`, `[VIDEO: URL]` were sent as text instead of media
   - **AI Response Fix**: Added preprocessing to extract URLs from bracket format before auto-detection in `parseAIResponse` function
   - **Flow Response Fix**: Added bracket format detection and extraction in `whatsapp_service.go` flow processing before sending messages
+  - **Flow Node Processing Fix**: Updated `processImageNode`, `processAudioNode`, and `processVideoNode` functions to return raw URLs instead of bracket format strings
+    - Removed all `fmt.Sprintf("[IMAGE: %s]", imageURL)` patterns and replaced with raw `imageURL` returns
+    - Removed all `fmt.Sprintf("[AUDIO: %s]", audioURL)` patterns and replaced with raw `audioURL` returns
+    - Removed all `fmt.Sprintf("[VIDEO: %s]", videoURL)` patterns and replaced with raw `videoURL` returns
+    - Updated comments to reflect "Return raw URL for media detection service to process"
   - Enhanced media URL detection to handle both bracket format and plain URLs in all response types
   - Implemented comprehensive logging for bracket format extraction debugging
   - Flow nodes (Image, Audio, Video) now properly send media messages instead of text
   - Ensures proper media message delivery regardless of AI or flow response format
   - Maintains backward compatibility with existing plain URL auto-detection
+  - **Root Cause Resolution**: Fixed the core issue where flow nodes were generating bracket format strings that prevented proper media detection
 - ✅ **PROVIDER API FORMAT UPDATE**: Wablas and Whacenter API implementation
   - **Wablas API**: Updated to use exact format specified in requirements
     - URL: `https://my.wablas.com/api/send-message`

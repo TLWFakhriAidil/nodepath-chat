@@ -1422,40 +1422,33 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return
 	}
 
-	// Check for media URLs BEFORE filtering message types
-	// This allows media detection even for non-text message types
+	// Check for media URLs in bracket format and extract clean text for processing
+	// This allows proper handling of bracket format media URLs as user input
 	if h.mediaDetectionService.HasMedia(message) {
-		mediaInfo := h.mediaDetectionService.ExtractFirstMedia(message)
-		if mediaInfo != nil {
+		mediaResults := h.mediaDetectionService.DetectMedia(message)
+		if len(mediaResults) > 0 {
+			// Use the clean text (with bracket format removed) for further processing
+			cleanMessage := mediaResults[0].CleanText
+			
 			logrus.WithFields(logrus.Fields{
 				"id_device": idDevice,
 				"from": from,
-				"media_type": mediaInfo.MediaType,
-				"media_url": mediaInfo.MediaURL,
-			}).Info("📎 WEBHOOK: Detected media URL using new detection service")
-
-			// Send media message through WhatsApp service
-			if h.whatsappService != nil {
-				err := h.whatsappService.SendMediaMessage(idDevice, from, "", mediaInfo.MediaURL)
-				if err != nil {
-					logrus.WithError(err).WithFields(logrus.Fields{
-					"id_device": idDevice,
-					"to": from,
-					"media_url": mediaInfo.MediaURL,
-					"media_type": mediaInfo.MediaType,
-				}).Error("❌ WEBHOOK: Failed to send media message")
-			} else {
+				"original_message": message,
+				"clean_message": cleanMessage,
+				"detected_media_count": len(mediaResults),
+			}).Info("📎 WEBHOOK: Detected bracket format media URLs, using clean text for processing")
+			
+			// Update message to clean text for further processing
+			message = strings.TrimSpace(cleanMessage)
+			
+			// If clean message is empty after removing media URLs, skip processing
+			if message == "" {
 				logrus.WithFields(logrus.Fields{
 					"id_device": idDevice,
-					"to": from,
-					"media_url": mediaInfo.MediaURL,
-					"media_type": mediaInfo.MediaType,
-				}).Info("✅ WEBHOOK: Successfully sent media message")
-				}
-			} else {
-				logrus.Error("❌ WEBHOOK: WhatsApp service not available")
+					"from": from,
+				}).Info("📎 WEBHOOK: Message contained only media URLs, skipping text processing")
+				return
 			}
-			return // Don't process as text after sending media
 		}
 	}
 
