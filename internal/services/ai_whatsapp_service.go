@@ -66,6 +66,9 @@ type AIWhatsappService interface {
 	
 	// Get flow execution variables
 	GetFlowExecutionVariables(prospectNum, idDevice string) (map[string]interface{}, error)
+	
+	// Parse AI response JSON
+	ParseAIResponse(responseText string) (*AIWhatsappResponse, error)
 }
 
 // AIWhatsappResponse represents the response from AI WhatsApp service
@@ -284,7 +287,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 	}
 
 	// Parse AI response
-	parsedResponse, err := s.parseAIResponse(aiResponse)
+	parsedResponse, err := s.ParseAIResponse(aiResponse)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to parse AI response")
 		return nil, fmt.Errorf("failed to parse AI response: %w", err)
@@ -580,8 +583,8 @@ func (s *aiWhatsappService) callAIAPI(apiURL, apiKey string, payload AIWhatsappP
 	return apiResponse.Choices[0].Message.Content, nil
 }
 
-// parseAIResponse parses the AI response JSON
-func (s *aiWhatsappService) parseAIResponse(responseText string) (*AIWhatsappResponse, error) {
+// ParseAIResponse parses the AI response JSON
+func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappResponse, error) {
 	// Clean the response text
 	responseText = strings.TrimSpace(responseText)
 	
