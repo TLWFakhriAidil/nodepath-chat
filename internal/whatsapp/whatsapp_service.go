@@ -731,28 +731,69 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 
 // processAIPromptNode processes an AI prompt node
 func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"user_input": userInput,
+		"prospect_num": execution.ProspectNum,
+		"id_device": execution.IDDevice,
+	}).Info("🤖 AI_PROMPT: Processing AI prompt node")
+
 	// Get AI configuration from node data
 	var systemPrompt, instance, apiProvider string
 
-	// Check node data for configuration
+	// Check node data for configuration - handle both camelCase and snake_case
 	if sp, ok := node.Data["system_prompt"].(string); ok {
 		systemPrompt = sp
+	} else if sp, ok := node.Data["systemPrompt"].(string); ok {
+		systemPrompt = sp
 	}
+	
 	if inst, ok := node.Data["instance"].(string); ok {
 		instance = inst
 	}
 	if ap, ok := node.Data["apiprovider"].(string); ok {
 		apiProvider = ap
+	} else if ap, ok := node.Data["apiProvider"].(string); ok {
+		apiProvider = ap
 	}
 
-	// Use global settings as fallback
+	// Get device settings for fallback values
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(execution.IDDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get device settings for AI prompt")
+	}
+
+	// Use device settings as fallback
+	if instance == "" && deviceSettings != nil {
+		if deviceSettings.Instance.Valid {
+			instance = deviceSettings.Instance.String
+		}
+	}
+	if apiProvider == "" && deviceSettings != nil {
+		apiProvider = deviceSettings.Provider
+	}
+	// Use global settings as final fallback
 	if apiProvider == "" {
 		apiProvider = flow.Niche
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"system_prompt_length": len(systemPrompt),
+		"instance": instance,
+		"api_provider": apiProvider,
+	}).Info("🤖 AI_PROMPT: Configuration loaded")
+
 	// Check if we have complete AI configuration
-	if systemPrompt == "" || instance == "" || apiProvider == "" {
-		// Fallback to manual response
+	if systemPrompt == "" {
+		logrus.Error("🤖 AI_PROMPT: No system prompt configured")
+		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
+	}
+	if instance == "" {
+		logrus.Error("🤖 AI_PROMPT: No instance configured")
+		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
+	}
+	if apiProvider == "" {
+		logrus.Error("🤖 AI_PROMPT: No API provider configured")
 		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
 	}
 
@@ -767,11 +808,22 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
 
 	// Generate AI response
+	logrus.WithFields(logrus.Fields{
+		"id_device": execution.IDDevice,
+		"api_provider": apiProvider,
+		"user_input": userInput,
+	}).Info("🤖 AI_PROMPT: Generating AI response")
+	
 	response, err := s.aiService.GenerateResponse(execution.IDDevice, systemPrompt, userInput, apiProvider, []models.ConversationMessage{})
 	if err != nil {
-		logrus.WithError(err).Error("Failed to generate AI response")
+		logrus.WithError(err).Error("🤖 AI_PROMPT: Failed to generate AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
 	}
+	
+	logrus.WithFields(logrus.Fields{
+		"response_length": len(response),
+		"node_id": node.ID,
+	}).Info("🤖 AI_PROMPT: AI response generated successfully")
 
 	// Check if next node exists and advance to it
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
