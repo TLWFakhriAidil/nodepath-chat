@@ -882,14 +882,21 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		"prospect_num": execution.ProspectNum,
 	}).Info("🔍 AI_PROMPT_DEBUG: Final parameters for AI service call")
 
+	// Get actual API key from device settings
+	var actualAPIKey string
+	if deviceSettings != nil && deviceSettings.APIKey.Valid {
+		actualAPIKey = deviceSettings.APIKey.String
+	}
+
 	// Generate AI response
 	logrus.WithFields(logrus.Fields{
 		"id_device": execution.IDDevice,
 		"api_provider": apiProvider,
+		"api_key_provided": actualAPIKey != "",
 		"user_input": userInput,
 	}).Info("🤖 AI_PROMPT: Generating AI response")
 	
-	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, execution.IDDevice, []models.ConversationMessage{})
+	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, actualAPIKey, execution.IDDevice, []models.ConversationMessage{})
 	if err != nil {
 		logrus.WithError(err).Error("🤖 AI_PROMPT: Failed to generate AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
@@ -1102,14 +1109,21 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 		"prospect_num": execution.ProspectNum,
 	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Final parameters for AI service call")
 
+	// Get actual API key from device settings
+	var actualAPIKey string
+	if deviceSettings != nil && deviceSettings.APIKey.Valid {
+		actualAPIKey = deviceSettings.APIKey.String
+	}
+
 	// Generate AI response with advanced JSON parsing
 	logrus.WithFields(logrus.Fields{
 		"id_device": execution.IDDevice,
 		"api_provider": apiProvider,
+		"api_key_provided": actualAPIKey != "",
 		"user_input": userInput,
 	}).Info("🤖 ADVANCED_AI_PROMPT: Generating AI response")
 
-	rawResponse, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, execution.IDDevice, []models.ConversationMessage{})
+	rawResponse, err := s.aiService.GenerateResponse(systemPrompt, userInput, actualAPIKey, execution.IDDevice, []models.ConversationMessage{})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate advanced AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
