@@ -99,7 +99,7 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 
 	query := `
 		INSERT INTO ai_whatsapp_nodepath (
-			id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
+			id_device, prospect_num, stage, date_order, conv_last, 
 			conv_current, human, niche, jam, intro, 
 			catatan_staff, balas, data_image, conv_stage, 
 			bot_balas, keywordiklan, marketer, update_today, 
@@ -165,7 +165,7 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	}
 
 	_, err := r.db.Exec(query,
-		ai.IDProspect, ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, convLastValue,
+		ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, convLastValue,
 		convCurrentValue, ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
