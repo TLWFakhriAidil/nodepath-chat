@@ -141,8 +141,8 @@ type aiWhatsappService struct {
 	cfg                   *config.Config
 }
 
-// maskAPIKey masks an API key for safe logging
-func maskAPIKey(apiKey string) string {
+// maskAPIKeyForLogging masks an API key for safe logging
+func maskAPIKeyForLogging(apiKey string) string {
 	if len(apiKey) <= 8 {
 		return "***"
 	}
@@ -333,7 +333,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
 			"api_key_source": "device_settings",
-			"api_key_preview": maskAPIKey(apiKey),
+			"api_key_preview": maskAPIKeyForLogging(apiKey),
 		}).Info("Using device-specific API key")
 	} else {
 		// Use default OpenRouter key for non-special devices
@@ -342,7 +342,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 			logrus.WithFields(logrus.Fields{
 				"id_device": idDevice,
 				"api_key_source": "default_openrouter",
-				"api_key_preview": maskAPIKey(apiKey),
+				"api_key_preview": maskAPIKeyForLogging(apiKey),
 			}).Info("Using default OpenRouter API key")
 		} else {
 			// For special devices, use the hardcoded OpenAI key from custom instructions
@@ -350,7 +350,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 			logrus.WithFields(logrus.Fields{
 				"id_device": idDevice,
 				"api_key_source": "hardcoded_openai",
-				"api_key_preview": maskAPIKey(apiKey),
+				"api_key_preview": maskAPIKeyForLogging(apiKey),
 			}).Info("Using hardcoded OpenAI API key for special device")
 		}
 	}

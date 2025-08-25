@@ -700,7 +700,7 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 	switch currentNode.Type {
 	case models.NodeTypeStart:
 		return s.processStartNode(flow, aiExecution, currentNode, userInput)
-	case models.NodeTypeAIPrompt:
+	case models.NodeTypeAIPrompt, "prompt": // Handle both 'ai_prompt' and 'prompt' types
 		return s.processAIPromptNode(flow, aiExecution, currentNode, userInput)
 	case models.NodeTypeAdvancedAIPrompt:
 		return s.processAdvancedAIPromptNode(flow, aiExecution, currentNode, userInput)
@@ -757,6 +757,27 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		apiProvider = ap
 	}
 
+	// 🔍 DEBUG TRACE: Log extracted node data for debugging
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"extracted_system_prompt_length": len(systemPrompt),
+		"extracted_system_prompt_preview": func() string {
+			if len(systemPrompt) > 200 {
+				return systemPrompt[:200] + "..."
+			}
+			return systemPrompt
+		}(),
+		"extracted_instance": instance,
+		"extracted_api_provider": apiProvider,
+		"node_data_keys": func() []string {
+			keys := make([]string, 0, len(node.Data))
+			for k := range node.Data {
+				keys = append(keys, k)
+			}
+			return keys
+		}(),
+	}).Info("🔍 AI_PROMPT_DEBUG: Extracted node configuration")
+
 	// Get device settings for fallback values
 	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(execution.IDDevice)
 	if err != nil {
@@ -772,6 +793,33 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	if apiProvider == "" && deviceSettings != nil {
 		apiProvider = deviceSettings.Provider
 	}
+
+	// 🔍 DEBUG TRACE: Log device settings and final values
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"device_settings_found": deviceSettings != nil,
+		"device_instance_valid": func() bool {
+			if deviceSettings != nil {
+				return deviceSettings.Instance.Valid
+			}
+			return false
+		}(),
+		"device_instance_value": func() string {
+			if deviceSettings != nil && deviceSettings.Instance.Valid {
+				return deviceSettings.Instance.String
+			}
+			return "null"
+		}(),
+		"device_provider": func() string {
+			if deviceSettings != nil {
+				return deviceSettings.Provider
+			}
+			return "null"
+		}(),
+		"final_instance": instance,
+		"final_api_provider": apiProvider,
+		"final_system_prompt_length": len(systemPrompt),
+	}).Info("🔍 AI_PROMPT_DEBUG: Device settings and final configuration")
 	// Use global settings as final fallback
 	if apiProvider == "" {
 		apiProvider = flow.Niche
@@ -805,7 +853,34 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	}
 
 	// Replace variables in system prompt
+	originalSystemPrompt := systemPrompt
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
+
+	// 🔍 DEBUG TRACE: Log variable replacement
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"variables_count": len(variables),
+		"original_prompt_length": len(originalSystemPrompt),
+		"final_prompt_length": len(systemPrompt),
+		"prompt_changed": originalSystemPrompt != systemPrompt,
+	}).Info("🔍 AI_PROMPT_DEBUG: Variable replacement completed")
+
+	// 🔍 DEBUG TRACE: Log final AI service call parameters
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"system_prompt_length": len(systemPrompt),
+		"system_prompt_preview": func() string {
+			if len(systemPrompt) > 300 {
+				return systemPrompt[:300] + "..."
+			}
+			return systemPrompt
+		}(),
+		"user_input": userInput,
+		"instance": instance,
+		"api_provider": apiProvider,
+		"device_id": execution.IDDevice,
+		"prospect_num": execution.ProspectNum,
+	}).Info("🔍 AI_PROMPT_DEBUG: Final parameters for AI service call")
 
 	// Generate AI response
 	logrus.WithFields(logrus.Fields{
@@ -814,7 +889,7 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		"user_input": userInput,
 	}).Info("🤖 AI_PROMPT: Generating AI response")
 	
-	response, err := s.aiService.GenerateResponse(execution.IDDevice, systemPrompt, userInput, apiProvider, []models.ConversationMessage{})
+	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, execution.IDDevice, []models.ConversationMessage{})
 	if err != nil {
 		logrus.WithError(err).Error("🤖 AI_PROMPT: Failed to generate AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
@@ -899,14 +974,94 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 		apiProvider = ap
 	}
 
+	// 🔍 DEBUG TRACE: Log extracted node configuration for advanced AI prompt
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"node_type": "advanced_ai_prompt",
+		"system_prompt_length": len(systemPrompt),
+		"system_prompt_preview": func() string {
+			if len(systemPrompt) > 100 {
+				return systemPrompt[:100] + "..."
+			}
+			return systemPrompt
+		}(),
+		"instance_from_node": instance,
+		"api_provider_from_node": apiProvider,
+		"user_input": userInput,
+		"node_data_keys": func() []string {
+			keys := make([]string, 0, len(node.Data))
+			for k := range node.Data {
+				keys = append(keys, k)
+			}
+			return keys
+		}(),
+	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Extracted node configuration")
+
+	// Get device settings for fallback values
+	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(execution.IDDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get device settings for advanced AI prompt")
+	}
+
+	// Use device settings as fallback
+	if instance == "" && deviceSettings != nil {
+		if deviceSettings.Instance.Valid {
+			instance = deviceSettings.Instance.String
+		}
+	}
+	if apiProvider == "" && deviceSettings != nil {
+		apiProvider = deviceSettings.Provider
+	}
+
+	// 🔍 DEBUG TRACE: Log device settings and final values for advanced AI prompt
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"device_settings_found": deviceSettings != nil,
+		"device_instance_valid": func() bool {
+			if deviceSettings != nil {
+				return deviceSettings.Instance.Valid
+			}
+			return false
+		}(),
+		"device_instance_value": func() string {
+			if deviceSettings != nil && deviceSettings.Instance.Valid {
+				return deviceSettings.Instance.String
+			}
+			return "null"
+		}(),
+		"device_provider": func() string {
+			if deviceSettings != nil {
+				return deviceSettings.Provider
+			}
+			return "null"
+		}(),
+		"final_instance": instance,
+		"final_api_provider": apiProvider,
+		"final_system_prompt_length": len(systemPrompt),
+	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Device settings and final configuration")
+
 	// Use global settings as fallback
 	if apiProvider == "" {
 		apiProvider = flow.Niche
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"system_prompt_length": len(systemPrompt),
+		"instance": instance,
+		"api_provider": apiProvider,
+	}).Info("🤖 ADVANCED_AI_PROMPT: Configuration loaded")
+
 	// Check if we have complete AI configuration
-	if systemPrompt == "" || instance == "" || apiProvider == "" {
-		// Fallback to manual response
+	if systemPrompt == "" {
+		logrus.Error("🤖 ADVANCED_AI_PROMPT: No system prompt configured")
+		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
+	}
+	if instance == "" {
+		logrus.Error("🤖 ADVANCED_AI_PROMPT: No instance configured")
+		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
+	}
+	if apiProvider == "" {
+		logrus.Error("🤖 ADVANCED_AI_PROMPT: No API provider configured")
 		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
 	}
 
@@ -918,10 +1073,43 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 	}
 
 	// Replace variables in system prompt
+	originalSystemPrompt := systemPrompt
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
 
+	// 🔍 DEBUG TRACE: Log variable replacement for advanced AI prompt
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"variables_count": len(variables),
+		"original_prompt_length": len(originalSystemPrompt),
+		"final_prompt_length": len(systemPrompt),
+		"prompt_changed": originalSystemPrompt != systemPrompt,
+	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Variable replacement completed")
+
+	// 🔍 DEBUG TRACE: Log final AI service call parameters for advanced AI prompt
+	logrus.WithFields(logrus.Fields{
+		"node_id": node.ID,
+		"system_prompt_length": len(systemPrompt),
+		"system_prompt_preview": func() string {
+			if len(systemPrompt) > 300 {
+				return systemPrompt[:300] + "..."
+			}
+			return systemPrompt
+		}(),
+		"user_input": userInput,
+		"instance": instance,
+		"api_provider": apiProvider,
+		"device_id": execution.IDDevice,
+		"prospect_num": execution.ProspectNum,
+	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Final parameters for AI service call")
+
 	// Generate AI response with advanced JSON parsing
-	rawResponse, err := s.aiService.GenerateResponse(execution.IDDevice, systemPrompt, userInput, apiProvider, []models.ConversationMessage{})
+	logrus.WithFields(logrus.Fields{
+		"id_device": execution.IDDevice,
+		"api_provider": apiProvider,
+		"user_input": userInput,
+	}).Info("🤖 ADVANCED_AI_PROMPT: Generating AI response")
+
+	rawResponse, err := s.aiService.GenerateResponse(systemPrompt, userInput, apiProvider, execution.IDDevice, []models.ConversationMessage{})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate advanced AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil

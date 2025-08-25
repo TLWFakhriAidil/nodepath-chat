@@ -84,15 +84,62 @@ func NewAIService(cfg *config.Config) *AIService {
 	}
 }
 
+// maskAPIKey masks an API key for safe logging
+func maskAPIKey(apiKey string) string {
+	if len(apiKey) <= 8 {
+		return "***"
+	}
+	return apiKey[:4] + "***" + apiKey[len(apiKey)-4:]
+}
+
 // GenerateResponse generates an AI response using OpenRouter with caching and concurrency control
 func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey, deviceID string, conversationHistory []models.ConversationMessage) (string, error) {
+	// 🔍 DEBUG TRACE: Log initial API key state
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"api_key_provided": apiKey != "",
+		"api_key_source": func() string {
+			if apiKey != "" {
+				return "parameter"
+			}
+			return "none"
+		}(),
+		"api_key_preview": func() string {
+			if apiKey != "" {
+				return maskAPIKey(apiKey)
+			}
+			return "none"
+		}(),
+	}).Info("🔍 AI_SERVICE_DEBUG: Initial API key state")
+
 	if apiKey == "" {
 		apiKey = s.cfg.OpenRouterDefaultKey
+		// 🔍 DEBUG TRACE: Log fallback to default key
+		logrus.WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"api_key_source": "config_default",
+			"api_key_preview": func() string {
+				if apiKey != "" {
+					return maskAPIKey(apiKey)
+				}
+				return "none"
+			}(),
+		}).Info("🔍 AI_SERVICE_DEBUG: Using default API key from config")
 	}
 
 	if apiKey == "" {
+		logrus.WithField("device_id", deviceID).Error("🔍 AI_SERVICE_DEBUG: No API key available after all fallbacks")
 		return "", fmt.Errorf("no API key provided")
 	}
+
+	// 🔍 DEBUG TRACE: Log final API key state
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"api_key_final_preview": maskAPIKey(apiKey),
+		"system_prompt_length": len(systemPrompt),
+		"user_input": userInput,
+		"conversation_history_count": len(conversationHistory),
+	}).Info("🔍 AI_SERVICE_DEBUG: Final parameters for AI API call")
 
 	// Check cache first
 	cacheKey := s.generateCacheKey(systemPrompt, userInput, conversationHistory)
