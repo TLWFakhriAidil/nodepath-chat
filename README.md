@@ -2185,3 +2185,41 @@ go run cmd/server/main.go
   - **Zero Downtime**: Fix applied without service interruption
 
 **Database Status**: 🟢 **OPTIMIZED & OPERATIONAL** - Schema cleaned, missing columns fixed, flow processing restored
+
+## 🔧 API Key Configuration Debug & Fix (Latest)
+
+### Device API Key Retrieval Issue Resolution
+
+- ✅ **ISSUE IDENTIFIED**: API key incorrectly stored as provider name instead of actual API key
+  - **Problem**: Device `FakhriAidilTLW-001` had `api_key` column storing "whacenter" instead of valid OpenRouter API key
+  - **Impact**: AI requests failing due to invalid API key format
+  - **Debug Process**: Created comprehensive debugging scripts to trace API key retrieval flow
+
+- ✅ **DEBUGGING TOOLS CREATED**: Multiple diagnostic scripts for API key validation
+  - **`debug/check_device_tables.go`**: Lists all device-related tables and structures
+  - **`debug/decode_api_key.go`**: Displays API key values in readable format
+  - **`debug/test_api_key_retrieval.go`**: Simulates exact system API key retrieval logic
+  - **Database Connection**: All scripts handle both local and production database connections
+
+- ✅ **API KEY MASKING TEMPORARILY DISABLED**: For debugging purposes
+  - **Files Modified**: `internal/services/ai_whatsapp_service.go`, `internal/services/ai_service.go`
+  - **Functions**: `maskAPIKeyForLogging()` and `maskAPIKey()` returned full keys for debugging
+  - **Security**: Masking functions restored to secure state after debugging completion
+
+- ✅ **DATABASE VERIFICATION**: Confirmed correct API key update
+  - **Device**: `FakhriAidilTLW-001` now has valid OpenRouter API key (`sk-or-v1-...`)
+  - **Format**: 73-character OpenRouter API key with proper `sk-or-v1-` prefix
+  - **Validation**: API key retrieval logic working correctly with updated database
+
+- ✅ **SYSTEM LOGIC VERIFIED**: API key selection hierarchy working as designed
+  - **Priority 1**: Device-specific API key from `device_setting_nodepath.api_key`
+  - **Priority 2**: Default OpenRouter key from configuration
+  - **Priority 3**: Hardcoded OpenAI key for special devices (SCHQ-S94, SCHQ-S12)
+  - **Validation**: Non-empty, non-test keys properly detected and used
+
+- ✅ **SECURITY RESTORED**: API key masking functions returned to secure state
+  - **Masking Logic**: Shows first 4 and last 4 characters with "******" in between
+  - **Log Safety**: API keys no longer exposed in production logs
+  - **Debug Scripts**: Available for future troubleshooting if needed
+
+**API Key Status**: 🟢 **FIXED & SECURE** - Correct API keys configured, retrieval logic verified, security restored
