@@ -30,6 +30,7 @@ type AIWhatsappRepository interface {
 
 	// Update operations
 	UpdateAIWhatsapp(ai *models.AIWhatsapp) error
+	UpdateFlowTrackingFields(prospectNum, idDevice string, flowID, currentNodeID, lastNodeID string, waitingForReply int, executionStatus, executionID string) error
 	UpdateConversationStage(prospectNum string, stage string) error
 	UpdateHumanTakeover(prospectNum string, human int) error
 	UpdateConvCurrent(prospectNum string, convCurrent string) error
@@ -72,6 +73,7 @@ func (r *aiWhatsappRepository) GetDB() *sql.DB {
 
 // CreateAIWhatsapp creates a new AI WhatsApp conversation record
 // Saves NULL instead of empty string when there's no conversation data
+// Includes all flow tracking fields to ensure data integrity
 func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	ai.CreatedAt = time.Now()
 	ai.UpdatedAt = time.Now()
@@ -101,8 +103,10 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 			conv_current, human, niche, jam, intro, 
 			catatan_staff, balas, data_image, conv_stage, 
 			bot_balas, keywordiklan, marketer, update_today, 
+			current_node_id, waiting_for_reply, flow_id, last_node_id,
+			flow_reference, execution_id, execution_status,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	// Handle ConvCurrent as sql.NullString
@@ -113,11 +117,60 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		convCurrentValue = nil
 	}
 
+	// Handle flow tracking fields as sql.NullString and sql.NullInt32
+	var currentNodeIDValue, flowIDValue, lastNodeIDValue interface{}
+	var waitingForReplyValue interface{}
+	var flowReferenceValue, executionIDValue, executionStatusValue interface{}
+	
+	if ai.CurrentNodeID.Valid {
+		currentNodeIDValue = ai.CurrentNodeID.String
+	} else {
+		currentNodeIDValue = nil
+	}
+	
+	if ai.FlowID.Valid {
+		flowIDValue = ai.FlowID.String
+	} else {
+		flowIDValue = nil
+	}
+	
+	if ai.LastNodeID.Valid {
+		lastNodeIDValue = ai.LastNodeID.String
+	} else {
+		lastNodeIDValue = nil
+	}
+	
+	if ai.WaitingForReply.Valid {
+		waitingForReplyValue = ai.WaitingForReply.Int32
+	} else {
+		waitingForReplyValue = nil
+	}
+	
+	if ai.FlowReference.Valid {
+		flowReferenceValue = ai.FlowReference.String
+	} else {
+		flowReferenceValue = nil
+	}
+	
+	if ai.ExecutionID.Valid {
+		executionIDValue = ai.ExecutionID.String
+	} else {
+		executionIDValue = nil
+	}
+	
+	if ai.ExecutionStatus.Valid {
+		executionStatusValue = ai.ExecutionStatus.String
+	} else {
+		executionStatusValue = nil
+	}
+
 	_, err := r.db.Exec(query,
 		ai.IDProspect, ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, convLastValue,
 		convCurrentValue, ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
+		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
+		flowReferenceValue, executionIDValue, executionStatusValue,
 		ai.CreatedAt, ai.UpdatedAt,
 	)
 
@@ -827,7 +880,8 @@ func (r *aiWhatsappRepository) GetConversationLogsByStage(stage string) ([]model
 }
 
 // UpdateAIWhatsapp updates an existing AI WhatsApp conversation
-// Saves NULL instead of empty string when there's no conversation data
+// WARNING: This function overwrites ALL fields. Use UpdateFlowTrackingFields for flow-specific updates
+// to preserve conversation history and other important data
 func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 	ai.UpdatedAt = time.Now()
 
@@ -912,6 +966,73 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 	}
 
 	logrus.WithField("id_prospect", ai.IDProspect).Info("AI WhatsApp conversation updated successfully")
+	return nil
+}
+
+// UpdateFlowTrackingFields updates only flow tracking fields without overwriting conversation history
+// This function preserves conv_last, niche, intro and other important data
+func (r *aiWhatsappRepository) UpdateFlowTrackingFields(prospectNum, idDevice string, flowID, currentNodeID, lastNodeID string, waitingForReply int, executionStatus, executionID string) error {
+	query := `
+		UPDATE ai_whatsapp_nodepath SET 
+			flow_id = ?, current_node_id = ?, last_node_id = ?, waiting_for_reply = ?,
+			execution_status = ?, execution_id = ?, updated_at = ?
+		WHERE prospect_num = ? AND id_device = ?
+	`
+
+	// Handle flow tracking fields as sql.NullString and sql.NullInt32
+	var currentNodeIDValue, flowIDValue, lastNodeIDValue interface{}
+	var waitingForReplyValue interface{}
+	var executionStatusValue, executionIDValue interface{}
+	
+	if currentNodeID != "" {
+		currentNodeIDValue = currentNodeID
+	} else {
+		currentNodeIDValue = nil
+	}
+	
+	if flowID != "" {
+		flowIDValue = flowID
+	} else {
+		flowIDValue = nil
+	}
+	
+	if lastNodeID != "" {
+		lastNodeIDValue = lastNodeID
+	} else {
+		lastNodeIDValue = nil
+	}
+	
+	waitingForReplyValue = waitingForReply
+	
+	if executionStatus != "" {
+		executionStatusValue = executionStatus
+	} else {
+		executionStatusValue = nil
+	}
+	
+	if executionID != "" {
+		executionIDValue = executionID
+	} else {
+		executionIDValue = nil
+	}
+
+	_, err := r.db.Exec(query,
+		flowIDValue, currentNodeIDValue, lastNodeIDValue, waitingForReplyValue,
+		executionStatusValue, executionIDValue, time.Now(),
+		prospectNum, idDevice,
+	)
+
+	if err != nil {
+		logrus.WithError(err).Error("Failed to update flow tracking fields")
+		return fmt.Errorf("failed to update flow tracking fields: %w", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"id_device": idDevice,
+		"flow_id": flowID,
+		"current_node_id": currentNodeID,
+	}).Info("Flow tracking fields updated successfully")
 	return nil
 }
 

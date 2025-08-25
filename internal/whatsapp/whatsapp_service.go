@@ -1748,44 +1748,49 @@ func (s *Service) updateCurrentNode(execution *models.AIWhatsapp, nodeID string)
 }
 
 // updateFlowTrackingFields updates the flow tracking fields for user reply handling
+// Uses repository's UpdateFlowTrackingFields to preserve conversation history
 func (s *Service) updateFlowTrackingFields(execution *models.AIWhatsapp, currentNodeID, flowID string, waitingForReply bool) error {
-	// Update the flow tracking fields in the execution model
-	execution.CurrentNodeID.String = currentNodeID
-	execution.CurrentNodeID.Valid = true
-	
-	execution.FlowID.String = flowID
-	execution.FlowID.Valid = true
-	
-	// Store the previous node as last_node_id
-	if execution.CurrentNode.Valid {
-		execution.LastNodeID.String = execution.CurrentNode.String
-		execution.LastNodeID.Valid = true
+	// Determine last node ID
+	lastNodeID := ""
+	if execution.CurrentNodeID.Valid && execution.CurrentNodeID.String != "" {
+		lastNodeID = execution.CurrentNodeID.String
 	}
 	
 	// Set waiting_for_reply flag
+	waitingForReplyValue := 0
 	if waitingForReply {
-		execution.WaitingForReply.Int32 = 1
-	} else {
-		execution.WaitingForReply.Int32 = 0
-	}
-	execution.WaitingForReply.Valid = true
-	
-	// Update the database with new flow tracking fields
-	// Convert Variables from json.RawMessage to map[string]interface{}
-	var variables map[string]interface{}
-	if execution.Variables != nil {
-		if err := json.Unmarshal(execution.Variables, &variables); err != nil {
-			logrus.WithError(err).Warn("Failed to unmarshal variables, using empty map")
-			variables = make(map[string]interface{})
-		}
-	} else {
-		variables = make(map[string]interface{})
+		waitingForReplyValue = 1
 	}
 	
-	err := s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, currentNodeID, variables, "active")
+	// Get execution ID
+	executionID := ""
+	if execution.ExecutionID.Valid {
+		executionID = execution.ExecutionID.String
+	}
+	
+	// Update flow tracking fields directly in repository to preserve conversation history
+	err := s.aiWhatsappService.GetRepository().UpdateFlowTrackingFields(
+		execution.ProspectNum, execution.IDDevice,
+		flowID, // flowID
+		currentNodeID, // currentNodeID
+		lastNodeID, // lastNodeID
+		waitingForReplyValue, // waitingForReply
+		"active", // executionStatus
+		executionID, // executionID
+	)
 	if err != nil {
 		return fmt.Errorf("failed to update flow tracking fields: %w", err)
 	}
+	
+	// Update the execution model in memory for consistency
+	execution.CurrentNodeID.String = currentNodeID
+	execution.CurrentNodeID.Valid = true
+	execution.FlowID.String = flowID
+	execution.FlowID.Valid = true
+	execution.LastNodeID.String = lastNodeID
+	execution.LastNodeID.Valid = (lastNodeID != "")
+	execution.WaitingForReply.Int32 = int32(waitingForReplyValue)
+	execution.WaitingForReply.Valid = true
 	
 	logrus.WithFields(logrus.Fields{
 		"prospect_id":       execution.IDProspect,

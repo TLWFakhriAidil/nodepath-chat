@@ -923,6 +923,25 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 		return nil, fmt.Errorf("failed to marshal flow variables: %w", err)
 	}
 
+	// Get flow data to populate intro and niche fields
+	var flowIntro, flowNiche string
+	if s.flowService != nil {
+		flow, err := s.flowService.GetFlow(flowReference)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to get flow data, using default values")
+		} else if flow != nil {
+			flowNiche = flow.Niche
+			// Use flow name as intro if available, otherwise use niche
+			if flow.Name != "" {
+				flowIntro = fmt.Sprintf("Welcome to %s flow", flow.Name)
+			} else if flow.Niche != "" {
+				flowIntro = fmt.Sprintf("Welcome to %s", flow.Niche)
+			} else {
+				flowIntro = "Welcome to our service"
+			}
+		}
+	}
+
 	// Check if record already exists
 	aiConv, err := s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
 	if err != nil {
@@ -939,6 +958,8 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 			Stage:           "flow_start",
 			Human:           0,
 			DateOrder:       &now,
+			Intro:           flowIntro,  // Set intro from flow data
+			Niche:           flowNiche,  // Set niche from flow data
 			FlowReference:   sql.NullString{String: flowReference, Valid: true},
 			// Legacy fields for backward compatibility
 			CurrentNode:     sql.NullString{String: "", Valid: false},
@@ -961,24 +982,51 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 		}
 	} else {
 		// Update existing record with flow execution data
+		// First update intro and niche if they are empty (preserve existing values)
+		if aiConv.Intro == "" && flowIntro != "" {
+			// Update intro field separately to preserve other data
+			query := `UPDATE ai_whatsapp_nodepath SET intro = ?, updated_at = ? WHERE prospect_num = ? AND id_device = ?`
+			_, err := s.aiRepo.GetDB().Exec(query, flowIntro, now, prospectNum, idDevice)
+			if err != nil {
+				logrus.WithError(err).Warn("Failed to update intro field")
+			}
+		}
+		if aiConv.Niche == "" && flowNiche != "" {
+			// Update niche field separately to preserve other data
+			query := `UPDATE ai_whatsapp_nodepath SET niche = ?, updated_at = ? WHERE prospect_num = ? AND id_device = ?`
+			_, err := s.aiRepo.GetDB().Exec(query, flowNiche, now, prospectNum, idDevice)
+			if err != nil {
+				logrus.WithError(err).Warn("Failed to update niche field")
+			}
+		}
+		
+		// Update flow tracking fields without overwriting conversation history
+		err = s.aiRepo.UpdateFlowTrackingFields(
+			prospectNum, idDevice,
+			flowReference, // flowID
+			"", // currentNodeID - will be set when flow starts
+			"", // lastNodeID
+			0, // waitingForReply
+			"active", // executionStatus
+			executionID, // executionID
+		)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update flow tracking fields")
+			return nil, fmt.Errorf("failed to update flow tracking fields: %w", err)
+		}
+		
+		// Update legacy fields for backward compatibility
 		aiConv.FlowReference = sql.NullString{String: flowReference, Valid: true}
-		// Legacy fields for backward compatibility
 		aiConv.CurrentNode = sql.NullString{String: "", Valid: false}
 		aiConv.Variables = json.RawMessage(variablesJSON)
 		aiConv.ExecutionStatus = sql.NullString{String: "active", Valid: true}
 		aiConv.ExecutionID = sql.NullString{String: executionID, Valid: true}
-		// New flow tracking fields
+		// Update flow tracking fields in memory for return value
 		aiConv.FlowID = sql.NullString{String: flowReference, Valid: true}
-		aiConv.CurrentNodeID = sql.NullString{String: "", Valid: false} // Will be set when flow starts
+		aiConv.CurrentNodeID = sql.NullString{String: "", Valid: false}
 		aiConv.WaitingForReply = sql.NullInt32{Int32: 0, Valid: true}
 		aiConv.LastNodeID = sql.NullString{String: "", Valid: false}
 		aiConv.UpdatedAt = now
-
-		err = s.aiRepo.UpdateAIWhatsapp(aiConv)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to update AI WhatsApp record with flow execution")
-			return nil, fmt.Errorf("failed to update record: %w", err)
-		}
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -1033,6 +1081,7 @@ func (s *aiWhatsappService) GetFlowExecutionByProspectAndDevice(prospectNum, idD
 }
 
 // UpdateFlowExecution updates flow execution state in ai_whatsapp_nodepath
+// Uses UpdateFlowTrackingFields to preserve conversation history and other important data
 func (s *aiWhatsappService) UpdateFlowExecution(prospectNum, idDevice, currentNode string, variables map[string]interface{}, status string) error {
 	logrus.WithFields(logrus.Fields{
 		"prospect_num": prospectNum,
@@ -1050,38 +1099,44 @@ func (s *aiWhatsappService) UpdateFlowExecution(prospectNum, idDevice, currentNo
 		return fmt.Errorf("AI WhatsApp record not found for prospect %s and device %s", prospectNum, idDevice)
 	}
 
-	// Update current node ID using new flow tracking field
-	if currentNode != "" {
-		// Store previous node as last_node_id if we have a current node
-		if aiConv.CurrentNodeID.Valid && aiConv.CurrentNodeID.String != "" {
-			aiConv.LastNodeID = sql.NullString{String: aiConv.CurrentNodeID.String, Valid: true}
-		}
-		// Update to new current node
-		aiConv.CurrentNodeID = sql.NullString{String: currentNode, Valid: true}
-		
-		// Also update the legacy CurrentNode field for backward compatibility
-		aiConv.CurrentNode = sql.NullString{String: currentNode, Valid: true}
+	// Determine last node ID
+	lastNodeID := ""
+	if currentNode != "" && aiConv.CurrentNodeID.Valid && aiConv.CurrentNodeID.String != "" {
+		lastNodeID = aiConv.CurrentNodeID.String
 	}
 
-	// Update variables if provided
+	// Get current flow ID
+	flowID := ""
+	if aiConv.FlowID.Valid {
+		flowID = aiConv.FlowID.String
+	}
+
+	// Update flow tracking fields without overwriting conversation history
+	err = s.aiRepo.UpdateFlowTrackingFields(
+		prospectNum, idDevice,
+		flowID, // preserve existing flowID
+		currentNode, // currentNodeID
+		lastNodeID, // lastNodeID
+		0, // waitingForReply - default to 0
+		status, // executionStatus
+		"", // executionID - preserve existing
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update flow tracking fields: %w", err)
+	}
+
+	// Update variables if provided (requires separate update to preserve other data)
 	if variables != nil {
 		variablesJSON, err := json.Marshal(variables)
 		if err != nil {
 			return fmt.Errorf("failed to marshal variables: %w", err)
 		}
-		aiConv.Variables = json.RawMessage(variablesJSON)
-	}
-
-	// Update execution status using legacy field for backward compatibility
-	if status != "" {
-		aiConv.ExecutionStatus = sql.NullString{String: status, Valid: true}
-	}
-
-	aiConv.UpdatedAt = time.Now()
-
-	err = s.aiRepo.UpdateAIWhatsapp(aiConv)
-	if err != nil {
-		return fmt.Errorf("failed to update AI WhatsApp record: %w", err)
+		// Update variables field separately to preserve other data
+		query := `UPDATE ai_whatsapp_nodepath SET variables = ?, updated_at = ? WHERE prospect_num = ? AND id_device = ?`
+		_, err = s.aiRepo.GetDB().Exec(query, string(variablesJSON), time.Now(), prospectNum, idDevice)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to update variables field")
+		}
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -1171,4 +1226,10 @@ func (s *aiWhatsappService) recordAPIFailure() {
 		s.circuitBreaker.isOpen = true
 		logrus.WithField("failure_count", s.circuitBreaker.failureCount).Warn("WhatsApp AI circuit breaker opened due to consecutive API failures")
 	}
+}
+
+// GetRepository returns the underlying repository for direct access
+// Used by other services that need to call repository methods directly
+func (s *aiWhatsappService) GetRepository() repository.AIWhatsappRepository {
+	return s.aiRepo
 }
