@@ -953,6 +953,20 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 	}
 
 	now := time.Now()
+	
+	// Get the start node ID from the flow
+	flow, err := s.flowService.GetFlow(flowReference)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get flow for start node")
+		return nil, fmt.Errorf("failed to get flow: %w", err)
+	}
+	
+	startNode, err := s.flowService.GetStartNode(flow)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get start node from flow")
+		return nil, fmt.Errorf("failed to get start node: %w", err)
+	}
+	
 	if aiConv == nil {
 		// Create new record with flow execution data
 		aiConv = &models.AIWhatsapp{
@@ -965,11 +979,11 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 			Niche:           flowNiche,  // Set niche from flow data
 			FlowReference:   sql.NullString{String: flowReference, Valid: true},
 			// Legacy fields for backward compatibility
-			CurrentNode:     sql.NullString{String: "", Valid: false},
+			CurrentNode:     sql.NullString{String: startNode.ID, Valid: true},
 			Variables:       json.RawMessage(variablesJSON),
 			// New flow tracking fields
 			FlowID:          sql.NullString{String: flowReference, Valid: true},
-			CurrentNodeID:   sql.NullString{String: "", Valid: false}, // Will be set when flow starts
+			CurrentNodeID:   sql.NullString{String: startNode.ID, Valid: true}, // Set to actual start node ID
 			WaitingForReply: sql.NullInt32{Int32: 0, Valid: true},
 			LastNodeID:      sql.NullString{String: "", Valid: false},
 			ExecutionStatus: sql.NullString{String: "active", Valid: true},
@@ -1007,7 +1021,7 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 		err = s.aiRepo.UpdateFlowTrackingFields(
 			prospectNum, idDevice,
 			flowReference, // flowID
-			"", // currentNodeID - will be set when flow starts
+			startNode.ID, // currentNodeID - set to actual start node ID
 			"", // lastNodeID
 			0, // waitingForReply
 			"active", // executionStatus
