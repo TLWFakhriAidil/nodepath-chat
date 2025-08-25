@@ -212,7 +212,9 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
-		       created_at, updated_at
+		       created_at, updated_at,
+		       current_node_id, waiting_for_reply, flow_id, last_node_id, 
+		       execution_status, execution_id
 		FROM ai_whatsapp_nodepath 
 		WHERE prospect_num = ?
 	`
@@ -229,6 +231,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
+		&ai.CurrentNodeID, &ai.WaitingForReply, &ai.FlowID, &ai.LastNodeID,
+		&ai.ExecutionStatus, &ai.ExecutionID,
 	)
 
 	ai.ConvCurrent = convCurrentSQL
@@ -1016,7 +1020,18 @@ func (r *aiWhatsappRepository) UpdateFlowTrackingFields(prospectNum, idDevice st
 		executionIDValue = nil
 	}
 
-	_, err := r.db.Exec(query,
+	// Debug logging before update
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"id_device": idDevice,
+		"flow_id_input": flowID,
+		"flow_id_value": flowIDValue,
+		"current_node_id": currentNodeID,
+		"execution_status": executionStatus,
+		"execution_id": executionID,
+	}).Info("DEBUG: About to update flow tracking fields")
+
+	result, err := r.db.Exec(query,
 		flowIDValue, currentNodeIDValue, lastNodeIDValue, waitingForReplyValue,
 		executionStatusValue, executionIDValue, time.Now(),
 		prospectNum, idDevice,
@@ -1027,11 +1042,18 @@ func (r *aiWhatsappRepository) UpdateFlowTrackingFields(prospectNum, idDevice st
 		return fmt.Errorf("failed to update flow tracking fields: %w", err)
 	}
 
+	// Check how many rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		logrus.WithError(err).Warn("Could not get rows affected count")
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"prospect_num": prospectNum,
 		"id_device": idDevice,
 		"flow_id": flowID,
 		"current_node_id": currentNodeID,
+		"rows_affected": rowsAffected,
 	}).Info("Flow tracking fields updated successfully")
 	return nil
 }
@@ -1182,7 +1204,9 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 		       conv_current, human, niche, jam, intro, 
 		       catatan_staff, balas, data_image, conv_stage, 
 		       bot_balas, keywordiklan, marketer, update_today, 
-		       created_at, updated_at
+		       created_at, updated_at,
+		       current_node_id, waiting_for_reply, flow_id, last_node_id, 
+		       execution_status, execution_id
 		FROM ai_whatsapp_nodepath 
 		WHERE prospect_num = ? AND id_device = ?
 	`
@@ -1199,6 +1223,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
+		&ai.CurrentNodeID, &ai.WaitingForReply, &ai.FlowID, &ai.LastNodeID,
+		&ai.ExecutionStatus, &ai.ExecutionID,
 	)
 
 	ai.ConvCurrent = convCurrentSQL

@@ -1034,13 +1034,13 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 		
 		// Update legacy fields for backward compatibility
 		aiConv.FlowReference = sql.NullString{String: flowReference, Valid: true}
-		aiConv.CurrentNode = sql.NullString{String: "", Valid: false}
+		aiConv.CurrentNode = sql.NullString{String: startNode.ID, Valid: true}
 		aiConv.Variables = json.RawMessage(variablesJSON)
 		aiConv.ExecutionStatus = sql.NullString{String: "active", Valid: true}
 		aiConv.ExecutionID = sql.NullString{String: executionID, Valid: true}
 		// Update flow tracking fields in memory for return value
 		aiConv.FlowID = sql.NullString{String: flowReference, Valid: true}
-		aiConv.CurrentNodeID = sql.NullString{String: "", Valid: false}
+		aiConv.CurrentNodeID = sql.NullString{String: startNode.ID, Valid: true}
 		aiConv.WaitingForReply = sql.NullInt32{Int32: 0, Valid: true}
 		aiConv.LastNodeID = sql.NullString{String: "", Valid: false}
 		aiConv.UpdatedAt = now
@@ -1122,10 +1122,25 @@ func (s *aiWhatsappService) UpdateFlowExecution(prospectNum, idDevice, currentNo
 		lastNodeID = aiConv.CurrentNodeID.String
 	}
 
-	// Get current flow ID
+	// Get current flow ID - always ensure we have a valid FlowID
 	flowID := ""
-	if aiConv.FlowID.Valid {
+	if aiConv.FlowID.Valid && aiConv.FlowID.String != "" {
 		flowID = aiConv.FlowID.String
+	} else if aiConv.FlowReference.Valid && aiConv.FlowReference.String != "" {
+		// If FlowID is NULL but we have a FlowReference, use that
+		flowID = aiConv.FlowReference.String
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"id_device": idDevice,
+			"flow_reference": flowID,
+		}).Info("Using FlowReference as FlowID since FlowID was NULL")
+	} else {
+		// If both are NULL, this is an error - we need a flow reference
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"id_device": idDevice,
+		}).Error("Cannot update flow execution: both FlowID and FlowReference are NULL")
+		return fmt.Errorf("cannot update flow execution: no flow reference available")
 	}
 
 	// Update flow tracking fields without overwriting conversation history
