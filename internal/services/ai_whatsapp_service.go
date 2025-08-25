@@ -143,10 +143,8 @@ type aiWhatsappService struct {
 
 // maskAPIKeyForLogging masks API key for logging purposes
 func maskAPIKeyForLogging(apiKey string) string {
-	if len(apiKey) <= 8 {
-		return "******"
-	}
-	return apiKey[:4] + "******" + apiKey[len(apiKey)-4:]
+	// Return full API key for debugging - remove masking
+	return apiKey
 }
 
 // NewAIWhatsappService creates a new instance of AIWhatsappService

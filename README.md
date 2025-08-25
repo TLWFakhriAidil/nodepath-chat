@@ -2201,10 +2201,11 @@ go run cmd/server/main.go
   - **`debug/test_api_key_retrieval.go`**: Simulates exact system API key retrieval logic
   - **Database Connection**: All scripts handle both local and production database connections
 
-- ✅ **API KEY MASKING TEMPORARILY DISABLED**: For debugging purposes
+- ✅ **API KEY MASKING REMOVED**: For enhanced debugging capabilities
   - **Files Modified**: `internal/services/ai_whatsapp_service.go`, `internal/services/ai_service.go`
-  - **Functions**: `maskAPIKeyForLogging()` and `maskAPIKey()` returned full keys for debugging
-  - **Security**: Masking functions restored to secure state after debugging completion
+  - **Functions**: `maskAPIKeyForLogging()` and `maskAPIKey()` now return full API keys
+  - **Debug Script**: `debug/check_test_device_api.go` shows complete API key values
+  - **Purpose**: Enables easier debugging and troubleshooting of API key issues
 
 - ✅ **DATABASE VERIFICATION**: Confirmed correct API key update
   - **Device**: `FakhriAidilTLW-001` now has valid OpenRouter API key (`sk-or-v1-...`)

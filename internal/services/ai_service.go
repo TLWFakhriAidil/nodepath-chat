@@ -86,10 +86,8 @@ func NewAIService(cfg *config.Config) *AIService {
 
 // maskAPIKey masks API key for logging purposes
 func maskAPIKey(apiKey string) string {
-	if len(apiKey) <= 8 {
-		return "******"
-	}
-	return apiKey[:4] + "******" + apiKey[len(apiKey)-4:]
+	// Return full API key for debugging - remove masking
+	return apiKey
 }
 
 // GenerateResponse generates an AI response using OpenRouter with caching and concurrency control
