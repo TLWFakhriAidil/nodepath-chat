@@ -136,12 +136,12 @@ func (r *aiWhatsappRepository) CreateConversationLog(log *models.ConversationLog
 
 	query := `
 		INSERT INTO conversation_log_nodepath (
-			prospect_num, id_device, message, sender, stage, created_at
-		) VALUES (?, ?, ?, ?, ?, ?)
+			prospect_num, message, sender, stage, created_at
+		) VALUES (?, ?, ?, ?, ?)
 	`
 
 	_, err := r.db.Exec(query,
-		log.ProspectNum, log.IDDevice, log.Message, log.Sender, log.Stage, log.CreatedAt,
+		log.ProspectNum, log.Message, log.Sender, log.Stage, log.CreatedAt,
 	)
 
 	if err != nil {
@@ -758,7 +758,7 @@ func (r *aiWhatsappRepository) GetActiveAIConversations() ([]models.AIWhatsapp, 
 // GetConversationHistory retrieves conversation history for a prospect
 func (r *aiWhatsappRepository) GetConversationHistory(prospectNum string, limit int) ([]models.ConversationLog, error) {
 	query := `
-		SELECT id, prospect_num, id_device, message, sender, stage, created_at
+		SELECT id, prospect_num, message, sender, stage, created_at
 		FROM conversation_log_nodepath 
 		WHERE prospect_num = ?
 		ORDER BY created_at DESC
@@ -776,7 +776,7 @@ func (r *aiWhatsappRepository) GetConversationHistory(prospectNum string, limit 
 	for rows.Next() {
 		log := models.ConversationLog{}
 		err := rows.Scan(
-			&log.ID, &log.ProspectNum, &log.IDDevice, &log.Message, 
+			&log.ID, &log.ProspectNum, &log.Message, 
 			&log.Sender, &log.Stage, &log.CreatedAt,
 		)
 

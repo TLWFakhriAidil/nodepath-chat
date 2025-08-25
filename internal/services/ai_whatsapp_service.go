@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/utils"
@@ -134,10 +135,19 @@ type aiWhatsappService struct {
 	circuitBreaker        *CircuitBreakerWhatsapp
 	// Advanced rate limiter for API calls
 	rateLimiter           *APIRateLimiter
+	cfg                   *config.Config
+}
+
+// maskAPIKey masks an API key for safe logging
+func maskAPIKey(apiKey string) string {
+	if len(apiKey) <= 8 {
+		return "***"
+	}
+	return apiKey[:4] + "***" + apiKey[len(apiKey)-4:]
 }
 
 // NewAIWhatsappService creates a new instance of AIWhatsappService
-func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo repository.DeviceSettingsRepository, flowService *FlowService, mediaDetectionService *MediaDetectionService) AIWhatsappService {
+func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo repository.DeviceSettingsRepository, flowService *FlowService, mediaDetectionService *MediaDetectionService, cfg *config.Config) AIWhatsappService {
 	// Initialize rate limiter configuration for WhatsApp AI service
 	rateLimiterConfig := &RateLimiterConfig{
 		RequestsPerMinute: 120, // Higher limit for WhatsApp service
@@ -159,6 +169,7 @@ func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo rep
 		},
 		circuitBreaker: &CircuitBreakerWhatsapp{}, // Initialize circuit breaker
 		rateLimiter:    rateLimiter,
+		cfg:            cfg,
 	}
 }
 
@@ -309,8 +320,36 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 
 	// Call AI API
 	apiKey := ""
-	if deviceSettings.APIKey.Valid {
+	// Check if device has a valid API key (not empty and not a test key)
+	isValidAPIKey := deviceSettings.APIKey.Valid && 
+		deviceSettings.APIKey.String != "" && 
+		!strings.HasPrefix(deviceSettings.APIKey.String, "sk-test")
+	
+	if isValidAPIKey {
 		apiKey = deviceSettings.APIKey.String
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"api_key_source": "device_settings",
+			"api_key_preview": maskAPIKey(apiKey),
+		}).Info("Using device-specific API key")
+	} else {
+		// Use default OpenRouter key for non-special devices
+		if idDevice != "SCHQ-S94" && idDevice != "SCHQ-S12" {
+			apiKey = s.cfg.OpenRouterDefaultKey
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"api_key_source": "default_openrouter",
+				"api_key_preview": maskAPIKey(apiKey),
+			}).Info("Using default OpenRouter API key")
+		} else {
+			// For special devices, use the hardcoded OpenAI key from custom instructions
+			apiKey = "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"
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"api_key_source": "hardcoded_openai",
+				"api_key_preview": maskAPIKey(apiKey),
+			}).Info("Using hardcoded OpenAI API key for special device")
+		}
 	}
 	aiResponse, err := s.callAIAPI(apiURL, apiKey, idDevice, payload)
 	if err != nil {
@@ -837,12 +876,12 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		// Create initial conversation log within transaction
 		convLogQuery := `
 			INSERT INTO conversation_log_nodepath (
-				prospect_num, id_device, message, sender, stage, created_at
-			) VALUES (?, ?, ?, ?, ?, ?)
+				prospect_num, message, sender, stage, created_at
+			) VALUES (?, ?, ?, ?, ?)
 		`
 		
 		_, err = tx.Exec(convLogQuery,
-			prospectNum, idDevice, userMessage, "user", "welcome", now,
+			prospectNum, userMessage, "user", "welcome", now,
 		)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create initial conversation log in transaction")
@@ -901,8 +940,14 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 			Human:           0,
 			DateOrder:       &now,
 			FlowReference:   sql.NullString{String: flowReference, Valid: true},
+			// Legacy fields for backward compatibility
 			CurrentNode:     sql.NullString{String: "", Valid: false},
 			Variables:       json.RawMessage(variablesJSON),
+			// New flow tracking fields
+			FlowID:          sql.NullString{String: flowReference, Valid: true},
+			CurrentNodeID:   sql.NullString{String: "", Valid: false}, // Will be set when flow starts
+			WaitingForReply: sql.NullInt32{Int32: 0, Valid: true},
+			LastNodeID:      sql.NullString{String: "", Valid: false},
 			ExecutionStatus: sql.NullString{String: "active", Valid: true},
 			ExecutionID:     sql.NullString{String: executionID, Valid: true},
 			CreatedAt:       now,
@@ -917,10 +962,16 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 	} else {
 		// Update existing record with flow execution data
 		aiConv.FlowReference = sql.NullString{String: flowReference, Valid: true}
+		// Legacy fields for backward compatibility
 		aiConv.CurrentNode = sql.NullString{String: "", Valid: false}
 		aiConv.Variables = json.RawMessage(variablesJSON)
 		aiConv.ExecutionStatus = sql.NullString{String: "active", Valid: true}
 		aiConv.ExecutionID = sql.NullString{String: executionID, Valid: true}
+		// New flow tracking fields
+		aiConv.FlowID = sql.NullString{String: flowReference, Valid: true}
+		aiConv.CurrentNodeID = sql.NullString{String: "", Valid: false} // Will be set when flow starts
+		aiConv.WaitingForReply = sql.NullInt32{Int32: 0, Valid: true}
+		aiConv.LastNodeID = sql.NullString{String: "", Valid: false}
 		aiConv.UpdatedAt = now
 
 		err = s.aiRepo.UpdateAIWhatsapp(aiConv)
@@ -950,9 +1001,15 @@ func (s *aiWhatsappService) GetActiveFlowExecution(prospectNum, idDevice string)
 		return nil, nil // No record found
 	}
 
-	// Check if there's an active flow execution
-	if !aiConv.ExecutionStatus.Valid || aiConv.ExecutionStatus.String != "active" {
-		return nil, nil // No active execution
+	// Check if there's an active flow execution using new flow tracking fields
+	// A flow is considered active if it has a valid FlowID and CurrentNodeID
+	if !aiConv.FlowID.Valid || aiConv.FlowID.String == "" {
+		return nil, nil // No active flow
+	}
+
+	// Also check if we have a valid current node ID
+	if !aiConv.CurrentNodeID.Valid || aiConv.CurrentNodeID.String == "" {
+		return nil, nil // No current node set
 	}
 
 	return aiConv, nil
@@ -993,8 +1050,16 @@ func (s *aiWhatsappService) UpdateFlowExecution(prospectNum, idDevice, currentNo
 		return fmt.Errorf("AI WhatsApp record not found for prospect %s and device %s", prospectNum, idDevice)
 	}
 
-	// Update current node
+	// Update current node ID using new flow tracking field
 	if currentNode != "" {
+		// Store previous node as last_node_id if we have a current node
+		if aiConv.CurrentNodeID.Valid && aiConv.CurrentNodeID.String != "" {
+			aiConv.LastNodeID = sql.NullString{String: aiConv.CurrentNodeID.String, Valid: true}
+		}
+		// Update to new current node
+		aiConv.CurrentNodeID = sql.NullString{String: currentNode, Valid: true}
+		
+		// Also update the legacy CurrentNode field for backward compatibility
 		aiConv.CurrentNode = sql.NullString{String: currentNode, Valid: true}
 	}
 
@@ -1007,7 +1072,7 @@ func (s *aiWhatsappService) UpdateFlowExecution(prospectNum, idDevice, currentNo
 		aiConv.Variables = json.RawMessage(variablesJSON)
 	}
 
-	// Update execution status
+	// Update execution status using legacy field for backward compatibility
 	if status != "" {
 		aiConv.ExecutionStatus = sql.NullString{String: status, Valid: true}
 	}
@@ -1020,9 +1085,9 @@ func (s *aiWhatsappService) UpdateFlowExecution(prospectNum, idDevice, currentNo
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"prospect_num": prospectNum,
-		"current_node": currentNode,
-		"status":       status,
+		"prospect_num":     prospectNum,
+		"current_node_id":  currentNode,
+		"status":           status,
 	}).Info("Flow execution updated successfully")
 
 	return nil

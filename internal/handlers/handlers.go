@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/services"
@@ -38,6 +39,7 @@ func NewHandlers(
 	mediaService *services.MediaService,
 	healthService *services.HealthService,
 	db *sql.DB,
+	cfg *config.Config,
 ) *Handlers {
 	// Initialize repositories
 	aiRepo := repository.NewAIWhatsappRepository(db)
@@ -47,7 +49,7 @@ func NewHandlers(
 	mediaDetectionService := services.NewMediaDetectionService()
 	
 	// Initialize AI WhatsApp service
-	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService, mediaDetectionService)
+	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService, mediaDetectionService, cfg)
 	
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)

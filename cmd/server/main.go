@@ -111,7 +111,7 @@ func main() {
 	logrus.Info("Health service initialized for system monitoring")
 
 	// Initialize AI WhatsApp service with media detection service
-	aiWhatsappService := services.NewAIWhatsappService(aiWhatsappRepo, deviceSettingsRepo, flowService, mediaDetectionService)
+	aiWhatsappService := services.NewAIWhatsappService(aiWhatsappRepo, deviceSettingsRepo, flowService, mediaDetectionService, cfg)
 	logrus.Info("AI WhatsApp service initialized with media detection service")
 
 	// Initialize WhatsApp service with multi-device support
@@ -138,6 +138,7 @@ func main() {
 		mediaService,
 		healthService,
 		db,
+		cfg,
 	)
 
 	// Initialize HTML template engine
