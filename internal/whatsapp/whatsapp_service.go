@@ -272,6 +272,9 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
 		}).Info("✅ FLOW: New execution started successfully in ai_whatsapp_nodepath")
+
+		// Process the new execution through the flow
+		return s.processNewFlowExecution(aiExecution, content, phoneNumber, deviceID)
 	} else {
 		logrus.WithFields(logrus.Fields{
 			"execution_id":   aiExecution.ExecutionID.String,
@@ -292,9 +295,33 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			
 			// Handle the user reply and resume flow from the correct node
 			return s.handleUserReplyResume(aiExecution, content)
+		} else {
+			// Execution exists but not waiting for reply - this means the flow is already completed or in progress
+			// We should not restart the flow, instead save the user message and potentially trigger AI conversation
+			logrus.WithFields(logrus.Fields{
+				"execution_id":     aiExecution.ExecutionID.String,
+				"current_node_id": aiExecution.CurrentNodeID.String,
+				"waiting_for_reply": aiExecution.WaitingForReply.Int32,
+				"user_input":      content,
+			}).Info("ℹ️ FLOW: Existing execution not waiting for reply, falling back to AI conversation")
+			
+			// Save user message to conversation history
+			err := s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "")
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to save user message to conversation")
+			}
+			
+			// Fall back to AI conversation instead of restarting flow
+			return s.processAIConversation(phoneNumber, content, deviceID)
 		}
 	}
 
+	return nil
+}
+
+// processNewFlowExecution handles flow processing for new executions only
+// This function contains the logic that was previously running for both new and existing executions
+func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, content, phoneNumber, deviceID string) error {
 	// Note: Human mode checking would be implemented through a separate table or field
 	// For now, we'll process all messages through the flow
 
