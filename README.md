@@ -2129,6 +2129,24 @@ go run cmd/server/main.go
   - **Build Verification**: All compilation errors resolved, Docker builds now succeed
   - **Deployment Ready**: System ready for Railway deployment without build failures
 
+- ✅ **ADVANCED AI PROMPT <NIL> MESSAGE FIX**: Eliminated unwanted `<nil>` messages sent with media responses
+  - **Root Cause**: Advanced AI Prompt nodes were returning empty strings after sending individual media items, causing main flow logic to send empty messages as `<nil>`
+  - **Issue Location**: `processFlowMessage` function was attempting to send empty responses from `processAdvancedAIPromptNode`
+  - **Solution**: Added comprehensive empty response handling in main flow processing logic
+    - Added empty string check before attempting to send any response
+    - Implemented "Skipping empty response to prevent <nil> message" logging for traceability
+    - Updated conversation logging to skip empty responses and prevent database pollution
+    - Maintained all existing media detection and sending functionality
+  - **Enhanced Flow Logic**: 
+    - `processAdvancedAIPromptNode` correctly returns empty string after sending individual items
+    - Main flow processing now properly handles empty responses without sending messages
+    - Conversation history no longer logs empty responses
+  - **Testing Verified**: 
+    - Media messages sent successfully without additional `<nil>` messages
+    - `has_media=true` flag correctly detected and logged
+    - Empty response skipping logic confirmed in server logs
+  - **User Experience**: Clean media delivery without confusing `<nil>` text messages
+
 **Final Status**: 🟢 **FULLY OPERATIONAL PRODUCTION SYSTEM** - Ready for users with no critical issues or blockers
 
 ## 📊 Database Schema Optimization (Latest)

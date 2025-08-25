@@ -394,29 +394,47 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 			"response_length": len(response),
 		}).Info("📤 FLOW: Sending response back to user")
 
-		// Check if response contains media URLs using the new detection service
-		if s.mediaDetectionService.HasMedia(response) {
-			mediaInfo := s.mediaDetectionService.ExtractFirstMedia(response)
-			if mediaInfo != nil {
-				logrus.WithFields(logrus.Fields{
-				"media_type": mediaInfo.MediaType,
-				"media_url":  mediaInfo.MediaURL,
-				"device_id":  deviceID,
-			}).Info("🖼️ FLOW: Extracted media URL using new detection service, sending as media message")
-			
-			// Send as media message instead of text
-			err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
-				if err != nil {
-					logrus.WithError(err).WithFields(logrus.Fields{
-						"device_id":    deviceID,
-						"phone_number": phoneNumber,
-						"media_url":    mediaInfo.MediaURL,
-				"media_type":   mediaInfo.MediaType,
-					}).Error("❌ FLOW: Failed to send media message")
-					return err
+		// Skip sending if response is empty (already handled by advanced AI nodes)
+		if response == "" {
+			logrus.WithFields(logrus.Fields{
+				"device_id":    deviceID,
+				"phone_number": phoneNumber,
+			}).Info("🔇 FLOW: Skipping empty response to prevent <nil> message")
+		} else {
+			// Check if response contains media URLs using the new detection service
+			if s.mediaDetectionService.HasMedia(response) {
+				mediaInfo := s.mediaDetectionService.ExtractFirstMedia(response)
+				if mediaInfo != nil {
+					logrus.WithFields(logrus.Fields{
+					"media_type": mediaInfo.MediaType,
+					"media_url":  mediaInfo.MediaURL,
+					"device_id":  deviceID,
+				}).Info("🖼️ FLOW: Extracted media URL using new detection service, sending as media message")
+				
+				// Send as media message instead of text
+				err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
+					if err != nil {
+						logrus.WithError(err).WithFields(logrus.Fields{
+							"device_id":    deviceID,
+							"phone_number": phoneNumber,
+							"media_url":    mediaInfo.MediaURL,
+					"media_type":   mediaInfo.MediaType,
+						}).Error("❌ FLOW: Failed to send media message")
+						return err
+					}
+				} else {
+					// Fallback to text if extraction failed
+					err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+					if err != nil {
+						logrus.WithError(err).WithFields(logrus.Fields{
+							"device_id":    deviceID,
+							"phone_number": phoneNumber,
+						}).Error("❌ FLOW: Failed to send response message")
+						return err
+					}
 				}
 			} else {
-				// Fallback to text if extraction failed
+				// Send response back to user using specific device (regular text)
 				err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
 				if err != nil {
 					logrus.WithError(err).WithFields(logrus.Fields{
@@ -426,35 +444,30 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 					return err
 				}
 			}
-		} else {
-			// Send response back to user using specific device (regular text)
-			err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
-			if err != nil {
-				logrus.WithError(err).WithFields(logrus.Fields{
-					"device_id":    deviceID,
-					"phone_number": phoneNumber,
-				}).Error("❌ FLOW: Failed to send response message")
-				return err
-			}
 		}
 
-		logrus.WithFields(logrus.Fields{
-			"phone_number": phoneNumber,
-			"response":     response,
-		}).Info("✅ FLOW: Response sent successfully")
-
-		// Add bot response to conversation
-		logrus.WithFields(logrus.Fields{
-				"execution_id": aiExecution.IDProspect,
-				"message_type": "BOT",
+		// Only log and save conversation if response is not empty
+		if response != "" {
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
 				"response":     response,
-			}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
+			}).Info("✅ FLOW: Response sent successfully")
 
-		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
-		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
+			// Add bot response to conversation
+			logrus.WithFields(logrus.Fields{
+					"execution_id": aiExecution.IDProspect,
+					"message_type": "BOT",
+					"response":     response,
+				}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
+
+			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
+			} else {
+				logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: Bot response added to ai_whatsapp_nodepath successfully")
+			}
 		} else {
-			logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: Bot response added to ai_whatsapp_nodepath successfully")
+			logrus.WithField("execution_id", aiExecution.IDProspect).Info("🔇 FLOW: Skipping conversation logging for empty response")
 		}
 	} else {
 		logrus.WithField("execution_id", aiExecution.IDProspect).Info("ℹ️ FLOW: No response generated from flow processing (Advanced AI nodes handle their own message sending)")
