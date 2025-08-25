@@ -541,6 +541,7 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 }
 
 // sendAIResponse sends AI response with multiple message types (text, images, audio, and video)
+// If media items are present, only media will be sent (text items are skipped)
 func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *services.AIWhatsappResponse) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
@@ -549,10 +550,20 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 		"response_count": len(response.Response),
 	}).Info("📤 AI: Sending AI response")
 
+	// Check if there are any media items in the response
+	hasMedia := false
+	for _, item := range response.Response {
+		if item.Type == "image" || item.Type == "audio" || item.Type == "video" {
+			hasMedia = true
+			break
+		}
+	}
+
 	// Console log for tracing AI response items
 	logrus.WithFields(logrus.Fields{
 		"device_id": deviceID,
 		"phone_number": phoneNumber,
+		"has_media": hasMedia,
 		"response_items": func() []map[string]interface{} {
 			items := make([]map[string]interface{}, len(response.Response))
 			for i, item := range response.Response {
@@ -560,6 +571,7 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 					"index": i,
 					"type": item.Type,
 					"content_length": len(item.Content),
+					"will_send": !hasMedia || (item.Type != "text"),
 					"content_preview": func() string {
 						if len(item.Content) > 100 {
 							return item.Content[:100] + "..."
@@ -572,11 +584,28 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 		}(),
 	}).Info("🔍 AI RESPONSE: PROCESSING RESPONSE ITEMS FOR TRACING")
 
+	// If media is present, log that text items will be skipped
+	if hasMedia {
+		logrus.WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"phone_number": phoneNumber,
+		}).Info("📱 AI RESPONSE: Media detected - skipping text items to send only media")
+	}
+
 	// Send each response item in sequence
 	for i, item := range response.Response {
+		// Skip text items if media is present
+		if hasMedia && item.Type == "text" {
+			logrus.WithFields(logrus.Fields{
+				"item_index": i,
+				"item_type": item.Type,
+			}).Info("⏭️ AI RESPONSE: Skipping text item due to media presence")
+			continue
+		}
+
 		switch item.Type {
 		case "text":
-			// Send text message
+			// Send text message (only if no media is present)
 			err := s.SendMessageFromDevice(deviceID, phoneNumber, item.Content)
 			if err != nil {
 				logrus.WithError(err).WithField("item_index", i).Error("Failed to send text message")
@@ -624,6 +653,7 @@ func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *service
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"stage":        response.Stage,
+		"has_media":    hasMedia,
 	}).Info("✅ AI: Successfully sent AI response")
 
 	return nil
