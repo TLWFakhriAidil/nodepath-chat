@@ -79,6 +79,15 @@ func (ps *ProviderService) SendMediaMessage(deviceSettings *models.DeviceSetting
 // sendWablasMessage sends a text message via Wablas API
 // Uses the exact API format specified by user requirements
 func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettings, phoneNumber, message string) error {
+	// Prevent sending empty or whitespace-only messages to avoid <nil> messages
+	if message == "" || strings.TrimSpace(message) == "" {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceSettings.Instance.String,
+		}).Warn("[WABLAS-TEXT] Skipping empty message to prevent <nil> message")
+		return nil
+	}
+
 	apiURL := "https://my.wablas.com/api/send-message"
 	
 	logrus.WithFields(logrus.Fields{
@@ -242,6 +251,15 @@ func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceS
 // sendWhacenterMessage sends a text message via Whacenter API
 // Uses the exact API format specified by user requirements
 func (ps *ProviderService) sendWhacenterMessage(deviceSettings *models.DeviceSettings, phoneNumber, message string) error {
+	// Prevent sending empty or whitespace-only messages to avoid <nil> messages
+	if message == "" || strings.TrimSpace(message) == "" {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceSettings.Instance.String,
+		}).Warn("[WHACENTER] Skipping empty message to prevent <nil> message")
+		return nil
+	}
+
 	apiURL := "https://api.whacenter.com/api/send"
 	
 	logrus.WithFields(logrus.Fields{

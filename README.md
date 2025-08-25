@@ -100,6 +100,21 @@ After setup, verify Redis connection:
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
+### ✅ Flow Condition Evaluation Fix (January 2025)
+- **Critical Bug Fixed**: Resolved issue where condition nodes in flows were not properly evaluating user input, causing incorrect responses
+- **Problem**: When users replied "sendiri" to a condition node, the system incorrectly returned the "anak" response instead of the correct "sendiri" response
+- **Root Cause**: The `processConditionNode` function was using `GetNextNode()` which only retrieved the first outgoing edge instead of evaluating conditions
+- **Solution**: 
+  - Created new `EvaluateConditionNode()` function in `flow_service.go` that properly evaluates conditions based on user input
+  - Updated `processConditionNode()` in `whatsapp_service.go` to use the new evaluation function
+  - Added support for different condition types: "equals", "contains", and "default" fallback
+  - Implemented case-insensitive condition matching for better user experience
+- **Files Updated**:
+  - `internal/services/flow_service.go` - Added `EvaluateConditionNode()` function with proper condition evaluation logic
+  - `internal/whatsapp/whatsapp_service.go` - Updated `processConditionNode()` to use new evaluation function
+- **Testing**: Successfully verified that both "anak" and "sendiri" inputs now trigger their correct respective responses
+- **Impact**: Flow conversations now work correctly with proper condition-based branching logic
+
 ### ✅ Centralized Media Detection Service (January 2025)
 - **New Architecture**: Implemented centralized `MediaDetectionService` for unified media URL detection across the entire system
 - **Service Integration**: Integrated into AI WhatsApp service, WhatsApp service, and webhook handlers for consistent media processing

@@ -383,7 +383,10 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 			"has_response":    response != "",
 		}).Info("🔄 FLOW: Flow processing completed")
 
-	if response != "" {
+	// Only send response if it's not empty and not just whitespace
+	// This prevents sending <nil> messages when Advanced AI Prompt nodes
+	// have already sent their individual response items
+	if response != "" && strings.TrimSpace(response) != "" {
 		logrus.WithFields(logrus.Fields{
 			"phone_number":    phoneNumber,
 			"device_id":       deviceID,
@@ -454,7 +457,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 			logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: Bot response added to ai_whatsapp_nodepath successfully")
 		}
 	} else {
-		logrus.WithField("execution_id", aiExecution.IDProspect).Info("ℹ️ FLOW: No response generated from flow processing")
+		logrus.WithField("execution_id", aiExecution.IDProspect).Info("ℹ️ FLOW: No response generated from flow processing (Advanced AI nodes handle their own message sending)")
 		
 		// Create AI WhatsApp record as fallback when no flow response is generated
 		logrus.WithFields(logrus.Fields{
@@ -1535,9 +1538,8 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 
 // processConditionNode processes a condition node
 func (s *Service) processConditionNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
-	// Evaluate condition and move to appropriate next node
-	// This would include condition evaluation logic
-	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	// Evaluate condition based on user input and move to appropriate next node
+	nextNode, err := s.flowService.EvaluateConditionNode(flow, node.ID, userInput)
 	if err == nil && nextNode != nil {
 		if nextNode.Type == models.NodeTypeDelay {
 			// Advance to delay node and process it immediately

@@ -319,6 +319,104 @@ func (s *FlowService) GetNextNode(flow *models.ChatbotFlow, currentNodeID string
 	return s.FindNodeByID(flow, nextNodeID)
 }
 
+// EvaluateConditionNode evaluates a condition node and returns the appropriate next node based on user input
+func (s *FlowService) EvaluateConditionNode(flow *models.ChatbotFlow, conditionNodeID string, userInput string) (*models.FlowNode, error) {
+	// Get the condition node
+	conditionNode, err := s.FindNodeByID(flow, conditionNodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	if conditionNode == nil {
+		return nil, fmt.Errorf("condition node not found: %s", conditionNodeID)
+	}
+
+	// Get edges from this condition node
+	edges, err := s.GetFlowEdges(flow)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get conditions from node data
+	conditions, ok := conditionNode.Data["conditions"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("no conditions found in condition node %s", conditionNodeID)
+	}
+
+	// Find outgoing edges from this condition node
+	var outgoingEdges []models.FlowEdge
+	for _, edge := range edges {
+		if edge.Source == conditionNodeID {
+			outgoingEdges = append(outgoingEdges, *edge)
+		}
+	}
+
+	if len(outgoingEdges) == 0 {
+		return nil, fmt.Errorf("no outgoing edges found for condition node %s", conditionNodeID)
+	}
+
+	// Normalize user input for comparison
+	userInputLower := strings.ToLower(strings.TrimSpace(userInput))
+
+	// Evaluate each condition
+	for i, conditionInterface := range conditions {
+		condition, ok := conditionInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Get condition properties
+		conditionType, _ := condition["type"].(string)
+		conditionValue, _ := condition["value"].(string)
+
+		// Normalize condition value for comparison
+		conditionValueLower := strings.ToLower(strings.TrimSpace(conditionValue))
+
+		// Evaluate condition based on type
+		var matches bool
+		switch conditionType {
+		case "equals":
+			matches = userInputLower == conditionValueLower
+		case "contains":
+			matches = strings.Contains(userInputLower, conditionValueLower)
+		case "default":
+			// Default condition matches if no other conditions match
+			continue
+		default:
+			// Fallback: treat as equals
+			matches = userInputLower == conditionValueLower
+		}
+
+		// If condition matches, find the corresponding edge
+		if matches && i < len(outgoingEdges) {
+			targetNodeID := outgoingEdges[i].Target
+			return s.FindNodeByID(flow, targetNodeID)
+		}
+	}
+
+	// If no conditions match, try to find a default condition
+	for i, conditionInterface := range conditions {
+		condition, ok := conditionInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		conditionType, _ := condition["type"].(string)
+		if conditionType == "default" && i < len(outgoingEdges) {
+			targetNodeID := outgoingEdges[i].Target
+			return s.FindNodeByID(flow, targetNodeID)
+		}
+	}
+
+	// If no conditions match and no default, use the first edge as fallback
+	if len(outgoingEdges) > 0 {
+		targetNodeID := outgoingEdges[0].Target
+		return s.FindNodeByID(flow, targetNodeID)
+	}
+
+	return nil, fmt.Errorf("no valid next node found for condition node %s", conditionNodeID)
+}
+
 
 
 
