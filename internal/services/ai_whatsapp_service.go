@@ -291,18 +291,11 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		}
 	}
 
-	// Get conversation history
-	convHistory, err := s.aiRepo.GetConversationHistory(prospectNum, 10)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get conversation history")
-		return nil, fmt.Errorf("failed to get conversation history: %w", err)
-	}
-
 	// Build AI prompt content
 	promptContent := s.buildAIPromptContent(aiSettings, stage)
 
-	// Get last AI response
-	lastText := s.getLastAIResponse(convHistory)
+	// Get last AI response from conv_last column
+	lastText := s.getLastAIResponse(aiConv)
 
 	// Determine API URL and model based on device
 	apiURL := s.getAPIURL(idDevice)
@@ -583,14 +576,21 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 	return content
 }
 
-// getLastAIResponse gets the last AI response from conversation history
-func (s *aiWhatsappService) getLastAIResponse(convHistory []models.ConversationLog) string {
-	for _, conv := range convHistory {
-		if conv.Sender == "bot" {
-			return conv.Message
-		}
+// getLastAIResponse gets the last AI response from conv_last column
+// getLastAIResponse retrieves the raw conv_last data from the AIWhatsapp record
+// Returns the complete conversation history stored in conv_last column
+func (s *aiWhatsappService) getLastAIResponse(aiConv *models.AIWhatsapp) string {
+	if aiConv == nil || aiConv.ConvLast == nil {
+		return ""
 	}
-	return ""
+
+	// Return raw conv_last data without processing
+	convLastStr := string(aiConv.ConvLast)
+	if convLastStr == "" || convLastStr == "null" {
+		return ""
+	}
+
+	return convLastStr
 }
 
 // getAPIURL determines the API URL based on device ID
