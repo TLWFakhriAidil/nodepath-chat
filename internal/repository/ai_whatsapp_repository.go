@@ -856,6 +856,7 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 			human = ?, niche = ?, jam = ?, intro = ?, 
 			catatan_staff = ?, balas = ?, data_image = ?, conv_stage = ?, 
 			bot_balas = ?, keywordiklan = ?, marketer = ?, update_today = ?, 
+			current_node_id = ?, waiting_for_reply = ?, flow_id = ?, last_node_id = ?,
 			updated_at = ?
 		WHERE id_prospect = ?
 	`
@@ -868,11 +869,40 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		convCurrentValue = nil
 	}
 
+	// Handle flow tracking fields as sql.NullString and sql.NullInt32
+	var currentNodeIDValue, flowIDValue, lastNodeIDValue interface{}
+	var waitingForReplyValue interface{}
+	
+	if ai.CurrentNodeID.Valid {
+		currentNodeIDValue = ai.CurrentNodeID.String
+	} else {
+		currentNodeIDValue = nil
+	}
+	
+	if ai.FlowID.Valid {
+		flowIDValue = ai.FlowID.String
+	} else {
+		flowIDValue = nil
+	}
+	
+	if ai.LastNodeID.Valid {
+		lastNodeIDValue = ai.LastNodeID.String
+	} else {
+		lastNodeIDValue = nil
+	}
+	
+	if ai.WaitingForReply.Valid {
+		waitingForReplyValue = ai.WaitingForReply.Int32
+	} else {
+		waitingForReplyValue = nil
+	}
+
 	_, err := r.db.Exec(query,
 		ai.IDDevice, ai.Stage, ai.DateOrder, convLastValue, convCurrentValue,
 		ai.Human, ai.Niche, ai.Jam, ai.Intro,
 		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
 		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
+		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		ai.UpdatedAt, ai.IDProspect,
 	)
 

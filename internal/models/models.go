@@ -187,6 +187,11 @@ type AIWhatsapp struct {
 	Variables       json.RawMessage `json:"variables" db:"variables"`             // Flow execution variables (JSON)
 	ExecutionStatus sql.NullString  `json:"execution_status" db:"execution_status"` // Flow execution status (active, completed, failed)
 	ExecutionID     sql.NullString  `json:"execution_id" db:"execution_id"`       // Unique execution identifier
+	// Flow tracking fields for user reply handling
+	CurrentNodeID   sql.NullString  `json:"current_node_id" db:"current_node_id"`   // Current node ID in the chatbot flow
+	WaitingForReply sql.NullInt32   `json:"waiting_for_reply" db:"waiting_for_reply"` // 1 = waiting for user reply, 0 = not waiting
+	FlowID          sql.NullString  `json:"flow_id" db:"flow_id"`                 // ID of the current chatbot flow being executed
+	LastNodeID      sql.NullString  `json:"last_node_id" db:"last_node_id"`       // Previous node ID for flow tracking
 	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`
 }
