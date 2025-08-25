@@ -1,7 +1,6 @@
 package whatsapp
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"

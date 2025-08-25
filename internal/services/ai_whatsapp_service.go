@@ -78,6 +78,9 @@ type AIWhatsappService interface {
 	
 	// Parse AI response JSON
 	ParseAIResponse(responseText string) (*AIWhatsappResponse, error)
+	
+	// Get repository for direct access
+	GetRepository() repository.AIWhatsappRepository
 }
 
 // AIWhatsappResponse represents the response from AI WhatsApp service
