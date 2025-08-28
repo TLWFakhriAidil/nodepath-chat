@@ -134,24 +134,16 @@ if (empty($config) || empty($config['host']) || empty($config['user']) || empty(
         if ($config) {
             debug_log('Using MYSQL_URI for database connection');
         } else {
-            debug_log('Failed to parse MYSQL_URI, using fallback values');
-            $config = [
-                'host' => '157.245.206.124',
-                'database' => 'admin_railway',
-                'user' => 'admin_aqil',
-                'password' => 'admin_aqil',
-                'port' => '3306'
-            ];
+            debug_log('Failed to parse MYSQL_URI');
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Invalid MYSQL_URI format']);
+            exit;
         }
     } else {
-        debug_log('MYSQL_URI not found, using fallback values');
-        $config = [
-            'host' => '157.245.206.124',
-            'database' => 'admin_railway',
-            'user' => 'admin_aqil',
-            'password' => 'admin_aqil',
-            'port' => '3306'
-        ];
+        debug_log('MYSQL_URI environment variable not found');
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'MYSQL_URI environment variable not set']);
+        exit;
     }
 }
 

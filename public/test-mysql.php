@@ -27,11 +27,22 @@ try {
     debug_log('Attempting to connect to MySQL');
     
     // MySQL connection parameters
-    $host = '157.245.206.124';
-    $port = 3306;
-    $database = 'admin_railway';
-    $user = 'admin_aqil';
-    $password = 'admin_aqil';
+    // Get database connection from environment variables
+$mysqlURI = getenv('MYSQL_URI');
+if (!$mysqlURI) {
+    die('MYSQL_URI environment variable not set');
+}
+
+// Parse MYSQL_URI
+if (!preg_match('/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/', $mysqlURI, $matches)) {
+    die('Invalid MYSQL_URI format');
+}
+
+$user = $matches[1];
+$password = $matches[2];
+$host = $matches[3];
+$port = (int)$matches[4];
+$database = $matches[5];
     
     $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
     

@@ -80,20 +80,12 @@ if ($mysqlURI) {
         $port = $config['port'];
         echo "Using MYSQL_URI for database connection\n";
     } else {
-        echo "Failed to parse MYSQL_URI, using fallback values\n";
-        $host = '157.245.206.124';
-        $dbname = 'admin_railway';
-        $user = 'admin_aqil';
-        $pass = 'admin_aqil';
-        $port = '3306';
+        echo "Failed to parse MYSQL_URI\n";
+        exit(1);
     }
 } else {
-    echo "MYSQL_URI not found, using fallback values\n";
-    $host = '157.245.206.124';
-    $dbname = 'admin_railway';
-    $user = 'admin_aqil';
-    $pass = 'admin_aqil';
-    $port = '3306';
+    echo "MYSQL_URI environment variable not set\n";
+    exit(1);
 }
 
 debug_log("Connection parameters: host=$host, dbname=$dbname, user=$user");

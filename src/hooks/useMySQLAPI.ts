@@ -1,6 +1,27 @@
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
+// Function to fetch database configuration from backend
+const fetchDatabaseConfig = async () => {
+  try {
+    const response = await fetch('/api/config/database');
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (error) {
+    console.warn('Failed to fetch database config from backend, using fallback');
+  }
+  
+  // Fallback configuration (should not contain real credentials)
+  return {
+    host: 'localhost',
+    port: 3306,
+    user: 'root',
+    password: '',
+    database: 'admin_railway'
+  };
+}
+
 interface APICallOptions {
   endpoint: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -25,17 +46,14 @@ export const useMySQLAPI = () => {
     try {
       console.log('MySQL API call via Supabase Edge Function:', options);
       
+      // Fetch database configuration from backend
+      const config = await fetchDatabaseConfig();
+      
       // Prepare the request payload
       const payload = {
         query: options.endpoint, // Using endpoint as SQL query
         params: options.data ? Object.values(options.data) : [],
-        config: {
-          host: '157.245.206.124',
-          port: 3306,
-          user: 'admin_aqil',
-          password: 'admin_aqil',
-          database: 'admin_railway'
-        }
+        config
       };
       
       console.log('Sending payload:', JSON.stringify(payload));

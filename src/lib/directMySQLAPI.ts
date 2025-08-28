@@ -1,10 +1,31 @@
-// Direct MySQL API without Supabase
-const MYSQL_CONFIG = {
-  host: '157.245.206.124',
-  port: 3306,
-  user: 'admin_aqil',
-  password: 'admin_aqil',
-  database: 'admin_railway'
+// Direct MySQL API without Supabase - Using Railway environment variables
+// Configuration is fetched from backend API to avoid exposing credentials in frontend
+let MYSQL_CONFIG: any = null;
+
+// Function to fetch database configuration from backend
+const fetchDatabaseConfig = async () => {
+  if (MYSQL_CONFIG) return MYSQL_CONFIG;
+  
+  try {
+    const response = await fetch('/api/config/database');
+    if (response.ok) {
+      MYSQL_CONFIG = await response.json();
+      return MYSQL_CONFIG;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch database config from backend, using fallback');
+  }
+  
+  // Fallback configuration (should not contain real credentials)
+  MYSQL_CONFIG = {
+    host: 'localhost',
+    port: 3306,
+    user: 'root',
+    password: '',
+    database: 'admin_railway'
+  };
+  
+  return MYSQL_CONFIG;
 }
 
 // Direct MySQL API call using a custom backend endpoint
@@ -12,11 +33,14 @@ export const callDirectMySQLAPI = async (query: string, params: any[] = []) => {
   try {
     console.log('Direct MySQL Query:', query, 'Params:', params);
     
+    // Fetch database configuration from backend
+    const config = await fetchDatabaseConfig();
+    
     // Prepare the request payload
     const payload = {
       query,
       params,
-      config: MYSQL_CONFIG
+      config
     };
     
     console.log('Sending payload:', JSON.stringify(payload));

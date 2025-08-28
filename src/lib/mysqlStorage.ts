@@ -2,7 +2,7 @@ import { ChatbotFlow, MediaFile, FlowExecution } from '@/types/chatbot'
 
 // Get MySQL config from environment variables with fallbacks
 const MYSQL_CONFIG = {
-  host: import.meta.env.VITE_DB_HOST || '157.245.206.124',
+  host: import.meta.env.VITE_DB_HOST || 'localhost',
   port: parseInt(import.meta.env.VITE_DB_PORT || '3306'),
   user: import.meta.env.VITE_DB_USER || 'admin_aqil',
   password: import.meta.env.VITE_DB_PASSWORD || 'admin_aqil',

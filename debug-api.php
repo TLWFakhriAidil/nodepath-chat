@@ -95,18 +95,14 @@ try {
             $pass = $config['password'];
             $port = $config['port'];
         } else {
-            $host = '157.245.206.124';
-            $dbname = 'admin_railway';
-            $user = 'admin_aqil';
-            $pass = 'admin_aqil';
-            $port = '3306';
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Invalid MYSQL_URI format']);
+            exit;
         }
     } else {
-        $host = '157.245.206.124';
-        $dbname = 'admin_railway';
-        $user = 'admin_aqil';
-        $pass = 'admin_aqil';
-        $port = '3306';
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'MYSQL_URI environment variable not set']);
+        exit;
     }
     
     $dsn = "mysql:host={$host};dbname={$dbname}";

@@ -9,12 +9,26 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
-// Database connection parameters
-$host = '157.245.206.124';
-$port = 3306;
-$database = 'admin_railway';
-$username = 'admin_aqil';
-$password = 'admin_aqil';
+// Database connection parameters from environment variables
+$mysqlURI = getenv('MYSQL_URI');
+if (!$mysqlURI) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'MYSQL_URI environment variable not set']);
+    exit;
+}
+
+// Parse MYSQL_URI
+if (!preg_match('/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/', $mysqlURI, $matches)) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Invalid MYSQL_URI format']);
+    exit;
+}
+
+$username = $matches[1];
+$password = $matches[2];
+$host = $matches[3];
+$port = (int)$matches[4];
+$database = $matches[5];
 
 try {
     // Create PDO connection

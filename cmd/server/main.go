@@ -260,6 +260,16 @@ func main() {
 		return c.Send(data)
 	})
 
+	// Add request logging middleware for debugging
+	app.Use(func(c *fiber.Ctx) error {
+		logrus.WithFields(logrus.Fields{
+			"method": c.Method(),
+			"path":   c.Path(),
+			"ip":     c.IP(),
+		}).Info("Incoming request")
+		return c.Next()
+	})
+
 	// Setup API routes
 	api := app.Group("/api")
 	handlers.SetupRoutes(api)
