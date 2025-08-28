@@ -57,6 +57,9 @@ type AIWhatsappService interface {
 	// Get AI WhatsApp record by prospect and device
 	GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error)
 	
+	// Update AI WhatsApp record
+	UpdateAIWhatsapp(ai *models.AIWhatsapp) error
+	
 	// Flow execution methods
 	// Start a new flow execution
 	StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error)
@@ -902,6 +905,11 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 // GetAIWhatsappByProspectAndDevice retrieves AI WhatsApp record by prospect number and device ID
 func (s *aiWhatsappService) GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error) {
 	return s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+}
+
+// UpdateAIWhatsapp updates an existing AI WhatsApp record
+func (s *aiWhatsappService) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
+	return s.aiRepo.UpdateAIWhatsapp(ai)
 }
 
 // Flow execution methods

@@ -100,6 +100,29 @@ After setup, verify Redis connection:
 
 ## 🔧 Recent Updates & Fixes (Latest)
 
+### ✅ Build Fix - UpdateAIWhatsapp Method Resolution (January 2025)
+**Status**: ✅ **COMPLETED**
+
+#### 🐛 Issue Resolved:
+- **Build Error**: `s.aiWhatsappService.UpdateAIWhatsapp undefined (type services.AIWhatsappService has no field or method UpdateAIWhatsapp)`
+- **Impact**: Backend compilation failure preventing Railway deployment
+- **Location**: `internal/whatsapp/whatsapp_service.go:787`
+
+#### 🔧 Solution Implemented:
+- **Interface Update**: Added `UpdateAIWhatsapp(aiWhatsapp *models.AIWhatsapp) error` method to `AIWhatsappService` interface
+- **Implementation Added**: Created corresponding implementation in `aiWhatsappService` struct that calls repository layer
+- **Repository Integration**: Method properly delegates to `aiWhatsappRepository.UpdateAIWhatsapp()`
+
+#### 📁 Files Modified:
+- `internal/services/ai_whatsapp_service.go` - Added interface method and implementation
+- **Build Status**: ✅ **SUCCESSFUL** - Backend now compiles without errors
+
+#### 🎯 Technical Details:
+- **Method Signature**: `UpdateAIWhatsapp(aiWhatsapp *models.AIWhatsapp) error`
+- **Purpose**: Updates existing AI WhatsApp conversation records in database
+- **Usage**: Called from `whatsapp_service.go` to save conversation state changes
+- **Layer Architecture**: Service → Repository → Database (proper separation maintained)
+
 ### ✅ Flow Condition Evaluation Fix (January 2025)
 - **Critical Bug Fixed**: Resolved issue where condition nodes in flows were not properly evaluating user input, causing incorrect responses
 - **Problem**: When users replied "sendiri" to a condition node, the system incorrectly returned the "anak" response instead of the correct "sendiri" response
