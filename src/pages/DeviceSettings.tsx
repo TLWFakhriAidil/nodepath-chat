@@ -254,7 +254,7 @@ const DeviceSettings: React.FC = () => {
   const providerOptions = [
     { value: 'whacenter', label: 'Whacenter' },
     { value: 'wablas', label: 'Wablas' },
-    { value: 'rvsb_wasap', label: 'RVSB WASAP' }
+    { value: 'waha', label: 'WAHA' }
   ];
 
   useEffect(() => {

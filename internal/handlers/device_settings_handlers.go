@@ -56,6 +56,24 @@ func (h *Handlers) GetDeviceSettingsById(c *fiber.Ctx) error {
 	return h.successResponse(c, setting)
 }
 
+// validateProvider validates that the provider is one of the supported values
+func (h *Handlers) validateProvider(provider string) error {
+	if provider == "" {
+		return nil // Provider is optional, will default to "wablas"
+	}
+	
+	validProviders := []string{"wablas", "whacenter", "waha"}
+	providerLower := strings.ToLower(provider)
+	
+	for _, validProvider := range validProviders {
+		if providerLower == validProvider {
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("invalid provider '%s'. Supported providers: %s", provider, strings.Join(validProviders, ", "))
+}
+
 // CreateDeviceSettings creates a new device setting
 func (h *Handlers) CreateDeviceSettings(c *fiber.Ctx) error {
 	var req models.CreateDeviceSettingsRequest
@@ -73,6 +91,12 @@ func (h *Handlers) CreateDeviceSettings(c *fiber.Ctx) error {
 	if req.IDAdmin == "" {
 		return h.errorResponse(c, 400, "ID Admin is required")
 	}
+	
+	// Validate provider
+	if err := h.validateProvider(req.Provider); err != nil {
+		return h.errorResponse(c, 400, err.Error())
+	}
+	
 	// DeviceID is optional - it will be generated later if not provided
 
 	setting, err := h.deviceSettingsService.Create(&req)
@@ -94,6 +118,11 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 	var req models.UpdateDeviceSettingsRequest
 	if err := c.BodyParser(&req); err != nil {
 		return h.errorResponse(c, 400, "Invalid request body")
+	}
+	
+	// Validate provider if provided
+	if err := h.validateProvider(req.Provider); err != nil {
+		return h.errorResponse(c, 400, err.Error())
 	}
 
 	setting, err := h.deviceSettingsService.Update(id, &req)
@@ -2125,9 +2154,14 @@ func (h *Handlers) sendWablasMultimediaMessage(to, fileURL, fileType string, dev
 	}).Info("📤 WABLAS: Multimedia message sent")
 }
 
-// determineProviderFromInstance determines the provider based on instance string length
-// Based on PHP logic: if instance length > 20 then Whacenter, else Wablas
+// determineProviderFromInstance determines the provider based on instance string patterns
+// Based on PHP logic with WAHA support: WAHA uses domain-like patterns, if instance length > 20 then Whacenter, else Wablas
 func (h *Handlers) determineProviderFromInstance(instance string) string {
+	// Check for WAHA provider patterns (typically contains domain-like structure)
+	if strings.Contains(instance, ".") && (strings.Contains(instance, "waha") || strings.Contains(instance, "api")) {
+		return "waha"
+	}
+	// Original logic for Wablas and Whacenter
 	characterCount := len(instance)
 	if characterCount <= 20 {
 		return "wablas"

@@ -1338,7 +1338,7 @@ CREATE TABLE device_setting_nodepath (
   device_id VARCHAR(255) NOT NULL,
   api_key_option ENUM('chat_gpt_so', 'chat_gpt_5_mini', 'chat_gpt_4o', 'chat_gpt_4_1_new', 'gemini_pro_25', 'gemini_pro_15') DEFAULT 'chat_gpt_4_1_new',
   webhook_id VARCHAR(500),
-  provider ENUM('whacenter', 'wablas', 'rvsb_wasap') DEFAULT 'wablas',
+  provider ENUM('whacenter', 'wablas', 'waha') DEFAULT 'wablas',
   phone_number VARCHAR(20),
   api_key TEXT,
   id_device VARCHAR(255),

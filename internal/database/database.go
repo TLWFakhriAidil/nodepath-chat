@@ -75,6 +75,11 @@ func RunMigrations(db *sql.DB) error {
 		logrus.WithError(err).Warn("Some device settings columns may already exist, continuing...")
 	}
 
+	// Update provider values from 'rvsb_wasap' to 'waha'
+	if err := updateProviderRvsbWasapToWaha(db); err != nil {
+		logrus.WithError(err).Warn("Failed to update provider values, continuing...")
+	}
+
 	logrus.Info("Database migrations completed successfully")
 	return nil
 }
@@ -102,7 +107,7 @@ CREATE TABLE IF NOT EXISTS device_setting_nodepath (
     device_id VARCHAR(255) NOT NULL,
     api_key_option ENUM('openai/gpt-5-chat', 'openai/gpt-5-mini', 'openai/chatgpt-4o-latest', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'google/gemini-pro-1.5') DEFAULT 'openai/gpt-4.1',
     webhook_id VARCHAR(500),
-    provider ENUM('whacenter', 'wablas', 'rvsb_wasap') DEFAULT 'wablas',
+    provider ENUM('whacenter', 'wablas', 'waha') DEFAULT 'wablas',
     phone_number VARCHAR(20),
     api_key TEXT,
     id_device VARCHAR(255),
@@ -202,6 +207,28 @@ func addMissingColumnsToFlowsTable(db *sql.DB) error {
 			logrus.WithField("column", col.name).Debug("Column already exists")
 		}
 	}	
+	return nil
+}
+
+// updateProviderRvsbWasapToWaha updates provider values from 'rvsb_wasap' to 'waha'
+func updateProviderRvsbWasapToWaha(db *sql.DB) error {
+	// Update existing records that have 'rvsb_wasap' provider to 'waha'
+	result, err := db.Exec("UPDATE device_setting_nodepath SET provider = 'waha' WHERE provider = 'rvsb_wasap'")
+	if err != nil {
+		return fmt.Errorf("failed to update provider values: %w", err)
+	}
+	
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	
+	if rowsAffected > 0 {
+		logrus.WithField("rows_updated", rowsAffected).Info("Updated provider values from 'rvsb_wasap' to 'waha'")
+	} else {
+		logrus.Debug("No records found with 'rvsb_wasap' provider to update")
+	}
+	
 	return nil
 }
 

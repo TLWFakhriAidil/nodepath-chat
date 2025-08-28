@@ -533,9 +533,14 @@ func (s *aiCronService) CheckInactiveConversations() error {
 	return nil
 }
 
-// determineProvider determines the WhatsApp provider based on instance string length
-// This mimics the PHP logic for provider detection
+// determineProvider determines the WhatsApp provider based on instance string patterns
+// This mimics the PHP logic for provider detection with WAHA support
 func (s *aiCronService) determineProvider(instance string) string {
+	// Check for WAHA provider patterns (typically contains domain-like structure)
+	if strings.Contains(instance, ".") && (strings.Contains(instance, "waha") || strings.Contains(instance, "api")) {
+		return "waha"
+	}
+	// Original logic for Wablas and Whacenter
 	if len(instance) <= 20 {
 		return "wablas"
 	}
@@ -554,6 +559,8 @@ func (s *aiCronService) sendTextMessage(to, message string, deviceSettings *mode
 		return s.sendWhacenterTextMessage(to, message, deviceSettings)
 	case "wablas":
 		return s.sendWablasTextMessage(to, message, deviceSettings)
+	case "waha":
+		return s.sendWahaTextMessage(to, message, deviceSettings)
 	default:
 		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for text message")
 		return fmt.Errorf("unsupported provider: %s", provider)
@@ -584,6 +591,8 @@ func (s *aiCronService) sendChatMessage(to, reply, fileURL string, deviceSetting
 		return s.sendWablasMultimediaMessage(to, fileURL, fileType, deviceSettings)
 	case "whacenter":
 		return s.sendWhacenterMultimediaMessage(to, fileURL, fileType, deviceSettings)
+	case "waha":
+		return s.sendWahaMultimediaMessage(to, fileURL, fileType, deviceSettings)
 	default:
 		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for multimedia message")
 		return fmt.Errorf("unsupported provider: %s", provider)
@@ -881,5 +890,175 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, fileURL, fileType str
 		logFields["status"] = "error"
 		logrus.WithFields(logFields).Error("❌ WHACENTER: Multimedia message failed")
 		return fmt.Errorf("whacenter API error: status %d, body: %s", resp.StatusCode, string(respBody))
+	}
+}
+
+// sendWahaTextMessage sends text message via WAHA provider
+func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *models.DeviceSettings) error {
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"provider": "waha",
+		"device_id": deviceSettings.IDDevice,
+	}).Debug("Sending text message via WAHA")
+
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WAHA: No instance available")
+		return fmt.Errorf("no instance available")
+	}
+
+	if !deviceSettings.APIKey.Valid {
+		logrus.Error("❌ WAHA: No API key available")
+		return fmt.Errorf("no API key available")
+	}
+
+	// Prepare request payload
+	payload := map[string]interface{}{
+		"chatId": to + "@c.us",
+		"text":   message,
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to marshal payload")
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Create HTTP request
+	url := fmt.Sprintf("https://%s/api/sendText", deviceSettings.Instance.String)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", deviceSettings.APIKey.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to send text message")
+		return fmt.Errorf("failed to send text message: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body for error details
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to read response body")
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Log response details
+	logFields := logrus.Fields{
+		"to":          to,
+		"status_code": resp.StatusCode,
+		"response_body": string(respBody),
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WAHA: Text message sent successfully")
+		return nil
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WAHA: Text message failed")
+		return fmt.Errorf("waha API error: status %d, body: %s", resp.StatusCode, string(respBody))
+	}
+}
+
+// sendWahaMultimediaMessage sends multimedia message via WAHA provider
+func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"file_type": fileType,
+		"provider": "waha",
+		"device_id": deviceSettings.IDDevice,
+	}).Debug("Sending multimedia message via WAHA")
+
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WAHA: No instance available")
+		return fmt.Errorf("no instance available")
+	}
+
+	if !deviceSettings.APIKey.Valid {
+		logrus.Error("❌ WAHA: No API key available")
+		return fmt.Errorf("no API key available")
+	}
+
+	// Determine WAHA endpoint based on file type
+	var endpoint string
+	switch fileType {
+	case "image":
+		endpoint = "/api/sendImage"
+	case "video":
+		endpoint = "/api/sendVideo"
+	case "audio":
+		endpoint = "/api/sendVoice"
+	case "document":
+		endpoint = "/api/sendDocument"
+	default:
+		endpoint = "/api/sendImage" // default to image
+	}
+
+	// Prepare request payload
+	payload := map[string]interface{}{
+		"chatId": to + "@c.us",
+		"url":    fileURL,
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to marshal payload")
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Create HTTP request
+	url := fmt.Sprintf("https://%s%s", deviceSettings.Instance.String, endpoint)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", deviceSettings.APIKey.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to send multimedia message")
+		return fmt.Errorf("failed to send multimedia message: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body for error details
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to read response body")
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Log response details
+	logFields := logrus.Fields{
+		"to":          to,
+		"file_type":   fileType,
+		"endpoint":    endpoint,
+		"status_code": resp.StatusCode,
+		"response_body": string(respBody),
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WAHA: Multimedia message sent successfully")
+		return nil
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WAHA: Multimedia message failed")
+		return fmt.Errorf("waha API error: status %d, body: %s", resp.StatusCode, string(respBody))
 	}
 }
