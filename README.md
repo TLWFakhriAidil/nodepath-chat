@@ -835,6 +835,9 @@ git push origin main  # Triggers Railway deployment with migration
 - **Scheduled Follow-ups**: Automated cron-based message scheduling
 - **Response Caching**: 5-minute cache for frequently asked questions
 - **Fallback Mechanisms**: Graceful degradation when AI unavailable
+- **🆕 Onemessage Combining**: PHP-compatible logic for combining consecutive text parts with `Jenis="onemessage"` into single messages
+- **🆕 Advanced Response Processing**: Support for 5 response formats with comprehensive parsing and validation
+- **🆕 Enhanced Conversation Logging**: BOT_COMBINED and BOT format logging matching PHP implementation
 
 #### User Interface
 - **Responsive Design**: Works on desktop and mobile

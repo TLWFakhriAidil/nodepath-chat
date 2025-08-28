@@ -720,6 +720,11 @@ func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSetti
 
 // sendWablasMultimediaMessage sends multimedia message via Wablas provider
 func (s *aiCronService) sendWablasMultimediaMessage(to, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
+	if !deviceSettings.Instance.Valid {
+		logrus.Error("❌ WABLAS: No instance available")
+		return fmt.Errorf("no instance available")
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"to": to,
 		"file_type": fileType,
@@ -727,10 +732,72 @@ func (s *aiCronService) sendWablasMultimediaMessage(to, fileURL, fileType string
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending multimedia message via Wablas")
 
-	// TODO: Implement actual Wablas multimedia API call
-	// This should use the device settings to make HTTP request to Wablas API
-	logrus.Info("📤 WABLAS: Multimedia message sent successfully")
-	return nil
+	// Determine API endpoint and field name based on file type
+	var apiURL string
+	var fieldName string
+
+	switch fileType {
+	case "video":
+		apiURL = "https://my.wablas.com/api/send-video"
+		fieldName = "video"
+	case "audio":
+		apiURL = "https://my.wablas.com/api/send-audio"
+		fieldName = "audio"
+	default: // image
+		apiURL = "https://my.wablas.com/api/send-image"
+		fieldName = "image"
+	}
+
+	// Prepare form data
+	data := url.Values{}
+	data.Set("phone", to)           // recipient number
+	data.Set(fieldName, fileURL)    // media file URL
+	data.Set("message", "")         // empty message field for media
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to create request")
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Authorization", deviceSettings.Instance.String)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to send multimedia message")
+		return fmt.Errorf("failed to send multimedia message: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body for error details
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WABLAS: Failed to read response body")
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Log response details
+	logFields := logrus.Fields{
+		"to":          to,
+		"file_type":   fileType,
+		"status_code": resp.StatusCode,
+		"response_body": string(respBody),
+	}
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WABLAS: Multimedia message sent successfully")
+		return nil
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WABLAS: Multimedia message failed")
+		return fmt.Errorf("wablas API error: status %d, body: %s", resp.StatusCode, string(respBody))
+	}
 }
 
 // sendWhacenterMultimediaMessage sends multimedia message via Whacenter provider
@@ -765,6 +832,7 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, fileURL, fileType str
 	data.Set("device_id", deviceSettings.Instance.String) // device_id from instance
 	data.Set("number", to)                               // recipient number
 	data.Set("file", fileURL)                           // media file URL
+	data.Set("message", "")                             // empty message field for media
 	
 	// Add type parameter for video and audio only (as per PHP code)
 	if mediaType != "" && mediaType != "image" {

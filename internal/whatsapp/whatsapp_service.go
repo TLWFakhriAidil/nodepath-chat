@@ -1,6 +1,8 @@
 package whatsapp
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -554,121 +556,252 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 }
 
 // sendAIResponse sends AI response with multiple message types (text, images, audio, and video)
-// If media items are present, only media will be sent (text items are skipped)
+// Implements PHP onemessage combining logic for text parts with Jenis="onemessage"
 func (s *Service) sendAIResponse(phoneNumber, deviceID string, response *services.AIWhatsappResponse) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"stage":        response.Stage,
 		"response_count": len(response.Response),
-	}).Info("📤 AI: Sending AI response")
+	}).Info("📤 AI: Sending AI response with onemessage combining logic")
 
-	// Check if there are any media items in the response
-	hasMedia := false
-	for _, item := range response.Response {
-		if item.Type == "image" || item.Type == "audio" || item.Type == "video" {
-			hasMedia = true
-			break
-		}
-	}
+	// Variables for onemessage combining logic (from PHP implementation)
+	textParts := []string{}
+	isOnemessageActive := false
+	delayMs := 5000 // 5 second delay between messages
 
-	// Console log for tracing AI response items
-	logrus.WithFields(logrus.Fields{
-		"device_id": deviceID,
-		"phone_number": phoneNumber,
-		"has_media": hasMedia,
-		"response_items": func() []map[string]interface{} {
-			items := make([]map[string]interface{}, len(response.Response))
-			for i, item := range response.Response {
-				items[i] = map[string]interface{}{
-					"index": i,
-					"type": item.Type,
-					"content_length": len(item.Content),
-					"will_send": !hasMedia || (item.Type != "text"),
-					"content_preview": func() string {
-						if len(item.Content) > 100 {
-							return item.Content[:100] + "..."
-						}
-						return item.Content
-					}(),
-				}
-			}
-			return items
-		}(),
-	}).Info("🔍 AI RESPONSE: PROCESSING RESPONSE ITEMS FOR TRACING")
-
-	// If media is present, log that text items will be skipped
-	if hasMedia {
-		logrus.WithFields(logrus.Fields{
-			"device_id": deviceID,
-			"phone_number": phoneNumber,
-		}).Info("📱 AI RESPONSE: Media detected - skipping text items to send only media")
-	}
-
-	// Send each response item in sequence
-	for i, item := range response.Response {
-		// Skip text items if media is present
-		if hasMedia && item.Type == "text" {
+	// Process each response part with PHP-equivalent logic
+	for index, part := range response.Response {
+		// Validate response part structure
+		if part.Type == "" || part.Content == "" {
 			logrus.WithFields(logrus.Fields{
-				"item_index": i,
-				"item_type": item.Type,
-			}).Info("⏭️ AI RESPONSE: Skipping text item due to media presence")
+				"index": index,
+				"part": part,
+			}).Warn("Invalid response part structure, skipping")
 			continue
 		}
 
-		switch item.Type {
-		case "text":
-			// Send text message (only if no media is present)
-			err := s.SendMessageFromDevice(deviceID, phoneNumber, item.Content)
-			if err != nil {
-				logrus.WithError(err).WithField("item_index", i).Error("Failed to send text message")
-				return err
-			}
-			// Add 5 second delay between messages for better user experience
-			time.Sleep(5000 * time.Millisecond)
+		// Handle text type with "Jenis"="onemessage" combining logic
+		if part.Type == "text" && part.Jenis == "onemessage" {
+			// Start collecting text parts
+			textParts = append(textParts, part.Content)
+			isOnemessageActive = true
 
-		case "image":
-			// Send image message - item.Content contains the image URL
-			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content)
-			if err != nil {
-				logrus.WithError(err).WithField("item_index", i).Error("Failed to send image message")
-				return err
+			// Check if next part isn't also onemessage, then send combined
+			nextIsOnemessage := false
+			if index+1 < len(response.Response) {
+				nextPart := response.Response[index+1]
+				if nextPart.Jenis == "onemessage" {
+					nextIsOnemessage = true
+				}
 			}
-			// Add 5 second delay between messages
-			time.Sleep(5000 * time.Millisecond)
 
-		case "audio":
-			// Send audio message - item.Content contains the audio URL
-			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content)
-			if err != nil {
-				logrus.WithError(err).WithField("item_index", i).Error("Failed to send audio message")
-				return err
+			if !nextIsOnemessage {
+				// Send combined message
+				combinedMessage := strings.Join(textParts, "\n")
+				err := s.SendMessageFromDevice(deviceID, phoneNumber, combinedMessage)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to send combined onemessage")
+					return err
+				}
+
+				// Log conversation with BOT_COMBINED format
+				err = s.logConversationMessage(phoneNumber, deviceID, "BOT_COMBINED", combinedMessage)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to log combined conversation")
+				}
+
+				// Reset temporary variables
+				textParts = []string{}
+				isOnemessageActive = false
+
+				// Add delay
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
 			}
-			// Add 5 second delay between messages
-			time.Sleep(5000 * time.Millisecond)
+		} else {
+			// If we just finished onemessage sequence, send combined first
+			if isOnemessageActive {
+				combinedMessage := strings.Join(textParts, "\n")
+				err := s.SendMessageFromDevice(deviceID, phoneNumber, combinedMessage)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to send combined onemessage before other type")
+					return err
+				}
 
-		case "video":
-			// Send video message - item.Content contains the video URL
-			err := s.SendMediaMessage(deviceID, phoneNumber, item.Content)
-			if err != nil {
-				logrus.WithError(err).WithField("item_index", i).Error("Failed to send video message")
-				return err
+				// Log conversation with BOT_COMBINED format
+				err = s.logConversationMessage(phoneNumber, deviceID, "BOT_COMBINED", combinedMessage)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to log combined conversation")
+				}
+
+				// Reset variables
+				textParts = []string{}
+				isOnemessageActive = false
+
+				// Add delay
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
 			}
-			// Add 5 second delay between messages
-			time.Sleep(5000 * time.Millisecond)
 
-		default:
-			logrus.WithField("type", item.Type).Warn("Unknown response type, skipping")
+			// Now handle normal text or media
+			switch part.Type {
+			case "text":
+				// Send regular text message
+				err := s.SendMessageFromDevice(deviceID, phoneNumber, part.Content)
+				if err != nil {
+					logrus.WithError(err).WithField("index", index).Error("Failed to send text message")
+					return err
+				}
+
+				// Log conversation with BOT format
+				err = s.logConversationMessage(phoneNumber, deviceID, "BOT", part.Content)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to log text conversation")
+				}
+
+				// Add delay
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
+
+			case "image":
+				// Send image message - part.Content contains the image URL
+				currentImageURL := strings.TrimSpace(part.Content)
+				err := s.SendMediaMessage(deviceID, phoneNumber, currentImageURL)
+				if err != nil {
+					logrus.WithError(err).WithField("index", index).Error("Failed to send image message")
+					return err
+				}
+
+				// Log conversation with BOT format for image
+				err = s.logConversationMessage(phoneNumber, deviceID, "BOT", currentImageURL)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to log image conversation")
+				}
+
+				// Add delay
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
+
+			case "audio":
+				// Send audio message - part.Content contains the audio URL
+				err := s.SendMediaMessage(deviceID, phoneNumber, part.Content)
+				if err != nil {
+					logrus.WithError(err).WithField("index", index).Error("Failed to send audio message")
+					return err
+				}
+
+				// Log conversation with BOT format for audio
+				err = s.logConversationMessage(phoneNumber, deviceID, "BOT", part.Content)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to log audio conversation")
+				}
+
+				// Add delay
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
+
+			case "video":
+				// Send video message - part.Content contains the video URL
+				err := s.SendMediaMessage(deviceID, phoneNumber, part.Content)
+				if err != nil {
+					logrus.WithError(err).WithField("index", index).Error("Failed to send video message")
+					return err
+				}
+
+				// Log conversation with BOT format for video
+				err = s.logConversationMessage(phoneNumber, deviceID, "BOT", part.Content)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to log video conversation")
+				}
+
+				// Add delay
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
+			}
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"device_id":    deviceID,
-		"phone_number": phoneNumber,
-		"stage":        response.Stage,
-		"has_media":    hasMedia,
-	}).Info("✅ AI: Successfully sent AI response")
+	return nil
+}
 
+// logConversationMessage logs conversation messages with proper format (BOT, BOT_COMBINED)
+// This function handles conversation logging similar to PHP implementation
+// Updates conv_last field in database and clears conv_current
+func (s *Service) logConversationMessage(phoneNumber, deviceID, messageType, content string) error {
+	// Create log entry with proper format matching PHP implementation
+	var logEntry string
+	if messageType == "BOT_COMBINED" {
+		// For combined messages, use JSON encoding like PHP
+		contentJSON, err := json.Marshal(content)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to marshal content for BOT_COMBINED")
+			logEntry = fmt.Sprintf("%s: %s", messageType, content)
+		} else {
+			logEntry = fmt.Sprintf("%s: %s", messageType, string(contentJSON))
+		}
+	} else {
+		// For regular BOT messages, use JSON encoding like PHP
+		contentJSON, err := json.Marshal(content)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to marshal content for BOT")
+			logEntry = fmt.Sprintf("%s: %s", messageType, content)
+		} else {
+			logEntry = fmt.Sprintf("%s: %s", messageType, string(contentJSON))
+		}
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"phone_number": phoneNumber,
+		"message_type": messageType,
+		"content_length": len(content),
+		"log_entry": logEntry,
+	}).Info("💬 CONVERSATION: Logging message to database")
+	
+	// Get existing conversation to append to conv_last
+	existingConv, err := s.aiWhatsappService.GetAIWhatsappByProspectAndDevice(phoneNumber, deviceID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get existing conversation for logging")
+		return err
+	}
+	
+	if existingConv != nil {
+		// Update conv_last by appending new log entry (similar to PHP: $whats->conv_last .= "\n" . $newBotEntry)
+		var updatedConvLast string
+		if existingConv.ConvLast != nil {
+			// Get existing conv_last as string
+			existingConvLastStr := string(existingConv.ConvLast)
+			// Remove JSON quotes if present
+			if len(existingConvLastStr) >= 2 && existingConvLastStr[0] == '"' && existingConvLastStr[len(existingConvLastStr)-1] == '"' {
+				existingConvLastStr = existingConvLastStr[1 : len(existingConvLastStr)-1]
+				// Unescape JSON escape sequences
+				existingConvLastStr = strings.ReplaceAll(existingConvLastStr, "\\n", "\n")
+				existingConvLastStr = strings.ReplaceAll(existingConvLastStr, "\\\\", "\\")
+				existingConvLastStr = strings.ReplaceAll(existingConvLastStr, "\\\"", "\"")
+			}
+			updatedConvLast = existingConvLastStr + "\n" + logEntry
+		} else {
+			updatedConvLast = logEntry
+		}
+		
+		// Update the conversation record with new conv_last and clear conv_current
+		existingConv.ConvLast = json.RawMessage(fmt.Sprintf("\"%s\"", strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(updatedConvLast, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n")))
+		existingConv.ConvCurrent = sql.NullString{Valid: false} // Clear conv_current (similar to PHP: $whats->conv_current = null)
+		
+		// Save the updated conversation
+		err = s.aiWhatsappService.UpdateAIWhatsapp(existingConv)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update conversation with new log entry")
+			return err
+		}
+		
+		logrus.WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"phone_number": phoneNumber,
+			"message_type": messageType,
+		}).Info("✅ CONVERSATION: Successfully logged message to database")
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"phone_number": phoneNumber,
+		}).Warn("No existing conversation found for logging")
+	}
+	
 	return nil
 }
 

@@ -651,75 +651,403 @@ func (s *AIService) buildEnhancedSystemPrompt(systemPrompt, closingPrompt string
 	return enhancedPrompt
 }
 
-// parseAIResponse parses the AI response JSON into structured format
+// parseAIResponse parses the AI response JSON into structured format with comprehensive PHP-based parsing logic
 func (s *AIService) parseAIResponse(content string) (*models.AIPromptResponse, error) {
-	// Clean the content - remove code block markers if present
-	sanitizedContent := content
-	if strings.HasPrefix(content, "```json") {
-		sanitizedContent = strings.TrimPrefix(content, "```json")
-	}
-	if strings.HasSuffix(sanitizedContent, "```") {
-		sanitizedContent = strings.TrimSuffix(sanitizedContent, "```")
-	}
-	sanitizedContent = strings.TrimSpace(sanitizedContent)
+	// Detect and log response format characteristics
+	formatInfo := s.detectResponseFormat(content)
+	logrus.WithFields(logrus.Fields{
+		"content_length": len(content),
+		"format_info": formatInfo,
+		"content_preview": s.getContentPreview(content, 100),
+	}).Debug("Starting AI response parsing")
 
-	// Try to parse as JSON first
+	// Step 1: Try to parse as structured JSON (direct format)
+	if response, ok := s.parseStructuredJSON(content); ok {
+		logrus.WithFields(logrus.Fields{
+			"method": "structured_json",
+			"stage": response.Stage,
+			"response_count": len(response.Response),
+		}).Info("Successfully parsed AI response")
+		return response, nil
+	}
+
+	// Step 2: Try to parse older format with Stage and Response fields
+	if response, ok := s.parseOlderFormat(content); ok {
+		logrus.WithFields(logrus.Fields{
+			"method": "older_format",
+			"stage": response.Stage,
+			"response_count": len(response.Response),
+		}).Info("Successfully parsed AI response")
+		return response, nil
+	}
+
+	// Step 3: Try to extract encapsulated JSON (JSON within text)
+	if response, ok := s.parseEncapsulatedJSON(content); ok {
+		logrus.WithFields(logrus.Fields{
+			"method": "encapsulated_json",
+			"stage": response.Stage,
+			"response_count": len(response.Response),
+		}).Info("Successfully parsed AI response")
+		return response, nil
+	}
+
+	// Step 4: Try advanced regex patterns for various formats
+	if response, ok := s.parseWithAdvancedRegex(content); ok {
+		logrus.WithFields(logrus.Fields{
+			"method": "advanced_regex",
+			"stage": response.Stage,
+			"response_count": len(response.Response),
+		}).Info("Successfully parsed AI response")
+		return response, nil
+	}
+
+	// Step 5: Final fallback - treat as plain text
+	logrus.WithFields(logrus.Fields{
+		"method": "plain_text_fallback",
+		"content_length": len(content),
+		"format_info": formatInfo,
+		"content_sample": s.getContentPreview(content, 200),
+	}).Warn("All parsing methods failed, using plain text fallback")
+	return s.getPlainTextFallback(content), nil
+}
+
+// parseStructuredJSON attempts to parse content as direct structured JSON
+func (s *AIService) parseStructuredJSON(content string) (*models.AIPromptResponse, bool) {
+	// Clean the content - remove code block markers if present
+	sanitizedContent := s.sanitizeContent(content)
+
+	// Try to parse as JSON directly
 	var response models.AIPromptResponse
 	err := json.Unmarshal([]byte(sanitizedContent), &response)
 	if err == nil && response.Stage != "" && len(response.Response) > 0 {
-		return &response, nil
+		return &response, true
 	}
 
-	// Fallback: try to extract using regex patterns (similar to PHP implementation)
-	if stage, responseParts, ok := s.extractWithRegex(content); ok {
-		return &models.AIPromptResponse{
-			Stage:    stage,
-			Response: responseParts,
-		}, nil
+	return nil, false
+}
+
+// parseOlderFormat attempts to parse older format with Stage and Response fields
+func (s *AIService) parseOlderFormat(content string) (*models.AIPromptResponse, bool) {
+	// Pattern for older format: Stage: ... Response: [...]
+	pattern := `(?s)Stage:\s*(.+?)\s*Response:\s*(\[.*\])\s*$`
+	re := regexp.MustCompile(pattern)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) == 3 {
+		stage := strings.TrimSpace(matches[1])
+		responseJSON := matches[2]
+		
+		var responseParts []models.AIResponsePart
+		err := json.Unmarshal([]byte(responseJSON), &responseParts)
+		if err == nil && len(responseParts) > 0 {
+			return &models.AIPromptResponse{
+				Stage:    stage,
+				Response: responseParts,
+			}, true
+		}
 	}
 
-	// Final fallback: treat as plain text
+	return nil, false
+}
+
+// parseEncapsulatedJSON attempts to extract JSON from within text content with comprehensive patterns
+func (s *AIService) parseEncapsulatedJSON(content string) (*models.AIPromptResponse, bool) {
+	// Comprehensive patterns to find JSON objects within text (based on PHP implementation)
+	patterns := []struct {
+		name    string
+		pattern string
+	}{
+		{"standard_json", `(?s)\{\s*"Stage"\s*:\s*"[^"]+"\s*,\s*"Response"\s*:\s*\[.*?\]\s*\}`},
+		{"loose_json", `(?s)\{[^{}]*"Stage"[^{}]*"Response"[^{}]*\}`},
+		{"nested_json", `(?s)\{.*?"Stage".*?"Response".*?\}`},
+		{"multiline_json", `(?s)\{[\s\S]*?"Stage"[\s\S]*?"Response"[\s\S]*?\}`},
+		{"escaped_json", `(?s)\\?\{[\s\S]*?"Stage"[\s\S]*?"Response"[\s\S]*?\\?\}`},
+		{"quoted_json", `(?s)"\{[\s\S]*?"Stage"[\s\S]*?"Response"[\s\S]*?\}"`},
+		{"bracketed_json", `(?s)\[[\s\S]*?\{[\s\S]*?"Stage"[\s\S]*?"Response"[\s\S]*?\}[\s\S]*?\]`},
+	}
+
+	for _, p := range patterns {
+		re := regexp.MustCompile(p.pattern)
+		matches := re.FindAllString(content, -1)
+		for _, match := range matches {
+			// Clean the match
+			cleanMatch := s.cleanJSONMatch(match)
+			
+			var response models.AIPromptResponse
+			err := json.Unmarshal([]byte(cleanMatch), &response)
+			if err == nil && response.Stage != "" && len(response.Response) > 0 {
+				logrus.WithFields(logrus.Fields{
+					"pattern": p.name,
+					"match_length": len(cleanMatch),
+				}).Debug("Successfully parsed encapsulated JSON")
+				return &response, true
+			}
+			
+			// Log parsing attempt for debugging
+			if err != nil {
+				logrus.WithFields(logrus.Fields{
+					"pattern": p.name,
+					"error": err.Error(),
+					"match": cleanMatch[:minInt(100, len(cleanMatch))],
+				}).Debug("Failed to parse encapsulated JSON match")
+			}
+		}
+	}
+
+	return nil, false
+}
+
+// cleanJSONMatch cleans and prepares JSON match for parsing
+func (s *AIService) cleanJSONMatch(match string) string {
+	// Remove leading/trailing quotes if present
+	clean := strings.TrimSpace(match)
+	if strings.HasPrefix(clean, `"`) && strings.HasSuffix(clean, `"`) {
+		clean = clean[1 : len(clean)-1]
+	}
+	
+	// Remove escape characters
+	clean = strings.ReplaceAll(clean, `\"`, `"`)
+	clean = strings.ReplaceAll(clean, `\\`, `\`)
+	
+	// Remove array brackets if they wrap the entire JSON
+	if strings.HasPrefix(clean, "[") && strings.HasSuffix(clean, "]") {
+		// Try to extract the JSON object from within the array
+		if idx := strings.Index(clean, "{"); idx != -1 {
+			if lastIdx := strings.LastIndex(clean, "}"); lastIdx != -1 && lastIdx > idx {
+				clean = clean[idx : lastIdx+1]
+			}
+		}
+	}
+	
+	return clean
+}
+
+// minInt returns the minimum of two integers
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// parseWithAdvancedRegex attempts to parse using advanced regex patterns (comprehensive PHP-based implementation)
+func (s *AIService) parseWithAdvancedRegex(content string) (*models.AIPromptResponse, bool) {
+	// Comprehensive advanced patterns for various response formats (based on PHP implementation)
+	patterns := []struct {
+		name    string
+		pattern string
+	}{
+		// Standard patterns
+		{"stage_response_multiline", `(?s)Stage\s*:\s*([^\n]+)\s*Response\s*:\s*(\[.*?\])\s*$`},
+		{"json_like_structure", `(?s)^\s*\{\s*"Stage"\s*:\s*"([^"]+)"\s*,\s*"Response"\s*:\s*(\[.*?\])\s*\}\s*$`},
+		{"loose_json_structure", `(?s)Stage[\s:]*([^\n,}]+)[\s,]*Response[\s:]*\[(.*?)\]`},
+		{"quoted_stage_response", `(?s)"Stage"\s*:\s*"([^"]+)".*?"Response"\s*:\s*(\[.*?\])`},
+		
+		// Extended patterns for edge cases
+		{"stage_colon_response", `(?s)Stage\s*:\s*([^\n\r]+)[\s\n\r]*Response\s*:\s*(\[.*?\])(?:\s*$|\s*[}\]])`},
+		{"stage_equals_response", `(?s)Stage\s*=\s*([^\n\r]+)[\s\n\r]*Response\s*=\s*(\[.*?\])`},
+		{"stage_arrow_response", `(?s)Stage\s*=>\s*([^\n\r]+)[\s\n\r]*Response\s*=>\s*(\[.*?\])`},
+		{"stage_dash_response", `(?s)Stage\s*-\s*([^\n\r]+)[\s\n\r]*Response\s*-\s*(\[.*?\])`},
+		
+		// Flexible patterns for malformed JSON
+		{"flexible_stage_response", `(?s)(?:Stage|stage|STAGE)[\s:=\-]*([^\n\r,}]+)[\s\n\r,]*(?:Response|response|RESPONSE)[\s:=\-]*(\[.*?\])`},
+		{"case_insensitive_json", `(?si)\{[\s\S]*?"?stage"?\s*:\s*"?([^"\n,}]+)"?[\s\S]*?"?response"?\s*:\s*(\[.*?\])[\s\S]*?\}`},
+		{"partial_json_structure", `(?s)"?Stage"?\s*:\s*"?([^"\n,}]+)"?[\s\S]*?"?Response"?\s*:\s*(\[.*?\])`},
+		
+		// Patterns for text with embedded JSON
+		{"text_with_json", `(?s).*?\{[\s\S]*?"Stage"\s*:\s*"([^"]+)"[\s\S]*?"Response"\s*:\s*(\[.*?\])[\s\S]*?\}.*?`},
+		{"markdown_json", `(?s)` + "`" + `(?:json)?[\s\S]*?\{[\s\S]*?"Stage"\s*:\s*"([^"]+)"[\s\S]*?"Response"\s*:\s*(\[.*?\])[\s\S]*?\}[\s\S]*?` + "`" + `?`},
+	}
+
+	for _, p := range patterns {
+		re := regexp.MustCompile(p.pattern)
+		matches := re.FindStringSubmatch(content)
+		if len(matches) >= 3 {
+			stage := s.cleanStageValue(matches[1])
+			responseJSON := s.cleanResponseJSON(matches[2])
+			
+			// Validate stage is not empty
+			if stage == "" {
+				logrus.WithField("pattern", p.name).Debug("Empty stage found, skipping")
+				continue
+			}
+			
+			// Try to parse the response array
+			var responseParts []models.AIResponsePart
+			err := json.Unmarshal([]byte(responseJSON), &responseParts)
+			if err == nil && len(responseParts) > 0 {
+				logrus.WithFields(logrus.Fields{
+					"pattern": p.name,
+					"stage": stage,
+					"response_count": len(responseParts),
+				}).Debug("Successfully parsed with advanced regex")
+				return &models.AIPromptResponse{
+					Stage:    stage,
+					Response: responseParts,
+				}, true
+			}
+			
+			// Log parsing failure for debugging
+			if err != nil {
+				logrus.WithFields(logrus.Fields{
+					"pattern": p.name,
+					"stage": stage,
+					"error": err.Error(),
+					"response_json": responseJSON[:minInt(200, len(responseJSON))],
+				}).Debug("Failed to parse response JSON in advanced regex")
+			}
+		}
+	}
+
+	return nil, false
+}
+
+// cleanStageValue cleans and validates the stage value
+func (s *AIService) cleanStageValue(stage string) string {
+	clean := strings.TrimSpace(stage)
+	clean = strings.Trim(clean, `"'`)
+	clean = strings.TrimSpace(clean)
+	
+	// Remove common prefixes/suffixes
+	clean = strings.TrimSuffix(clean, ",")
+	clean = strings.TrimSuffix(clean, ";")
+	clean = strings.TrimSpace(clean)
+	
+	return clean
+}
+
+// cleanResponseJSON cleans and validates the response JSON
+func (s *AIService) cleanResponseJSON(responseJSON string) string {
+	clean := strings.TrimSpace(responseJSON)
+	
+	// Ensure it starts and ends with brackets
+	if !strings.HasPrefix(clean, "[") {
+		clean = "[" + clean
+	}
+	if !strings.HasSuffix(clean, "]") {
+		clean = clean + "]"
+	}
+	
+	return clean
+}
+
+// sanitizeContent cleans and sanitizes the input content
+func (s *AIService) sanitizeContent(content string) string {
+	// Remove code block markers
+	sanitized := content
+	if strings.HasPrefix(content, "```json") {
+		sanitized = strings.TrimPrefix(content, "```json")
+	}
+	if strings.HasPrefix(sanitized, "```") {
+		sanitized = strings.TrimPrefix(sanitized, "```")
+	}
+	if strings.HasSuffix(sanitized, "```") {
+		sanitized = strings.TrimSuffix(sanitized, "```")
+	}
+
+	// Remove common prefixes and suffixes
+	sanitized = strings.TrimSpace(sanitized)
+	sanitized = strings.Trim(sanitized, "\n\r\t ")
+
+	// Remove any leading/trailing quotes if they wrap the entire content
+	if (strings.HasPrefix(sanitized, `"`) && strings.HasSuffix(sanitized, `"`)) ||
+		(strings.HasPrefix(sanitized, "'") && strings.HasSuffix(sanitized, "'")) {
+		sanitized = sanitized[1 : len(sanitized)-1]
+	}
+
+	return sanitized
+}
+
+// getPlainTextFallback creates a fallback response for plain text content
+func (s *AIService) getPlainTextFallback(content string) *models.AIPromptResponse {
+	// Clean the content
+	cleanContent := s.sanitizeContent(content)
+	
+	// If content is empty, provide a default response
+	if strings.TrimSpace(cleanContent) == "" {
+		cleanContent = "I apologize, but I'm having trouble processing your request. Please try again."
+	}
+
 	return &models.AIPromptResponse{
 		Stage: "conversation",
 		Response: []models.AIResponsePart{
 			{
 				Type:    "text",
-				Content: content,
+				Content: cleanContent,
 				Jenis:   "onemessage",
 			},
 		},
-	}, nil
+	}
 }
 
-// extractWithRegex attempts to extract stage and response using regex patterns
-func (s *AIService) extractWithRegex(content string) (string, []models.AIResponsePart, bool) {
-	// Pattern 1: Stage: ... Response: [...]
-	pattern1 := `Stage:\s*(.+?)\s*Response:\s*(\[.*?\])$`
-	re1 := regexp.MustCompile(pattern1)
-	matches1 := re1.FindStringSubmatch(content)
-	if len(matches1) == 3 {
-		stage := strings.TrimSpace(matches1[1])
-		responseJSON := matches1[2]
-		
-		var responseParts []models.AIResponsePart
-		err := json.Unmarshal([]byte(responseJSON), &responseParts)
-		if err == nil {
-			return stage, responseParts, true
-		}
-	}
+// detectResponseFormat analyzes the content to determine its format characteristics
+func (s *AIService) detectResponseFormat(content string) map[string]interface{} {
+	formatInfo := make(map[string]interface{})
+	
+	// Basic content analysis
+	formatInfo["has_json_markers"] = strings.Contains(content, "```json") || strings.Contains(content, "```")
+	formatInfo["has_stage_field"] = strings.Contains(content, "Stage") || strings.Contains(content, "stage")
+	formatInfo["has_response_field"] = strings.Contains(content, "Response") || strings.Contains(content, "response")
+	formatInfo["has_curly_braces"] = strings.Contains(content, "{") && strings.Contains(content, "}")
+	formatInfo["has_square_brackets"] = strings.Contains(content, "[") && strings.Contains(content, "]")
+	
+	// JSON structure detection
+	formatInfo["appears_json"] = s.looksLikeJSON(content)
+	formatInfo["has_quoted_fields"] = strings.Contains(content, `"Stage"`) && strings.Contains(content, `"Response"`)
+	
+	// Content characteristics
+	lines := strings.Split(content, "\n")
+	formatInfo["line_count"] = len(lines)
+	formatInfo["starts_with_brace"] = strings.HasPrefix(strings.TrimSpace(content), "{")
+	formatInfo["ends_with_brace"] = strings.HasSuffix(strings.TrimSpace(content), "}")
+	
+	// Pattern detection
+	formatInfo["has_colon_separator"] = strings.Contains(content, "Stage:") && strings.Contains(content, "Response:")
+	formatInfo["has_equals_separator"] = strings.Contains(content, "Stage=") && strings.Contains(content, "Response=")
+	
+	return formatInfo
+}
 
-	// Pattern 2: JSON-like structure detection
-	pattern2 := `^\s*{\s*"Stage":\s*".+?",\s*"Response":\s*\[.*\]\s*}\s*$`
-	re2 := regexp.MustCompile(pattern2)
-	if re2.MatchString(content) {
-		var response models.AIPromptResponse
-		err := json.Unmarshal([]byte(content), &response)
-		if err == nil {
-			return response.Stage, response.Response, true
-		}
+// looksLikeJSON performs a basic check to see if content resembles JSON
+func (s *AIService) looksLikeJSON(content string) bool {
+	trimmed := strings.TrimSpace(content)
+	
+	// Remove code block markers for analysis
+	if strings.HasPrefix(trimmed, "```json") {
+		trimmed = strings.TrimPrefix(trimmed, "```json")
 	}
+	if strings.HasPrefix(trimmed, "```") {
+		trimmed = strings.TrimPrefix(trimmed, "```")
+	}
+	if strings.HasSuffix(trimmed, "```") {
+		trimmed = strings.TrimSuffix(trimmed, "```")
+	}
+	trimmed = strings.TrimSpace(trimmed)
+	
+	// Basic JSON structure check
+	return (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
+		   (strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]"))
+}
 
-	return "", nil, false
+// getContentPreview returns a safe preview of the content for logging
+func (s *AIService) getContentPreview(content string, maxLength int) string {
+	if len(content) <= maxLength {
+		return content
+	}
+	
+	// Try to break at a reasonable point
+	preview := content[:maxLength]
+	
+	// Try to break at word boundary
+	if lastSpace := strings.LastIndex(preview, " "); lastSpace > maxLength/2 {
+		preview = preview[:lastSpace]
+	}
+	
+	// Try to break at line boundary
+	if lastNewline := strings.LastIndex(preview, "\n"); lastNewline > maxLength/2 {
+		preview = preview[:lastNewline]
+	}
+	
+	return preview + "..."
 }
 
 // getFallbackAdvancedResponse returns a fallback response for advanced AI prompts
