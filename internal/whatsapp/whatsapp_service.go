@@ -905,6 +905,7 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	logrus.WithFields(logrus.Fields{
 		"response_length": len(response),
 		"node_id": node.ID,
+		"ai_response": response,
 	}).Info("🤖 AI_PROMPT: AI response generated successfully")
 
 	// Check if next node exists and advance to it
@@ -918,6 +919,7 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 				"current_node": node.ID,
 				"next_node":    nextNode.ID,
 				"next_type":    nextNode.Type,
+				"ai_response": response,
 			}).Info("🤖 AI_PROMPT: AI response generated, advancing to delay node")
 			
 			// Update execution to delay node
