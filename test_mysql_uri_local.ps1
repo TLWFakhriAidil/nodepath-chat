@@ -6,7 +6,7 @@ Write-Host "Testing connection to Railway MySQL database..." -ForegroundColor Ye
 Write-Host ""
 
 # Set environment variables
-$env:MYSQL_URI = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
+$env:MYSQL_URI = "mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway"
 $env:APP_PORT = "3000"
 $env:APP_DEBUG = "false"
 $env:APP_OS = "Chrome"

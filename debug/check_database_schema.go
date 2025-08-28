@@ -113,7 +113,7 @@ func main() {
 	mysqlURI := os.Getenv("MYSQL_URI")
 	if mysqlURI == "" {
 		// Fallback to default connection for local testing
-		mysqlURI = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
+		mysqlURI = "mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway"
 		fmt.Println("Using default MySQL URI for testing")
 	}
 	

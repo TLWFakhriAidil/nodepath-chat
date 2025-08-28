@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Database connection string
-	dsn := "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local"
 	
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

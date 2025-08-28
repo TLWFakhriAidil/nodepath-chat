@@ -72,7 +72,7 @@
 14. The system has three type personal user device command that is % for wablas provider, # for whacenter provider,this will be used when bot of AI reply not trigger to trigger to the receiver based on the current stage of the receiver and cmd for change status human into 1 that mean no ai reply and by default it 0 that mean ai reply is active.
 15. The systems will used apikey $apikey from device_setting_nodepath columns of api_key but for the SCHQ-S94 and SCHQ-S12 will be used this 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.
 16. The system will be record new prospect number only one time for each id_device mean that same phone number can be save multiple time but with same id_device.
-17. The system will have a remote access into the databse using this mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway.
+17. The system will have a remote access into the databse using this mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway.
 18. The system only use the MYSQL_URI to conencted to the database using the enviroment variables in railways for both system deploy in railways and local development.
 19. The systems only used id_device for all process, so there will be no id_staff in the system.
 20. The system database type input will not used the json type except the chatbot_flows_nodepath database.

@@ -13,7 +13,7 @@ import (
 func main() {
 	mysqlURI := os.Getenv("MYSQL_URI")
 	if mysqlURI == "" {
-		mysqlURI = "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway"
+		mysqlURI = "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway"
 	} else {
 		// Convert mysql:// format to Go driver format
 		if strings.HasPrefix(mysqlURI, "mysql://") {

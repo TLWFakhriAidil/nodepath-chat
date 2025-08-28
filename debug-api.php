@@ -95,14 +95,14 @@ try {
             $pass = $config['password'];
             $port = $config['port'];
         } else {
-            $host = '159.89.198.71';
+            $host = '157.245.206.124';
             $dbname = 'admin_railway';
             $user = 'admin_aqil';
             $pass = 'admin_aqil';
             $port = '3306';
         }
     } else {
-        $host = '159.89.198.71';
+        $host = '157.245.206.124';
         $dbname = 'admin_railway';
         $user = 'admin_aqil';
         $pass = 'admin_aqil';

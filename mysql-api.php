@@ -136,7 +136,7 @@ if (empty($config) || empty($config['host']) || empty($config['user']) || empty(
         } else {
             debug_log('Failed to parse MYSQL_URI, using fallback values');
             $config = [
-                'host' => '159.89.198.71',
+                'host' => '157.245.206.124',
                 'database' => 'admin_railway',
                 'user' => 'admin_aqil',
                 'password' => 'admin_aqil',
@@ -146,7 +146,7 @@ if (empty($config) || empty($config['host']) || empty($config['user']) || empty(
     } else {
         debug_log('MYSQL_URI not found, using fallback values');
         $config = [
-            'host' => '159.89.198.71',
+            'host' => '157.245.206.124',
             'database' => 'admin_railway',
             'user' => 'admin_aqil',
             'password' => 'admin_aqil',

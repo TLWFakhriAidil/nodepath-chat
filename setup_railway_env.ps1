@@ -38,7 +38,7 @@ Write-Host "Setting up environment variables..." -ForegroundColor Yellow
 
 # Define environment variables
 $envVars = @{
-    "MYSQL_URI" = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
+    "MYSQL_URI" = "mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway"
     "APP_PORT" = "3000"
     "PORT" = "8080"
     "APP_DEBUG" = "false"
@@ -107,10 +107,10 @@ Write-Host ""
 Write-Host "⚠️  IMPORTANT NOTICE:" -ForegroundColor Yellow
 Write-Host "The database connection will still fail until you whitelist Railway's IP." -ForegroundColor Red
 Write-Host "Railway's outbound IP: 175.141.148.92" -ForegroundColor White
-Write-Host "MySQL Server: 159.89.198.71:3306" -ForegroundColor White
+Write-Host "MySQL Server: 157.245.206.124:3306" -ForegroundColor White
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "1. Whitelist 175.141.148.92 on your MySQL server at 159.89.198.71" -ForegroundColor White
+Write-Host "1. Whitelist 175.141.148.92 on your MySQL server at 157.245.206.124" -ForegroundColor White
 Write-Host "2. Deploy your application: railway up" -ForegroundColor White
 Write-Host "3. Check logs: railway logs" -ForegroundColor White
 Write-Host "4. Test your application endpoints" -ForegroundColor White

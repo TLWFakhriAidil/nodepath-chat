@@ -10,14 +10,14 @@ import { saveFlow, getFlows } from '@/lib/mysqlStorage'
 
 export default function MySQLAPIExample() {
   const { get, post, loading } = useMySQLAPI();
-  const [endpoint, setEndpoint] = useState('mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway');
+  const [endpoint, setEndpoint] = useState('mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway');
   const [postData, setPostData] = useState('{"sql": "CREATE TABLE IF NOT EXISTS chatbot_flows (id VARCHAR(255) PRIMARY KEY, name VARCHAR(255) NOT NULL, description TEXT, nodes JSON NOT NULL DEFAULT \'[]\', edges JSON NOT NULL DEFAULT \'[]\', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"}');
   const [response, setResponse] = useState<any>(null);
 
   // Example: Fetch data on component mount
   useEffect(() => {
     const fetchInitialData = async () => {
-      const result = await get('mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway');
+      const result = await get('mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway');
       if (result.success) {
         console.log('Initial data loaded:', result.data);
       }
@@ -55,7 +55,7 @@ export default function MySQLAPIExample() {
           query: 'SELECT 1 as test',
           params: [],
           config: {
-            host: '159.89.198.71',
+            host: '157.245.206.124',
             port: 3306,
             user: 'admin_aqil',
             password: 'admin_aqil',
@@ -110,7 +110,7 @@ export default function MySQLAPIExample() {
               id="endpoint"
               value={endpoint}
               onChange={(e) => setEndpoint(e.target.value)}
-              placeholder="mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
+              placeholder="mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway"
               className="mt-1"
             />
           </div>

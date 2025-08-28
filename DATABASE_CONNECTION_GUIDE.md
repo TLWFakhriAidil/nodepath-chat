@@ -3,7 +3,7 @@
 ## Database Credentials
 
 ```
-Host: 159.89.198.71
+Host: 157.245.206.124
 Port: 3306
 Database: admin_railway
 Username: admin_aqil
@@ -56,12 +56,12 @@ The system currently uses the following tables:
 
 ### 1. Using MySQL Command Line
 ```bash
-mysql -h 159.89.198.71 -P 3306 -u admin_aqil -padmin_aqil admin_railway
+mysql -h 157.245.206.124 -P 3306 -u admin_aqil -padmin_aqil admin_railway
 ```
 
 ### 2. Using phpMyAdmin
 ```
-URL: http://159.89.198.71/phpmyadmin
+URL: http://157.245.206.124/phpmyadmin
 Username: admin_aqil
 Password: admin_aqil
 ```
@@ -71,7 +71,7 @@ Password: admin_aqil
 import pymysql
 
 connection = pymysql.connect(
-    host='159.89.198.71',
+    host='157.245.206.124',
     port=3306,
     user='admin_aqil',
     password='admin_aqil',
@@ -92,7 +92,7 @@ connection.close()
 ### 4. Using MySQL Workbench
 1. Click "+" to create new connection
 2. Connection Name: WhatsApp Multi-Device
-3. Hostname: 159.89.198.71
+3. Hostname: 157.245.206.124
 4. Port: 3306
 5. Username: admin_aqil
 6. Password: admin_aqil (click "Store in Vault")
@@ -101,7 +101,7 @@ connection.close()
 
 ### 5. Using DBeaver (Universal Database Tool)
 1. New Database Connection → MySQL
-2. Server Host: 159.89.198.71
+2. Server Host: 157.245.206.124
 3. Port: 3306
 4. Database: admin_railway
 5. Username: admin_aqil
@@ -111,7 +111,7 @@ connection.close()
 ### 6. Using HeidiSQL (Windows)
 1. Session manager → New
 2. Network type: MySQL (TCP/IP)
-3. Hostname: 159.89.198.71
+3. Hostname: 157.245.206.124
 4. User: admin_aqil
 5. Password: admin_aqil
 6. Port: 3306
@@ -119,7 +119,7 @@ connection.close()
 
 ### 7. Using TablePlus
 1. Create new connection → MySQL
-2. Host: 159.89.198.71
+2. Host: 157.245.206.124
 3. Port: 3306
 4. User: admin_aqil
 5. Password: admin_aqil
@@ -129,7 +129,7 @@ connection.close()
 
 ### 8. Using Sequel Pro (Mac)
 1. New Connection
-2. MySQL Host: 159.89.198.71
+2. MySQL Host: 157.245.206.124
 3. Username: admin_aqil
 4. Password: admin_aqil
 5. Database: admin_railway
@@ -140,19 +140,19 @@ connection.close()
 
 ### MySQL URI Format
 ```
-mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
+mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway
 ```
 
 ### JDBC Format (for Java)
 ```
-jdbc:mysql://159.89.198.71:3306/admin_railway?user=admin_aqil&password=admin_aqil
+jdbc:mysql://157.245.206.124:3306/admin_railway?user=admin_aqil&password=admin_aqil
 ```
 
 ### Node.js (mysql2)
 ```javascript
 const mysql = require('mysql2');
 const connection = mysql.createConnection({
-  host: '159.89.198.71',
+  host: '157.245.206.124',
   port: 3306,
   user: 'admin_aqil',
   password: 'admin_aqil',
@@ -162,14 +162,14 @@ const connection = mysql.createConnection({
 
 ### PHP PDO
 ```php
-$dsn = 'mysql:host=159.89.198.71;port=3306;dbname=admin_railway';
+$dsn = 'mysql:host=157.245.206.124;port=3306;dbname=admin_railway';
 $pdo = new PDO($dsn, 'admin_aqil', 'admin_aqil');
 ```
 
 ### Go (go-sql-driver/mysql) - Current Implementation
 ```go
 // MySQL 5.7 optimized connection string
-dsn := "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+dsn := "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
 db, err := sql.Open("mysql", dsn)
 
 // MySQL 5.7 specific connection pool settings
@@ -259,10 +259,10 @@ DELETE FROM chatbot_flows_nodepath WHERE name LIKE 'Test%';
 ### Environment Variables (.env)
 ```env
 # Database Configuration
-DATABASE_URL=admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local
+DATABASE_URL=admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local
 
 # Legacy Vite Database Configuration (keep for compatibility)
-VITE_DB_HOST=159.89.198.71
+VITE_DB_HOST=157.245.206.124
 VITE_DB_NAME=admin_railway
 VITE_DB_USER=admin_aqil
 VITE_DB_PASSWORD=admin_aqil
@@ -272,7 +272,7 @@ VITE_DB_PORT=3306
 ### Go Configuration (internal/config/config.go)
 ```go
 // Database configuration with fallback values
-MySQLHost:     getEnv("MYSQL_HOST", "159.89.198.71"),
+MySQLHost:     getEnv("MYSQL_HOST", "157.245.206.124"),
 MySQLPort:     getEnvAsInt("MYSQL_PORT", 3306),
 MySQLUser:     getEnv("MYSQL_USER", "admin_aqil"),
 MySQLPassword: getEnv("MYSQL_PASSWORD", "admin_aqil"),

@@ -20,7 +20,7 @@ func getLastAIResponseTest(convLast string) string {
 
 func main() {
 	// Connect to database
-	db, err := sql.Open("mysql", "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway")
+	db, err := sql.Open("mysql", "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway")
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}

@@ -1,6 +1,6 @@
 // Direct MySQL API without Supabase
 const MYSQL_CONFIG = {
-  host: '159.89.198.71',
+  host: '157.245.206.124',
   port: 3306,
   user: 'admin_aqil',
   password: 'admin_aqil',

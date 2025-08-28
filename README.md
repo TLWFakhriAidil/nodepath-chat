@@ -684,7 +684,7 @@ Completed comprehensive database schema migration to rename `id_staff` columns t
 **Configuration**:
 **MYSQL_URI** (Required) - MySQL database connection URI
 ```
-MYSQL_URI=mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
+MYSQL_URI=mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway
 ```
 
 **Database Connection Features**:
@@ -722,7 +722,7 @@ MYSQL_URI=mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
 **Usage**:
 ```bash
 # Set MYSQL_URI and run tests
-$env:MYSQL_URI="mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
+$env:MYSQL_URI="mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway"
 go run test_mysql_uri_connection.go
 ```
 
@@ -1092,7 +1092,7 @@ internal/
 
 **Database Configuration**:
 ```env
-DB_HOST=159.89.198.71
+DB_HOST=157.245.206.124
 DB_NAME=admin_railway
 DB_USER=admin_aqil
 DB_PASSWORD=admin_aqil
@@ -1303,7 +1303,7 @@ User Action → Flow Builder → Validation → Save Attempt
 - **Status**: ⚠️ Requires Railway dashboard configuration update
 
 ### ⚠️ **PRODUCTION DATABASE STATUS**
-- **Host**: 159.89.198.71:3306
+- **Host**: 157.245.206.124:3306
 - **Database**: admin_railway
 - **Local Connection**: ✅ Stable and operational (confirmed working)
 - **Railway Connection**: ❌ IP whitelist required
@@ -1447,7 +1447,7 @@ For full MySQL functionality, you need to set up environment variables:
 ### Local Development (Vite)
 ```env
 # For local development with Vite
-VITE_DB_HOST=159.89.198.71
+VITE_DB_HOST=157.245.206.124
 VITE_DB_NAME=admin_railway
 VITE_DB_USER=admin_aqil
 VITE_DB_PASSWORD=admin_aqil
@@ -2011,7 +2011,7 @@ go run cmd/server/main.go
 - **All Features**: ✅ **DEPLOYED AND WORKING**
 
 #### 🗄️ **DATABASE STATUS**
-- **MySQL Production**: ✅ **FULLY OPERATIONAL** (159.89.198.71)
+- **MySQL Production**: ✅ **FULLY OPERATIONAL** (157.245.206.124)
 - **All Tables**: ✅ **CREATED AND INDEXED**
 - **Data Operations**: ✅ **100% FUNCTIONAL**
 - **Backup System**: ✅ **AUTOMATED**

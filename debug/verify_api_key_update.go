@@ -23,7 +23,7 @@ func main() {
 	mysqlURI := os.Getenv("MYSQL_URI")
 	if mysqlURI == "" {
 		// Use the remote database connection as fallback
-		mysqlURI = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
+		mysqlURI = "mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway"
 	}
 
 	// Convert mysql:// URL to DSN format if needed

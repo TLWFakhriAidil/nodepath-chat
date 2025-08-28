@@ -23,9 +23,9 @@ func main() {
 	}
 
 	// Convert mysql:// format to Go driver format
-	// mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway
-	// becomes: admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local
-	dsn := "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local"
+	// mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway
+	// becomes: admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local
+	dsn := "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local"
 
 	// Connect to database
 	db, err := sql.Open("mysql", dsn)

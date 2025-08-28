@@ -27,7 +27,7 @@ try {
     debug_log('Attempting to connect to MySQL');
     
     // MySQL connection parameters
-    $host = '159.89.198.71';
+    $host = '157.245.206.124';
     $port = 3306;
     $database = 'admin_railway';
     $user = 'admin_aqil';

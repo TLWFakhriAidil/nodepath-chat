@@ -17,7 +17,7 @@ func main() {
 	mysqlURI := os.Getenv("MYSQL_URI")
 	if mysqlURI == "" {
 		// Fallback to Railway production database URI in proper format
-		mysqlURI = "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway?parseTime=true"
+		mysqlURI = "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway?parseTime=true"
 		log.Println("Using default Railway production database URI")
 	} else {
 		// Convert mysql:// format to go-sql-driver format

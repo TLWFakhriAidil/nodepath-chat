@@ -46,7 +46,7 @@ func main() {
 	// Get database connection string
 	mysqlURI := os.Getenv("MYSQL_URI")
 	if mysqlURI == "" {
-		mysqlURI = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
+		mysqlURI = "mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway"
 	}
 
 	// Convert to Go MySQL driver format

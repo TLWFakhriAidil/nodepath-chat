@@ -10,10 +10,10 @@ import (
 
 func main() {
 	// Database connection details
-	dsn := "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
+	dsn := "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local&collation=utf8mb4_unicode_ci"
 	
 	fmt.Println("Testing MySQL connection...")
-	fmt.Println("Host: 159.89.198.71")
+	fmt.Println("Host: 157.245.206.124")
 	fmt.Println("Port: 3306")
 	fmt.Println("Database: admin_railway")
 	fmt.Println("Username: admin_aqil")

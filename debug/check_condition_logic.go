@@ -27,7 +27,7 @@ type FlowEdge struct {
 
 func main() {
 	// Use the correct MySQL connection string format for Go driver
-	mysqlURI := "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local"
+	mysqlURI := "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway?charset=utf8mb4&parseTime=True&loc=Local"
 
 	db, err := sql.Open("mysql", mysqlURI)
 	if err != nil {

@@ -13,12 +13,12 @@ func main() {
 	// Get database connection
 	mysqlURI := os.Getenv("MYSQL_URI")
 	if mysqlURI == "" {
-		mysqlURI = "mysql://admin_aqil:admin_aqil@159.89.198.71:3306/admin_railway"
+		mysqlURI = "mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway"
 	}
 
 	// Convert to proper DSN format
 	// mysql://user:password@host:port/database -> user:password@tcp(host:port)/database
-	dsn := "admin_aqil:admin_aqil@tcp(159.89.198.71:3306)/admin_railway"
+	dsn := "admin_aqil:admin_aqil@tcp(157.245.206.124:3306)/admin_railway"
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

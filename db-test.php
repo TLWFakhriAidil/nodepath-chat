@@ -81,7 +81,7 @@ if ($mysqlURI) {
         echo "Using MYSQL_URI for database connection\n";
     } else {
         echo "Failed to parse MYSQL_URI, using fallback values\n";
-        $host = '159.89.198.71';
+        $host = '157.245.206.124';
         $dbname = 'admin_railway';
         $user = 'admin_aqil';
         $pass = 'admin_aqil';
@@ -89,7 +89,7 @@ if ($mysqlURI) {
     }
 } else {
     echo "MYSQL_URI not found, using fallback values\n";
-    $host = '159.89.198.71';
+    $host = '157.245.206.124';
     $dbname = 'admin_railway';
     $user = 'admin_aqil';
     $pass = 'admin_aqil';

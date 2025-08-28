@@ -10,7 +10,7 @@ header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 // Database connection parameters
-$host = '159.89.198.71';
+$host = '157.245.206.124';
 $port = 3306;
 $database = 'admin_railway';
 $username = 'admin_aqil';
