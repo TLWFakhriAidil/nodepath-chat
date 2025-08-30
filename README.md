@@ -610,6 +610,7 @@ req.Header.Set("X-Api-Key", deviceSettings.APIKey.String)
 - **Debug Directory Integration**: Properly integrated moved debug files into Docker build process
 - **Missing Import Fix**: Added missing `bytes` package import in `ai_cron_service.go` to resolve `undefined: bytes` error
 - **DeviceService Field Fix**: Corrected field reference from `h.DeviceService.GetDeviceSettingsByID()` to `h.deviceSettingsService.GetByIDDevice()` in `device_settings_handlers.go`
+- **Database IP Configuration**: Updated MYSQL_URI from `159.89.198.71` to `157.245.206.124` in `.env` file for correct database server connection
 
 #### 🎯 Benefits:
 - **Successful Railway Deployment**: Fixed Docker build process for Railway platform
@@ -618,6 +619,7 @@ req.Header.Set("X-Api-Key", deviceSettings.APIKey.String)
 - **Build Consistency**: Aligned Docker build with current project structure
 - **WAHA API Integration**: Resolved build errors preventing WAHA multimedia messaging functionality
 - **Handler Functionality**: Fixed device settings handlers for proper WAHA device status checking
+- **Database Connectivity**: Established proper database connection using correct IP address for reliable data operations
 
 ### 🗄️ Database Schema Migration: ID Staff to ID Device (Complete)
 **Date**: Current Session
