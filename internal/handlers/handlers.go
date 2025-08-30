@@ -198,12 +198,14 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	deviceSettings.Post("/", h.CreateDeviceSettings)
 	// Device status route - must be before /:id to avoid conflicts
 	deviceSettings.Get("/:id/status", h.GetDeviceStatus)
+	deviceSettings.Get("/:id/waha-status", h.GetWahaDeviceStatus)
 	deviceSettings.Get("/:id", h.GetDeviceSettingsById)
 	deviceSettings.Put("/:id", h.UpdateDeviceSettings)
 	deviceSettings.Delete("/:id", h.DeleteDeviceSettings)
 	// Device generation routes
 	deviceSettings.Post("/generate-whacenter", h.GenerateWhacenterDevice)
 	deviceSettings.Post("/generate-wablas", h.GenerateWablasDevice)
+	deviceSettings.Post("/generate-waha", h.GenerateWahaDevice)
 
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")

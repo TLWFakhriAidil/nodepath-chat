@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { Smartphone, Settings, Save, X, Link, Copy, Plus, Edit, Trash2, Eye } from 'lucide-react';
 import WablasStatusModal from '@/components/WablasStatusModal';
 import WhacenterStatusModal from '@/components/WhacenterStatusModal';
+import WahaStatusModal from '@/components/WahaStatusModal';
 
 interface DeviceSettings {
   id: string;
@@ -652,6 +653,82 @@ const DeviceSettings: React.FC = () => {
           });
           throw new Error(`Network Error: ${fetchError.message}`);
         }
+      } else if (settings.provider === 'waha') {
+        console.log('🟢 Using WAHA provider');
+        console.log('📡 Preparing WAHA API request...');
+        
+        // WAHA API integration
+        const wahaData = {
+          device_name: settings.id_device,
+          webhook_url: webhookUrl,
+          api_base: 'https://waha-plus-production-705f.up.railway.app/',
+          api_key: 'dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0'
+        };
+        
+        const requestBody = {
+          ...settings,
+          webhook_url: webhookUrl,
+          device_data: wahaData
+        };
+        
+        console.log('📤 WAHA Request Details:');
+        console.log('  - Endpoint: /api/device-settings/generate-waha');
+        console.log('  - Method: POST');
+        console.log('  - Headers: Content-Type: application/json');
+        console.log('  - Body:', JSON.stringify(requestBody, null, 2));
+        
+        const startTime = Date.now();
+        
+        try {
+          console.log('🌐 Making network request to WAHA API...');
+          
+          apiResponse = await fetch('/api/device-settings/generate-waha', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          
+          console.log(`📥 WAHA API Response (${duration}ms):`);
+          console.log('  - Status:', apiResponse.status, apiResponse.statusText);
+          console.log('  - OK:', apiResponse.ok);
+          console.log('  - Headers:', Object.fromEntries(apiResponse.headers.entries()));
+          
+          // Clone response to read body without consuming it
+          const responseClone = apiResponse.clone();
+          const responseText = await responseClone.text();
+          console.log('  - Body Length:', responseText.length);
+          console.log('  - Body:', responseText);
+          
+          // Log network timing
+          console.log('⏱️ Network Timing:', {
+            duration: `${duration}ms`,
+            url: '/api/device-settings/generate-waha',
+            method: 'POST',
+            status: apiResponse.status,
+            ok: apiResponse.ok
+          });
+          
+        } catch (fetchError) {
+          console.error('💥 NETWORK ERROR - WAHA API Request Failed');
+          console.error('❌ Fetch Error Details:', {
+            name: fetchError.name,
+            message: fetchError.message,
+            stack: fetchError.stack,
+            cause: fetchError.cause
+          });
+          console.error('🌐 Network Request Info:', {
+            url: '/api/device-settings/generate-waha',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            bodyLength: JSON.stringify(requestBody).length
+          });
+          throw new Error(`Network Error: ${fetchError.message}`);
+        }
       } else {
         // Fallback: Generate local device ID
         const deviceId = `C${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}H`;
@@ -941,6 +1018,15 @@ const DeviceSettings: React.FC = () => {
       
       {selectedDeviceForStatus?.provider === 'whacenter' && (
         <WhacenterStatusModal
+          isOpen={statusPopupOpen}
+          onClose={handleStatusPopupClose}
+          deviceId={selectedDeviceForStatus?.id || ''}
+          deviceName={selectedDeviceForStatus?.device_id}
+        />
+      )}
+      
+      {selectedDeviceForStatus?.provider === 'waha' && (
+        <WahaStatusModal
           isOpen={statusPopupOpen}
           onClose={handleStatusPopupClose}
           deviceId={selectedDeviceForStatus?.id || ''}

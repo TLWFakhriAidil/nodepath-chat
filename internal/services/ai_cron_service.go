@@ -894,6 +894,7 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, fileURL, fileType str
 }
 
 // sendWahaTextMessage sends text message via WAHA provider
+// Based on WAHA API specification: /api/sendText endpoint
 func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *models.DeviceSettings) error {
 	logrus.WithFields(logrus.Fields{
 		"to": to,
@@ -911,10 +912,14 @@ func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *
 		return fmt.Errorf("no API key available")
 	}
 
-	// Prepare request payload
+	// Prepare request payload according to WAHA API specification
+	// session: instance from device settings
+	// chatId: phone number with @c.us suffix
+	// text: message content
 	payload := map[string]interface{}{
-		"chatId": to + "@c.us",
-		"text":   message,
+		"session": deviceSettings.Instance.String,
+		"chatId":  to + "@c.us",
+		"text":    message,
 	}
 
 	jsonPayload, err := json.Marshal(payload)
@@ -923,17 +928,23 @@ func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// Create HTTP request
-	url := fmt.Sprintf("https://%s/api/sendText", deviceSettings.Instance.String)
+	// Create HTTP request to WAHA API base URL + /api/sendText endpoint
+	// Using the API base URL from device settings instance field
+	apiBaseURL := deviceSettings.Instance.String
+	if !strings.HasPrefix(apiBaseURL, "http") {
+		apiBaseURL = "https://" + apiBaseURL
+	}
+	url := fmt.Sprintf("%s/api/sendText", strings.TrimSuffix(apiBaseURL, "/"))
+	
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
+	// Set headers according to WAHA API specification
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Key", deviceSettings.APIKey.String)
+	req.Header.Set("X-Api-Key", deviceSettings.APIKey.String)
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -988,25 +999,127 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, fileType string, 
 		return fmt.Errorf("no API key available")
 	}
 
-	// Determine WAHA endpoint based on file type
-	var endpoint string
+	// Helper function to extract file extension from URL
+	getFileExtension := func(url string) string {
+		// Remove query parameters and fragments
+		if idx := strings.Index(url, "?"); idx != -1 {
+			url = url[:idx]
+		}
+		if idx := strings.Index(url, "#"); idx != -1 {
+			url = url[:idx]
+		}
+		// Extract extension
+		if idx := strings.LastIndex(url, "."); idx != -1 {
+			return strings.ToLower(url[idx+1:])
+		}
+		return ""
+	}
+
+	// Determine WAHA endpoint and mimetype based on file type
+	var endpoint, mimetype, filename string
 	switch fileType {
 	case "image":
 		endpoint = "/api/sendImage"
+		ext := getFileExtension(fileURL)
+		switch ext {
+		case "jpg", "jpeg":
+			mimetype = "image/jpeg"
+			filename = "file.jpeg"
+		case "png":
+			mimetype = "image/png"
+			filename = "file.png"
+		case "gif":
+			mimetype = "image/gif"
+			filename = "file.gif"
+		case "webp":
+			mimetype = "image/webp"
+			filename = "file.webp"
+		default:
+			// Default to jpeg if extension is unknown
+			mimetype = "image/jpeg"
+			filename = "file.jpeg"
+		}
 	case "video":
 		endpoint = "/api/sendVideo"
+		ext := getFileExtension(fileURL)
+		switch ext {
+		case "mp4":
+			mimetype = "video/mp4"
+			filename = "file.mp4"
+		case "avi":
+			mimetype = "video/avi"
+			filename = "file.avi"
+		case "mov":
+			mimetype = "video/mov"
+			filename = "file.mov"
+		case "mkv":
+			mimetype = "video/mkv"
+			filename = "file.mkv"
+		default:
+			// Default to mp4 if extension is unknown
+			mimetype = "video/mp4"
+			filename = "file.mp4"
+		}
 	case "audio":
 		endpoint = "/api/sendVoice"
+		ext := getFileExtension(fileURL)
+		switch ext {
+		case "mp3":
+			mimetype = "audio/mp3"
+		case "wav":
+			mimetype = "audio/wav"
+		case "ogg":
+			mimetype = "audio/ogg"
+		case "m4a":
+			mimetype = "audio/m4a"
+		default:
+			// Default to mp3 if extension is unknown
+			mimetype = "audio/mp3"
+		}
+		filename = "" // Voice messages don't need filename
 	case "document":
 		endpoint = "/api/sendDocument"
+		ext := getFileExtension(fileURL)
+		switch ext {
+		case "pdf":
+			mimetype = "application/pdf"
+			filename = "file.pdf"
+		case "doc":
+			mimetype = "application/msword"
+			filename = "file.doc"
+		case "docx":
+			mimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+			filename = "file.docx"
+		case "txt":
+			mimetype = "text/plain"
+			filename = "file.txt"
+		default:
+			// Default to pdf if extension is unknown
+			mimetype = "application/pdf"
+			filename = "file.pdf"
+		}
 	default:
 		endpoint = "/api/sendImage" // default to image
+		mimetype = "image/jpeg"
+		filename = "file.jpeg"
 	}
 
-	// Prepare request payload
+	// Prepare request payload according to WAHA API specification
+	fileData := map[string]interface{}{
+		"mimetype": mimetype,
+		"url":      fileURL,
+	}
+	
+	// Add filename for non-voice media types
+	if fileType != "audio" && filename != "" {
+		fileData["filename"] = filename
+	}
+
 	payload := map[string]interface{}{
-		"chatId": to + "@c.us",
-		"url":    fileURL,
+		"session": deviceSettings.Instance.String,
+		"chatId":  to + "@c.us",
+		"file":    fileData,
+		"caption": "", // Empty caption, can be modified if needed
 	}
 
 	jsonPayload, err := json.Marshal(payload)
@@ -1015,17 +1128,23 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, fileType string, 
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// Create HTTP request
-	url := fmt.Sprintf("https://%s%s", deviceSettings.Instance.String, endpoint)
+	// Create HTTP request to WAHA API base URL + endpoint
+	// Using the API base URL from device settings instance field
+	apiBaseURL := deviceSettings.Instance.String
+	if !strings.HasPrefix(apiBaseURL, "http") {
+		apiBaseURL = "https://" + apiBaseURL
+	}
+	url := fmt.Sprintf("%s%s", strings.TrimSuffix(apiBaseURL, "/"), endpoint)
+	
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
+	// Set headers according to WAHA API specification
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Key", deviceSettings.APIKey.String)
+	req.Header.Set("X-Api-Key", deviceSettings.APIKey.String)
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}

@@ -1783,6 +1783,243 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider strin
 	}
 }
 
+// GenerateWahaDevice generates a device using WAHA API with session management
+func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
+	var req struct {
+		models.CreateDeviceSettingsRequest
+		WebhookURL string `json:"webhook_url"`
+		DeviceData struct {
+			DeviceName string `json:"device_name"`
+			WebhookURL string `json:"webhook_url"`
+		} `json:"device_data"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return h.errorResponse(c, 400, "Invalid request body")
+	}
+
+	// Validate required fields
+	if req.PhoneNumber == "" {
+		return h.errorResponse(c, 400, "Phone number is required")
+	}
+	if req.IDDevice == "" {
+		return h.errorResponse(c, 400, "ID Device is required")
+	}
+
+	// WAHA API configuration
+	apiBase := "https://waha-plus-production-705f.up.railway.app"
+	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0" // Must match WHATSAPP_API_KEY in container
+
+	// Create unique session name using device ID
+	sessionName := fmt.Sprintf("user_%s", req.IDDevice)
+
+	// Webhook endpoint for incoming WA messages
+	webhook := fmt.Sprintf("https://nodepath-chat-production.up.railway.app/api/webhook/%s/%s", req.IDDevice, sessionName)
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Check existing device settings by IDDevice to get instance value
+	existingDevice, err := h.deviceSettingsService.GetByIDDevice(req.IDDevice)
+	if err == nil && existingDevice.Instance.Valid && existingDevice.Instance.String != "" {
+		// STEP 1: Delete old session (if exists)
+		oldSession := existingDevice.Instance.String
+		logrus.WithFields(logrus.Fields{
+			"id_device": req.IDDevice,
+			"old_session": oldSession,
+			"action": "delete_existing",
+		}).Info("🗑️ WAHA: Deleting existing session")
+
+		deleteURL := fmt.Sprintf("%s/api/sessions/%s", apiBase, oldSession)
+		deleteRequest, err := http.NewRequest("DELETE", deleteURL, nil)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create delete request")
+		} else {
+			deleteRequest.Header.Set("X-Api-Key", apiKey)
+			deleteResp, err := client.Do(deleteRequest)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to delete existing WAHA session")
+			} else {
+				defer deleteResp.Body.Close()
+				logrus.WithFields(logrus.Fields{
+					"status_code": deleteResp.StatusCode,
+					"session_name": oldSession,
+				}).Info("📥 WAHA: Session deletion attempted")
+			}
+		}
+	}
+
+	// STEP 2: Create a new session
+	sessionData := map[string]interface{}{
+		"name":  sessionName,
+		"start": false,
+		"config": map[string]interface{}{
+			"debug":    false,
+			"markSeen": false, // Disable auto-read
+			"noweb": map[string]interface{}{
+				"store": map[string]interface{}{
+					"enabled":  true,
+					"fullSync": false,
+				},
+			},
+			"webhooks": []map[string]interface{}{
+				{
+					"url":    webhook,
+					"events": []string{"message"},
+					"retries": map[string]interface{}{
+						"attempts": 1,
+						"delay":    3,
+						"policy":   "constant",
+					},
+				},
+			},
+		},
+	}
+
+	// Convert session data to JSON
+	sessionJSON, err := json.Marshal(sessionData)
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to marshal session data")
+	}
+
+	// Create session
+	createURL := fmt.Sprintf("%s/api/sessions", apiBase)
+	createRequest, err := http.NewRequest("POST", createURL, strings.NewReader(string(sessionJSON)))
+	if err != nil {
+		return h.errorResponse(c, 500, "Failed to create session request")
+	}
+
+	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest.Header.Set("X-Api-Key", apiKey)
+
+	// Make request to WAHA API
+	logrus.WithFields(logrus.Fields{
+		"provider":     "waha",
+		"url":          createURL,
+		"session_name": sessionName,
+		"webhook":      webhook,
+		"api_key_length": len(apiKey),
+	}).Info("🟢 WAHA: Making session creation request")
+
+	createResp, err := client.Do(createRequest)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": "waha",
+			"url":      createURL,
+			"error":    err.Error(),
+		}).Error("❌ WAHA: Failed to call session creation API")
+		return h.errorResponse(c, 500, fmt.Sprintf("Failed to communicate with WAHA API: %v", err))
+	}
+	defer createResp.Body.Close()
+
+	createBody, err := io.ReadAll(createResp.Body)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": "waha",
+			"error":    err.Error(),
+		}).Error("❌ WAHA: Failed to read session creation response")
+		return h.errorResponse(c, 500, "Failed to read API response")
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"provider":        "waha",
+		"status_code":     createResp.StatusCode,
+		"response_body":   string(createBody),
+		"response_length": len(createBody),
+	}).Info("📄 WAHA: Session creation response received")
+
+	var createResponse map[string]interface{}
+	if err := json.Unmarshal(createBody, &createResponse); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider":      "waha",
+			"error":         err.Error(),
+			"response_body": string(createBody),
+		}).Error("❌ WAHA: Failed to unmarshal session creation response")
+		return h.errorResponse(c, 500, "Failed to parse API response")
+	}
+
+	// Check if session creation was successful
+	if sessionNameResp, ok := createResponse["name"].(string); !ok || sessionNameResp == "" {
+		errorMsg := "Unknown error"
+		if errResp, exists := createResponse["error"]; exists {
+			errorMsg = fmt.Sprintf("%v", errResp)
+		}
+		return h.errorResponse(c, 500, fmt.Sprintf("WAHA session creation error: %s", errorMsg))
+	}
+
+	// STEP 3: Start session immediately
+	startURL := fmt.Sprintf("%s/api/sessions/%s/start", apiBase, sessionName)
+	startRequest, err := http.NewRequest("PUT", startURL, nil)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create start session request")
+	} else {
+		startRequest.Header.Set("Content-Type", "application/json")
+		startRequest.Header.Set("X-Api-Key", apiKey)
+
+		startResp, err := client.Do(startRequest)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to start WAHA session")
+		} else {
+			defer startResp.Body.Close()
+			logrus.WithFields(logrus.Fields{
+				"status_code":  startResp.StatusCode,
+				"session_name": sessionName,
+			}).Info("📥 WAHA: Session start attempted")
+		}
+	}
+
+	// Save device data to database - WAHA mapping: instance stores session_name, webhook_id stores webhook_url
+	createReq := &models.CreateDeviceSettingsRequest{
+		APIKeyOption: req.APIKeyOption,
+		WebhookID:    webhook,        // Store webhook URL
+		Provider:     "waha",
+		PhoneNumber:  req.PhoneNumber,
+		APIKey:       req.APIKey, // Preserve the original OpenRouter API key
+		IDDevice:     req.IDDevice,
+		IDERP:        req.IDERP,
+		IDAdmin:      req.IDAdmin,
+		Instance:     sessionName, // Store session name as instance for WAHA
+	}
+
+	// Debug logging for database save
+	logrus.WithFields(logrus.Fields{
+		"session_name": sessionName,
+		"webhook_id":   webhook,
+		"provider":     "waha",
+		"phone_number": req.PhoneNumber,
+	}).Info("💾 WAHA: Saving device data to database")
+
+	// Upsert device setting in database (update if exists, create if not)
+	deviceSetting, err := h.deviceSettingsService.Upsert(createReq)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to save device setting to database")
+		// Continue with success response even if database save fails
+	} else {
+		logrus.WithField("device_setting_id", deviceSetting.ID).Info("Device setting saved to database")
+	}
+
+	// Log successful device generation
+	logrus.WithFields(logrus.Fields{
+		"provider":     "waha",
+		"session_name": sessionName,
+		"webhook_url":  webhook,
+		"phone_number": req.PhoneNumber,
+	}).Info("✅ WAHA: Device generated successfully")
+
+	// Return success response
+	return h.successResponse(c, map[string]interface{}{
+		"success": true,
+		"message": "Device generated successfully via WAHA",
+		"data": map[string]interface{}{
+			"session_name": sessionName,
+			"webhook_url":  webhook,
+			"provider":     "waha",
+		},
+	})
+}
+
 // sendWhatsappResponse sends AI response back to WhatsApp through the appropriate provider
 func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response interface{}) {
 	logrus.WithFields(logrus.Fields{
@@ -2362,4 +2599,186 @@ func (h *Handlers) sanitizeValue(value interface{}) interface{} {
 		// Return other types as-is (numbers, booleans, etc.)
 		return v
 	}
+}
+
+// GetWahaDeviceStatus handles WAHA QR code scanning and device status checking
+func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
+	logrus.Info("🔍 WAHA: Getting device status for QR code scanning")
+
+	// Get device ID from request
+	idDevice := c.Params("id")
+	if idDevice == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Device ID is required",
+		})
+	}
+
+	// Get device settings from database
+	device, err := h.DeviceService.GetDeviceSettingsByID(idDevice)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get device settings")
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to get device settings",
+		})
+	}
+
+	// Validate provider is WAHA
+	if device.Provider != "waha" {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "This endpoint is only for WAHA provider",
+		})
+	}
+
+	// WAHA API configuration
+	apiBase := "https://waha-plus-production-705f.up.railway.app"
+	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
+	session := "user_" + idDevice
+
+	var image *string
+	status := "UNKNOWN"
+
+	// Step 1: Check session status
+	logrus.WithField("session", session).Info("🔍 WAHA: Checking session status")
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/sessions/%s", apiBase, session), nil)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create status request")
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to create status request",
+		})
+	}
+	req.Header.Set("X-Api-Key", apiKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to check session status")
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to check session status",
+		})
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to read status response")
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to read status response",
+		})
+	}
+
+	var statusData map[string]interface{}
+	if err := json.Unmarshal(body, &statusData); err != nil {
+		logrus.WithError(err).Error("Failed to parse status response")
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to parse status response",
+		})
+	}
+
+	if statusValue, ok := statusData["status"]; ok {
+		status = fmt.Sprintf("%v", statusValue)
+	}
+
+	logrus.WithField("status", status).Info("📊 WAHA: Session status retrieved")
+
+	// Step 2: If STOPPED, try auto-start session
+	if status == "STOPPED" {
+		logrus.Info("🔄 WAHA: Session is stopped, attempting to start")
+		startReq, err := http.NewRequest("POST", fmt.Sprintf("%s/api/sessions/%s/start", apiBase, session), nil)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create start request")
+			return c.Status(500).JSON(fiber.Map{
+				"error": "Failed to create start request",
+			})
+		}
+		startReq.Header.Set("Content-Type", "application/json")
+		startReq.Header.Set("X-Api-Key", apiKey)
+
+		startResp, err := client.Do(startReq)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to start session")
+		} else {
+			startResp.Body.Close()
+			logrus.Info("✅ WAHA: Session start request sent")
+
+			// Wait 2 seconds to allow WAHA to update status
+			time.Sleep(2 * time.Second)
+
+			// Recheck status
+			logrus.Info("🔍 WAHA: Rechecking session status after start")
+			recheckReq, err := http.NewRequest("GET", fmt.Sprintf("%s/api/sessions/%s", apiBase, session), nil)
+			if err == nil {
+				recheckReq.Header.Set("X-Api-Key", apiKey)
+				recheckResp, err := client.Do(recheckReq)
+				if err == nil {
+					defer recheckResp.Body.Close()
+					recheckBody, err := io.ReadAll(recheckResp.Body)
+					if err == nil {
+						var recheckData map[string]interface{}
+						if json.Unmarshal(recheckBody, &recheckData) == nil {
+							if recheckStatus, ok := recheckData["status"]; ok {
+								status = fmt.Sprintf("%v", recheckStatus)
+								logrus.WithField("new_status", status).Info("📊 WAHA: Updated session status")
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Step 3: If session waiting for QR
+	if status == "SCAN_QR_CODE" {
+		logrus.Info("📱 WAHA: Session waiting for QR code, fetching QR image")
+		qrURL := fmt.Sprintf("%s/api/%s/auth/qr?format=image", apiBase, session)
+
+		qrReq, err := http.NewRequest("GET", qrURL, nil)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create QR request")
+		} else {
+			qrReq.Header.Set("X-Api-Key", apiKey)
+			qrReq.Header.Set("Accept", "application/json")
+
+			qrResp, err := client.Do(qrReq)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to fetch QR code")
+			} else {
+				defer qrResp.Body.Close()
+				qrBody, err := io.ReadAll(qrResp.Body)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to read QR response")
+				} else {
+					var qrData map[string]interface{}
+					if err := json.Unmarshal(qrBody, &qrData); err != nil {
+						logrus.WithError(err).Error("Failed to parse QR response")
+					} else {
+						if data, ok := qrData["data"]; ok {
+							if dataStr, ok := data.(string); ok {
+								imageData := "data:image/png;base64," + dataStr
+								image = &imageData
+								logrus.Info("✅ WAHA: QR code image retrieved successfully")
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Final response
+	response := fiber.Map{
+		"provider": "WAHA",
+		"status":   status,
+	}
+
+	if image != nil {
+		response["image"] = *image
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"provider": "WAHA",
+		"status":   status,
+		"has_image": image != nil,
+	}).Info("📤 WAHA: Returning device status response")
+
+	return c.JSON(response)
 }
