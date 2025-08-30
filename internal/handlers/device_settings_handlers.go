@@ -2614,7 +2614,7 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 	}
 
 	// Get device settings from database
-	device, err := h.DeviceService.GetDeviceSettingsByID(idDevice)
+	device, err := h.deviceSettingsService.GetByIDDevice(idDevice)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get device settings")
 		return c.Status(500).JSON(fiber.Map{
