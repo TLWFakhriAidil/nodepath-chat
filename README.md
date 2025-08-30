@@ -564,6 +564,10 @@ req.Header.Set("X-Api-Key", deviceSettings.APIKey.String)
 - **Filename Generation**: Dynamically generates filenames based on detected extensions
 - **Fallback Support**: Defaults to common formats (JPEG for images, MP4 for videos, etc.) when extension is unknown
 
+#### 🛠️ Build Fix:
+- **Missing Import**: Added missing `bytes` package import to resolve build error in Docker deployment
+- **HTTP Request**: Fixed `bytes.NewBuffer()` usage for WAHA API HTTP requests
+
 #### 🎉 Benefits:
 - **Multi-Provider Support**: System now supports three major WhatsApp providers (Wablas, Whacenter, WAHA)
 - **Unified Interface**: Consistent device management interface across all providers
