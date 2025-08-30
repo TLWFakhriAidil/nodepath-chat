@@ -2459,7 +2459,8 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 		}
 		
 		if execution == nil {
-			logrus.WithField("execution_id", executionID).Warn("⚠️ FLOW: No execution found for continuation")
+			// Log as debug instead of warn to reduce noise - this is expected for cleaned up executions
+			logrus.WithField("execution_id", executionID).Debug("⚠️ FLOW: No execution found for continuation (likely cleaned up)")
 			return fmt.Errorf("execution not found: %s", executionID)
 		}
 		

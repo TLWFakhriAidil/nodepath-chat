@@ -778,6 +778,54 @@ MYSQL_URI=mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway
 - Enhanced connection pooling for high-performance scenarios (200 max open, 50 max idle)
 - Improved error handling and logging for MYSQL_URI connections
 - Optimized for real-time messaging with 3000+ concurrent users
+
+---
+
+## 🔧 WAHA Provider Database Fix
+
+**Issue**: Users unable to save device settings with "waha" provider, receiving database constraint errors. Only affected WAHA provider while Whacenter and Wablas providers worked correctly.
+
+**Root Cause**: Database ENUM constraint was outdated - the `device_setting_nodepath` table still had 'rvsb_wasap' instead of 'waha' in the provider ENUM definition.
+
+**Investigation**: Created diagnostic tools to identify the schema mismatch:
+- `debug/check_provider_enum.go` - Revealed database had `enum('whacenter','wablas','rvsb_wasap')`
+- Application validation supported 'waha' but database schema didn't match
+
+**Solution**: Updated database ENUM constraint to support WAHA provider
+
+**Changes Made**:
+- Created `debug/fix_provider_enum.go` to update the ENUM constraint
+- Modified provider column to `enum('whacenter','wablas','waha')`
+- Migrated any existing 'rvsb_wasap' records to 'waha'
+- Verified fix with successful test insertion
+
+**Benefits**:
+- ✅ **WAHA Provider Support** - Users can now save device settings with WAHA provider
+- ✅ **Database Consistency** - ENUM constraint matches application validation logic
+- ✅ **Improved UX** - No more confusing errors when selecting WAHA provider
+- ✅ **Future-Proof** - Database properly supports all three providers
+
+---
+
+## 🔇 Error Log Noise Reduction Fix
+
+**Issue**: Continuous "execution not found" error logs appearing every 5 seconds in server output, causing disturbance during development and monitoring.
+
+**Root Cause**: The delayed message processing system was attempting to process flow continuations for executions that had already been cleaned up or completed, resulting in expected "execution not found" errors being logged as errors instead of being handled gracefully.
+
+**Solution**: Enhanced error handling in queue service and WhatsApp service to suppress expected "execution not found" errors
+
+**Changes Made**:
+- Modified `processFlowContinuation` in `redis_service.go` to detect "execution not found" errors
+- Changed error logging level from ERROR to DEBUG for expected missing executions
+- Updated WhatsApp service to log missing executions as DEBUG instead of WARN
+- Added proper error handling to prevent retries for cleaned up executions
+
+**Benefits**:
+- ✅ **Clean Logs** - Eliminated disturbing error messages for expected conditions
+- ✅ **Better Monitoring** - Real errors are now more visible without noise
+- ✅ **Improved Performance** - Reduced unnecessary retry attempts for cleaned up executions
+- ✅ **Developer Experience** - Cleaner console output during development
 - Connection lifetime management (30 minutes) and idle timeout (10 minutes)
 - UTF8MB4 support with proper collation for full Unicode compatibility
 

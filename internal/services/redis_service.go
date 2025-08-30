@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"nodepath-chat/internal/config"
@@ -437,6 +438,18 @@ func (s *QueueService) processFlowContinuation(message *QueueMessage) error {
 	)
 
 	if err != nil {
+		// Check if this is an "execution not found" error - these are expected for cleaned up executions
+		if strings.Contains(err.Error(), "execution not found") {
+			// Log as debug level instead of error to reduce noise
+			logrus.WithFields(logrus.Fields{
+				"execution_id": message.ExecutionID,
+				"message_id":   message.ID,
+			}).Debug("🔄 QUEUE: Execution not found for delayed message (likely cleaned up)")
+			// Return nil to prevent retries and remove from queue
+			return nil
+		}
+		
+		// For other errors, log as error
 		logrus.WithError(err).Error("🔄 QUEUE: Failed to process flow continuation")
 		return fmt.Errorf("failed to process flow continuation: %w", err)
 	}
