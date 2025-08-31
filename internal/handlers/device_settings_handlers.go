@@ -1470,6 +1470,13 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	var from, message, messageType string
 	var isGroup bool
 
+	// Debug log to check provider value
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"provider": provider,
+		"provider_type": fmt.Sprintf("%T", provider),
+	}).Info("🔍 WEBHOOK: Provider debug info")
+
 	switch provider {
 	case "whacenter":
 		// Extract data for Whacenter provider
@@ -1499,6 +1506,48 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		}
 		// Wablas doesn't have is_group field, default to false
 		isGroup = false
+
+	case "waha":
+		// Extract data for WAHA provider with nested payload structure
+		// WAHA webhook structure: payload._data.from and payload._data.body
+		if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
+			if dataMap, ok := payload["_data"].(map[string]interface{}); ok {
+				// Extract 'from' field from payload._data.from
+				if fromVal, ok := dataMap["from"].(string); ok {
+					from = fromVal
+				}
+				// Extract 'body' field from payload._data.body as message content
+				if bodyVal, ok := dataMap["body"].(string); ok {
+					message = bodyVal
+				}
+				// Check if it's a group message from payload._data.Info.IsGroup
+				if info, ok := dataMap["Info"].(map[string]interface{}); ok {
+					if isGroupVal, ok := info["IsGroup"].(bool); ok {
+						isGroup = isGroupVal
+					}
+				}
+				// Set message type as text for WAHA
+				messageType = "text"
+			}
+		}
+		
+		// Strip @c.us suffix from phone number for WAHA provider
+		if strings.HasSuffix(from, "@c.us") {
+			from = strings.TrimSuffix(from, "@c.us")
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"original_from": from + "@c.us",
+				"cleaned_from": from,
+			}).Info("🔧 WEBHOOK: WAHA phone number cleaned - stripped @c.us suffix")
+		}
+
+		// Log WAHA-specific extraction for debugging
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"extracted_from": from,
+			"extracted_message": message,
+			"is_group": isGroup,
+		}).Info("🔍 WEBHOOK: WAHA field extraction completed")
 
 	default:
 		// Generic webhook format

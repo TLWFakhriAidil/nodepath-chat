@@ -1,0 +1,13 @@
+{
+  "event": "message",
+  "payload": {
+    "_data": {
+      "Info": {
+        "IsGroup": false
+      },
+      "body": "Hai",
+      "from": "60179645043@c.us"
+    }
+  },
+  "session": "user_Test"
+}

@@ -207,6 +207,11 @@ func (r *aiWhatsappRepository) CreateConversationLog(log *models.ConversationLog
 
 // GetAIWhatsappByProspectNum retrieves AI WhatsApp conversation by prospect number
 func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*models.AIWhatsapp, error) {
+	// Check if database connection is available
+	if r.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
 		       conv_current, human, niche, jam, intro, 
@@ -272,6 +277,11 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 
 // GetAIWhatsappByID retrieves AI WhatsApp conversation by ID
 func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, error) {
+	// Check if database connection is available
+	if r.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
 		       conv_current, human, niche, jam, intro, 
@@ -333,6 +343,11 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 
 // GetAIWhatsappByDevice retrieves all AI WhatsApp conversations for a specific device
 func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.AIWhatsapp, error) {
+	// Check if database connection is available
+	if r.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
 		       conv_current, human, niche, jam, intro, 
@@ -1199,6 +1214,11 @@ func (r *aiWhatsappRepository) UpdateConvLast(prospectNum string, convLast inter
 
 // GetAIWhatsappByProspectAndDevice retrieves AI WhatsApp conversation by prospect number and device ID
 func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idDevice string) (*models.AIWhatsapp, error) {
+	// Check if database connection is available
+	if r.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
 		       conv_current, human, niche, jam, intro, 

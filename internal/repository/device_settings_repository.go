@@ -79,6 +79,11 @@ func (r *deviceSettingsRepository) CreateDeviceSettings(settings *models.DeviceS
 
 // GetDeviceSettingsByID retrieves device settings by device_id
 func (r *deviceSettingsRepository) GetDeviceSettingsByID(deviceID string) (*models.DeviceSettings, error) {
+	// Check if database connection is available
+	if r.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT device_id, api_key_option, webhook_id, provider, 
 		       api_key, id_device, created_at, updated_at
@@ -107,6 +112,11 @@ func (r *deviceSettingsRepository) GetDeviceSettingsByID(deviceID string) (*mode
 
 // GetDeviceSettingsByDevice retrieves device settings by id_device
 func (r *deviceSettingsRepository) GetDeviceSettingsByDevice(idDevice string) (*models.DeviceSettings, error) {
+	// Check if database connection is available
+	if r.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT device_id, api_key_option, webhook_id, provider, 
 		       api_key, id_device, created_at, updated_at
@@ -135,6 +145,11 @@ func (r *deviceSettingsRepository) GetDeviceSettingsByDevice(idDevice string) (*
 
 // GetAllDeviceSettings retrieves all device settings
 func (r *deviceSettingsRepository) GetAllDeviceSettings() ([]models.DeviceSettings, error) {
+	// Check if database connection is available
+	if r.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT device_id, api_key_option, webhook_id, provider, 
 		       api_key, id_device, created_at, updated_at

@@ -76,6 +76,11 @@ func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
 
 // GetByID retrieves a device setting by ID
 func (s *DeviceSettingsService) GetByID(id string) (*models.DeviceSettings, error) {
+	// Check if database connection is available
+	if s.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
 		       id_device, id_erp, id_admin, instance, created_at, updated_at
@@ -112,6 +117,11 @@ func (s *DeviceSettingsService) GetByID(id string) (*models.DeviceSettings, erro
 
 // GetByIDDevice retrieves a device setting by id_device field
 func (s *DeviceSettingsService) GetByIDDevice(idDevice string) (*models.DeviceSettings, error) {
+	// Check if database connection is available
+	if s.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
 		       id_device, id_erp, id_admin, instance, created_at, updated_at
@@ -151,6 +161,11 @@ func (s *DeviceSettingsService) GetByIDDevice(idDevice string) (*models.DeviceSe
 // Upsert creates a new device setting or updates existing one based on id_device
 // Uses database transactions to ensure data consistency during upsert operations
 func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) (*models.DeviceSettings, error) {
+	// Check if database connection is available
+	if s.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	var resultID string
 	
 	err := utils.WithTransaction(s.db, func(tx *sql.Tx) error {
@@ -314,6 +329,11 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 
 // Create creates a new device setting
 func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) (*models.DeviceSettings, error) {
+	// Check if database connection is available
+	if s.db == nil {
+		return nil, fmt.Errorf("database connection is not available")
+	}
+
 	id := uuid.New().String()
 	now := time.Now()
 
