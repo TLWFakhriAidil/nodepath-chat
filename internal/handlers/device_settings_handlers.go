@@ -2640,7 +2640,7 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 	}
 
 	// WAHA API configuration - matching PHP implementation
-	apiBase := "http://waha-plus-production-705f.up.railway.app"
+	apiBase := "https://waha-plus-production-705f.up.railway.app"
 	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
 	// Use device instance from database as session name (matching PHP $user->instance)
 	// Extract string value from sql.NullString
