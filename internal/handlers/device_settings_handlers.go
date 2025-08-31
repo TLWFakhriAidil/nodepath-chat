@@ -2606,22 +2606,31 @@ func (h *Handlers) sanitizeValue(value interface{}) interface{} {
 func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 	logrus.Info("🔍 WAHA: Getting device status for QR code scanning")
 
-	// Get device ID from request
-	idDevice := c.Params("id")
-	if idDevice == "" {
+	// Get device ID from request (this is the 'id' column, not 'id_device')
+	deviceID := c.Params("id")
+	if deviceID == "" {
 		return c.Status(400).JSON(fiber.Map{
 			"error": "Device ID is required",
 		})
 	}
 
-	// Get device settings from database
-	device, err := h.deviceSettingsService.GetByIDDevice(idDevice)
+	// Get device settings from database using the 'id' column
+	logrus.WithField("deviceID", deviceID).Info("🔍 WAHA: Attempting to get device by ID")
+	device, err := h.deviceSettingsService.GetByID(deviceID)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get device settings")
+		logrus.WithFields(logrus.Fields{
+			"deviceID": deviceID,
+			"error":    err.Error(),
+		}).Error("Failed to get device settings")
 		return c.Status(500).JSON(fiber.Map{
 			"error": "Failed to get device settings",
 		})
 	}
+	logrus.WithFields(logrus.Fields{
+		"deviceID":  deviceID,
+		"id_device": device.IDDevice,
+		"provider":  device.Provider,
+	}).Info("✅ WAHA: Device found successfully")
 
 	// Validate provider is WAHA
 	if device.Provider != "waha" {
@@ -2640,7 +2649,12 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 		session = device.Instance.String
 	} else {
 		// Fallback to user_{id_device} pattern if instance is not set
-		session = fmt.Sprintf("user_%s", idDevice)
+		// Use the actual id_device value from the database record
+		if device.IDDevice.Valid {
+			session = fmt.Sprintf("user_%s", device.IDDevice.String)
+		} else {
+			session = fmt.Sprintf("user_%s", deviceID)
+		}
 	}
 
 	var image *string
