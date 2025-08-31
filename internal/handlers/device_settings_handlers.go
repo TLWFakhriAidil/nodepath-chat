@@ -2602,6 +2602,7 @@ func (h *Handlers) sanitizeValue(value interface{}) interface{} {
 }
 
 // GetWahaDeviceStatus handles WAHA QR code scanning and device status checking
+// Updated to match PHP implementation structure with proper API configuration
 func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 	logrus.Info("🔍 WAHA: Getting device status for QR code scanning")
 
@@ -2629,10 +2630,18 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	// WAHA API configuration
-	apiBase := "https://waha-plus-production-705f.up.railway.app"
+	// WAHA API configuration - matching PHP implementation
+	apiBase := "http://waha-plus-production-705f.up.railway.app"
 	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
-	session := "user_" + idDevice
+	// Use device instance from database as session name (matching PHP $user->instance)
+	// Extract string value from sql.NullString
+	session := ""
+	if device.Instance.Valid {
+		session = device.Instance.String
+	} else {
+		// Fallback to user_{id_device} pattern if instance is not set
+		session = fmt.Sprintf("user_%s", idDevice)
+	}
 
 	var image *string
 	status := "UNKNOWN"
