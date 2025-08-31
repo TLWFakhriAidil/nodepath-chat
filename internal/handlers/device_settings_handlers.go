@@ -1509,26 +1509,42 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 
 	case "waha":
 		// Extract data for WAHA provider with nested payload structure
-		// WAHA webhook structure: payload._data.from and payload._data.body
+		// WAHA webhook has multiple possible structures, try different paths
 		if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
-			if dataMap, ok := payload["_data"].(map[string]interface{}); ok {
-				// Extract 'from' field from payload._data.from
-				if fromVal, ok := dataMap["from"].(string); ok {
-					from = fromVal
-				}
-				// Extract 'body' field from payload._data.body as message content
-				if bodyVal, ok := dataMap["body"].(string); ok {
-					message = bodyVal
-				}
-				// Check if it's a group message from payload._data.Info.IsGroup
-				if info, ok := dataMap["Info"].(map[string]interface{}); ok {
-					if isGroupVal, ok := info["IsGroup"].(bool); ok {
-						isGroup = isGroupVal
+			// Try to extract from payload.from and payload.body (direct payload level)
+			if fromVal, ok := payload["from"].(string); ok {
+				from = fromVal
+			}
+			if bodyVal, ok := payload["body"].(string); ok {
+				message = bodyVal
+			}
+			
+			// If not found at payload level, try payload._data level
+			if from == "" || message == "" {
+				if dataMap, ok := payload["_data"].(map[string]interface{}); ok {
+					// Extract 'from' field from payload._data.from
+					if from == "" {
+						if fromVal, ok := dataMap["from"].(string); ok {
+							from = fromVal
+						}
+					}
+					// Extract 'body' field from payload._data.body as message content
+					if message == "" {
+						if bodyVal, ok := dataMap["body"].(string); ok {
+							message = bodyVal
+						}
+					}
+					// Check if it's a group message from payload._data.Info.IsGroup
+					if info, ok := dataMap["Info"].(map[string]interface{}); ok {
+						if isGroupVal, ok := info["IsGroup"].(bool); ok {
+							isGroup = isGroupVal
+						}
 					}
 				}
-				// Set message type as text for WAHA
-				messageType = "text"
 			}
+			
+			// Set message type as text for WAHA
+			messageType = "text"
 		}
 		
 		// Strip @c.us suffix from phone number for WAHA provider
