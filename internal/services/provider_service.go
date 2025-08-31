@@ -451,7 +451,7 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 	}
 
 	// WAHA API endpoint for sending text messages
-	apiURL := "http://localhost:3000/api/sendText"
+	apiURL := "https://waha-plus-production-705f.up.railway.app/api/sendText"
 	
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
@@ -552,14 +552,14 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 	
 	if strings.Contains(mediaURL, ".mp4") {
 		mediaType = "video"
-		apiURL = "http://localhost:3000/api/sendVideo"
+		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendVideo"
 	} else if strings.Contains(mediaURL, ".mp3") {
 		mediaType = "audio"
-		apiURL = "http://localhost:3000/api/sendAudio"
+		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendAudio"
 	} else {
 		// Default to image for all other file types
 		mediaType = "image"
-		apiURL = "http://localhost:3000/api/sendImage"
+		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendImage"
 	}
 	
 	logrus.WithFields(logrus.Fields{
