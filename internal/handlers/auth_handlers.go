@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"fmt"
 	"time"
 
 	"nodepath-chat/internal/models"
@@ -149,8 +148,17 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 		SameSite: "Lax",
 	})
 
-	// Store session in memory (in production, use Redis or database)
-	storeSession(token, user.ID)
+	// Store session in database with client information
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	err = ah.storeSession(token, user.ID, ipAddress, userAgent)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to store session")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to create session",
+		})
+	}
 
 	logrus.WithField("user_id", user.ID).Info("User registered successfully")
 
@@ -234,8 +242,7 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 		SameSite: "Lax",
 	})
 
-	// Store session in memory (in production, use Redis or database)
-	storeSession(token, user.ID)
+
 
 	logrus.WithField("user_id", user.ID).Info("User logged in successfully")
 
@@ -256,8 +263,11 @@ func (ah *AuthHandlers) Logout(c *fiber.Ctx) error {
 	// Get session token from cookie
 	token := c.Cookies("session_token")
 	if token != "" {
-		// Remove session from memory
-		removeSession(token)
+		// Remove session from database
+		err := ah.removeSession(token)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to remove session")
+		}
 	}
 
 	// Clear session cookie
@@ -308,8 +318,6 @@ func (ah *AuthHandlers) GetCurrentUser(c *fiber.Ctx) error {
 }
 
 // Simple in-memory session store (use Redis or database in production)
-var sessions = make(map[string]int)
-
 // generateSessionToken generates a random session token
 func generateSessionToken() (string, error) {
 	bytes := make([]byte, 32)
@@ -319,24 +327,60 @@ func generateSessionToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// storeSession stores a session token with user ID
-func storeSession(token string, userID int) {
-	sessions[token] = userID
+// storeSession stores a session token with user ID in database
+func (ah *AuthHandlers) storeSession(token string, userID int, ipAddress, userAgent string) error {
+	// Set expiration time to 24 hours from now
+	expiresAt := time.Now().Add(24 * time.Hour)
+	
+	_, err := ah.db.Exec(`
+		INSERT INTO user_sessions_nodepath (session_token, user_id, expires_at, ip_address, user_agent) 
+		VALUES (?, ?, ?, ?, ?)
+	`, token, userID, expiresAt, ipAddress, userAgent)
+	
+	return err
 }
 
-// getSession retrieves user ID from session token
-func getSession(token string) (int, bool) {
-	userID, exists := sessions[token]
-	return userID, exists
+// getSession retrieves user ID from session token in database
+func (ah *AuthHandlers) getSession(token string) (int, bool) {
+	var userID int
+	var expiresAt time.Time
+	
+	err := ah.db.QueryRow(`
+		SELECT user_id, expires_at FROM user_sessions_nodepath 
+		WHERE session_token = ? AND is_active = TRUE
+	`, token).Scan(&userID, &expiresAt)
+	
+	if err != nil {
+		return 0, false
+	}
+	
+	// Check if session has expired
+	if time.Now().After(expiresAt) {
+		// Mark session as inactive
+		ah.db.Exec(`UPDATE user_sessions_nodepath SET is_active = FALSE WHERE session_token = ?`, token)
+		return 0, false
+	}
+	
+	// Update last accessed time
+	ah.db.Exec(`UPDATE user_sessions_nodepath SET last_accessed = NOW() WHERE session_token = ?`, token)
+	
+	return userID, true
 }
 
-// removeSession removes a session token
-func removeSession(token string) {
-	delete(sessions, token)
+// removeSession removes a session token from database
+func (ah *AuthHandlers) removeSession(token string) error {
+	_, err := ah.db.Exec(`UPDATE user_sessions_nodepath SET is_active = FALSE WHERE session_token = ?`, token)
+	return err
+}
+
+// cleanupExpiredSessions removes expired sessions from database
+func (ah *AuthHandlers) cleanupExpiredSessions() error {
+	_, err := ah.db.Exec(`DELETE FROM user_sessions_nodepath WHERE expires_at < NOW() OR is_active = FALSE`)
+	return err
 }
 
 // AuthMiddleware validates session tokens and sets user context
-func AuthMiddleware() fiber.Handler {
+func (ah *AuthHandlers) AuthMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get session token from cookie
 		token := c.Cookies("session_token")
@@ -347,8 +391,8 @@ func AuthMiddleware() fiber.Handler {
 			})
 		}
 
-		// Validate session
-		userID, exists := getSession(token)
+		// Validate session using database
+		userID, exists := ah.getSession(token)
 		if !exists {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"success": false,
@@ -368,7 +412,7 @@ func (ah *AuthHandlers) SetupAuthRoutes(api fiber.Router) {
 	auth.Post("/register", ah.Register)
 	auth.Post("/login", ah.Login)
 	auth.Post("/logout", ah.Logout)
-	auth.Get("/me", ah.AuthMiddleware, ah.GetCurrentUser)
+	auth.Get("/me", ah.AuthMiddleware(), ah.GetCurrentUser)
 }
 
 // SetupTemplateRoutes configures template serving routes

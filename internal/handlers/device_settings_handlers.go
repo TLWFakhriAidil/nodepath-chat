@@ -69,10 +69,10 @@ func (h *Handlers) GetDeviceSettingsById(c *fiber.Ctx) error {
 	}
 
 	// Check if the device setting belongs to the authenticated user
-	if setting.UserID.Valid && int(setting.UserID.Int64) != userID {
+	if setting.UserID.Valid && int(setting.UserID.Int32) != userID {
 		logrus.WithFields(logrus.Fields{
 			"userID": userID,
-			"settingUserID": setting.UserID.Int64,
+			"settingUserID": setting.UserID.Int32,
 			"settingID": id,
 		}).Warn("User attempted to access device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only access your own device settings")
@@ -131,7 +131,7 @@ func (h *Handlers) CreateDeviceSettings(c *fiber.Ctx) error {
 	
 	// DeviceID is optional - it will be generated later if not provided
 	// Automatically set the user ID from the authenticated user
-	req.UserID = userID
+	req.UserID = &userID
 
 	setting, err := h.deviceSettingsService.Create(&req)
 	if err != nil {
@@ -167,10 +167,10 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 	}
 
 	// Check ownership
-	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int64) != userID {
+	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int32) != userID {
 		logrus.WithFields(logrus.Fields{
 			"userID": userID,
-			"settingUserID": existingSetting.UserID.Int64,
+			"settingUserID": existingSetting.UserID.Int32,
 			"settingID": id,
 		}).Warn("User attempted to update device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only update your own device settings")
@@ -223,10 +223,10 @@ func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 	}
 
 	// Check ownership
-	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int64) != userID {
-		logrus.WithFields(logrus.Fields{
-			"userID": userID,
-			"settingUserID": existingSetting.UserID.Int64,
+	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int32) != userID {
+			logrus.WithFields(logrus.Fields{
+				"userID": userID,
+				"settingUserID": existingSetting.UserID.Int32,
 			"settingID": id,
 		}).Warn("User attempted to delete device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only delete your own device settings")

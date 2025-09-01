@@ -198,7 +198,7 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 
 	// Device settings routes (protected with authentication middleware)
 	deviceSettings := api.Group("/device-settings")
-	deviceSettings.Use(h.authHandlers.AuthMiddleware)
+	deviceSettings.Use(h.authHandlers.AuthMiddleware())
 	deviceSettings.Get("/", h.GetDeviceSettings)
 	deviceSettings.Get("/device-ids", h.GetDeviceIDs)
 	deviceSettings.Post("/", h.CreateDeviceSettings)

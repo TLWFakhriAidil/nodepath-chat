@@ -28,9 +28,13 @@ import (
 )
 
 func main() {
+	logrus.Info("Starting NodePath Chat Server...")
+	
 	// Load environment variables from .env file if it exists
 	if err := godotenv.Load(); err != nil {
 		logrus.Println("No .env file found, using environment variables")
+	} else {
+		logrus.Info(".env file loaded successfully")
 	}
 
 	// Load configuration
@@ -296,6 +300,22 @@ func main() {
 			time.Sleep(5 * time.Second)
 		}
 	}()
+
+	// Start session cleanup service for database-backed sessions
+	if db != nil {
+		go func() {
+			logrus.Info("Starting session cleanup service")
+			for {
+				// Clean up expired sessions every 30 minutes
+				time.Sleep(30 * time.Minute)
+				if _, err := db.Exec(`DELETE FROM user_sessions_nodepath WHERE expires_at < NOW() OR is_active = FALSE`); err != nil {
+					logrus.WithError(err).Error("Failed to cleanup expired sessions")
+				} else {
+					logrus.Info("Successfully cleaned up expired sessions")
+				}
+			}
+		}()
+	}
 
 	// Graceful shutdown
 	c := make(chan os.Signal, 1)

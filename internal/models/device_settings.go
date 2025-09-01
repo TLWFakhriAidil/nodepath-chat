@@ -18,6 +18,7 @@ type DeviceSettings struct {
 	IDDevice     sql.NullString `json:"-" db:"id_device"`
 	IDERP        sql.NullString `json:"-" db:"id_erp"`
 	IDAdmin      sql.NullString `json:"-" db:"id_admin"`
+	UserID       sql.NullInt32  `json:"-" db:"user_id"`
 	Instance     sql.NullString `json:"-" db:"instance"`
 	CreatedAt    time.Time      `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at" db:"updated_at"`
@@ -36,6 +37,7 @@ func (d *DeviceSettings) MarshalJSON() ([]byte, error) {
 		"id_device":      nullStringToString(d.IDDevice),
 		"id_erp":         nullStringToString(d.IDERP),
 		"id_admin":       nullStringToString(d.IDAdmin),
+		"user_id":        nullInt32ToInt(d.UserID),
 		"instance":       nullStringToString(d.Instance),
 		"created_at":     d.CreatedAt,
 		"updated_at":     d.UpdatedAt,
@@ -50,6 +52,15 @@ func nullStringToString(ns sql.NullString) string {
 	return ""
 }
 
+// nullInt32ToInt converts sql.NullInt32 to *int
+func nullInt32ToInt(ni sql.NullInt32) *int {
+	if ni.Valid {
+		val := int(ni.Int32)
+		return &val
+	}
+	return nil
+}
+
 // CreateDeviceSettingsRequest represents the request to create device settings
 type CreateDeviceSettingsRequest struct {
 	DeviceID     string `json:"device_id" validate:"required"`
@@ -61,6 +72,7 @@ type CreateDeviceSettingsRequest struct {
 	IDDevice     string `json:"id_device" validate:"required"`
 	IDERP        string `json:"id_erp" validate:"required"`
 	IDAdmin      string `json:"id_admin" validate:"required"`
+	UserID       *int   `json:"user_id"`
 	Instance     string `json:"instance"`
 }
 
@@ -75,5 +87,6 @@ type UpdateDeviceSettingsRequest struct {
 	IDDevice     string `json:"id_device"`
 	IDERP        string `json:"id_erp"`
 	IDAdmin      string `json:"id_admin"`
+	UserID       *int   `json:"user_id"`
 	Instance     string `json:"instance"`
 }

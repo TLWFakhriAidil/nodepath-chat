@@ -250,8 +250,8 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			}
 			
 			// Convert strings to sql.NullString for nullable fields
-			var deviceID, webhookID, phoneNumber, apiKey, idERP, idAdmin, instance sql.NullString
-			var userID sql.NullInt64
+			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
+			var userID sql.NullInt32
 			
 			if req.DeviceID != "" {
 				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -265,6 +265,9 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.APIKey != "" {
 				apiKey = sql.NullString{String: req.APIKey, Valid: true}
 			}
+			if req.IDDevice != "" {
+				idDevice = sql.NullString{String: req.IDDevice, Valid: true}
+			}
 			if req.IDERP != "" {
 				idERP = sql.NullString{String: req.IDERP, Valid: true}
 			}
@@ -274,20 +277,20 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.Instance != "" {
 				instance = sql.NullString{String: req.Instance, Valid: true}
 			}
-			if req.UserID != 0 {
-				userID = sql.NullInt64{Int64: int64(req.UserID), Valid: true}
+			if req.UserID != nil && *req.UserID != 0 {
+				userID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
 			}
 			
 			updateQuery := `
 				UPDATE device_setting_nodepath 
 				SET device_id = ?, api_key_option = ?, webhook_id = ?, provider = ?, phone_number = ?, api_key = ?, 
-				    id_erp = ?, id_admin = ?, instance = ?, updated_at = ?, user_id = ?
+				    id_device = ?, id_erp = ?, id_admin = ?, instance = ?, updated_at = ?, user_id = ?
 				WHERE id = ?
 			`
 			
 			_, err = tx.Exec(updateQuery,
 				deviceID, apiKeyOption, webhookID, provider, phoneNumber, apiKey,
-				idERP, idAdmin, instance, now, userID, existingID,
+				idDevice, idERP, idAdmin, instance, now, userID, existingID,
 			)
 			
 			if err != nil {
@@ -321,7 +324,7 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			
 			// Convert strings to sql.NullString for nullable fields
 			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
-			var userID sql.NullInt64
+			var userID sql.NullInt32
 			
 			if req.DeviceID != "" {
 				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -347,8 +350,8 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.Instance != "" {
 				instance = sql.NullString{String: req.Instance, Valid: true}
 			}
-			if req.UserID != 0 {
-				userID = sql.NullInt64{Int64: int64(req.UserID), Valid: true}
+			if req.UserID != nil && *req.UserID != 0 {
+				userID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
 			}
 			
 			insertQuery := `
@@ -413,7 +416,7 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 
 	// Convert strings to sql.NullString for nullable fields
 	var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
-	var userID sql.NullInt64
+	var userID sql.NullInt32
 	
 	if req.DeviceID != "" {
 		deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -439,8 +442,8 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 	if req.Instance != "" {
 		instance = sql.NullString{String: req.Instance, Valid: true}
 	}
-	if req.UserID != 0 {
-		userID = sql.NullInt64{Int64: int64(req.UserID), Valid: true}
+	if req.UserID != nil && *req.UserID != 0 {
+		userID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
 	}
 
 	query := `
@@ -520,8 +523,8 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 	if req.Instance != "" {
 		existing.Instance = sql.NullString{String: req.Instance, Valid: true}
 	}
-	if req.UserID != 0 {
-		existing.UserID = sql.NullInt64{Int64: int64(req.UserID), Valid: true}
+	if req.UserID != nil && *req.UserID != 0 {
+		existing.UserID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
 	}
 
 	existing.UpdatedAt = time.Now()
