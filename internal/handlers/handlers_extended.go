@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strconv"
 	"strings"
 
 	"nodepath-chat/internal/models"
@@ -17,7 +18,18 @@ func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
 
 	if flowReference != "" {
 		// Use AI WhatsApp repository to get executions
-		executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference)
+		// Get userID from context
+		userID, ok := c.Locals("user_id").(string)
+		if !ok {
+			return h.errorResponse(c, 401, "Authentication required")
+		}
+		userIDInt := 0
+		if userID != "" {
+			if id, err := strconv.Atoi(userID); err == nil {
+				userIDInt = id
+			}
+		}
+		executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userIDInt)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to get executions by flow")
 			return h.errorResponse(c, 500, "Failed to retrieve executions")
@@ -222,7 +234,18 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	}
 
 	// Get executions for the flow using AI WhatsApp repository
-	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference)
+	// Get userID from context
+	userID, ok := c.Locals("user_id").(string)
+	if !ok {
+		return h.errorResponse(c, 401, "Authentication required")
+	}
+	userIDInt := 0
+	if userID != "" {
+		if id, err := strconv.Atoi(userID); err == nil {
+			userIDInt = id
+		}
+	}
+	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userIDInt)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow executions")
 		return h.errorResponse(c, 500, "Failed to get flow statistics")
