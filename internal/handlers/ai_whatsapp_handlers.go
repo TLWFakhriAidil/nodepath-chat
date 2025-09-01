@@ -39,6 +39,7 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 	api.Post("/webhook/whatsapp/:device_id", h.HandleWhatsappWebhook)
 	api.Post("/webhook/wablas/:device_id", h.HandleWablasWebhook)
 	api.Post("/webhook/whacenter/:device_id", h.HandleWhacenterWebhook)
+	api.Post("/webhook/waha/:device_id", h.HandleWahaWebhook)
 
 	// AI conversation management endpoints
 	api.Post("/ai/conversation/start", h.StartAIConversation)
@@ -88,6 +89,22 @@ type WhacenterWebhookRequest struct {
 	Text    string `json:"text"`
 	Device  string `json:"device"`
 	Date    string `json:"date"`
+}
+
+// WahaWebhookRequest represents incoming WAHA webhook data
+// WAHA uses nested payload structure with _data containing message info
+type WahaWebhookRequest struct {
+	Event   string `json:"event"`
+	Session string `json:"session"`
+	Payload struct {
+		Data struct {
+			From string `json:"from"`
+			Body string `json:"body"`
+			Info struct {
+				IsGroup bool `json:"IsGroup"`
+			} `json:"Info"`
+		} `json:"_data"`
+	} `json:"payload"`
 }
 
 // StartAIConversationRequest represents request to start AI conversation
@@ -208,6 +225,59 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 	go h.processIncomingMessage(req.Number, req.Text, deviceID, "whacenter")
 
 	return h.successResponse(c, map[string]string{"status": "received"})
+}
+
+// HandleWahaWebhook handles incoming WAHA webhook requests
+// WAHA provider uses nested payload structure with specific event types
+func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
+	var req WahaWebhookRequest
+	if err := c.BodyParser(&req); err != nil {
+		logrus.WithError(err).Error("Failed to parse WAHA webhook request")
+		return c.Status(400).JSON(fiber.Map{
+			"success": false,
+			"message": "Invalid request format",
+		})
+	}
+
+	// Only process message events, ignore other events like status updates
+	if req.Event != "message" {
+		logrus.WithFields(logrus.Fields{
+			"event":   req.Event,
+			"session": req.Session,
+		}).Debug("Ignoring non-message WAHA event")
+		return c.JSON(fiber.Map{
+			"success": true,
+			"message": "Event ignored",
+		})
+	}
+
+	// Skip group messages as per business logic
+	if req.Payload.Data.Info.IsGroup {
+		logrus.WithFields(logrus.Fields{
+			"from":    req.Payload.Data.From,
+			"session": req.Session,
+		}).Debug("Ignoring group message from WAHA")
+		return c.JSON(fiber.Map{
+			"success": true,
+			"message": "Group message ignored",
+		})
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"from":    req.Payload.Data.From,
+		"body":    req.Payload.Data.Body,
+		"session": req.Session,
+		"event":   req.Event,
+	}).Info("Received WAHA webhook")
+
+	// Process the incoming message asynchronously
+	// Use session as device identifier for WAHA
+	go h.processIncomingMessage(req.Payload.Data.From, req.Payload.Data.Body, req.Session, "waha")
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": "Webhook received",
+	})
 }
 
 // StartAIConversation starts a new AI conversation
@@ -463,25 +533,10 @@ func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, device
 		return
 	}
 
-	// Save conversation history if we have a response
+	// Send response if we have a response
+	// Note: ProcessAIConversation already handles conversation logging internally via LogConversation
+	// Removed duplicate SaveConversationHistory call to prevent duplicate saves
 	if response != nil {
-		// Extract bot response text from response array
-		var botResponseText string
-		for _, item := range response.Response {
-			if item.Type == "text" {
-				if botResponseText != "" {
-					botResponseText += " "
-				}
-				botResponseText += item.Content
-			}
-		}
-
-		// Save conversation history to conv_last field
-		err = h.AIWhatsappService.SaveConversationHistory(prospectNum, deviceID, message, botResponseText, response.Stage)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to save conversation history")
-		}
-
 		// Send response back to WhatsApp
 		h.sendWhatsappResponse(prospectNum, deviceID, provider, response)
 	}

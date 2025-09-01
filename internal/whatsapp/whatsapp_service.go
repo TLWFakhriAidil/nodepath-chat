@@ -298,22 +298,18 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			return s.handleUserReplyResume(aiExecution, content)
 		} else {
 			// Execution exists but not waiting for reply - this means the flow is already completed or in progress
-			// We should not restart the flow, instead save the user message and potentially trigger AI conversation
-			logrus.WithFields(logrus.Fields{
-				"execution_id":     aiExecution.ExecutionID.String,
-				"current_node_id": aiExecution.CurrentNodeID.String,
-				"waiting_for_reply": aiExecution.WaitingForReply.Int32,
-				"user_input":      content,
-			}).Info("ℹ️ FLOW: Existing execution not waiting for reply, falling back to AI conversation")
-			
-			// Save user message to conversation history
-			err := s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "")
-			if err != nil {
-				logrus.WithError(err).Error("❌ FLOW: Failed to save user message to conversation")
-			}
-			
-			// Fall back to AI conversation instead of restarting flow
-			return s.processAIConversation(phoneNumber, content, deviceID)
+		// We should not restart the flow, instead fall back to AI conversation
+		// Note: AI conversation will handle its own conversation saving to prevent duplicates
+		logrus.WithFields(logrus.Fields{
+			"execution_id":     aiExecution.ExecutionID.String,
+			"current_node_id": aiExecution.CurrentNodeID.String,
+			"waiting_for_reply": aiExecution.WaitingForReply.Int32,
+			"user_input":      content,
+		}).Info("ℹ️ FLOW: Existing execution not waiting for reply, falling back to AI conversation")
+		
+		// Fall back to AI conversation instead of restarting flow
+		// AI conversation will handle conversation saving internally
+		return s.processAIConversation(phoneNumber, content, deviceID)
 		}
 	}
 
@@ -322,6 +318,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 
 // processNewFlowExecution handles flow processing for new executions only
 // This function contains the logic that was previously running for both new and existing executions
+// Fixed: Consolidated conversation saving to prevent duplicate entries
 func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, content, phoneNumber, deviceID string) error {
 	// Note: Human mode checking would be implemented through a separate table or field
 	// For now, we'll process all messages through the flow
@@ -350,7 +347,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 		"device_id":  flow.IdDevice,
 	}).Info("✅ FLOW: Successfully retrieved flow data from chatbot_flows_nodepath")
 
-	// Add user message to ai_whatsapp_nodepath conversation
+	// Save user message to conversation history (single save point for user input)
 	logrus.WithFields(logrus.Fields{
 			"execution_id": aiExecution.IDProspect,
 			"message_type": "USER",
@@ -448,7 +445,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 			}
 		}
 
-		// Only log and save conversation if response is not empty
+		// Save bot response to conversation history (single save point for bot response)
 		if response != "" {
 			logrus.WithFields(logrus.Fields{
 				"phone_number": phoneNumber,
@@ -475,6 +472,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 		logrus.WithField("execution_id", aiExecution.IDProspect).Info("ℹ️ FLOW: No response generated from flow processing (Advanced AI nodes handle their own message sending)")
 		
 		// Create AI WhatsApp record as fallback when no flow response is generated
+		// Note: Conversation history was already saved above for user input
 		logrus.WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
@@ -486,6 +484,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 			logrus.WithError(err).Error("❌ FLOW: Failed to check existing AI WhatsApp record")
 		} else if existingRecord == nil {
 			// Create new AI WhatsApp record for prospect tracking
+			// Note: User message was already saved above, no need to save again
 			err = s.aiWhatsappService.CreateAIWhatsappRecord(phoneNumber, deviceID, content, flow.Niche)
 			if err != nil {
 				logrus.WithError(err).Error("❌ FLOW: Failed to create AI WhatsApp record")
@@ -497,13 +496,13 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 				}).Info("✅ FLOW: AI WhatsApp record created successfully")
 			}
 		} else {
-			// Update existing record with new conversation data
-			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", existingRecord.Stage)
-			if err != nil {
-				logrus.WithError(err).Error("❌ FLOW: Failed to update conversation history")
-			} else {
-				logrus.WithField("phone_number", phoneNumber).Info("✅ FLOW: Conversation history updated successfully")
-			}
+			// Existing record found - conversation history was already saved above
+			// No need to save again to prevent duplicates
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id":    deviceID,
+				"stage":        existingRecord.Stage,
+			}).Info("✅ FLOW: Using existing AI WhatsApp record, conversation already saved")
 		}
 	}
 

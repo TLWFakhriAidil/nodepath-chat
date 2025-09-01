@@ -1783,32 +1783,10 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider strin
 			return
 		}
 
-		// Save conversation history and send response if we have a response
+		// Send response if we have a response
+		// Note: ProcessAIConversation already handles conversation logging internally via LogConversation
+		// Removed duplicate SaveConversationHistory call to prevent 4x duplicate saves
 		if response != nil {
-			// Extract bot response text from response array
-			var botResponseText string
-			for _, item := range response.Response {
-				if item.Type == "text" {
-					if botResponseText != "" {
-						botResponseText += " "
-					}
-					botResponseText += item.Content
-				}
-			}
-
-			// Save conversation history to conv_last field
-			historySaveStart := time.Now()
-			err = h.aiWhatsappHandlers.AIWhatsappService.SaveConversationHistory(from, idDevice, message, botResponseText, response.Stage)
-			historySaveDuration := time.Since(historySaveStart)
-			
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"id_device": idDevice,
-					"from": from,
-					"history_save_duration": historySaveDuration,
-					"error": err.Error(),
-				}).Error("❌ WEBHOOK: Failed to save conversation history")
-			}
 
 			// Send response through the appropriate provider
 			responseSendStart := time.Now()
@@ -1823,7 +1801,6 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider strin
 				"to": from,
 				"provider": provider,
 				"ai_call_duration": aiCallDuration,
-				"history_save_duration": historySaveDuration,
 				"response_send_duration": responseSendDuration,
 				"total_ai_processing_time": totalProcessingTime,
 				"total_request_time": totalRequestTime,
