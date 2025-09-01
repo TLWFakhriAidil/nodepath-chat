@@ -1,18 +1,44 @@
 import { useState, useEffect } from 'react'
 import { Lead, LeadStats, LeadFilters, LeadSummary } from '@/types/leads'
 import { toast } from 'sonner'
+import { useDevice } from '@/contexts/DeviceContext'
 
+/**
+ * Custom hook for managing leads with device-based filtering
+ * Automatically filters leads by user's configured devices
+ */
 export const useLeads = () => {
+  const { has_devices, device_ids } = useDevice()
   const [leads, setLeads] = useState<Lead[]>([])
   const [stats, setStats] = useState<LeadStats[]>([])
   const [summary, setSummary] = useState<LeadSummary | null>(null)
   const [loading, setLoading] = useState(false)
+  const [deviceRequiredError, setDeviceRequiredError] = useState(false)
 
+  /**
+   * Fetch leads filtered by user's device IDs
+   * Automatically includes device context in the request
+   */
   const fetchLeads = async (filters?: Partial<LeadFilters>) => {
+    // Check if user has devices before fetching
+    if (!has_devices) {
+      setDeviceRequiredError(true)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
+    setDeviceRequiredError(false)
     try {
-      // Direct MySQL API call would go here
+      // Prepare filters with device IDs from context
+      const deviceFilters = {
+        ...filters,
+        device_ids: device_ids // Include user's device IDs in filters
+      }
+      
+      // Direct MySQL API call would go here with device filtering
       // For now, return empty array since MySQL connection is needed
+      // TODO: Implement actual API call with device filtering
       setLeads([])
     } catch (error) {
       console.error('Error fetching leads:', error)
@@ -22,9 +48,27 @@ export const useLeads = () => {
     }
   }
 
+  /**
+   * Fetch lead statistics filtered by user's device IDs
+   * Automatically includes device context in the request
+   */
   const fetchStats = async (filters?: Partial<LeadFilters>) => {
+    // Check if user has devices before fetching
+    if (!has_devices) {
+      setDeviceRequiredError(true)
+      return
+    }
+
+    setDeviceRequiredError(false)
     try {
-      // Direct MySQL stats call would go here
+      // Prepare filters with device IDs from context
+      const deviceFilters = {
+        ...filters,
+        device_ids: device_ids // Include user's device IDs in filters
+      }
+      
+      // Direct MySQL stats call would go here with device filtering
+      // TODO: Implement actual API call with device filtering
       setStats([])
     } catch (error) {
       console.error('Error fetching lead stats:', error)
@@ -129,6 +173,7 @@ export const useLeads = () => {
     stats,
     summary,
     loading,
+    deviceRequiredError,
     fetchLeads,
     fetchStats,
     generateSummary,

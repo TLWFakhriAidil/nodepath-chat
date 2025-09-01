@@ -11,19 +11,28 @@ import { useLeads } from '@/hooks/useLeads'
 import { LeadFilters } from '@/types/leads'
 import { LeadChart } from '@/components/LeadChart'
 import { LeadTable } from '@/components/LeadTable'
+import { useDevice } from '@/contexts/DeviceContext'
+import DeviceRequiredPopup from '@/components/DeviceRequiredPopup'
 import { addDays } from 'date-fns'
 
+/**
+ * Lead Dashboard component with device-based filtering
+ * Automatically filters leads by user's configured devices
+ */
 export const LeadDashboard = () => {
+  const { has_devices } = useDevice()
   const { 
     leads, 
     stats, 
     summary, 
     loading, 
+    deviceRequiredError,
     fetchLeads, 
     fetchStats, 
     generateSummary, 
     exportToCSV 
   } = useLeads()
+  const [showDeviceRequiredPopup, setShowDeviceRequiredPopup] = useState(false)
 
   const [filters, setFilters] = useState<Partial<LeadFilters>>({
     startDate: addDays(new Date(), -30),
@@ -38,6 +47,13 @@ export const LeadDashboard = () => {
   useEffect(() => {
     generateSummary(leads)
   }, [leads])
+
+  // Show device required popup when deviceRequiredError is true
+  useEffect(() => {
+    if (deviceRequiredError) {
+      setShowDeviceRequiredPopup(true)
+    }
+  }, [deviceRequiredError])
 
   const handleFilterChange = (key: keyof LeadFilters, value: any) => {
     const newFilters = { ...filters, [key]: value }
@@ -215,6 +231,12 @@ export const LeadDashboard = () => {
           <LeadTable data={leads} loading={loading} onRefresh={() => fetchLeads(filters)} />
         </TabsContent>
       </Tabs>
+      
+      {/* Device Required Popup */}
+      <DeviceRequiredPopup 
+        isOpen={showDeviceRequiredPopup} 
+        onClose={() => setShowDeviceRequiredPopup(false)} 
+      />
     </div>
   )
 }

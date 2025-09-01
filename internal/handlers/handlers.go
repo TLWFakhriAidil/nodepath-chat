@@ -147,8 +147,10 @@ func NewHandlers(
 
 // SetupRoutes sets up all API routes
 func (h *Handlers) SetupRoutes(api fiber.Router) {
-	// Flow routes
+	// Flow routes - protected with device requirement
 	flows := api.Group("/flows")
+	flows.Use(h.authHandlers.AuthMiddleware())
+	flows.Use(h.authHandlers.DeviceRequiredMiddleware())
 	flows.Get("/", h.GetFlows)
 	flows.Post("/", h.CreateFlow)
 	flows.Get("/:id", h.GetFlow)
@@ -157,8 +159,10 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 
 	// Test chat routes removed
 
-	// Execution routes
+	// Execution routes - protected with device requirement
 	executions := api.Group("/executions")
+	executions.Use(h.authHandlers.AuthMiddleware())
+	executions.Use(h.authHandlers.DeviceRequiredMiddleware())
 	executions.Get("/", h.GetExecutions)
 	executions.Get("/:id", h.GetExecution)
 	executions.Put("/:id/complete", h.CompleteExecution)
@@ -168,8 +172,10 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	whatsapp := api.Group("/whatsapp")
 	whatsapp.Post("/send", h.SendWhatsAppMessage)
 
-	// Queue management routes
+	// Queue management routes - protected with device requirement
 	queue := api.Group("/queue")
+	queue.Use(h.authHandlers.AuthMiddleware())
+	queue.Use(h.authHandlers.DeviceRequiredMiddleware())
 	queue.Get("/stats", h.GetQueueStats)
 	queue.Delete("/failed", h.ClearFailedQueue)
 
@@ -178,8 +184,10 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	ai.Post("/validate-key", h.ValidateAPIKey)
 	ai.Get("/models", h.GetSupportedModels)
 
-	// Analytics routes
+	// Analytics routes - protected with device requirement
 	analytics := api.Group("/analytics")
+	analytics.Use(h.authHandlers.AuthMiddleware())
+	analytics.Use(h.authHandlers.DeviceRequiredMiddleware())
 	analytics.Get("/overview", h.GetAnalyticsOverview)
 	analytics.Get("/flows/:id/stats", h.GetFlowStats)
 

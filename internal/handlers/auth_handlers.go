@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
+	"hash/fnv"
 	"time"
 
 	"nodepath-chat/internal/models"
@@ -266,6 +268,21 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 
 	logrus.WithField("user_id", user.ID).Info("User logged in successfully")
 
+	// Check if user has devices for redirect logic
+	userIDInt := convertUUIDToInt(user.ID)
+	deviceCount, deviceIDs, err := ah.CheckUserDevices(userIDInt)
+	if err != nil {
+		logrus.WithError(err).WithField("user_id", user.ID).Error("Failed to check user devices after login")
+		// Don't fail login, just log the error
+		deviceCount = 0
+	}
+
+	// Determine redirect URL based on device ownership
+	redirectURL := "/device-settings" // Default to device settings if no devices
+	if deviceCount > 0 {
+		redirectURL = "/dashboard" // Redirect to dashboard if user has devices
+	}
+
 	return c.JSON(fiber.Map{
 		"success": true,
 		"message": "Login successful",
@@ -273,6 +290,10 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 			User:  user,
 			Token: token,
 		},
+		"redirect_url": redirectURL,
+		"has_devices":  deviceCount > 0,
+		"device_count": deviceCount,
+		"device_ids":   deviceIDs,
 	})
 }
 
@@ -397,6 +418,13 @@ func (ah *AuthHandlers) cleanupExpiredSessions() error {
 	return err
 }
 
+// convertUUIDToInt converts a UUID string to a consistent integer using hash function
+func convertUUIDToInt(uuid string) int {
+	h := fnv.New32a()
+	h.Write([]byte(uuid))
+	return int(h.Sum32())
+}
+
 // AuthMiddleware validates session tokens and sets user context
 func (ah *AuthHandlers) AuthMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -418,10 +446,115 @@ func (ah *AuthHandlers) AuthMiddleware() fiber.Handler {
 			})
 		}
 
-		// Set user ID in context
-		c.Locals("user_id", userID)
+		// Convert UUID string to integer for device handlers compatibility
+		// This creates a consistent integer mapping from the UUID
+		userIDInt := convertUUIDToInt(userID)
+
+		// Set user ID in context with the key expected by device handlers
+		c.Locals("userID", userIDInt)
+		c.Locals("user_id", userID) // Keep the string version for backward compatibility
 		return c.Next()
 	}
+}
+
+// DeviceRequiredMiddleware checks if user has at least one device_setting_nodepath record
+func (ah *AuthHandlers) DeviceRequiredMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Get user ID from context (should be set by AuthMiddleware)
+		userID, ok := c.Locals("userID").(int)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error":   "Authentication required",
+			})
+		}
+
+		// Check if user has any device settings
+		var count int
+		err := ah.db.QueryRow(`
+			SELECT COUNT(*) FROM device_setting_nodepath 
+			WHERE user_id = ?
+		`, userID).Scan(&count)
+		if err != nil {
+			logrus.WithError(err).WithField("userID", userID).Error("Failed to check user device count")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "Internal server error",
+			})
+		}
+
+		// If user has no devices, return device required error
+		if count == 0 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"success": false,
+				"error":   "device_required",
+				"message": "Please add a device first to access this feature",
+			})
+		}
+
+		// User has devices, continue to next handler
+		return c.Next()
+	}
+}
+
+// CheckUserDevices returns device count and device IDs for a user
+func (ah *AuthHandlers) CheckUserDevices(userID int) (int, []string, error) {
+	var deviceIDs []string
+	var count int
+
+	// Get device count and IDs
+	rows, err := ah.db.Query(`
+		SELECT id_device FROM device_setting_nodepath 
+		WHERE user_id = ? AND id_device IS NOT NULL AND id_device != ''
+	`, userID)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to query user devices: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var deviceID string
+		if err := rows.Scan(&deviceID); err != nil {
+			return 0, nil, fmt.Errorf("failed to scan device ID: %w", err)
+		}
+		deviceIDs = append(deviceIDs, deviceID)
+		count++
+	}
+
+	if err = rows.Err(); err != nil {
+		return 0, nil, fmt.Errorf("error iterating device rows: %w", err)
+	}
+
+	return count, deviceIDs, nil
+}
+
+// GetDeviceStatus returns the device status for the authenticated user
+func (ah *AuthHandlers) GetDeviceStatus(c *fiber.Ctx) error {
+	// Get user ID from context
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Authentication required",
+		})
+	}
+
+	// Check user devices
+	count, deviceIDs, err := ah.CheckUserDevices(userID)
+	if err != nil {
+		logrus.WithError(err).WithField("userID", userID).Error("Failed to check user devices")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Internal server error",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success":     true,
+		"has_devices": count > 0,
+		"device_count": count,
+		"device_ids":   deviceIDs,
+	})
 }
 
 // SetupAuthRoutes configures authentication routes
@@ -431,6 +564,9 @@ func (ah *AuthHandlers) SetupAuthRoutes(api fiber.Router) {
 	auth.Post("/login", ah.Login)
 	auth.Post("/logout", ah.Logout)
 	auth.Get("/me", ah.AuthMiddleware(), ah.GetCurrentUser)
+	
+	// Device check endpoint
+	auth.Get("/device-status", ah.AuthMiddleware(), ah.GetDeviceStatus)
 }
 
 // SetupTemplateRoutes configures template serving routes

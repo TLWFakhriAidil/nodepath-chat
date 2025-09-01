@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { useDevice } from '@/contexts/DeviceContext';
+import DeviceRequiredPopup from '@/components/DeviceRequiredPopup';
 import {
   Table,
   TableBody,
@@ -68,10 +70,16 @@ interface AIWhatsappDataResponse {
   };
 }
 
+/**
+ * AI WhatsApp Data Table component with device-based filtering
+ * Automatically filters conversations by user's configured devices
+ */
 const AIWhatsappDataTable = () => {
+  const { has_devices, device_ids } = useDevice();
   const [conversations, setConversations] = useState<AIWhatsappConversation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeviceRequiredPopup, setShowDeviceRequiredPopup] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -84,12 +92,22 @@ const AIWhatsappDataTable = () => {
   const [stageFilter, setStageFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Available devices and stages for filters
+  // Available devices and stages for filters (filtered by user's devices)
   const [availableDevices, setAvailableDevices] = useState<string[]>([]);
   const [availableStages, setAvailableStages] = useState<string[]>([]);
 
-  // Fetch AI WhatsApp data from the backend
+  /**
+   * Fetch AI WhatsApp data from the backend
+   * Automatically filters by user's device IDs from device context
+   */
   const fetchAIWhatsappData = async () => {
+    // Check if user has devices before fetching
+    if (!has_devices) {
+      setShowDeviceRequiredPopup(true);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     
@@ -101,6 +119,11 @@ const AIWhatsappDataTable = () => {
         ...(stageFilter && stageFilter !== 'all' && { stage: stageFilter }),
         ...(searchTerm && { search: searchTerm })
       });
+      
+      // Add user's device IDs to filter the data
+      if (device_ids && device_ids.length > 0) {
+        params.append('user_device_ids', device_ids.join(','));
+      }
       
       const response = await fetch(`/api/ai/whatsapp/data?${params}`);
       
@@ -115,11 +138,13 @@ const AIWhatsappDataTable = () => {
       setTotalPages(data.pagination.total_pages);
       setTotalRecords(data.pagination.total_records);
       
-      // Extract unique devices and stages for filters
+      // Extract unique devices and stages for filters (only from user's devices)
       const devices = [...new Set(data.data.map(conv => conv.id_device).filter(Boolean))];
       const stages = [...new Set(data.data.map(conv => conv.stage).filter(Boolean))];
       
-      setAvailableDevices(devices);
+      // Filter devices to only show user's devices
+      const userDevices = devices.filter(device => device_ids?.includes(device));
+      setAvailableDevices(userDevices);
       setAvailableStages(stages);
       
     } catch (err) {
@@ -436,6 +461,12 @@ const AIWhatsappDataTable = () => {
           </>
         )}
       </CardContent>
+      
+      {/* Device Required Popup */}
+      <DeviceRequiredPopup 
+        isOpen={showDeviceRequiredPopup} 
+        onClose={() => setShowDeviceRequiredPopup(false)} 
+      />
     </Card>
   );
 };

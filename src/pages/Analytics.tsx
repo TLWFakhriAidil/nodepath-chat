@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DatePickerWithRange } from '@/components/ui/date-picker';
 import AIWhatsappDataTable from '@/components/AIWhatsappDataTable';
+import { useDevice } from '@/contexts/DeviceContext';
+import DeviceRequiredPopup from '@/components/DeviceRequiredPopup';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -45,7 +47,12 @@ interface AnalyticsData {
   stageDistribution: Record<string, number>;
 }
 
+/**
+ * Analytics component with device-based data filtering
+ * Automatically filters analytics data by user's configured devices
+ */
 const Analytics = () => {
+  const { has_devices, device_ids } = useDevice();
   const [timeRange, setTimeRange] = useState('current_month');
   const [refreshing, setRefreshing] = useState(false);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
@@ -56,9 +63,20 @@ const Analytics = () => {
     to: new Date() // Today
   });
   const [selectedDevice, setSelectedDevice] = useState<string>(''); // Empty string means all devices
+  const [showDeviceRequiredPopup, setShowDeviceRequiredPopup] = useState(false);
 
-  // Fetch analytics data from backend API
+  /**
+   * Fetch analytics data from backend API
+   * Automatically filters by user's device IDs from device context
+   */
   const fetchAnalyticsData = async () => {
+    // Check if user has devices before fetching
+    if (!has_devices) {
+      setShowDeviceRequiredPopup(true);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -71,8 +89,13 @@ const Analytics = () => {
       if (dateRange?.to) {
         params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
       }
+      
+      // Use specific device if selected, otherwise use all user's devices
       if (selectedDevice) {
         params.append('idDevice', selectedDevice);
+      } else if (device_ids && device_ids.length > 0) {
+        // Send all device IDs as comma-separated string
+        params.append('deviceIds', device_ids.join(','));
       }
       
       const response = await fetch(`/api/ai/analytics?${params.toString()}`, {
@@ -229,7 +252,7 @@ const Analytics = () => {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" disabled={!has_devices}>
                 <Filter className="w-4 h-4 mr-2" />
                 {selectedDevice ? `Device: ${selectedDevice}` : 'All Devices'}
               </Button>
@@ -238,12 +261,15 @@ const Analytics = () => {
               <DropdownMenuItem onClick={() => setSelectedDevice('')}>
                 All Devices
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSelectedDevice('SCHQ-S94')}>
-                SCHQ-S94
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSelectedDevice('SCHQ-S12')}>
-                SCHQ-S12
-              </DropdownMenuItem>
+              {/* Dynamically render user's devices */}
+              {device_ids && device_ids.map((deviceId) => (
+                <DropdownMenuItem 
+                  key={deviceId} 
+                  onClick={() => setSelectedDevice(deviceId)}
+                >
+                  {deviceId}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
           
@@ -572,6 +598,12 @@ const Analytics = () => {
       <div className="mt-8">
         <AIWhatsappDataTable />
       </div>
+      
+      {/* Device Required Popup */}
+      <DeviceRequiredPopup 
+        isOpen={showDeviceRequiredPopup} 
+        onClose={() => setShowDeviceRequiredPopup(false)} 
+      />
     </div>
   );
 };

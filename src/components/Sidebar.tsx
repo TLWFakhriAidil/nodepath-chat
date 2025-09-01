@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { useDevice } from '@/contexts/DeviceContext';
 import {
   LayoutDashboard,
   Workflow,
@@ -32,46 +33,62 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
+/**
+ * Sidebar component with device-based navigation restrictions
+ * Only shows navigation items that the user has access to based on device ownership
+ */
 const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
   const location = useLocation();
+  const { has_devices } = useDevice();
   const [notifications] = useState({
     flows: 2,
     messages: 5
   });
 
+  // Navigation items with device access requirements
   const navigation = [
     {
       name: 'Dashboard',
       href: '/',
       icon: LayoutDashboard,
-      current: location.pathname === '/'
+      current: location.pathname === '/',
+      requiresDevice: false // Dashboard is always accessible
     },
     {
       name: 'Flow Builder',
       href: '/flow-builder',
       icon: Workflow,
       current: location.pathname === '/flow-builder',
-      badge: notifications.flows
+      badge: notifications.flows,
+      requiresDevice: true // Requires device ownership
     },
     {
       name: 'Flow Manager',
       href: '/flow-manager',
       icon: List,
-      current: location.pathname === '/flow-manager'
+      current: location.pathname === '/flow-manager',
+      requiresDevice: true // Requires device ownership
     },
     {
       name: 'Analytics',
       href: '/analytics',
       icon: BarChart3,
-      current: location.pathname === '/analytics'
+      current: location.pathname === '/analytics',
+      requiresDevice: true // Requires device ownership
     },
     {
       name: 'Device Settings',
       href: '/device-settings',
       icon: Smartphone,
-      current: location.pathname === '/device-settings'
+      current: location.pathname === '/device-settings',
+      requiresDevice: false // Device settings is always accessible
     }
   ];
+
+  // Filter navigation based on device ownership
+  const filteredNavigation = navigation.filter(item => 
+    !item.requiresDevice || has_devices
+  );
 
   const quickActions = [
     {
@@ -125,7 +142,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-4">
         <nav className="space-y-1 px-3">
-          {navigation.map((item) => {
+          {filteredNavigation.map((item) => {
             const Icon = item.icon;
             return (
               <Link

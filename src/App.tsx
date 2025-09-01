@@ -27,36 +27,36 @@ import DeviceSettings from './pages/DeviceSettings';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider } from './contexts/AuthContext';
+import { DeviceProvider, useDevice } from './contexts/DeviceContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import TopBar from './components/TopBar';
 
 const queryClient = new QueryClient();
 
-const App = () => {
+/**
+ * Main application content component that uses device context
+ * Handles navigation restrictions based on device ownership
+ */
+function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { has_devices } = useDevice();
 
+  // Navigation items with device restrictions
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home, current: true },
-    { name: 'Flow Builder', href: '/flow-builder', icon: Workflow, current: false },
-    { name: 'Flow Manager', href: '/flow-manager', icon: Workflow, current: false },
-    { name: 'Analytics', href: '/analytics', icon: BarChart3, current: false },
-    { name: 'Device Settings', href: '/device-settings', icon: Smartphone, current: false },
+    { name: 'Dashboard', href: '/', icon: Home, current: true, requiresDevice: false },
+    { name: 'Flow Builder', href: '/flow-builder', icon: Workflow, current: false, requiresDevice: true },
+    { name: 'Flow Manager', href: '/flow-manager', icon: Workflow, current: false, requiresDevice: true },
+    { name: 'Analytics', href: '/analytics', icon: BarChart3, current: false, requiresDevice: true },
+    { name: 'Device Settings', href: '/device-settings', icon: Smartphone, current: false, requiresDevice: false },
   ];
 
+  // Filter navigation based on device ownership
+  const filteredNavigation = navigation.filter(item => 
+    !item.requiresDevice || has_devices
+  );
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <Router>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              
-              {/* Protected routes */}
-              <Route path="/*" element={
-                <ProtectedRoute>
-                  <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
                     {/* Sidebar */}
                     <div className={cn(
                       "fixed inset-y-0 left-0 z-50 w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-700/50 transition-transform duration-300 ease-in-out",
@@ -82,7 +82,7 @@ const App = () => {
                       </div>
                       
                       <nav className="mt-8 px-4 space-y-2">
-                        {navigation.map((item) => {
+                        {filteredNavigation.map((item) => {
                           const Icon = item.icon;
                           return (
                             <a
@@ -142,13 +142,33 @@ const App = () => {
                       </main>
                     </div>
                   </div>
-                </ProtectedRoute>
-              } />
-            </Routes>
-            
-            <Toaster />
-            <Sonner />
-          </Router>
+  );
+}
+
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <DeviceProvider>
+            <Router>
+              <Routes>
+                {/* Public routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                
+                {/* Protected routes */}
+                <Route path="/*" element={
+                  <ProtectedRoute>
+                    <AppContent />
+                  </ProtectedRoute>
+                } />
+              </Routes>
+              
+              <Toaster />
+              <Sonner />
+            </Router>
+          </DeviceProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
