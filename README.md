@@ -2460,6 +2460,9 @@ go run cmd/server/main.go
   - **Database Optimization**: Efficient queries using device ID filtering with IN clauses
   - **User Experience**: Shows popup requiring device addition if no devices exist
   - **Implementation**: `GetFlowsByUserDevices` method added to FlowService for proper filtering
+  - **Authentication Context Fix**: Resolved "Invalid user ID" error by using integer `userID` from context
+  - **UUID Conversion**: Handlers now use `convertUUIDToInt()` result instead of string conversion
+  - **Context Variables**: AuthMiddleware sets both `userID` (int) and `user_id` (string) in Fiber context
   - **High Availability**: Production WAHA instance provides better reliability
   - **Scalability**: Supports multiple device instances through single WAHA endpoint
 

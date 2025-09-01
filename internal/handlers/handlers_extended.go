@@ -208,20 +208,10 @@ func (h *Handlers) GetSupportedModels(c *fiber.Ctx) error {
 
 // GetAnalyticsOverview returns analytics overview
 func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
-	// Get user ID from authentication context
-	userID, ok := c.Locals("user_id").(string)
+	// Get user ID from authentication context (integer version set by AuthMiddleware)
+	userID, ok := c.Locals("userID").(int)
 	if !ok {
 		return h.errorResponse(c, 401, "Authentication required")
-	}
-	
-	// Convert userID string to int
-	userIDInt := 0
-	if userID != "" {
-		if id, err := strconv.Atoi(userID); err == nil {
-			userIDInt = id
-		} else {
-			return h.errorResponse(c, 400, "Invalid user ID")
-		}
 	}
 	
 	// Analytics data filtered by user's devices
@@ -234,7 +224,7 @@ func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
 	}
 
 	// Get actual flow count filtered by user's devices
-	flows, err := h.flowService.GetFlowsByUserDevices(userIDInt)
+	flows, err := h.flowService.GetFlowsByUserDevices(userID)
 	if err == nil {
 		overview["total_flows"] = len(flows)
 	}
@@ -249,20 +239,14 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Flow reference is required")
 	}
 
-	// Get userID from context
-	userID, ok := c.Locals("user_id").(string)
+	// Get userID from context (integer version set by AuthMiddleware)
+	userID, ok := c.Locals("userID").(int)
 	if !ok {
 		return h.errorResponse(c, 401, "Authentication required")
 	}
-	userIDInt := 0
-	if userID != "" {
-		if id, err := strconv.Atoi(userID); err == nil {
-			userIDInt = id
-		}
-	}
 	
 	// Verify that the flow belongs to user's devices
-	userFlows, err := h.flowService.GetFlowsByUserDevices(userIDInt)
+	userFlows, err := h.flowService.GetFlowsByUserDevices(userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get user flows")
 		return h.errorResponse(c, 500, "Failed to verify flow ownership")
@@ -282,7 +266,7 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	}
 	
 	// Get executions for the flow using AI WhatsApp repository
-	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userIDInt)
+	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow executions")
 		return h.errorResponse(c, 500, "Failed to get flow statistics")
