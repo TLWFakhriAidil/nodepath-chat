@@ -26,22 +26,37 @@ func min(a, b int) int {
 	return b
 }
 
-// GetDeviceSettings retrieves all device settings
+// GetDeviceSettings retrieves device settings for the authenticated user
 func (h *Handlers) GetDeviceSettings(c *fiber.Ctx) error {
-	settings, err := h.deviceSettingsService.GetAll()
+	// Get user ID from context (set by AuthMiddleware)
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return h.errorResponse(c, 401, "Authentication required")
+	}
+
+	// Get device settings filtered by user ID
+	settings, err := h.deviceSettingsService.GetByUserID(userID)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get device settings")
+		logrus.WithError(err).WithField("userID", userID).Error("Failed to get device settings")
 		return h.errorResponse(c, 500, "Failed to retrieve device settings")
 	}
 
 	return h.successResponse(c, settings)
 }
 
-// GetDeviceSettingsById retrieves a device setting by ID
+// GetDeviceSettingsById retrieves a device setting by ID for the authenticated user
 func (h *Handlers) GetDeviceSettingsById(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return h.errorResponse(c, 400, "Device setting ID is required")
+	}
+
+	// Get user ID from context (set by AuthMiddleware)
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return h.errorResponse(c, 401, "Authentication required")
 	}
 
 	setting, err := h.deviceSettingsService.GetByID(id)
@@ -51,6 +66,16 @@ func (h *Handlers) GetDeviceSettingsById(c *fiber.Ctx) error {
 			return h.errorResponse(c, 404, "Device setting not found")
 		}
 		return h.errorResponse(c, 500, "Failed to retrieve device setting")
+	}
+
+	// Check if the device setting belongs to the authenticated user
+	if setting.UserID.Valid && int(setting.UserID.Int64) != userID {
+		logrus.WithFields(logrus.Fields{
+			"userID": userID,
+			"settingUserID": setting.UserID.Int64,
+			"settingID": id,
+		}).Warn("User attempted to access device setting they don't own")
+		return h.errorResponse(c, 403, "Access denied: You can only access your own device settings")
 	}
 
 	return h.successResponse(c, setting)
@@ -74,11 +99,18 @@ func (h *Handlers) validateProvider(provider string) error {
 	return fmt.Errorf("invalid provider '%s'. Supported providers: %s", provider, strings.Join(validProviders, ", "))
 }
 
-// CreateDeviceSettings creates a new device setting
+// CreateDeviceSettings creates a new device setting for the authenticated user
 func (h *Handlers) CreateDeviceSettings(c *fiber.Ctx) error {
 	var req models.CreateDeviceSettingsRequest
 	if err := c.BodyParser(&req); err != nil {
 		return h.errorResponse(c, 400, "Invalid request body")
+	}
+
+	// Get user ID from context (set by AuthMiddleware)
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return h.errorResponse(c, 401, "Authentication required")
 	}
 
 	// Validate required fields
@@ -98,21 +130,50 @@ func (h *Handlers) CreateDeviceSettings(c *fiber.Ctx) error {
 	}
 	
 	// DeviceID is optional - it will be generated later if not provided
+	// Automatically set the user ID from the authenticated user
+	req.UserID = userID
 
 	setting, err := h.deviceSettingsService.Create(&req)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create device setting")
+		logrus.WithError(err).WithField("userID", userID).Error("Failed to create device setting")
 		return h.errorResponse(c, 500, "Failed to create device setting")
 	}
 
 	return h.successMessageResponse(c, "Device setting created successfully", setting)
 }
 
-// UpdateDeviceSettings updates an existing device setting
+// UpdateDeviceSettings updates an existing device setting for the authenticated user
 func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return h.errorResponse(c, 400, "Device setting ID is required")
+	}
+
+	// Get user ID from context (set by AuthMiddleware)
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return h.errorResponse(c, 401, "Authentication required")
+	}
+
+	// Check if the device setting exists and belongs to the user
+	existingSetting, err := h.deviceSettingsService.GetByID(id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get device setting for update")
+		if err.Error() == "device setting not found" {
+			return h.errorResponse(c, 404, "Device setting not found")
+		}
+		return h.errorResponse(c, 500, "Failed to retrieve device setting")
+	}
+
+	// Check ownership
+	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int64) != userID {
+		logrus.WithFields(logrus.Fields{
+			"userID": userID,
+			"settingUserID": existingSetting.UserID.Int64,
+			"settingID": id,
+		}).Warn("User attempted to update device setting they don't own")
+		return h.errorResponse(c, 403, "Access denied: You can only update your own device settings")
 	}
 
 	var req models.UpdateDeviceSettingsRequest
@@ -127,7 +188,7 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 
 	setting, err := h.deviceSettingsService.Update(id, &req)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to update device setting")
+		logrus.WithError(err).WithField("userID", userID).Error("Failed to update device setting")
 		if err.Error() == "device setting not found" {
 			return h.errorResponse(c, 404, "Device setting not found")
 		}
@@ -137,16 +198,43 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 	return h.successMessageResponse(c, "Device setting updated successfully", setting)
 }
 
-// DeleteDeviceSettings deletes a device setting
+// DeleteDeviceSettings deletes a device setting for the authenticated user
 func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return h.errorResponse(c, 400, "Device setting ID is required")
 	}
 
-	err := h.deviceSettingsService.Delete(id)
+	// Get user ID from context (set by AuthMiddleware)
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return h.errorResponse(c, 401, "Authentication required")
+	}
+
+	// Check if the device setting exists and belongs to the user
+	existingSetting, err := h.deviceSettingsService.GetByID(id)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to delete device setting")
+		logrus.WithError(err).Error("Failed to get device setting for deletion")
+		if err.Error() == "device setting not found" {
+			return h.errorResponse(c, 404, "Device setting not found")
+		}
+		return h.errorResponse(c, 500, "Failed to retrieve device setting")
+	}
+
+	// Check ownership
+	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int64) != userID {
+		logrus.WithFields(logrus.Fields{
+			"userID": userID,
+			"settingUserID": existingSetting.UserID.Int64,
+			"settingID": id,
+		}).Warn("User attempted to delete device setting they don't own")
+		return h.errorResponse(c, 403, "Access denied: You can only delete your own device settings")
+	}
+
+	err = h.deviceSettingsService.Delete(id)
+	if err != nil {
+		logrus.WithError(err).WithField("userID", userID).Error("Failed to delete device setting")
 		if err.Error() == "device setting not found" {
 			return h.errorResponse(c, 404, "Device setting not found")
 		}
@@ -156,11 +244,18 @@ func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 	return h.successMessageResponse(c, "Device setting deleted successfully", nil)
 }
 
-// GetDeviceIDs retrieves all device IDs for dropdown selection
+// GetDeviceIDs retrieves device IDs for dropdown selection for the authenticated user
 func (h *Handlers) GetDeviceIDs(c *fiber.Ctx) error {
-	settings, err := h.deviceSettingsService.GetAll()
+	// Get user ID from context (set by AuthMiddleware)
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return h.errorResponse(c, 401, "Authentication required")
+	}
+
+	settings, err := h.deviceSettingsService.GetByUserID(userID)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get device settings")
+		logrus.WithError(err).WithField("userID", userID).Error("Failed to get device settings")
 		return h.errorResponse(c, 500, "Failed to retrieve device settings")
 	}
 

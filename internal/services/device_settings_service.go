@@ -32,7 +32,7 @@ func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
 	
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
-		       id_device, id_erp, id_admin, instance, created_at, updated_at
+		       id_device, id_erp, id_admin, instance, created_at, updated_at, user_id
 		FROM device_setting_nodepath
 		ORDER BY created_at DESC
 	`
@@ -60,6 +60,59 @@ func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
 			&setting.Instance,
 			&setting.CreatedAt,
 			&setting.UpdatedAt,
+			&setting.UserID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan device setting: %w", err)
+		}
+		settings = append(settings, setting)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating device settings: %w", err)
+	}
+
+	return settings, nil
+}
+
+// GetByUserID retrieves device settings for a specific user
+func (s *DeviceSettingsService) GetByUserID(userID int) ([]*models.DeviceSettings, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	
+	query := `
+		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
+		       id_device, id_erp, id_admin, instance, created_at, updated_at, user_id
+		FROM device_setting_nodepath
+		WHERE user_id = ?
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query device settings for user: %w", err)
+	}
+	defer rows.Close()
+
+	var settings []*models.DeviceSettings
+	for rows.Next() {
+		setting := &models.DeviceSettings{}
+		err := rows.Scan(
+			&setting.ID,
+			&setting.DeviceID,
+			&setting.APIKeyOption,
+			&setting.WebhookID,
+			&setting.Provider,
+			&setting.PhoneNumber,
+			&setting.APIKey,
+			&setting.IDDevice,
+			&setting.IDERP,
+			&setting.IDAdmin,
+			&setting.Instance,
+			&setting.CreatedAt,
+			&setting.UpdatedAt,
+			&setting.UserID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan device setting: %w", err)
@@ -83,7 +136,7 @@ func (s *DeviceSettingsService) GetByID(id string) (*models.DeviceSettings, erro
 
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
-		       id_device, id_erp, id_admin, instance, created_at, updated_at
+		       id_device, id_erp, id_admin, instance, created_at, updated_at, user_id
 		FROM device_setting_nodepath
 		WHERE id = ?
 	`
@@ -103,6 +156,7 @@ func (s *DeviceSettingsService) GetByID(id string) (*models.DeviceSettings, erro
 		&setting.Instance,
 		&setting.CreatedAt,
 		&setting.UpdatedAt,
+		&setting.UserID,
 	)
 
 	if err != nil {
@@ -124,7 +178,7 @@ func (s *DeviceSettingsService) GetByIDDevice(idDevice string) (*models.DeviceSe
 
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
-		       id_device, id_erp, id_admin, instance, created_at, updated_at
+		       id_device, id_erp, id_admin, instance, created_at, updated_at, user_id
 		FROM device_setting_nodepath
 		WHERE id_device = ?
 		ORDER BY created_at DESC
@@ -146,6 +200,7 @@ func (s *DeviceSettingsService) GetByIDDevice(idDevice string) (*models.DeviceSe
 		&setting.Instance,
 		&setting.CreatedAt,
 		&setting.UpdatedAt,
+		&setting.UserID,
 	)
 
 	if err != nil {
@@ -196,6 +251,7 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			
 			// Convert strings to sql.NullString for nullable fields
 			var deviceID, webhookID, phoneNumber, apiKey, idERP, idAdmin, instance sql.NullString
+			var userID sql.NullInt64
 			
 			if req.DeviceID != "" {
 				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -218,17 +274,20 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.Instance != "" {
 				instance = sql.NullString{String: req.Instance, Valid: true}
 			}
+			if req.UserID != 0 {
+				userID = sql.NullInt64{Int64: int64(req.UserID), Valid: true}
+			}
 			
 			updateQuery := `
 				UPDATE device_setting_nodepath 
 				SET device_id = ?, api_key_option = ?, webhook_id = ?, provider = ?, phone_number = ?, api_key = ?, 
-				    id_erp = ?, id_admin = ?, instance = ?, updated_at = ?
+				    id_erp = ?, id_admin = ?, instance = ?, updated_at = ?, user_id = ?
 				WHERE id = ?
 			`
 			
 			_, err = tx.Exec(updateQuery,
 				deviceID, apiKeyOption, webhookID, provider, phoneNumber, apiKey,
-				idERP, idAdmin, instance, now, existingID,
+				idERP, idAdmin, instance, now, userID, existingID,
 			)
 			
 			if err != nil {
@@ -262,6 +321,7 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			
 			// Convert strings to sql.NullString for nullable fields
 			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
+			var userID sql.NullInt64
 			
 			if req.DeviceID != "" {
 				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -287,16 +347,19 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.Instance != "" {
 				instance = sql.NullString{String: req.Instance, Valid: true}
 			}
+			if req.UserID != 0 {
+				userID = sql.NullInt64{Int64: int64(req.UserID), Valid: true}
+			}
 			
 			insertQuery := `
 				INSERT INTO device_setting_nodepath 
-				(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, instance, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, instance, created_at, updated_at, user_id)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`
 			
 			_, err = tx.Exec(insertQuery,
 				id, deviceID, apiKeyOption, webhookID, provider, phoneNumber, apiKey,
-				idDevice, idERP, idAdmin, instance, now, now,
+				idDevice, idERP, idAdmin, instance, now, now, userID,
 			)
 			
 			if err != nil {
@@ -350,6 +413,7 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 
 	// Convert strings to sql.NullString for nullable fields
 	var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
+	var userID sql.NullInt64
 	
 	if req.DeviceID != "" {
 		deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -375,11 +439,14 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 	if req.Instance != "" {
 		instance = sql.NullString{String: req.Instance, Valid: true}
 	}
+	if req.UserID != 0 {
+		userID = sql.NullInt64{Int64: int64(req.UserID), Valid: true}
+	}
 
 	query := `
 		INSERT INTO device_setting_nodepath 
-		(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, instance, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, instance, created_at, updated_at, user_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.Exec(query,
@@ -396,6 +463,7 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 		instance,
 		now,
 		now,
+		userID,
 	)
 
 	if err != nil {
@@ -452,13 +520,16 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 	if req.Instance != "" {
 		existing.Instance = sql.NullString{String: req.Instance, Valid: true}
 	}
+	if req.UserID != 0 {
+		existing.UserID = sql.NullInt64{Int64: int64(req.UserID), Valid: true}
+	}
 
 	existing.UpdatedAt = time.Now()
 
 	query := `
 		UPDATE device_setting_nodepath 
 		SET device_id = ?, api_key_option = ?, webhook_id = ?, provider = ?, phone_number = ?, api_key = ?, 
-		    id_device = ?, id_erp = ?, id_admin = ?, instance = ?, updated_at = ?
+		    id_device = ?, id_erp = ?, id_admin = ?, instance = ?, updated_at = ?, user_id = ?
 		WHERE id = ?
 	`
 
@@ -474,6 +545,7 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 		existing.IDAdmin,
 		existing.Instance,
 		existing.UpdatedAt,
+		existing.UserID,
 		id,
 	)
 

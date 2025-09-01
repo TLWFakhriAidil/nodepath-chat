@@ -270,6 +270,9 @@ func main() {
 		return c.Next()
 	})
 
+	// Setup template routes for login/register pages
+	handlers.SetupTemplateRoutes(app)
+
 	// Setup API routes
 	api := app.Group("/api")
 	handlers.SetupRoutes(api)

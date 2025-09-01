@@ -98,6 +98,7 @@ type Handlers struct {
 	mediaDetectionService *services.MediaDetectionService
 	healthService         *services.HealthService
 	aiWhatsappHandlers    *AIWhatsappHandlers
+	authHandlers          *AuthHandlers
 }
 
 // NewHandlers creates a new handlers instance
@@ -126,6 +127,9 @@ func NewHandlers(
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
 	
+	// Initialize authentication handlers
+	authHandlers := NewAuthHandlers(db)
+	
 	return &Handlers{
 		flowService:           flowService,
 		aiService:             aiService,
@@ -137,6 +141,7 @@ func NewHandlers(
 		mediaDetectionService: mediaDetectionService,
 		healthService:         healthService,
 		aiWhatsappHandlers:    aiWhatsappHandlers,
+		authHandlers:          authHandlers,
 	}
 }
 
@@ -191,8 +196,9 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	config := api.Group("/config")
 	config.Get("/database", h.GetDatabaseConfig)
 
-	// Device settings routes
+	// Device settings routes (protected with authentication middleware)
 	deviceSettings := api.Group("/device-settings")
+	deviceSettings.Use(h.authHandlers.AuthMiddleware)
 	deviceSettings.Get("/", h.GetDeviceSettings)
 	deviceSettings.Get("/device-ids", h.GetDeviceIDs)
 	deviceSettings.Post("/", h.CreateDeviceSettings)
@@ -210,9 +216,17 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// AI WhatsApp routes - delegate to AIWhatsappHandlers (must be registered before generic webhook routes)
 	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
 
+	// Authentication routes
+	h.authHandlers.SetupAuthRoutes(api)
+
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")
 	webhook.Post("/:id_device/:instance", h.HandleWebhook)
+}
+
+// SetupTemplateRoutes configures template serving routes
+func (h *Handlers) SetupTemplateRoutes(app *fiber.App) {
+	h.authHandlers.SetupTemplateRoutes(app)
 }
 
 // Response helpers

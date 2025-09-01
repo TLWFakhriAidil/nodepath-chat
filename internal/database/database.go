@@ -50,6 +50,7 @@ func RunMigrations(db *sql.DB) error {
 	migrations := []string{
 		createFlowsTable,
 		createDeviceSettingsTable,
+		createUsersTable,
 		createAIWhatsappTable,
 		createConversationLogTable,
 	}
@@ -113,8 +114,22 @@ CREATE TABLE IF NOT EXISTS device_setting_nodepath (
     id_device VARCHAR(255),
     id_erp VARCHAR(255),
     id_admin VARCHAR(255),
+    user_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
+// Users table for authentication and user management
+const createUsersTable = `
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    full_name VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
@@ -277,6 +292,7 @@ func addMissingColumnsToDeviceSettingsTable(db *sql.DB) error {
 	}{
 		{"phone_number", "VARCHAR(20)"},
 		{"instance", "TEXT"},
+		{"user_id", "INT"},
 	}
 
 	for _, col := range columns {

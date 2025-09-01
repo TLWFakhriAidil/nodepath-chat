@@ -45,6 +45,34 @@ const (
 
 
 
+// User represents a user in the authentication system
+type User struct {
+	ID        int       `json:"id" db:"id"`
+	Email     string    `json:"email" db:"email"`
+	FullName  string    `json:"full_name" db:"full_name"`
+	Password  string    `json:"-" db:"password"` // Don't include password in JSON responses
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// DeviceSetting represents device configuration linked to a user
+type DeviceSetting struct {
+	ID           string    `json:"id" db:"id"`
+	DeviceID     string    `json:"device_id" db:"device_id"`
+	APIKeyOption string    `json:"api_key_option" db:"api_key_option"`
+	WebhookID    string    `json:"webhook_id" db:"webhook_id"`
+	Provider     string    `json:"provider" db:"provider"`
+	PhoneNumber  string    `json:"phone_number" db:"phone_number"`
+	APIKey       string    `json:"-" db:"api_key"` // Don't include API key in JSON responses
+	IDDevice     string    `json:"id_device" db:"id_device"`
+	IDERP        string    `json:"id_erp" db:"id_erp"`
+	IDAdmin      string    `json:"id_admin" db:"id_admin"`
+	UserID       *int      `json:"user_id" db:"user_id"`
+	Instance     string    `json:"instance" db:"instance"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
 // MediaType represents the type of media
 type MediaType string
 
