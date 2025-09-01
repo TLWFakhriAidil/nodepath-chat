@@ -208,7 +208,23 @@ func (h *Handlers) GetSupportedModels(c *fiber.Ctx) error {
 
 // GetAnalyticsOverview returns analytics overview
 func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
-	// Mock analytics data - in a real implementation, you'd calculate these from the database
+	// Get user ID from authentication context
+	userID, ok := c.Locals("user_id").(string)
+	if !ok {
+		return h.errorResponse(c, 401, "Authentication required")
+	}
+	
+	// Convert userID string to int
+	userIDInt := 0
+	if userID != "" {
+		if id, err := strconv.Atoi(userID); err == nil {
+			userIDInt = id
+		} else {
+			return h.errorResponse(c, 400, "Invalid user ID")
+		}
+	}
+	
+	// Analytics data filtered by user's devices
 	overview := map[string]interface{}{
 		"total_flows":      0,
 		"active_executions": 0,
@@ -217,8 +233,8 @@ func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
 		"avg_response_time": 0.0,
 	}
 
-	// Get actual flow count
-	flows, err := h.flowService.GetAllFlows()
+	// Get actual flow count filtered by user's devices
+	flows, err := h.flowService.GetFlowsByUserDevices(userIDInt)
 	if err == nil {
 		overview["total_flows"] = len(flows)
 	}
@@ -233,7 +249,6 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Flow reference is required")
 	}
 
-	// Get executions for the flow using AI WhatsApp repository
 	// Get userID from context
 	userID, ok := c.Locals("user_id").(string)
 	if !ok {
@@ -245,6 +260,28 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 			userIDInt = id
 		}
 	}
+	
+	// Verify that the flow belongs to user's devices
+	userFlows, err := h.flowService.GetFlowsByUserDevices(userIDInt)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get user flows")
+		return h.errorResponse(c, 500, "Failed to verify flow ownership")
+	}
+	
+	// Check if the requested flow belongs to the user
+	flowExists := false
+	for _, flow := range userFlows {
+		if flow.ID == flowReference {
+			flowExists = true
+			break
+		}
+	}
+	
+	if !flowExists {
+		return h.errorResponse(c, 403, "Access denied: Flow not found or not owned by user")
+	}
+	
+	// Get executions for the flow using AI WhatsApp repository
 	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userIDInt)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow executions")

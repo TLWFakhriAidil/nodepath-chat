@@ -2448,6 +2448,18 @@ go run cmd/server/main.go
 - ✅ **DEPLOYMENT READY**: WAHA provider now configured for production environment
   - **Local Development**: No longer dependent on local WAHA instance
   - **Production Deployment**: Uses centralized WAHA Railway instance
+
+- ✅ **DEVICE FILTERING SYSTEM**: Sidebar modules now properly filter data by user devices
+  - **Flow Builder**: Only shows flows from user's devices in `device_setting_nodepath`
+  - **Flow Manager**: Filters flows by authenticated user's device ownership
+  - **Dashboard Analytics**: Analytics overview filtered by user's device data only
+  - **Flow Statistics**: Validates flow ownership before returning statistics
+  - **Access Control**: Users can only access data from their own devices
+  - **Device Validation**: `DeviceRequiredMiddleware` ensures users have at least one device
+  - **Security Enhancement**: Prevents unauthorized access to other users' device data
+  - **Database Optimization**: Efficient queries using device ID filtering with IN clauses
+  - **User Experience**: Shows popup requiring device addition if no devices exist
+  - **Implementation**: `GetFlowsByUserDevices` method added to FlowService for proper filtering
   - **High Availability**: Production WAHA instance provides better reliability
   - **Scalability**: Supports multiple device instances through single WAHA endpoint
 
