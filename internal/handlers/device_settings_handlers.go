@@ -284,6 +284,9 @@ func (h *Handlers) GetDeviceIDs(c *fiber.Ctx) error {
 
 // GenerateWhacenterDevice generates a device using Whacenter API
 func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
+	// Get user ID from context
+	userID := c.Locals("userID").(int)
+	
 	var req struct {
 		models.CreateDeviceSettingsRequest
 		WebhookURL string `json:"webhook_url"`
@@ -508,6 +511,7 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - Whacenter mapping: webhook_id stores webhook_url, instance stores device_id, device_id should be null
 	createReq := &models.CreateDeviceSettingsRequest{
+		UserID:       userID, // Set user ID from context
 		// DeviceID is intentionally left empty (null) for Whacenter devices
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    productionWebhookURL, // Store webhook URL
@@ -699,6 +703,9 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 
 // GenerateWablasDevice generates a device using Wablas API
 func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
+	// Get user ID from context
+	userID := c.Locals("userID").(int)
+	
 	var req struct {
 		models.CreateDeviceSettingsRequest
 		WebhookURL string `json:"webhook_url"`
@@ -938,6 +945,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - Wablas mapping: device_id stores device_id, webhook_id stores webhook_url, instance stores api_key
 	createReq := &models.CreateDeviceSettingsRequest{
+		UserID:       userID, // Set user ID from context
 		DeviceID:     deviceID, // Store device_id
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    productionWebhookURL, // Store webhook URL
@@ -1867,6 +1875,9 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider strin
 
 // GenerateWahaDevice generates a device using WAHA API with session management
 func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
+	// Get user ID from context
+	userID := c.Locals("userID").(int)
+	
 	var req struct {
 		models.CreateDeviceSettingsRequest
 		WebhookURL string `json:"webhook_url"`
@@ -2054,6 +2065,7 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - WAHA mapping: instance stores session_name, webhook_id stores webhook_url
 	createReq := &models.CreateDeviceSettingsRequest{
+		UserID:       userID, // Set user ID from context
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    webhook,        // Store webhook URL
 		Provider:     "waha",
