@@ -92,7 +92,7 @@ const Register: React.FC = () => {
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Enter your full name"
                   required
-                  className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 pl-10"
+                  className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 pl-10 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
                   disabled={isLoading}
                 />
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -110,7 +110,7 @@ const Register: React.FC = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 required
-                className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400"
+                className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
                 disabled={isLoading}
               />
             </div>
@@ -128,7 +128,7 @@ const Register: React.FC = () => {
                   placeholder="Enter your password"
                   required
                   minLength={6}
-                  className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 pr-10"
+                  className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 pr-10 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
                   disabled={isLoading}
                 />
                 <Button
@@ -161,7 +161,7 @@ const Register: React.FC = () => {
                   placeholder="Confirm your password"
                   required
                   minLength={6}
-                  className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 pr-10"
+                  className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-400 pr-10 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
                   disabled={isLoading}
                 />
                 <Button
