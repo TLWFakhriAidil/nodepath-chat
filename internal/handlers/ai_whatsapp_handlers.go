@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -230,20 +232,58 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 // HandleWahaWebhook handles incoming WAHA webhook requests
 // WAHA provider uses nested payload structure with specific event types
 func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
-	var req WahaWebhookRequest
-	if err := c.BodyParser(&req); err != nil {
-		logrus.WithError(err).Error("Failed to parse WAHA webhook request")
+	deviceID := c.Params("device_id")
+	body := c.Body()
+	
+	// Log raw payload for debugging production issues
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"payload_size": len(body),
+		"raw_payload": string(body),
+	}).Info("🔍 WAHA: Raw webhook payload received")
+
+	// Parse as generic map first for flexible extraction
+	var rawPayload map[string]interface{}
+	if err := json.Unmarshal(body, &rawPayload); err != nil {
+		logrus.WithError(err).Error("Failed to parse WAHA webhook JSON")
 		return c.Status(400).JSON(fiber.Map{
 			"success": false,
-			"message": "Invalid request format",
+			"message": "Invalid JSON format",
+		})
+	}
+
+	// Extract fields using multiple fallback methods
+	from, message, event, session, isGroup := h.extractWahaFields(rawPayload)
+
+	// Log extracted fields for debugging
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"extracted_from": from,
+		"extracted_message": message,
+		"extracted_event": event,
+		"extracted_session": session,
+		"is_group": isGroup,
+	}).Info("🔍 WAHA: Field extraction completed")
+
+	// Validate required fields
+	if from == "" || message == "" {
+		logrus.WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"from": from,
+			"message": message,
+			"raw_payload": string(body),
+		}).Warn("⚠️ WAHA: Missing required fields (from or message)")
+		return c.Status(400).JSON(fiber.Map{
+			"success": false,
+			"message": "Missing required fields: from or message",
 		})
 	}
 
 	// Only process message events, ignore other events like status updates
-	if req.Event != "message" {
+	if event != "" && event != "message" {
 		logrus.WithFields(logrus.Fields{
-			"event":   req.Event,
-			"session": req.Session,
+			"event": event,
+			"session": session,
 		}).Debug("Ignoring non-message WAHA event")
 		return c.JSON(fiber.Map{
 			"success": true,
@@ -252,10 +292,10 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	}
 
 	// Skip group messages as per business logic
-	if req.Payload.Data.Info.IsGroup {
+	if isGroup {
 		logrus.WithFields(logrus.Fields{
-			"from":    req.Payload.Data.From,
-			"session": req.Session,
+			"from": from,
+			"session": session,
 		}).Debug("Ignoring group message from WAHA")
 		return c.JSON(fiber.Map{
 			"success": true,
@@ -263,21 +303,194 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 		})
 	}
 
+	// Clean phone number format (remove @c.us suffix if present)
+	if strings.HasSuffix(from, "@c.us") {
+		from = strings.TrimSuffix(from, "@c.us")
+		logrus.WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"cleaned_from": from,
+		}).Info("🔧 WAHA: Phone number cleaned - stripped @c.us suffix")
+	}
+
 	logrus.WithFields(logrus.Fields{
-		"from":    req.Payload.Data.From,
-		"body":    req.Payload.Data.Body,
-		"session": req.Session,
-		"event":   req.Event,
+		"from": from,
+		"body": message,
+		"session": session,
+		"event": event,
 	}).Info("Received WAHA webhook")
 
+	// Use deviceID from URL parameter, fallback to session if needed
+	processDeviceID := deviceID
+	if session != "" && deviceID == "" {
+		processDeviceID = session
+	}
+
 	// Process the incoming message asynchronously
-	// Use session as device identifier for WAHA
-	go h.processIncomingMessage(req.Payload.Data.From, req.Payload.Data.Body, req.Session, "waha")
+	go h.processIncomingMessage(from, message, processDeviceID, "waha")
 
 	return c.JSON(fiber.Map{
 		"success": true,
 		"message": "Webhook received",
 	})
+}
+
+// extractWahaFields extracts fields from WAHA webhook payload using multiple fallback methods
+// Handles different WAHA payload structures that may vary in production
+func (h *AIWhatsappHandlers) extractWahaFields(payload map[string]interface{}) (from, message, event, session string, isGroup bool) {
+	// Log payload structure for comprehensive debugging
+	logrus.WithFields(logrus.Fields{
+		"payload_keys": getMapKeys(payload),
+		"payload_depth": analyzePayloadDepth(payload),
+		"has_nested_data": payload["data"] != nil || payload["payload"] != nil,
+	}).Debug("🔍 WAHA: Analyzing payload structure")
+
+	// Method 1: Try structured WahaWebhookRequest format
+	if eventVal, ok := payload["event"].(string); ok {
+		event = eventVal
+		logrus.WithField("extraction_method", "top_level_event").Debug("🔍 WAHA: Event extracted from top level")
+	}
+	if sessionVal, ok := payload["session"].(string); ok {
+		session = sessionVal
+		logrus.WithField("extraction_method", "top_level_session").Debug("🔍 WAHA: Session extracted from top level")
+	}
+
+	// Try to extract from payload.payload._data structure (nested)
+	if payloadData, ok := payload["payload"].(map[string]interface{}); ok {
+		logrus.Debug("🔍 WAHA: Found payload.payload structure")
+		if dataMap, ok := payloadData["_data"].(map[string]interface{}); ok {
+			logrus.Debug("🔍 WAHA: Found payload.payload._data structure")
+			// Extract from nested _data structure
+			if fromVal, ok := dataMap["from"].(string); ok {
+				from = fromVal
+				logrus.WithField("extraction_method", "nested_payload_data_from").Debug("🔍 WAHA: From extracted from nested _data")
+			}
+			if bodyVal, ok := dataMap["body"].(string); ok {
+				message = bodyVal
+				logrus.WithField("extraction_method", "nested_payload_data_body").Debug("🔍 WAHA: Message extracted from nested _data")
+			}
+			// Check group status from Info.IsGroup
+			if info, ok := dataMap["Info"].(map[string]interface{}); ok {
+				if isGroupVal, ok := info["IsGroup"].(bool); ok {
+					isGroup = isGroupVal
+					logrus.WithField("extraction_method", "nested_payload_info_isgroup").Debug("🔍 WAHA: Group status extracted from nested Info")
+				}
+			}
+		}
+		
+		// Fallback: Try direct payload level
+		if from == "" {
+			if fromVal, ok := payloadData["from"].(string); ok {
+				from = fromVal
+				logrus.WithField("extraction_method", "payload_direct_from").Debug("🔍 WAHA: From extracted from direct payload")
+			}
+		}
+		if message == "" {
+			if bodyVal, ok := payloadData["body"].(string); ok {
+				message = bodyVal
+				logrus.WithField("extraction_method", "payload_direct_body").Debug("🔍 WAHA: Message extracted from direct payload body")
+			}
+			if textVal, ok := payloadData["text"].(string); ok {
+				message = textVal
+				logrus.WithField("extraction_method", "payload_direct_text").Debug("🔍 WAHA: Message extracted from direct payload text")
+			}
+		}
+	}
+
+	// Method 2: Try direct top-level fields (alternative format)
+	if from == "" {
+		if fromVal, ok := payload["from"].(string); ok {
+			from = fromVal
+			logrus.WithField("extraction_method", "top_level_from").Debug("🔍 WAHA: From extracted from top level")
+		}
+	}
+	if message == "" {
+		if bodyVal, ok := payload["body"].(string); ok {
+			message = bodyVal
+			logrus.WithField("extraction_method", "top_level_body").Debug("🔍 WAHA: Message extracted from top level body")
+		}
+		if textVal, ok := payload["text"].(string); ok {
+			message = textVal
+			logrus.WithField("extraction_method", "top_level_text").Debug("🔍 WAHA: Message extracted from top level text")
+		}
+		if messageVal, ok := payload["message"].(string); ok {
+			message = messageVal
+			logrus.WithField("extraction_method", "top_level_message").Debug("🔍 WAHA: Message extracted from top level message")
+		}
+	}
+
+	// Method 3: Try data field at top level
+	if dataMap, ok := payload["data"].(map[string]interface{}); ok {
+		logrus.WithField("data_keys", getMapKeys(dataMap)).Debug("🔍 WAHA: Found data field at top level")
+		if from == "" {
+			if fromVal, ok := dataMap["from"].(string); ok {
+				from = fromVal
+				logrus.WithField("extraction_method", "data_from").Debug("🔍 WAHA: From extracted from data field")
+			}
+		}
+		if message == "" {
+			if bodyVal, ok := dataMap["body"].(string); ok {
+				message = bodyVal
+				logrus.WithField("extraction_method", "data_body").Debug("🔍 WAHA: Message extracted from data body")
+			}
+			if textVal, ok := dataMap["text"].(string); ok {
+				message = textVal
+				logrus.WithField("extraction_method", "data_text").Debug("🔍 WAHA: Message extracted from data text")
+			}
+		}
+		// Check group status
+		if !isGroup {
+			if isGroupVal, ok := dataMap["isGroup"].(bool); ok {
+				isGroup = isGroupVal
+				logrus.WithField("extraction_method", "data_isGroup").Debug("🔍 WAHA: Group status extracted from data isGroup")
+			}
+			if isGroupVal, ok := dataMap["is_group"].(bool); ok {
+				isGroup = isGroupVal
+				logrus.WithField("extraction_method", "data_is_group").Debug("🔍 WAHA: Group status extracted from data is_group")
+			}
+		}
+	}
+
+	// Method 4: Try webhook field (some WAHA versions use this)
+	if webhookData, ok := payload["webhook"].(map[string]interface{}); ok {
+		logrus.WithField("webhook_keys", getMapKeys(webhookData)).Debug("🔍 WAHA: Found webhook field")
+		if from == "" {
+			if fromVal, ok := webhookData["from"].(string); ok {
+				from = fromVal
+				logrus.WithField("extraction_method", "webhook_from").Debug("🔍 WAHA: From extracted from webhook field")
+			}
+		}
+		if message == "" {
+			if bodyVal, ok := webhookData["body"].(string); ok {
+				message = bodyVal
+				logrus.WithField("extraction_method", "webhook_body").Debug("🔍 WAHA: Message extracted from webhook body")
+			}
+		}
+	}
+
+	// Log comprehensive extraction results for debugging
+	logrus.WithFields(logrus.Fields{
+		"method_1_payload_data": payload["payload"] != nil,
+		"method_2_direct": payload["from"] != nil || payload["body"] != nil,
+		"method_3_data": payload["data"] != nil,
+		"method_4_webhook": payload["webhook"] != nil,
+		"final_from": from,
+		"final_message": truncateString(message, 100),
+		"final_event": event,
+		"final_session": session,
+		"final_is_group": isGroup,
+		"extraction_success": from != "" && message != "",
+	}).Info("🔍 WAHA: Field extraction completed with results")
+
+	// Log warning if extraction failed
+	if from == "" || message == "" {
+		logrus.WithFields(logrus.Fields{
+			"missing_from": from == "",
+			"missing_message": message == "",
+			"available_keys": getMapKeys(payload),
+		}).Warn("⚠️ WAHA: Critical field extraction failed - check payload structure")
+	}
+
+	return from, message, event, session, isGroup
 }
 
 // StartAIConversation starts a new AI conversation
@@ -736,4 +949,55 @@ func (h *AIWhatsappHandlers) errorResponse(c *fiber.Ctx, statusCode int, message
 		Success: false,
 		Error:   message,
 	})
+}
+
+// Helper functions for comprehensive WAHA webhook debugging
+
+// getMapKeys returns all keys from a map for debugging payload structure
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// analyzePayloadDepth analyzes the depth and structure of nested payload
+func analyzePayloadDepth(payload map[string]interface{}) map[string]interface{} {
+	analysis := make(map[string]interface{})
+	
+	for key, value := range payload {
+		switch v := value.(type) {
+		case map[string]interface{}:
+			analysis[key] = map[string]interface{}{
+				"type": "object",
+				"keys": getMapKeys(v),
+				"key_count": len(v),
+			}
+		case []interface{}:
+			analysis[key] = map[string]interface{}{
+				"type": "array",
+				"length": len(v),
+			}
+		case string:
+			analysis[key] = map[string]interface{}{
+				"type": "string",
+				"length": len(v),
+			}
+		default:
+			analysis[key] = map[string]interface{}{
+				"type": fmt.Sprintf("%T", v),
+			}
+		}
+	}
+	
+	return analysis
+}
+
+// truncateString truncates a string to specified length for logging
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
