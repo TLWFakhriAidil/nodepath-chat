@@ -1507,63 +1507,8 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		// Wablas doesn't have is_group field, default to false
 		isGroup = false
 
-	case "waha":
-		// Extract data for WAHA provider with nested payload structure
-		// WAHA webhook has multiple possible structures, try different paths
-		if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
-			// Try to extract from payload.from and payload.body (direct payload level)
-			if fromVal, ok := payload["from"].(string); ok {
-				from = fromVal
-			}
-			if bodyVal, ok := payload["body"].(string); ok {
-				message = bodyVal
-			}
-			
-			// If not found at payload level, try payload._data level
-			if from == "" || message == "" {
-				if dataMap, ok := payload["_data"].(map[string]interface{}); ok {
-					// Extract 'from' field from payload._data.from
-					if from == "" {
-						if fromVal, ok := dataMap["from"].(string); ok {
-							from = fromVal
-						}
-					}
-					// Extract 'body' field from payload._data.body as message content
-					if message == "" {
-						if bodyVal, ok := dataMap["body"].(string); ok {
-							message = bodyVal
-						}
-					}
-					// Check if it's a group message from payload._data.Info.IsGroup
-					if info, ok := dataMap["Info"].(map[string]interface{}); ok {
-						if isGroupVal, ok := info["IsGroup"].(bool); ok {
-							isGroup = isGroupVal
-						}
-					}
-				}
-			}
-			
-			// Set message type as text for WAHA
-			messageType = "text"
-		}
-		
-		// Strip @c.us suffix from phone number for WAHA provider
-		if strings.HasSuffix(from, "@c.us") {
-			from = strings.TrimSuffix(from, "@c.us")
-			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"original_from": from + "@c.us",
-				"cleaned_from": from,
-			}).Info("🔧 WEBHOOK: WAHA phone number cleaned - stripped @c.us suffix")
-		}
-
-		// Log WAHA-specific extraction for debugging
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"extracted_from": from,
-			"extracted_message": message,
-			"is_group": isGroup,
-		}).Info("🔍 WEBHOOK: WAHA field extraction completed")
+	// WAHA case removed - now handled by dedicated WAHA webhook handler in ai_whatsapp_handlers.go
+	// This prevents duplicate processing of WAHA messages
 
 	default:
 		// Generic webhook format
