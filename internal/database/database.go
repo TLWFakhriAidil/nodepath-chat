@@ -51,6 +51,7 @@ func RunMigrations(db *sql.DB) error {
 		createFlowsTable,
 		createDeviceSettingsTable,
 		createUsersTable,
+		createUserSessionsTable,
 		createAIWhatsappTable,
 		createConversationLogTable,
 	}
@@ -120,20 +121,32 @@ CREATE TABLE IF NOT EXISTS device_setting_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-// Users table for authentication and user management
+// Create users table for authentication (matches existing schema)
 const createUsersTable = `
 CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    full_name VARCHAR(255) NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_email (email)
+	id CHAR(36) NOT NULL PRIMARY KEY,
+	email VARCHAR(255) NOT NULL,
+	full_name VARCHAR(255) NOT NULL,
+	password_hash VARCHAR(255) NOT NULL,
+	is_active TINYINT(1) DEFAULT 1,
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+	last_login TIMESTAMP NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-// AI WhatsApp conversation table for managing AI-powered WhatsApp conversations
+// Create user_sessions table for authentication sessions (matches existing schema)
+const createUserSessionsTable = `
+CREATE TABLE IF NOT EXISTS user_sessions (
+	id CHAR(36) NOT NULL PRIMARY KEY,
+	user_id CHAR(36) NOT NULL,
+	token VARCHAR(255) NOT NULL,
+	expires_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
+	// AI WhatsApp conversation table for managing AI-powered WhatsApp conversations
 const createAIWhatsappTable = `
 CREATE TABLE IF NOT EXISTS ai_whatsapp_nodepath (
     id VARCHAR(255) PRIMARY KEY,

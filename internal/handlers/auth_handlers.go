@@ -66,7 +66,7 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 	}
 
 	// Check if user already exists
-	var existingUserID int
+	var existingUserID string
 	err := ah.db.QueryRow("SELECT id FROM users WHERE email = ?", req.Email).Scan(&existingUserID)
 	if err == nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
@@ -91,10 +91,13 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 		})
 	}
 
+	// Generate UUID for user
+	userID := generateUUID()
+
 	// Insert new user
-	result, err := ah.db.Exec(
-		"INSERT INTO users (email, full_name, password, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
-		req.Email, req.FullName, string(hashedPassword),
+	_, err = ah.db.Exec(
+		"INSERT INTO users (id, email, full_name, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, NOW(), NOW())",
+		userID, req.Email, req.FullName, string(hashedPassword),
 	)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create user")
@@ -104,22 +107,12 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get the created user ID
-	userID, err := result.LastInsertId()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get user ID")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"success": false,
-			"error":   "Failed to create user",
-		})
-	}
-
 	// Fetch the created user
 	var user models.User
 	err = ah.db.QueryRow(
-		"SELECT id, email, full_name, created_at, updated_at FROM users WHERE id = ?",
+		"SELECT id, email, full_name, is_active, created_at, updated_at, last_login FROM users WHERE id = ?",
 		userID,
-	).Scan(&user.ID, &user.Email, &user.FullName, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.FullName, &user.IsActive, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to fetch created user")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -132,6 +125,16 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 	token, err := generateSessionToken()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate session token")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to create session",
+		})
+	}
+
+	// Store session in database
+	err = ah.storeSession(token, user.ID, c.IP(), c.Get("User-Agent"))
+	if err != nil {
+		logrus.WithError(err).Error("Failed to store session")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Failed to create session",
@@ -197,9 +200,9 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 	var user models.User
 	var hashedPassword string
 	err := ah.db.QueryRow(
-		"SELECT id, email, full_name, password, created_at, updated_at FROM users WHERE email = ?",
+		"SELECT id, email, full_name, password_hash, is_active, created_at, updated_at, last_login FROM users WHERE email = ? AND is_active = 1",
 		req.Email,
-	).Scan(&user.ID, &user.Email, &user.FullName, &hashedPassword, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.FullName, &hashedPassword, &user.IsActive, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin)
 	if err == sql.ErrNoRows {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"success": false,
@@ -220,6 +223,13 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 			"success": false,
 			"error":   "Invalid email or password",
 		})
+	}
+
+	// Update last_login timestamp
+	_, err = ah.db.Exec("UPDATE users SET last_login = NOW() WHERE id = ?", user.ID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to update last_login")
+		// Don't fail the login for this error, just log it
 	}
 
 	// Generate session token
@@ -300,9 +310,9 @@ func (ah *AuthHandlers) GetCurrentUser(c *fiber.Ctx) error {
 	// Fetch user from database
 	var user models.User
 	err := ah.db.QueryRow(
-		"SELECT id, email, full_name, created_at, updated_at FROM users WHERE id = ?",
+		"SELECT id, email, full_name, is_active, created_at, updated_at, last_login FROM users WHERE id = ?",
 		userID,
-	).Scan(&user.ID, &user.Email, &user.FullName, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.FullName, &user.IsActive, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to fetch current user")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -327,55 +337,53 @@ func generateSessionToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
+// generateUUID generates a simple UUID-like string
+func generateUUID() string {
+	bytes := make([]byte, 16)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
 // storeSession stores a session token with user ID in database
-func (ah *AuthHandlers) storeSession(token string, userID int, ipAddress, userAgent string) error {
+func (ah *AuthHandlers) storeSession(token string, userID string, ipAddress, userAgent string) error {
 	// Set expiration time to 24 hours from now
 	expiresAt := time.Now().Add(24 * time.Hour)
-	
+	// Generate UUID for session ID
+	sessionID := generateUUID()
 	_, err := ah.db.Exec(`
-		INSERT INTO user_sessions (session_token, user_id, expires_at, ip_address, user_agent) 
-		VALUES (?, ?, ?, ?, ?)
-	`, token, userID, expiresAt, ipAddress, userAgent)
+		INSERT INTO user_sessions (id, user_id, token, expires_at) 
+		VALUES (?, ?, ?, ?)
+	`, sessionID, userID, token, expiresAt)
 	
 	return err
 }
 
 // getSession retrieves user ID from session token in database
-func (ah *AuthHandlers) getSession(token string) (int, bool) {
-	var userID int
+func (ah *AuthHandlers) getSession(token string) (string, bool) {
+	var userID string
 	var expiresAt time.Time
 	
 	err := ah.db.QueryRow(`
 		SELECT user_id, expires_at FROM user_sessions 
-		WHERE session_token = ? AND is_active = TRUE
+		WHERE token = ? AND expires_at > NOW()
 	`, token).Scan(&userID, &expiresAt)
 	
 	if err != nil {
-		return 0, false
+		return "", false
 	}
-	
-	// Check if session has expired
-	if time.Now().After(expiresAt) {
-		// Mark session as inactive
-		ah.db.Exec(`UPDATE user_sessions SET is_active = FALSE WHERE session_token = ?`, token)
-		return 0, false
-	}
-	
-	// Update last accessed time
-	ah.db.Exec(`UPDATE user_sessions SET last_accessed = NOW() WHERE session_token = ?`, token)
 	
 	return userID, true
 }
 
 // removeSession removes a session token from database
 func (ah *AuthHandlers) removeSession(token string) error {
-	_, err := ah.db.Exec(`UPDATE user_sessions SET is_active = FALSE WHERE session_token = ?`, token)
+	_, err := ah.db.Exec(`DELETE FROM user_sessions WHERE token = ?`, token)
 	return err
 }
 
 // cleanupExpiredSessions removes expired sessions from database
 func (ah *AuthHandlers) cleanupExpiredSessions() error {
-	_, err := ah.db.Exec(`DELETE FROM user_sessions WHERE expires_at < NOW() OR is_active = FALSE`)
+	_, err := ah.db.Exec(`DELETE FROM user_sessions WHERE expires_at < NOW()`)
 	return err
 }
 

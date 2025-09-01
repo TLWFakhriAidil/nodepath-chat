@@ -47,12 +47,14 @@ const (
 
 // User represents a user in the authentication system
 type User struct {
-	ID        int       `json:"id" db:"id"`
+	ID        string    `json:"id" db:"id"`
 	Email     string    `json:"email" db:"email"`
 	FullName  string    `json:"full_name" db:"full_name"`
 	Password  string    `json:"-" db:"password"` // Don't include password in JSON responses
+	IsActive  bool      `json:"is_active" db:"is_active"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	LastLogin *time.Time `json:"last_login" db:"last_login"`
 }
 
 // DeviceSetting represents device configuration linked to a user

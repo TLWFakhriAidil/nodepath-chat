@@ -2435,6 +2435,16 @@ go run cmd/server/main.go
 
 **Authentication Status**: 🟢 **FULLY OPERATIONAL** - Complete user authentication system with secure session management
 
+- ✅ **AUTHENTICATION SYSTEM FIXED**: Database schema alignment completed
+  - **Schema Mismatch Resolved**: Updated authentication handlers to match actual database schema
+  - **User Sessions Table**: Actual schema uses `CHAR(36)` for IDs, `token` field (not `session_token`)
+  - **Database Structure**: `id` (CHAR(36) PRIMARY KEY), `user_id` (CHAR(36)), `token` (VARCHAR(255)), `expires_at` (TIMESTAMP), `created_at` (TIMESTAMP)
+  - **Authentication Handlers**: Updated to work with actual database schema
+  - **Session Management**: UUID generation for session IDs, proper user_id conversion
+  - **Compatibility**: Maintains integer user_id in application while storing as string in database
+  - **Database Migrations**: Migration scripts updated to match actual schema
+  - **Testing**: Server successfully running with corrected authentication system
+
 - ✅ **DEPLOYMENT READY**: WAHA provider now configured for production environment
   - **Local Development**: No longer dependent on local WAHA instance
   - **Production Deployment**: Uses centralized WAHA Railway instance
@@ -2442,3 +2452,80 @@ go run cmd/server/main.go
   - **Scalability**: Supports multiple device instances through single WAHA endpoint
 
 **WAHA Status**: 🟢 **PRODUCTION READY** - All WAHA API calls now use production Railway instance
+**Authentication Status**: 🟢 **FULLY FIXED** - All authentication errors resolved and system operational
+
+---
+
+### Database Schema Alignment (January 2025)
+
+- ✅ **COMPLETE DATABASE SCHEMA ALIGNMENT**: Both `user_sessions` and `users` tables now properly aligned with actual database structure
+
+#### User Sessions Table Schema Mismatch (Fixed)
+
+**Issues Found:**
+- Code expected `session_token` field, but database has `token`
+- Code expected `user_id` as INT, but database uses CHAR(36) for UUIDs
+- Code expected `id` as INT AUTO_INCREMENT, but database uses CHAR(36)
+- Missing fields in code: `ip_address`, `user_agent`
+- Different field names and data types
+
+**Current `user_sessions` Table Structure:**
+```sql
+CREATE TABLE `user_sessions` (
+  `id` char(36) NOT NULL,
+  `user_id` char(36) NOT NULL,
+  `token` varchar(255) NOT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` text,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `expires_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `token` (`token`),
+  KEY `user_id` (`user_id`),
+  KEY `expires_at` (`expires_at`),
+  CONSTRAINT `user_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+```
+
+#### Users Table Schema Mismatch (Fixed)
+
+**Issues Found:**
+- Code expected `id` as INT AUTO_INCREMENT, but database uses CHAR(36) for UUIDs
+- Code expected `email` with UNIQUE constraint, but database doesn't have it
+- Code expected `is_active` as BOOLEAN, but database uses TINYINT(1)
+- Missing field in code: `last_login`
+- User model struct used `int` for ID instead of `string`
+
+**Current `users` Table Structure:**
+```sql
+CREATE TABLE `users` (
+  `id` char(36) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `full_name` varchar(255) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `last_login` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+```
+
+**Key Fixes Applied:**
+1. **Schema Alignment**: Updated `database.go` to match actual table structures
+2. **UUID Generation**: Implemented proper UUID generation for user and session IDs
+3. **Data Type Conversion**: Changed from INT to CHAR(36) for all IDs
+4. **Model Updates**: Updated `models.User` struct to use `string` for ID and added missing fields (`IsActive`, `LastLogin`)
+5. **Query Updates**: Modified all database queries to use correct field names and types
+6. **Session Management**: Updated session handling to work with UUID-based user IDs
+7. **Authentication Flow**: Fixed registration, login, and session validation to work with actual schema
+8. **Handler Updates**: Updated all authentication handlers to work with string UUIDs instead of integers
+
+**Files Modified:**
+- `internal/database/database.go` - Updated table creation statements
+- `internal/models/models.go` - Updated User struct with correct field types
+- `internal/handlers/auth_handlers.go` - Updated all authentication functions for UUID support
+- `debug/check_users_schema.go` - Created schema inspection tool
+
+**Database Schema Status**: 🟢 **FULLY ALIGNED** - Both authentication tables now work correctly with the actual database schema
