@@ -333,7 +333,7 @@ func (ah *AuthHandlers) storeSession(token string, userID int, ipAddress, userAg
 	expiresAt := time.Now().Add(24 * time.Hour)
 	
 	_, err := ah.db.Exec(`
-		INSERT INTO user_sessions_nodepath (session_token, user_id, expires_at, ip_address, user_agent) 
+		INSERT INTO user_sessions (session_token, user_id, expires_at, ip_address, user_agent) 
 		VALUES (?, ?, ?, ?, ?)
 	`, token, userID, expiresAt, ipAddress, userAgent)
 	
@@ -346,7 +346,7 @@ func (ah *AuthHandlers) getSession(token string) (int, bool) {
 	var expiresAt time.Time
 	
 	err := ah.db.QueryRow(`
-		SELECT user_id, expires_at FROM user_sessions_nodepath 
+		SELECT user_id, expires_at FROM user_sessions 
 		WHERE session_token = ? AND is_active = TRUE
 	`, token).Scan(&userID, &expiresAt)
 	
@@ -357,25 +357,25 @@ func (ah *AuthHandlers) getSession(token string) (int, bool) {
 	// Check if session has expired
 	if time.Now().After(expiresAt) {
 		// Mark session as inactive
-		ah.db.Exec(`UPDATE user_sessions_nodepath SET is_active = FALSE WHERE session_token = ?`, token)
+		ah.db.Exec(`UPDATE user_sessions SET is_active = FALSE WHERE session_token = ?`, token)
 		return 0, false
 	}
 	
 	// Update last accessed time
-	ah.db.Exec(`UPDATE user_sessions_nodepath SET last_accessed = NOW() WHERE session_token = ?`, token)
+	ah.db.Exec(`UPDATE user_sessions SET last_accessed = NOW() WHERE session_token = ?`, token)
 	
 	return userID, true
 }
 
 // removeSession removes a session token from database
 func (ah *AuthHandlers) removeSession(token string) error {
-	_, err := ah.db.Exec(`UPDATE user_sessions_nodepath SET is_active = FALSE WHERE session_token = ?`, token)
+	_, err := ah.db.Exec(`UPDATE user_sessions SET is_active = FALSE WHERE session_token = ?`, token)
 	return err
 }
 
 // cleanupExpiredSessions removes expired sessions from database
 func (ah *AuthHandlers) cleanupExpiredSessions() error {
-	_, err := ah.db.Exec(`DELETE FROM user_sessions_nodepath WHERE expires_at < NOW() OR is_active = FALSE`)
+	_, err := ah.db.Exec(`DELETE FROM user_sessions WHERE expires_at < NOW() OR is_active = FALSE`)
 	return err
 }
 

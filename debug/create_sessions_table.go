@@ -54,5 +54,5 @@ func main() {
 		log.Fatalf("Failed to execute SQL: %v", err)
 	}
 
-	fmt.Println("Successfully created user_sessions_nodepath table")
+	fmt.Println("Successfully created user_sessions table")
 }

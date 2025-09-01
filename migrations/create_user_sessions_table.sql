@@ -1,7 +1,7 @@
--- Create user_sessions_nodepath table for persistent session storage
+-- Create user_sessions table for persistent session storage
 -- This table will replace the in-memory session map for better scalability
 
-CREATE TABLE IF NOT EXISTS user_sessions_nodepath (
+CREATE TABLE IF NOT EXISTS user_sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_token VARCHAR(255) NOT NULL UNIQUE,
     user_id INT NOT NULL,
@@ -15,14 +15,14 @@ CREATE TABLE IF NOT EXISTS user_sessions_nodepath (
     INDEX idx_user_id (user_id),
     INDEX idx_expires_at (expires_at),
     INDEX idx_active_sessions (user_id, is_active, expires_at),
-    FOREIGN KEY (user_id) REFERENCES users_nodepath(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Add cleanup for expired sessions (optional stored procedure)
 DELIMITER //
 CREATE PROCEDURE CleanupExpiredSessions()
 BEGIN
-    DELETE FROM user_sessions_nodepath 
+    DELETE FROM user_sessions 
     WHERE expires_at < NOW() OR is_active = FALSE;
 END //
 DELIMITER ;

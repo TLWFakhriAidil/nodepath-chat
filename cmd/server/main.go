@@ -308,7 +308,7 @@ func main() {
 			for {
 				// Clean up expired sessions every 30 minutes
 				time.Sleep(30 * time.Minute)
-				if _, err := db.Exec(`DELETE FROM user_sessions_nodepath WHERE expires_at < NOW() OR is_active = FALSE`); err != nil {
+				if _, err := db.Exec(`DELETE FROM user_sessions WHERE expires_at < NOW() OR is_active = FALSE`); err != nil {
 					logrus.WithError(err).Error("Failed to cleanup expired sessions")
 				} else {
 					logrus.Info("Successfully cleaned up expired sessions")

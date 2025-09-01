@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS device_setting_nodepath (
 
 // Users table for authentication and user management
 const createUsersTable = `
-CREATE TABLE IF NOT EXISTS users_nodepath (
+CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     full_name VARCHAR(255) NOT NULL,
