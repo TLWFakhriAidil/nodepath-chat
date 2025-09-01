@@ -354,25 +354,52 @@ func (h *AIWhatsappHandlers) extractWahaFields(payload map[string]interface{}) (
 		logrus.WithField("extraction_method", "top_level_session").Debug("🔍 WAHA: Session extracted from top level")
 	}
 
-	// Try to extract from payload.payload._data structure (nested)
+	// Method 1a: Try direct payload._data structure (production format)
+	if dataMap, ok := payload["_data"].(map[string]interface{}); ok {
+		logrus.Debug("🔍 WAHA: Found payload._data structure (production format)")
+		// Extract from direct _data structure
+		if fromVal, ok := dataMap["from"].(string); ok {
+			from = fromVal
+			logrus.WithField("extraction_method", "direct_payload_data_from").Debug("🔍 WAHA: From extracted from direct _data")
+		}
+		if bodyVal, ok := dataMap["body"].(string); ok {
+			message = bodyVal
+			logrus.WithField("extraction_method", "direct_payload_data_body").Debug("🔍 WAHA: Message extracted from direct _data")
+		}
+		// Check group status from Info.IsGroup
+		if info, ok := dataMap["Info"].(map[string]interface{}); ok {
+			if isGroupVal, ok := info["IsGroup"].(bool); ok {
+				isGroup = isGroupVal
+				logrus.WithField("extraction_method", "direct_payload_info_isgroup").Debug("🔍 WAHA: Group status extracted from direct Info")
+			}
+		}
+	}
+
+	// Method 1b: Try to extract from payload.payload._data structure (nested)
 	if payloadData, ok := payload["payload"].(map[string]interface{}); ok {
 		logrus.Debug("🔍 WAHA: Found payload.payload structure")
 		if dataMap, ok := payloadData["_data"].(map[string]interface{}); ok {
 			logrus.Debug("🔍 WAHA: Found payload.payload._data structure")
 			// Extract from nested _data structure
-			if fromVal, ok := dataMap["from"].(string); ok {
-				from = fromVal
-				logrus.WithField("extraction_method", "nested_payload_data_from").Debug("🔍 WAHA: From extracted from nested _data")
+			if from == "" {
+				if fromVal, ok := dataMap["from"].(string); ok {
+					from = fromVal
+					logrus.WithField("extraction_method", "nested_payload_data_from").Debug("🔍 WAHA: From extracted from nested _data")
+				}
 			}
-			if bodyVal, ok := dataMap["body"].(string); ok {
-				message = bodyVal
-				logrus.WithField("extraction_method", "nested_payload_data_body").Debug("🔍 WAHA: Message extracted from nested _data")
+			if message == "" {
+				if bodyVal, ok := dataMap["body"].(string); ok {
+					message = bodyVal
+					logrus.WithField("extraction_method", "nested_payload_data_body").Debug("🔍 WAHA: Message extracted from nested _data")
+				}
 			}
 			// Check group status from Info.IsGroup
-			if info, ok := dataMap["Info"].(map[string]interface{}); ok {
-				if isGroupVal, ok := info["IsGroup"].(bool); ok {
-					isGroup = isGroupVal
-					logrus.WithField("extraction_method", "nested_payload_info_isgroup").Debug("🔍 WAHA: Group status extracted from nested Info")
+			if !isGroup {
+				if info, ok := dataMap["Info"].(map[string]interface{}); ok {
+					if isGroupVal, ok := info["IsGroup"].(bool); ok {
+						isGroup = isGroupVal
+						logrus.WithField("extraction_method", "nested_payload_info_isgroup").Debug("🔍 WAHA: Group status extracted from nested Info")
+					}
 				}
 			}
 		}
@@ -469,7 +496,8 @@ func (h *AIWhatsappHandlers) extractWahaFields(payload map[string]interface{}) (
 
 	// Log comprehensive extraction results for debugging
 	logrus.WithFields(logrus.Fields{
-		"method_1_payload_data": payload["payload"] != nil,
+		"method_1a_direct_data": payload["_data"] != nil,
+		"method_1b_payload_data": payload["payload"] != nil,
 		"method_2_direct": payload["from"] != nil || payload["body"] != nil,
 		"method_3_data": payload["data"] != nil,
 		"method_4_webhook": payload["webhook"] != nil,
