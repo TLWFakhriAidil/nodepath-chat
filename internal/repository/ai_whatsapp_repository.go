@@ -45,10 +45,10 @@ type AIWhatsappRepository interface {
 	GetConversationStats(idDevice string) (map[string]int, error)
 	GetActiveConversationCount() (int, error)
 	GetConversationsByDateRange(startDate, endDate time.Time) ([]models.AIWhatsapp, error)
-	GetAnalyticsData(startDate, endDate time.Time, idDevice string) (map[string]interface{}, error)
+	GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID int) (map[string]interface{}, error)
 
 	// Data table operations
-	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string) ([]models.AIWhatsapp, int, error)
+	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error)
 	
 	// Database access for transactions
 	GetDB() *sql.DB
@@ -416,49 +416,55 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 }
 
 // GetAllAIWhatsappData retrieves all AI WhatsApp conversation records with pagination and filtering
-func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string) ([]models.AIWhatsapp, int, error) {
-	// Build base query
+func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error) {
+	// Build base query with JOIN to filter by user
 	baseQuery := `
-		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
-		       conv_current, human, niche, jam, intro, 
-		       catatan_staff, balas, data_image, conv_stage, 
-		       bot_balas, keywordiklan, marketer, update_today, 
-		       created_at, updated_at
-		FROM ai_whatsapp_nodepath
+		SELECT a.id_prospect, a.id_device, a.prospect_num, a.stage, a.date_order, a.conv_last, 
+		       a.conv_current, a.human, a.niche, a.jam, a.intro, 
+		       a.catatan_staff, a.balas, a.data_image, a.conv_stage, 
+		       a.bot_balas, a.keywordiklan, a.marketer, a.update_today, 
+		       a.created_at, a.updated_at
+		FROM ai_whatsapp_nodepath a
+		JOIN device_setting_nodepath d ON a.id_device = d.id_device
+		WHERE d.user_id = ?
 	`
 
-	countQuery := `SELECT COUNT(*) FROM ai_whatsapp_nodepath`
+	countQuery := `SELECT COUNT(*) FROM ai_whatsapp_nodepath a JOIN device_setting_nodepath d ON a.id_device = d.id_device WHERE d.user_id = ?`
 
-	// Build WHERE conditions
+	// Build additional WHERE conditions
 	var conditions []string
 	var args []interface{}
 	var countArgs []interface{}
 
+	// Start with userID for both queries
+	args = append(args, userID)
+	countArgs = append(countArgs, userID)
+
 	// Add device filter
 	if deviceFilter != "" {
-		conditions = append(conditions, "id_device = ?")
+		conditions = append(conditions, "a.id_device = ?")
 		args = append(args, deviceFilter)
 		countArgs = append(countArgs, deviceFilter)
 	}
 
 	// Add stage filter
 	if stageFilter != "" {
-		conditions = append(conditions, "stage = ?")
+		conditions = append(conditions, "a.stage = ?")
 		args = append(args, stageFilter)
 		countArgs = append(countArgs, stageFilter)
 	}
 
-	// Add search filter (searches in prospect_num, niche, and stage)
+	// Add search filter (searches in prospect_num, niche, stage, and marketer)
 	if search != "" {
-		conditions = append(conditions, "(prospect_num LIKE ? OR niche LIKE ? OR stage LIKE ? OR marketer LIKE ?)")
+		conditions = append(conditions, "(a.prospect_num LIKE ? OR a.niche LIKE ? OR a.stage LIKE ? OR a.marketer LIKE ?)")
 		searchTerm := "%" + search + "%"
 		args = append(args, searchTerm, searchTerm, searchTerm, searchTerm)
 		countArgs = append(countArgs, searchTerm, searchTerm, searchTerm, searchTerm)
 	}
 
-	// Add WHERE clause if conditions exist
+	// Add additional WHERE conditions if they exist
 	if len(conditions) > 0 {
-		whereClause := " WHERE " + fmt.Sprintf("%s", conditions[0])
+		whereClause := " AND " + fmt.Sprintf("%s", conditions[0])
 		for i := 1; i < len(conditions); i++ {
 			whereClause += " AND " + conditions[i]
 		}
@@ -548,24 +554,25 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 }
 
 // GetAnalyticsData retrieves analytics data from ai_whatsapp_nodepath table with date filtering
-func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, idDevice string) (map[string]interface{}, error) {
-	// Base query for filtering by date_order
+func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID int) (map[string]interface{}, error) {
+	// Base query for filtering by date_order with user-specific filtering
 	baseQuery := `
 		SELECT 
 			COUNT(*) as total_conversations,
-			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_active,
-			COUNT(CASE WHEN human = 1 THEN 1 END) as human_takeover,
-			COUNT(DISTINCT id_device) as unique_devices,
-			COUNT(DISTINCT niche) as unique_niches,
-			COUNT(CASE WHEN stage IS NOT NULL AND stage != '' THEN 1 END) as conversations_with_stage
-		FROM ai_whatsapp_nodepath 
-		WHERE date_order BETWEEN ? AND ?
+			COUNT(CASE WHEN a.human = 0 THEN 1 END) as ai_active,
+			COUNT(CASE WHEN a.human = 1 THEN 1 END) as human_takeover,
+			COUNT(DISTINCT a.id_device) as unique_devices,
+			COUNT(DISTINCT a.niche) as unique_niches,
+			COUNT(CASE WHEN a.stage IS NOT NULL AND a.stage != '' THEN 1 END) as conversations_with_stage
+		FROM ai_whatsapp_nodepath a
+		JOIN device_setting_nodepath d ON a.id_device = d.id_device
+		WHERE d.user_id = ? AND a.date_order BETWEEN ? AND ?
 	`
 
 	// Add device filter if specified
-	args := []interface{}{startDate, endDate}
+	args := []interface{}{userID, startDate, endDate}
 	if idDevice != "" && idDevice != "all" {
-		baseQuery += " AND id_device = ?"
+		baseQuery += " AND a.id_device = ?"
 		args = append(args, idDevice)
 	}
 
@@ -582,17 +589,18 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 	// Get daily breakdown
 	dailyQuery := `
 		SELECT 
-			DATE(date_order) as date,
+			DATE(a.date_order) as date,
 			COUNT(*) as conversations,
-			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_conversations,
-			COUNT(CASE WHEN human = 1 THEN 1 END) as human_conversations
-		FROM ai_whatsapp_nodepath 
-		WHERE date_order BETWEEN ? AND ?
+			COUNT(CASE WHEN a.human = 0 THEN 1 END) as ai_conversations,
+			COUNT(CASE WHEN a.human = 1 THEN 1 END) as human_conversations
+		FROM ai_whatsapp_nodepath a
+		JOIN device_setting_nodepath d ON a.id_device = d.id_device
+		WHERE d.user_id = ? AND a.date_order BETWEEN ? AND ?
 	`
 
-	dailyArgs := []interface{}{startDate, endDate}
+	dailyArgs := []interface{}{userID, startDate, endDate}
 	if idDevice != "" && idDevice != "all" {
-		dailyQuery += " AND id_device = ?"
+		dailyQuery += " AND a.id_device = ?"
 		dailyArgs = append(dailyArgs, idDevice)
 	}
 	dailyQuery += " GROUP BY DATE(date_order) ORDER BY DATE(date_order)"
@@ -625,15 +633,16 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 	// Get stage distribution
 	stageQuery := `
 		SELECT 
-			stage,
+			a.stage,
 			COUNT(*) as count
-		FROM ai_whatsapp_nodepath 
-		WHERE date_order BETWEEN ? AND ? AND stage IS NOT NULL AND stage != ''
+		FROM ai_whatsapp_nodepath a
+		JOIN device_setting_nodepath d ON a.id_device = d.id_device
+		WHERE d.user_id = ? AND a.date_order BETWEEN ? AND ? AND a.stage IS NOT NULL AND a.stage != ''
 	`
 
-	stageArgs := []interface{}{startDate, endDate}
+	stageArgs := []interface{}{userID, startDate, endDate}
 	if idDevice != "" && idDevice != "all" {
-		stageQuery += " AND id_device = ?"
+		stageQuery += " AND a.id_device = ?"
 		stageArgs = append(stageArgs, idDevice)
 	}
 	stageQuery += " GROUP BY stage ORDER BY count DESC"

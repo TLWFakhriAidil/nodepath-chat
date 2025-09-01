@@ -880,8 +880,18 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 		req.DeviceID = "all"
 	}
 
-	// Get analytics data from repository
-	analyticsData, err := h.AIRepo.GetAnalyticsData(startDate, endDate, req.DeviceID)
+	// Get user ID from authentication context
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return c.Status(fiber.StatusUnauthorized).JSON(AnalyticsResponse{
+			Success: false,
+			Message: "Authentication required",
+		})
+	}
+
+	// Get analytics data from repository with user-specific filtering
+	analyticsData, err := h.AIRepo.GetAnalyticsData(startDate, endDate, req.DeviceID, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get analytics data")
 		return c.Status(fiber.StatusInternalServerError).JSON(AnalyticsResponse{
@@ -938,8 +948,18 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 	// Calculate offset for pagination
 	offset := (page - 1) * limit
 
-	// Get data from repository
-	data, total, err := h.AIRepo.GetAllAIWhatsappData(limit, offset, deviceFilter, stageFilter, search)
+	// Get user ID from authentication context
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"message": "Authentication required",
+		})
+	}
+
+	// Get data from repository with user-specific filtering
+	data, total, err := h.AIRepo.GetAllAIWhatsappData(limit, offset, deviceFilter, stageFilter, search, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get AI WhatsApp data")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

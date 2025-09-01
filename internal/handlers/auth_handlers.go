@@ -252,7 +252,17 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 		SameSite: "Lax",
 	})
 
-
+	// Store session in database with client information
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	err = ah.storeSession(token, user.ID, ipAddress, userAgent)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to store session")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to create session",
+		})
+	}
 
 	logrus.WithField("user_id", user.ID).Info("User logged in successfully")
 

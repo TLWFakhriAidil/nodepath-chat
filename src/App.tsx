@@ -28,6 +28,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import TopBar from './components/TopBar';
 
 const queryClient = new QueryClient();
 
@@ -124,39 +125,10 @@ const App = () => {
                       sidebarOpen ? "lg:ml-64" : "ml-0"
                     )}>
                       {/* Top bar */}
-                      <div className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50">
-                        <div className="flex h-16 items-center justify-between px-6">
-                          <div className="flex items-center space-x-4">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setSidebarOpen(!sidebarOpen)}
-                              className="text-slate-600 dark:text-slate-300"
-                            >
-                              <Menu className="w-5 h-5" />
-                            </Button>
-                            <div>
-                              <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
-                                ChatBot Builder
-                              </h1>
-                              <p className="text-sm text-slate-500 dark:text-slate-400">
-                                Build intelligent conversational flows
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center space-x-4">
-                            <div className="hidden md:flex items-center space-x-2 bg-slate-100/50 dark:bg-slate-800/50 rounded-lg px-3 py-1.5">
-                              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                              <span className="text-sm text-slate-600 dark:text-slate-300">System Online</span>
-                            </div>
-                            
-                            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
-                              <span className="text-sm font-medium text-white">U</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <TopBar 
+                        sidebarOpen={sidebarOpen} 
+                        setSidebarOpen={setSidebarOpen} 
+                      />
 
                       {/* Page content */}
                       <main className="p-6">
