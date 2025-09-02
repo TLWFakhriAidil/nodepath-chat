@@ -63,6 +63,7 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 ### WAHA Webhook Integration
 - **Fixed Route Registration**: Corrected AI WhatsApp routes to use proper `/api/ai-whatsapp` prefix
 - **Fixed Data Extraction**: Updated WAHA webhook data extraction to handle both nested and direct payload structures
+- **Hardcoded API Key**: WAHA provider now uses hardcoded API key `dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0` for authentication
 - **Working Endpoints**:
   - `POST /api/ai-whatsapp/test/waha/extraction` - Test WAHA data extraction
   - `POST /api/ai-whatsapp/webhook/waha/{device_id}` - Production WAHA webhook handler

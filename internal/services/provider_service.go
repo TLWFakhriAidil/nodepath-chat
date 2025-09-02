@@ -434,13 +434,8 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 		return nil
 	}
 
-	// Get API key from device settings
-	apiKey := ""
-	if deviceSettings.APIKey.Valid {
-		apiKey = deviceSettings.APIKey.String
-	} else {
-		return fmt.Errorf("no API key found for WAHA device %s", deviceSettings.Instance.String)
-	}
+	// Hardcoded API key for WAHA provider
+	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
 
 	// Get instance for session (as per user requirements)
 	instance := ""
@@ -453,12 +448,23 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 	// WAHA API endpoint for sending text messages
 	apiURL := "https://waha-plus-production-705f.up.railway.app/api/sendText"
 	
+	// 🚨 DEBUG: Log API key details (masked for security)
+	maskedAPIKey := "<empty>"
+	if len(apiKey) > 8 {
+		maskedAPIKey = apiKey[:4] + "******" + apiKey[len(apiKey)-4:]
+	} else if len(apiKey) > 0 {
+		maskedAPIKey = "****" + apiKey[len(apiKey)-2:]
+	}
+	
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
 		"message_len":  len(message),
 		"device_id":    deviceSettings.Instance.String,
-	}).Debug("[WAHA-TEXT] Preparing request")
+		"instance":     instance,
+		"api_key_masked": maskedAPIKey,
+		"api_key_length": len(apiKey),
+	}).Error("🚨 WAHA DEBUG: Preparing request with API key details")
 
 	// Format phone number for WAHA (international format without + and add @c.us)
 	chatId := phoneNumber
@@ -480,6 +486,15 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
+	// 🚨 DEBUG: Log complete payload details
+	logrus.WithFields(logrus.Fields{
+		"payload": payload,
+		"json_data": string(jsonData),
+		"chat_id": chatId,
+		"session": instance,
+		"message": message,
+	}).Error("🚨 WAHA DEBUG: Complete payload prepared")
+
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -490,6 +505,22 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Api-Key", apiKey)  // API key for authentication
+
+	// 🚨 DEBUG: Log request headers (with masked API key)
+	headersCopy := make(map[string]string)
+	for key, values := range req.Header {
+		if key == "X-Api-Key" {
+			headersCopy[key] = maskedAPIKey
+		} else {
+			headersCopy[key] = strings.Join(values, ", ")
+		}
+	}
+	logrus.WithFields(logrus.Fields{
+		"method": "POST",
+		"url": apiURL,
+		"headers": headersCopy,
+		"content_length": len(jsonData),
+	}).Error("🚨 WAHA DEBUG: Request headers and details")
 
 	// Send request
 	startTime := time.Now()
@@ -506,23 +537,47 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 	}
 
 	duration := time.Since(startTime)
+	
+	// 🚨 DEBUG: Log complete response details
+	responseHeaders := make(map[string]string)
+	for key, values := range resp.Header {
+		responseHeaders[key] = strings.Join(values, ", ")
+	}
+	
 	logrus.WithFields(logrus.Fields{
 		"status_code": resp.StatusCode,
-		"response":    string(body),
-		"duration":    duration,
-		"instance":    instance,
-	}).Debug("[WAHA-TEXT] Response received")
+		"response_body": string(body),
+		"response_headers": responseHeaders,
+		"duration": duration,
+		"instance": instance,
+		"success": resp.StatusCode >= 200 && resp.StatusCode < 300,
+	}).Error("🚨 WAHA DEBUG: Complete response received")
 
 	// Check for success (200-299 status codes)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// 🚨 DEBUG: Log error details for 401 Unauthorized
+		if resp.StatusCode == 401 {
+			logrus.WithFields(logrus.Fields{
+				"error_type": "UNAUTHORIZED",
+				"api_key_provided": len(apiKey) > 0,
+				"api_key_length": len(apiKey),
+				"api_key_masked": maskedAPIKey,
+				"instance": instance,
+				"endpoint": apiURL,
+				"response_body": string(body),
+			}).Error("🚨 WAHA DEBUG: 401 UNAUTHORIZED ERROR - API Key Issue")
+		}
 		return fmt.Errorf("WAHA API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
+	// 🚨 DEBUG: Log successful send
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
-		"duration":     duration,
-		"device_id":    deviceSettings.Instance.String,
-	}).Info("[WAHA-TEXT] ✅ Message sent successfully")
+		"duration": duration,
+		"device_id": deviceSettings.Instance.String,
+		"status_code": resp.StatusCode,
+		"response_body": string(body),
+	}).Error("🚨 WAHA DEBUG: ✅ Message sent successfully")
 
 	return nil
 }
@@ -530,13 +585,8 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 // sendWahaMediaMessage sends a media message via WAHA API
 // Handles video, audio, and image files with appropriate API endpoints
 func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSettings, phoneNumber, mediaURL string) error {
-	// Get API key from device settings
-	apiKey := ""
-	if deviceSettings.APIKey.Valid {
-		apiKey = deviceSettings.APIKey.String
-	} else {
-		return fmt.Errorf("no API key found for WAHA device %s", deviceSettings.Instance.String)
-	}
+	// Hardcoded API key for WAHA provider
+	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
 
 	// Get instance for session (as per user requirements)
 	instance := ""
@@ -562,13 +612,24 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendImage"
 	}
 	
+	// 🚨 DEBUG: Log API key details (masked for security)
+	maskedAPIKey := "<empty>"
+	if len(apiKey) > 8 {
+		maskedAPIKey = apiKey[:4] + "******" + apiKey[len(apiKey)-4:]
+	} else if len(apiKey) > 0 {
+		maskedAPIKey = "****" + apiKey[len(apiKey)-2:]
+	}
+	
 	logrus.WithFields(logrus.Fields{
-		"api_url":      apiURL,
+		"api_url": apiURL,
 		"phone_number": phoneNumber,
-		"media_url":    mediaURL,
-		"media_type":   mediaType,
-		"device_id":    deviceSettings.Instance.String,
-	}).Debug("[WAHA-MEDIA] Preparing request")
+		"media_url": mediaURL,
+		"media_type": mediaType,
+		"device_id": deviceSettings.Instance.String,
+		"instance": instance,
+		"api_key_masked": maskedAPIKey,
+		"api_key_length": len(apiKey),
+	}).Error("🚨 WAHA MEDIA DEBUG: Preparing request with API key details")
 
 	// Format phone number for WAHA (international format without + and add @c.us)
 	chatId := phoneNumber
@@ -599,6 +660,16 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
+	// 🚨 DEBUG: Log complete payload details
+	logrus.WithFields(logrus.Fields{
+		"payload": payload,
+		"json_data": string(jsonData),
+		"chat_id": chatId,
+		"session": instance,
+		"media_url": mediaURL,
+		"media_type": mediaType,
+	}).Error("🚨 WAHA MEDIA DEBUG: Complete payload prepared")
+
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -625,25 +696,50 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 	}
 
 	duration := time.Since(startTime)
+	
+	// 🚨 DEBUG: Log complete response details
+	responseHeaders := make(map[string]string)
+	for key, values := range resp.Header {
+		responseHeaders[key] = strings.Join(values, ", ")
+	}
+	
 	logrus.WithFields(logrus.Fields{
 		"status_code": resp.StatusCode,
-		"response":    string(body),
-		"duration":    duration,
-		"instance":    instance,
-		"media_type":  mediaType,
-	}).Debug("[WAHA-MEDIA] Response received")
+		"response_body": string(body),
+		"response_headers": responseHeaders,
+		"duration": duration,
+		"instance": instance,
+		"media_type": mediaType,
+		"success": resp.StatusCode >= 200 && resp.StatusCode < 300,
+	}).Error("🚨 WAHA MEDIA DEBUG: Complete response received")
 
 	// Check for success (200-299 status codes)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// 🚨 DEBUG: Log error details for 401 Unauthorized
+		if resp.StatusCode == 401 {
+			logrus.WithFields(logrus.Fields{
+				"error_type": "UNAUTHORIZED",
+				"api_key_provided": len(apiKey) > 0,
+				"api_key_length": len(apiKey),
+				"api_key_masked": maskedAPIKey,
+				"instance": instance,
+				"endpoint": apiURL,
+				"media_type": mediaType,
+				"response_body": string(body),
+			}).Error("🚨 WAHA MEDIA DEBUG: 401 UNAUTHORIZED ERROR - API Key Issue")
+		}
 		return fmt.Errorf("WAHA API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
+	// 🚨 DEBUG: Log successful send
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
-		"duration":     duration,
-		"device_id":    deviceSettings.Instance.String,
-		"media_type":   mediaType,
-	}).Info("[WAHA-MEDIA] ✅ Media sent successfully")
+		"duration": duration,
+		"device_id": deviceSettings.Instance.String,
+		"media_type": mediaType,
+		"status_code": resp.StatusCode,
+		"response_body": string(body),
+	}).Error("🚨 WAHA MEDIA DEBUG: ✅ Media sent successfully")
 
 	return nil
 }
