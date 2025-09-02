@@ -2578,3 +2578,10 @@ CREATE TABLE `users` (
   - **Error Handling**: Comprehensive logging for debugging extraction issues
 
 **WAHA Webhook Status**: 🟢 **FULLY IMPLEMENTED** - Standardized webhook data extraction aligned with specifications
+
+- ✅ **BUILD COMPATIBILITY FIX**: Resolved type mismatch error in WAHA webhook processing
+  - **Issue Fixed**: `cannot use req.Payload (struct) as map[string]interface{} value` compilation error
+  - **Solution**: Added JSON marshaling/unmarshaling to convert struct payload to map format
+  - **Affected Function**: `TestWahaExtraction` endpoint in `ai_whatsapp_handlers.go`
+  - **Build Status**: Successfully compiles with both standard and CGO_ENABLED=0 builds
+  - **Docker Compatibility**: Now builds successfully in Docker environment for Railway deployment

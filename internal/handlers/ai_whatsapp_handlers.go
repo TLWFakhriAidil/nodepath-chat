@@ -664,8 +664,27 @@ func (h *AIWhatsappHandlers) TestWahaExtraction(c *fiber.Ctx) error {
 		})
 	}
 
+	// Convert struct payload to map for extraction function
+	payloadBytes, err := json.Marshal(req.Payload)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA TEST: Failed to marshal payload")
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to process payload",
+			"details": err.Error(),
+		})
+	}
+	
+	var payloadMap map[string]interface{}
+	if err := json.Unmarshal(payloadBytes, &payloadMap); err != nil {
+		logrus.WithError(err).Error("❌ WAHA TEST: Failed to unmarshal payload")
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to process payload",
+			"details": err.Error(),
+		})
+	}
+	
 	// Extract standardized webhook data
-	extractedData := h.extractWahaWebhookData(req.Payload)
+	extractedData := h.extractWahaWebhookData(payloadMap)
 
 	// Log the test extraction
 	logrus.WithFields(logrus.Fields{
