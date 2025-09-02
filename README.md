@@ -2544,3 +2544,37 @@ CREATE TABLE `users` (
 - `debug/check_users_schema.go` - Created schema inspection tool
 
 **Database Schema Status**: 🟢 **FULLY ALIGNED** - Both authentication tables now work correctly with the actual database schema
+
+---
+
+### WAHA Webhook Data Extraction Implementation (January 2025)
+
+- ✅ **STANDARDIZED WAHA WEBHOOK PROCESSING**: Implemented standardized data extraction from WAHA webhook payloads
+  - **Extraction Logic**: Extracts data specifically from the `payload` object as specified
+  - **Fields Extracted**: `sender_phone`, `sender_name`, `message`, `is_from_me`, `is_group`
+  - **Data Sources**: 
+    - `sender_phone` = `payload.from`
+    - `sender_name` = `payload.media.Info.PushName`
+    - `message` = `payload.body`
+    - `is_from_me` = `payload.fromMe`
+    - `is_group` = `payload.media.Info.IsGroup`
+
+- ✅ **PROCESSING LOGIC**: Implemented conditional message processing based on extracted flags
+  - **Group Messages**: Ignored when `is_group = true`
+  - **System Commands**: Processed when `is_from_me = true` and message starts with `%`, `#`, `cmd`, or `&`
+  - **Customer Messages**: All other messages treated as normal customer interactions
+  - **Response Format**: Standardized JSON format with all extracted fields
+
+- ✅ **IMPLEMENTATION DETAILS**:
+  - **New Function**: `extractWahaWebhookData()` for standardized extraction
+  - **Data Structure**: `WahaWebhookData` struct for type-safe data handling
+  - **Updated Handler**: `HandleWahaWebhook()` now uses new extraction logic
+  - **Test Endpoint**: `/test/waha/extraction` for testing webhook data extraction
+  - **File Modified**: `internal/handlers/ai_whatsapp_handlers.go`
+
+- ✅ **BACKWARD COMPATIBILITY**: Maintains compatibility with existing webhook processing
+  - **Legacy Support**: Old extraction methods preserved for non-WAHA providers
+  - **Provider Detection**: WAHA-specific processing only for WAHA webhooks
+  - **Error Handling**: Comprehensive logging for debugging extraction issues
+
+**WAHA Webhook Status**: 🟢 **FULLY IMPLEMENTED** - Standardized webhook data extraction aligned with specifications
