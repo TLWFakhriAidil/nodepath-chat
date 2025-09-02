@@ -20,6 +20,7 @@ type AIWhatsappHandlers struct {
 	AIWhatsappService services.AIWhatsappService
 	AIRepo            repository.AIWhatsappRepository
 	DeviceRepo        repository.DeviceSettingsRepository
+	mainHandlers      *Handlers // Reference to main handlers for flow routing
 }
 
 // NewAIWhatsappHandlers creates a new AI WhatsApp handlers instance
@@ -32,7 +33,13 @@ func NewAIWhatsappHandlers(
 		AIWhatsappService: aiWhatsappService,
 		AIRepo:            aiRepo,
 		DeviceRepo:        deviceRepo,
+		mainHandlers:      nil, // Will be set after main handlers initialization
 	}
+}
+
+// SetMainHandlers sets the reference to main handlers for flow routing
+func (h *AIWhatsappHandlers) SetMainHandlers(mainHandlers *Handlers) {
+	h.mainHandlers = mainHandlers
 }
 
 // SetupAIWhatsappRoutes sets up AI WhatsApp webhook routes
@@ -327,14 +334,47 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 				"sender_phone": extractedData.SenderPhone,
 				"command": truncateString(message, 50),
 				"device_id": deviceID,
-			}).Info("🔧 WAHA: Processing system/device command from sender")
+			}).Info("🔧 WAHA: Processing system/device command through standardized flow routing")
 			
-			// Process system command using existing device command logic
-			go h.processIncomingMessage(extractedData.SenderPhone, message, deviceID, "waha")
+			// STANDARDIZED FLOW ROUTING: Use the same flow processing logic as Whacenter for commands
+			// Create webhook data structure compatible with processWebhookMessage
+			webhookData := map[string]interface{}{
+				"from": extractedData.SenderPhone,
+				"message": message,
+				"message_type": "text",
+				"is_group": extractedData.IsGroup,
+				"sender_name": extractedData.SenderName,
+				"is_from_me": extractedData.IsFromMe,
+			}
+
+			// Route through the standardized webhook processing system
+			go func() {
+				if h.mainHandlers != nil {
+					err := h.mainHandlers.processWebhookMessage(webhookData, deviceID, "waha")
+					if err != nil {
+						logrus.WithError(err).WithFields(logrus.Fields{
+							"device_id": deviceID,
+							"sender_phone": extractedData.SenderPhone,
+							"command": message,
+						}).Error("❌ WAHA: Failed to process system command through standardized flow routing")
+					} else {
+						logrus.WithFields(logrus.Fields{
+							"device_id": deviceID,
+							"sender_phone": extractedData.SenderPhone,
+							"command": message,
+						}).Info("✅ WAHA: Successfully processed system command through standardized flow routing")
+					}
+				} else {
+					logrus.Error("❌ WAHA: Main handlers not available, falling back to direct AI processing for command")
+					// Fallback to direct processing if main handlers not available
+					h.processIncomingMessage(extractedData.SenderPhone, message, deviceID, "waha")
+				}
+			}()
 			
 			return c.JSON(fiber.Map{
 				"status": "success",
 				"type": "system_command",
+				"routing": "standardized_flow",
 				"extracted_data": extractedData,
 			})
 		} else {
@@ -358,14 +398,46 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 		"sender_name": extractedData.SenderName,
 		"message": truncateString(extractedData.Message, 100),
 		"device_id": deviceID,
-	}).Info("💬 WAHA: Processing normal customer message")
+	}).Info("💬 WAHA: Processing normal customer message through standardized flow routing")
 
-	// Process the customer message through the AI system
-	go h.processIncomingMessage(extractedData.SenderPhone, extractedData.Message, deviceID, "waha")
+	// STANDARDIZED FLOW ROUTING: Use the same flow processing logic as Whacenter
+	// Create webhook data structure compatible with processWebhookMessage
+	webhookData := map[string]interface{}{
+		"from": extractedData.SenderPhone,
+		"message": extractedData.Message,
+		"message_type": "text",
+		"is_group": extractedData.IsGroup,
+		"sender_name": extractedData.SenderName,
+		"is_from_me": extractedData.IsFromMe,
+	}
+
+	// Route through the standardized webhook processing system
+	// This ensures WAHA follows the same flow node logic as Whacenter
+	go func() {
+		if h.mainHandlers != nil {
+			err := h.mainHandlers.processWebhookMessage(webhookData, deviceID, "waha")
+			if err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"device_id": deviceID,
+					"sender_phone": extractedData.SenderPhone,
+				}).Error("❌ WAHA: Failed to process message through standardized flow routing")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"device_id": deviceID,
+					"sender_phone": extractedData.SenderPhone,
+				}).Info("✅ WAHA: Successfully processed message through standardized flow routing")
+			}
+		} else {
+			logrus.Error("❌ WAHA: Main handlers not available, falling back to direct AI processing")
+			// Fallback to direct processing if main handlers not available
+			h.processIncomingMessage(extractedData.SenderPhone, extractedData.Message, deviceID, "waha")
+		}
+	}()
 
 	return c.JSON(fiber.Map{
 		"status": "success",
 		"type": "customer_message",
+		"routing": "standardized_flow",
 		"extracted_data": extractedData,
 	})
 }

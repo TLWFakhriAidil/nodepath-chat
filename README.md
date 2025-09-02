@@ -48,7 +48,19 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 ## 🔧 Recent Updates & Fixes
 
-### WAHA Webhook Integration (Latest)
+### Standardized Flow Processing System (Latest)
+- **Unified Flow Routing**: All WhatsApp providers (WAHA, Whacenter, Wablas) now use the same standardized flow processing logic
+- **Flow Engine Priority**: Messages are processed through the flow engine first, with AI as fallback
+- **Cross-Provider Compatibility**: Standardized webhook data structure works across all providers
+- **Enhanced Processing Pipeline**:
+  - Device command detection (%, #, cmd prefixes)
+  - Flow node processing with stage management
+  - AI conversation fallback when flows are not configured
+  - Consistent message validation and logging
+- **WAHA Integration**: WAHA webhooks now route through the same flow processing as Whacenter
+- **Performance Optimization**: Reduced code duplication and improved maintainability
+
+### WAHA Webhook Integration
 - **Fixed Route Registration**: Corrected AI WhatsApp routes to use proper `/api/ai-whatsapp` prefix
 - **Fixed Data Extraction**: Updated WAHA webhook data extraction to handle both nested and direct payload structures
 - **Working Endpoints**:
@@ -277,6 +289,25 @@ After setup, verify Redis connection:
   - Comprehensive logging for device connection events
 - **User Control**: Users can manually connect/disconnect devices through device settings
 - **Performance**: Reliable message delivery when devices are connected
+
+### ✅ Standardized Flow Processing Architecture (2025-01-19)
+- **Unified Provider Integration**: All WhatsApp providers (WAHA, Whacenter, Wablas) now use the same standardized flow processing pipeline
+- **Cross-Provider Data Structure**: Implemented standardized webhook data format that works seamlessly across all providers
+- **Enhanced WAHA Integration**: WAHA webhooks now route through `device_settings_handlers.processWebhookMessage` instead of direct AI processing
+- **Consistent Processing Pipeline**:
+  - Message validation and cleaning
+  - Device command detection (%, #, cmd prefixes)
+  - Flow engine processing with priority
+  - AI conversation fallback
+  - Standardized error handling and logging
+- **Code Consolidation**: Eliminated duplicate processing logic between providers, improving maintainability
+- **Performance Optimization**: Reduced code complexity and improved processing efficiency
+- **Technical Implementation**:
+  - Modified `ai_whatsapp_handlers.go` to route WAHA messages through standardized flow
+  - Updated `device_settings_handlers.go` to accept WAHA webhook data
+  - Added `SetMainHandlers` method for cross-handler communication
+  - Implemented standardized webhook data extraction for all providers
+- **Testing Verified**: Successfully tested WAHA webhook processing through standardized flow routing
 
 ### ✅ Flow-Based Message Routing System (2025-01-19)
 - **Intelligent Message Routing**: Implemented priority-based message routing that checks for configured flows before falling back to AI conversation system

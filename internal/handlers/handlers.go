@@ -130,7 +130,8 @@ func NewHandlers(
 	// Initialize authentication handlers
 	authHandlers := NewAuthHandlers(db)
 	
-	return &Handlers{
+	// Create main handlers instance
+	mainHandlers := &Handlers{
 		flowService:           flowService,
 		aiService:             aiService,
 		queueService:          queueService,
@@ -143,6 +144,11 @@ func NewHandlers(
 		aiWhatsappHandlers:    aiWhatsappHandlers,
 		authHandlers:          authHandlers,
 	}
+	
+	// Set the reference to main handlers in AI WhatsApp handlers for flow routing
+	aiWhatsappHandlers.SetMainHandlers(mainHandlers)
+	
+	return mainHandlers
 }
 
 // SetupRoutes sets up all API routes

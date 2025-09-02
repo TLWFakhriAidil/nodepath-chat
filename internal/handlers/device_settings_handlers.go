@@ -1611,15 +1611,28 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		isGroup = false
 
 	case "waha":
-		// WAHA webhooks should ONLY be processed by the dedicated WAHA handler
-		// at /api/ai-whatsapp/webhook/waha/:device_id
-		// This generic webhook handler cannot properly extract WAHA data
+		// Extract data for WAHA provider using standardized format
+		// WAHA now uses the same field structure as Whacenter for consistency
+		if fromVal, ok := webhookData["from"].(string); ok {
+			from = fromVal
+		}
+		if msgVal, ok := webhookData["message"].(string); ok {
+			message = msgVal
+		}
+		if msgTypeVal, ok := webhookData["message_type"].(string); ok {
+			messageType = msgTypeVal
+		}
+		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
+			isGroup = isGroupVal
+		}
+		
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
 			"provider": provider,
-			"webhook_data_keys": getMapKeys(webhookData),
-		}).Warn("⚠️ WEBHOOK: WAHA webhook received on generic endpoint - should use dedicated /api/ai-whatsapp/webhook/waha/:device_id endpoint")
-		return fmt.Errorf("WAHA webhooks must use dedicated endpoint: /api/ai-whatsapp/webhook/waha/%s", idDevice)
+			"from": from,
+			"message": truncateString(message, 100),
+			"is_group": isGroup,
+		}).Info("📨 WEBHOOK: Processing WAHA message through standardized flow routing")
 
 	default:
 		// Generic webhook format
@@ -2906,4 +2919,12 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 	}).Info("📤 WAHA: Returning device status response")
 
 	return c.JSON(response)
+}
+
+// truncateString truncates a string to maxLen characters and adds "..." if truncated
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
