@@ -2920,11 +2920,3 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 
 	return c.JSON(response)
 }
-
-// truncateString truncates a string to maxLen characters and adds "..." if truncated
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}

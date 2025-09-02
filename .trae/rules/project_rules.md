@@ -80,5 +80,5 @@
 22. The provider that used in this are Wablas and Whacenter only, this will get from the device_setting_nodepath columns of provider.
 23. The system will used the instance from the device_setting_nodepath columns of instance for sending message.
 24. For testing flow will be using id_device FakhriAidilTLW-001, flow flow_ai_1756016272 and phone number 601137508067 for testing.
-
+25. The system will always do the run test simulaion wihtout ncgo and fix any error occurs.
 
