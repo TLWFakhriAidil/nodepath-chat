@@ -95,6 +95,7 @@ curl -X POST http://localhost:8080/api/ai-whatsapp/webhook/waha/FakhriAidilTLW-0
 2. **Added Route Validation**: WAHA webhooks now MUST use `/api/ai-whatsapp/webhook/waha/:device_id`
 3. **Enhanced Error Messages**: Clear warnings when WAHA uses wrong endpoint
 4. **Prevented Duplicate Processing**: Only dedicated WAHA handler processes WAHA data
+5. **Fixed WAHA Device Generation**: Updated WAHA device generation to create correct webhook URL using dedicated endpoint
 
 **🔧 Debug Steps** (if issues persist):
 1. **Use Debug Endpoint**: Temporarily change WAHA webhook URL to:

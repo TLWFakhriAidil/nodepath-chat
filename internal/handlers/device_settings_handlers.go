@@ -1914,8 +1914,8 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 	// Create unique session name using device ID
 	sessionName := fmt.Sprintf("user_%s", req.IDDevice)
 
-	// Webhook endpoint for incoming WA messages
-	webhook := fmt.Sprintf("https://nodepath-chat-production.up.railway.app/api/webhook/%s/%s", req.IDDevice, sessionName)
+	// Webhook endpoint for incoming WA messages - Use dedicated WAHA endpoint
+	webhook := fmt.Sprintf("https://nodepath-chat-production.up.railway.app/api/ai-whatsapp/webhook/waha/%s", req.IDDevice)
 
 	// Create HTTP client with timeout
 	client := &http.Client{
