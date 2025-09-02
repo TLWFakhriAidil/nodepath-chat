@@ -88,9 +88,15 @@ curl -X POST http://localhost:8080/api/ai-whatsapp/webhook/waha/FakhriAidilTLW-0
 
 **Issue**: `Missing required fields (from or message)` in Railway logs
 
-**Root Cause**: Real WAHA webhook payload structure differs from expected format
+**Root Cause**: WAHA webhooks were being processed by BOTH the dedicated WAHA handler AND the generic webhook handler, causing duplicate processing and validation failures.
 
-**Solution Steps**:
+**✅ Solution Implemented**:
+1. **Fixed Webhook Routing**: Updated generic webhook handler to reject WAHA webhooks
+2. **Added Route Validation**: WAHA webhooks now MUST use `/api/ai-whatsapp/webhook/waha/:device_id`
+3. **Enhanced Error Messages**: Clear warnings when WAHA uses wrong endpoint
+4. **Prevented Duplicate Processing**: Only dedicated WAHA handler processes WAHA data
+
+**🔧 Debug Steps** (if issues persist):
 1. **Use Debug Endpoint**: Temporarily change WAHA webhook URL to:
    ```
    https://your-railway-app.railway.app/api/ai-whatsapp/debug/waha/FakhriAidilTLW-001
@@ -103,11 +109,10 @@ curl -X POST http://localhost:8080/api/ai-whatsapp/webhook/waha/FakhriAidilTLW-0
    railway logs --follow
    ```
 
-4. **Analyze Structure**: Find logs with `🚨 WAHA DEBUG` to see actual payload format
-
-5. **Apply Fix**: Based on payload structure, the system will auto-detect and use appropriate extraction method
-
-6. **Switch Back**: Change webhook URL back to production endpoint:
+4. **Verify Endpoint**: Ensure WAHA is configured to use correct webhook URL
+5. **Analyze Structure**: Find logs with `🚨 WAHA DEBUG` to see actual payload format
+6. **Apply Fix**: Based on payload structure, the system will auto-detect and use appropriate extraction method
+7. **Switch Back**: Change webhook URL back to production endpoint:
    ```
    https://your-railway-app.railway.app/api/ai-whatsapp/webhook/waha/FakhriAidilTLW-001
    ```

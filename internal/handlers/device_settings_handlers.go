@@ -1610,8 +1610,16 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		// Wablas doesn't have is_group field, default to false
 		isGroup = false
 
-	// WAHA case removed - now handled by dedicated WAHA webhook handler in ai_whatsapp_handlers.go
-	// This prevents duplicate processing of WAHA messages
+	case "waha":
+		// WAHA webhooks should ONLY be processed by the dedicated WAHA handler
+		// at /api/ai-whatsapp/webhook/waha/:device_id
+		// This generic webhook handler cannot properly extract WAHA data
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"provider": provider,
+			"webhook_data_keys": getMapKeys(webhookData),
+		}).Warn("⚠️ WEBHOOK: WAHA webhook received on generic endpoint - should use dedicated /api/ai-whatsapp/webhook/waha/:device_id endpoint")
+		return fmt.Errorf("WAHA webhooks must use dedicated endpoint: /api/ai-whatsapp/webhook/waha/%s", idDevice)
 
 	default:
 		// Generic webhook format
