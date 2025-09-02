@@ -222,7 +222,8 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	deviceSettings.Post("/generate-waha", h.GenerateWahaDevice)
 
 	// AI WhatsApp routes - delegate to AIWhatsappHandlers (must be registered before generic webhook routes)
-	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(api)
+	aiWhatsapp := api.Group("/ai-whatsapp")
+	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(aiWhatsapp)
 
 	// Authentication routes
 	h.authHandlers.SetupAuthRoutes(api)

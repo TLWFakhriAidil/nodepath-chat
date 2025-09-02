@@ -389,7 +389,7 @@ type WahaWebhookData struct {
 }
 
 // extractWahaWebhookData extracts WAHA webhook data according to standardized requirements
-// Only uses data inside the "payload" object as specified
+// Handles both nested payload structure and direct structure
 // Returns extracted fields in standardized JSON format
 func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]interface{}) WahaWebhookData {
 	var result WahaWebhookData
@@ -398,49 +398,81 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 	logrus.WithFields(logrus.Fields{
 		"payload_keys": getMapKeys(webhookPayload),
 		"has_payload": webhookPayload["payload"] != nil,
-	}).Debug("🔍 WAHA: Analyzing webhook payload structure")
+		"full_payload": webhookPayload,
+	}).Info("🔍 WAHA DEBUG: Full webhook payload structure")
 	
-	// Extract from payload object only as specified in requirements
-	payloadObj, ok := webhookPayload["payload"].(map[string]interface{})
-	if !ok {
-		logrus.Warn("⚠️ WAHA: No payload object found in webhook data")
-		return result
+	// Determine the payload object to work with
+	var payloadObj map[string]interface{}
+	if nestedPayload, ok := webhookPayload["payload"].(map[string]interface{}); ok {
+		// Use nested payload structure (real webhook)
+		payloadObj = nestedPayload
+		logrus.Info("🔍 WAHA: Using nested payload structure")
+	} else {
+		// Use direct structure (test or alternative format)
+		payloadObj = webhookPayload
+		logrus.Info("🔍 WAHA: Using direct payload structure")
 	}
 	
-	// Extract sender_phone = payload.from
-	if fromVal, ok := payloadObj["from"].(string); ok {
+	// Debug log the payload object structure
+	logrus.WithFields(logrus.Fields{
+		"payload_obj_keys": getMapKeys(payloadObj),
+		"payload_obj": payloadObj,
+	}).Info("🔍 WAHA DEBUG: Payload object structure")
+	
+	// Check if data is in _data nested structure (WAHA format)
+	var dataObj map[string]interface{}
+	if _dataObj, ok := payloadObj["_data"].(map[string]interface{}); ok {
+		dataObj = _dataObj
+		logrus.Info("🔍 WAHA: Using _data nested structure")
+	} else {
+		// Fallback to direct payload structure
+		dataObj = payloadObj
+		logrus.Info("🔍 WAHA: Using direct payload structure")
+	}
+	
+	// Extract sender_phone = _data.from or payload.from
+	if fromVal, ok := dataObj["from"].(string); ok {
 		result.SenderPhone = fromVal
-		logrus.WithField("extraction_method", "payload_from").Debug("🔍 WAHA: Sender phone extracted from payload.from")
+		logrus.WithField("extraction_method", "data_from").Debug("🔍 WAHA: Sender phone extracted from data.from")
 	}
 	
-	// Extract message = payload.body
-	if bodyVal, ok := payloadObj["body"].(string); ok {
+	// Extract message = _data.body or payload.body
+	if bodyVal, ok := dataObj["body"].(string); ok {
 		result.Message = bodyVal
-		logrus.WithField("extraction_method", "payload_body").Debug("🔍 WAHA: Message extracted from payload.body")
+		logrus.WithField("extraction_method", "data_body").Debug("🔍 WAHA: Message extracted from data.body")
 	}
 	
-	// Extract is_from_me = payload.fromMe (true/false)
-	if fromMeVal, ok := payloadObj["fromMe"].(bool); ok {
+	// Extract is_from_me = _data.fromMe or payload.fromMe (true/false)
+	if fromMeVal, ok := dataObj["fromMe"].(bool); ok {
 		result.IsFromMe = fromMeVal
-		logrus.WithField("extraction_method", "payload_fromMe").Debug("🔍 WAHA: IsFromMe extracted from payload.fromMe")
+		logrus.WithField("extraction_method", "data_fromMe").Debug("🔍 WAHA: IsFromMe extracted from data.fromMe")
 	}
 	
-	// Extract sender_name = payload.media.Info.PushName
-	if mediaObj, ok := payloadObj["media"].(map[string]interface{}); ok {
-		if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
-			if pushNameVal, ok := infoObj["PushName"].(string); ok {
-				result.SenderName = pushNameVal
-				logrus.WithField("extraction_method", "payload_media_info_pushname").Debug("🔍 WAHA: Sender name extracted from payload.media.Info.PushName")
-			}
+	// Extract sender_name = _data.info.pushName or payload.info.pushName
+	if infoObj, ok := dataObj["info"].(map[string]interface{}); ok {
+		if pushNameVal, ok := infoObj["pushName"].(string); ok {
+			result.SenderName = pushNameVal
+			logrus.WithField("extraction_method", "data_info_pushname").Debug("🔍 WAHA: Sender name extracted from data.info.pushName")
+		}
+		// Extract is_group = _data.info.IsGroup or payload.info.IsGroup (true/false)
+		if isGroupVal, ok := infoObj["IsGroup"].(bool); ok {
+			result.IsGroup = isGroupVal
+			logrus.WithField("extraction_method", "data_info_isgroup").Debug("🔍 WAHA: IsGroup extracted from data.info.IsGroup")
 		}
 	}
 	
-	// Extract is_group = payload.media.Info.IsGroup (true/false)
-	if mediaObj, ok := payloadObj["media"].(map[string]interface{}); ok {
-		if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
-			if isGroupVal, ok := infoObj["IsGroup"].(bool); ok {
-				result.IsGroup = isGroupVal
-				logrus.WithField("extraction_method", "payload_media_info_isgroup").Debug("🔍 WAHA: IsGroup extracted from payload.media.Info.IsGroup")
+	// Fallback: try alternative structure for sender_name and is_group
+	if result.SenderName == "" {
+		if mediaObj, ok := dataObj["media"].(map[string]interface{}); ok {
+			if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
+				if pushNameVal, ok := infoObj["PushName"].(string); ok {
+					result.SenderName = pushNameVal
+					logrus.WithField("extraction_method", "data_media_info_pushname").Debug("🔍 WAHA: Sender name extracted from data.media.Info.PushName")
+				}
+				if isGroupVal, ok := infoObj["IsGroup"].(bool); ok {
+					result.IsGroup = isGroupVal
+					logrus.WithField("extraction_method", "data_media_info_isgroup").Debug("🔍 WAHA: IsGroup extracted from data.media.Info.IsGroup")
+				}
 			}
 		}
 	}
@@ -463,6 +495,15 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 			"payload_keys": getMapKeys(payloadObj),
 		}).Warn("⚠️ WAHA: Critical field extraction failed - check payload structure")
 	}
+	
+	// Console debug output for checking extracted data
+	logrus.WithFields(logrus.Fields{
+		"sender_phone": result.SenderPhone,
+		"sender_name": result.SenderName,
+		"message": result.Message,
+		"is_from_me": result.IsFromMe,
+		"is_group": result.IsGroup,
+	}).Info("🧪 WAHA EXTRACTION DEBUG: Final extracted data")
 	
 	return result
 }
@@ -654,9 +695,9 @@ func (h *AIWhatsappHandlers) UpdateAISettings(c *fiber.Ctx) error {
 // TestWahaExtraction tests the WAHA webhook data extraction
 // Returns extracted fields in the standardized JSON format for testing
 func (h *AIWhatsappHandlers) TestWahaExtraction(c *fiber.Ctx) error {
-	// Parse the incoming webhook request
-	var req WahaWebhookRequest
-	if err := c.BodyParser(&req); err != nil {
+	// Parse the incoming webhook request as raw map
+	var rawPayload map[string]interface{}
+	if err := c.BodyParser(&rawPayload); err != nil {
 		logrus.WithError(err).Error("❌ WAHA TEST: Failed to parse webhook request")
 		return c.Status(400).JSON(fiber.Map{
 			"error": "Invalid request format",
@@ -664,27 +705,14 @@ func (h *AIWhatsappHandlers) TestWahaExtraction(c *fiber.Ctx) error {
 		})
 	}
 
-	// Convert struct payload to map for extraction function
-	payloadBytes, err := json.Marshal(req.Payload)
-	if err != nil {
-		logrus.WithError(err).Error("❌ WAHA TEST: Failed to marshal payload")
-		return c.Status(500).JSON(fiber.Map{
-			"error": "Failed to process payload",
-			"details": err.Error(),
-		})
-	}
-	
-	var payloadMap map[string]interface{}
-	if err := json.Unmarshal(payloadBytes, &payloadMap); err != nil {
-		logrus.WithError(err).Error("❌ WAHA TEST: Failed to unmarshal payload")
-		return c.Status(500).JSON(fiber.Map{
-			"error": "Failed to process payload",
-			"details": err.Error(),
-		})
-	}
+	// Log the raw payload structure for debugging
+	logrus.WithFields(logrus.Fields{
+		"raw_payload": rawPayload,
+		"payload_keys": getMapKeys(rawPayload),
+	}).Info("🧪 WAHA TEST: Raw payload received")
 	
 	// Extract standardized webhook data
-	extractedData := h.extractWahaWebhookData(payloadMap)
+	extractedData := h.extractWahaWebhookData(rawPayload)
 
 	// Log the test extraction
 	logrus.WithFields(logrus.Fields{
