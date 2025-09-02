@@ -2666,3 +2666,11 @@ CREATE TABLE `users` (
   - **Affected Function**: `TestWahaExtraction` endpoint in `ai_whatsapp_handlers.go`
   - **Build Status**: Successfully compiles with both standard and CGO_ENABLED=0 builds
   - **Docker Compatibility**: Now builds successfully in Docker environment for Railway deployment
+
+- ✅ **WAHA EXTRACTION LOGIC FIX**: Fixed payload structure extraction based on production logs
+  - **Issue Fixed**: "Missing required fields" and "All extraction methods failed" errors in production
+  - **Root Cause**: WAHA sends data at payload level (payload.body, payload.from) not in _data nested structure
+  - **Solution**: Reversed extraction priority - check payload level first, then _data as fallback
+  - **Enhanced Extraction**: Added extraction from 'me' field for sender information
+  - **Logging Improved**: Changed to INFO level for successful extractions, ERROR for failures
+  - **Production Status**: Now correctly extracts message content and sender information from WAHA webhooks

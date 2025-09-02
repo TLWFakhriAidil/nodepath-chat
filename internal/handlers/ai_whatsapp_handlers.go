@@ -434,59 +434,88 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		"payload_obj": payloadObj,
 	}).Info("🔍 WAHA DEBUG: Payload object structure")
 	
-	// Check if data is in _data nested structure (WAHA format)
-	var dataObj map[string]interface{}
-	if _dataObj, ok := payloadObj["_data"].(map[string]interface{}); ok {
-		dataObj = _dataObj
-		logrus.Info("🔍 WAHA: Using _data nested structure")
-	} else {
-		// Fallback to direct payload structure
-		dataObj = payloadObj
-		logrus.Info("🔍 WAHA: Using direct payload structure")
-	}
+	// FIXED: Extract directly from payload level first, then try _data as fallback
+	// Based on production logs, WAHA sends data at payload level: payload.body, payload.from, etc.
 	
-	// Extract sender_phone = _data.from or payload.from
-	if fromVal, ok := dataObj["from"].(string); ok {
+	// Extract sender_phone = payload.from (primary) or _data.from (fallback)
+	if fromVal, ok := payloadObj["from"].(string); ok {
 		result.SenderPhone = fromVal
-		logrus.WithField("extraction_method", "data_from").Debug("🔍 WAHA: Sender phone extracted from data.from")
+		logrus.WithField("extraction_method", "payload_from").Info("🔍 WAHA: Sender phone extracted from payload.from")
+	} else if _dataObj, ok := payloadObj["_data"].(map[string]interface{}); ok {
+		if fromVal, ok := _dataObj["from"].(string); ok {
+			result.SenderPhone = fromVal
+			logrus.WithField("extraction_method", "_data_from").Info("🔍 WAHA: Sender phone extracted from _data.from")
+		}
 	}
 	
-	// Extract message = _data.body or payload.body
-	if bodyVal, ok := dataObj["body"].(string); ok {
+	// Extract message = payload.body (primary) or _data.body (fallback)
+	if bodyVal, ok := payloadObj["body"].(string); ok {
 		result.Message = bodyVal
-		logrus.WithField("extraction_method", "data_body").Debug("🔍 WAHA: Message extracted from data.body")
+		logrus.WithField("extraction_method", "payload_body").Info("🔍 WAHA: Message extracted from payload.body")
+	} else if _dataObj, ok := payloadObj["_data"].(map[string]interface{}); ok {
+		if bodyVal, ok := _dataObj["body"].(string); ok {
+			result.Message = bodyVal
+			logrus.WithField("extraction_method", "_data_body").Info("🔍 WAHA: Message extracted from _data.body")
+		}
 	}
 	
-	// Extract is_from_me = _data.fromMe or payload.fromMe (true/false)
-	if fromMeVal, ok := dataObj["fromMe"].(bool); ok {
+	// Extract is_from_me = payload.fromMe (primary) or _data.fromMe (fallback)
+	if fromMeVal, ok := payloadObj["fromMe"].(bool); ok {
 		result.IsFromMe = fromMeVal
-		logrus.WithField("extraction_method", "data_fromMe").Debug("🔍 WAHA: IsFromMe extracted from data.fromMe")
+		logrus.WithField("extraction_method", "payload_fromMe").Info("🔍 WAHA: IsFromMe extracted from payload.fromMe")
+	} else if _dataObj, ok := payloadObj["_data"].(map[string]interface{}); ok {
+		if fromMeVal, ok := _dataObj["fromMe"].(bool); ok {
+			result.IsFromMe = fromMeVal
+			logrus.WithField("extraction_method", "_data_fromMe").Info("🔍 WAHA: IsFromMe extracted from _data.fromMe")
+		}
 	}
 	
-	// Extract sender_name = _data.info.pushName or payload.info.pushName
-	if infoObj, ok := dataObj["info"].(map[string]interface{}); ok {
+	// Extract sender_name from payload.info.pushName (primary) or _data.info.pushName (fallback)
+	if infoObj, ok := payloadObj["info"].(map[string]interface{}); ok {
 		if pushNameVal, ok := infoObj["pushName"].(string); ok {
 			result.SenderName = pushNameVal
-			logrus.WithField("extraction_method", "data_info_pushname").Debug("🔍 WAHA: Sender name extracted from data.info.pushName")
+			logrus.WithField("extraction_method", "payload_info_pushname").Info("🔍 WAHA: Sender name extracted from payload.info.pushName")
 		}
-		// Extract is_group = _data.info.IsGroup or payload.info.IsGroup (true/false)
+		// Extract is_group from payload.info.IsGroup
 		if isGroupVal, ok := infoObj["IsGroup"].(bool); ok {
 			result.IsGroup = isGroupVal
-			logrus.WithField("extraction_method", "data_info_isgroup").Debug("🔍 WAHA: IsGroup extracted from data.info.IsGroup")
+			logrus.WithField("extraction_method", "payload_info_isgroup").Info("🔍 WAHA: IsGroup extracted from payload.info.IsGroup")
+		}
+	} else if _dataObj, ok := payloadObj["_data"].(map[string]interface{}); ok {
+		if infoObj, ok := _dataObj["info"].(map[string]interface{}); ok {
+			if pushNameVal, ok := infoObj["pushName"].(string); ok {
+				result.SenderName = pushNameVal
+				logrus.WithField("extraction_method", "_data_info_pushname").Info("🔍 WAHA: Sender name extracted from _data.info.pushName")
+			}
+			// Extract is_group from _data.info.IsGroup
+			if isGroupVal, ok := infoObj["IsGroup"].(bool); ok {
+				result.IsGroup = isGroupVal
+				logrus.WithField("extraction_method", "_data_info_isgroup").Info("🔍 WAHA: IsGroup extracted from _data.info.IsGroup")
+			}
 		}
 	}
 	
-	// Fallback: try alternative structure for sender_name and is_group
+	// Additional fallback: try 'me' field for sender information (based on production logs)
 	if result.SenderName == "" {
-		if mediaObj, ok := dataObj["media"].(map[string]interface{}); ok {
+		if meObj, ok := webhookPayload["me"].(map[string]interface{}); ok {
+			if pushNameVal, ok := meObj["pushName"].(string); ok {
+				result.SenderName = pushNameVal
+				logrus.WithField("extraction_method", "me_pushname").Info("🔍 WAHA: Sender name extracted from me.pushName")
+			}
+		}
+	}
+	
+	// Fallback: try alternative media structure for sender_name and is_group
+	if result.SenderName == "" {
+		if mediaObj, ok := payloadObj["media"].(map[string]interface{}); ok {
 			if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
 				if pushNameVal, ok := infoObj["PushName"].(string); ok {
 					result.SenderName = pushNameVal
-					logrus.WithField("extraction_method", "data_media_info_pushname").Debug("🔍 WAHA: Sender name extracted from data.media.Info.PushName")
+					logrus.WithField("extraction_method", "payload_media_info_pushname").Info("🔍 WAHA: Sender name extracted from payload.media.Info.PushName")
 				}
 				if isGroupVal, ok := infoObj["IsGroup"].(bool); ok {
 					result.IsGroup = isGroupVal
-					logrus.WithField("extraction_method", "data_media_info_isgroup").Debug("🔍 WAHA: IsGroup extracted from data.media.Info.IsGroup")
+					logrus.WithField("extraction_method", "payload_media_info_isgroup").Info("🔍 WAHA: IsGroup extracted from payload.media.Info.IsGroup")
 				}
 			}
 		}
