@@ -64,6 +64,13 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 - **Fixed Route Registration**: Corrected AI WhatsApp routes to use proper `/api/ai-whatsapp` prefix
 - **Fixed Data Extraction**: Updated WAHA webhook data extraction to handle both nested and direct payload structures
 - **Hardcoded API Key**: WAHA provider now uses hardcoded API key `dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0` for authentication
+- **Dynamic Mimetype Detection**: WAHA media messages now automatically detect file type from URL using improved extension extraction:
+  - **Smart Extension Extraction**: Extracts the last file extension from URL, handles query parameters (e.g., `image.jpg?v=123` → `jpg`)
+  - **Video**: .mp4 (video/mp4), .avi (video/avi), .mov (video/quicktime), .mkv (video/x-matroska), .webm (video/webm)
+  - **Audio**: .mp3 (audio/mpeg), .wav (audio/wav), .ogg (audio/ogg), .m4a (audio/mp4), .aac (audio/aac)
+  - **Image**: .jpg/.jpeg (image/jpeg), .png (image/png), .gif (image/gif), .webp (image/webp), .bmp (image/bmp), .svg (image/svg+xml)
+  - **Document**: .pdf (application/pdf), .doc (application/msword), .docx, .txt (text/plain)
+  - **Efficient Switch Statement**: Uses switch-case for better performance compared to string contains checks
 - **Working Endpoints**:
   - `POST /api/ai-whatsapp/test/waha/extraction` - Test WAHA data extraction
   - `POST /api/ai-whatsapp/webhook/waha/{device_id}` - Production WAHA webhook handler

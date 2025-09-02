@@ -596,21 +596,8 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		return fmt.Errorf("no instance found for WAHA device %s", deviceSettings.Instance.String)
 	}
 
-	// Detect media type and set appropriate API endpoint
-	mediaType := ""
-	var apiURL string
-	
-	if strings.Contains(mediaURL, ".mp4") {
-		mediaType = "video"
-		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendVideo"
-	} else if strings.Contains(mediaURL, ".mp3") {
-		mediaType = "audio"
-		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendAudio"
-	} else {
-		// Default to image for all other file types
-		mediaType = "image"
-		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendImage"
-	}
+	// WAHA API endpoint for sending files (updated to match PHP code)
+	apiURL := "https://waha-plus-production-705f.up.railway.app/api/sendFile"
 	
 	// 🚨 DEBUG: Log API key details (masked for security)
 	maskedAPIKey := "<empty>"
@@ -624,7 +611,6 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		"api_url": apiURL,
 		"phone_number": phoneNumber,
 		"media_url": mediaURL,
-		"media_type": mediaType,
 		"device_id": deviceSettings.Instance.String,
 		"instance": instance,
 		"api_key_masked": maskedAPIKey,
@@ -638,20 +624,77 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		chatId = strings.TrimPrefix(chatId, "+") + "@c.us"
 	}
 
-	// Prepare JSON payload as per WAHA API documentation
+	// Extract file extension from mediaURL
+	fileExtension := ""
+	if lastDot := strings.LastIndex(mediaURL, "."); lastDot != -1 {
+		// Get extension after the last dot, handle query parameters
+		extension := mediaURL[lastDot+1:]
+		if questionMark := strings.Index(extension, "?"); questionMark != -1 {
+			extension = extension[:questionMark]
+		}
+		fileExtension = strings.ToLower(extension)
+	}
+
+	// Detect file type from extension and set appropriate mimetype
+	mimeType := "image/jpeg" // Default mimetype
+	
+	switch fileExtension {
+	// Video file types
+	case "mp4":
+		mimeType = "video/mp4"
+	case "avi":
+		mimeType = "video/avi"
+	case "mov":
+		mimeType = "video/quicktime"
+	case "mkv":
+		mimeType = "video/x-matroska"
+	case "webm":
+		mimeType = "video/webm"
+	// Audio file types
+	case "mp3":
+		mimeType = "audio/mpeg"
+	case "wav":
+		mimeType = "audio/wav"
+	case "ogg":
+		mimeType = "audio/ogg"
+	case "m4a":
+		mimeType = "audio/mp4"
+	case "aac":
+		mimeType = "audio/aac"
+	// Image file types
+	case "png":
+		mimeType = "image/png"
+	case "gif":
+		mimeType = "image/gif"
+	case "webp":
+		mimeType = "image/webp"
+	case "bmp":
+		mimeType = "image/bmp"
+	case "svg":
+		mimeType = "image/svg+xml"
+	case "jpg", "jpeg":
+		mimeType = "image/jpeg"
+	// Document file types
+	case "pdf":
+		mimeType = "application/pdf"
+	case "doc":
+		mimeType = "application/msword"
+	case "docx":
+		mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case "txt":
+		mimeType = "text/plain"
+	}
+
+	// Prepare JSON payload to match PHP structure
 	payload := map[string]interface{}{
 		"session": instance,    // Session name from instance
 		"chatId":  chatId,      // Phone number in WAHA format
 		"file": map[string]interface{}{
-			"url": mediaURL,    // Media file URL
+			"mimetype": mimeType,      // Dynamic mimetype based on file extension
+			"url":      mediaURL,      // Media file URL
+			"filename": mimeType,      // Using mimetype as filename as per PHP code
 		},
-	}
-
-	// Add caption for videos if needed
-	if mediaType == "video" {
-		payload["caption"] = ""
-		payload["asNote"] = false
-		payload["convert"] = false
+		"caption": nil, // Set to null as per PHP code
 	}
 
 	// Convert payload to JSON
@@ -667,7 +710,6 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		"chat_id": chatId,
 		"session": instance,
 		"media_url": mediaURL,
-		"media_type": mediaType,
 	}).Error("🚨 WAHA MEDIA DEBUG: Complete payload prepared")
 
 	// Create request
@@ -709,7 +751,6 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		"response_headers": responseHeaders,
 		"duration": duration,
 		"instance": instance,
-		"media_type": mediaType,
 		"success": resp.StatusCode >= 200 && resp.StatusCode < 300,
 	}).Error("🚨 WAHA MEDIA DEBUG: Complete response received")
 
@@ -718,15 +759,14 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		// 🚨 DEBUG: Log error details for 401 Unauthorized
 		if resp.StatusCode == 401 {
 			logrus.WithFields(logrus.Fields{
-				"error_type": "UNAUTHORIZED",
-				"api_key_provided": len(apiKey) > 0,
-				"api_key_length": len(apiKey),
-				"api_key_masked": maskedAPIKey,
-				"instance": instance,
-				"endpoint": apiURL,
-				"media_type": mediaType,
-				"response_body": string(body),
-			}).Error("🚨 WAHA MEDIA DEBUG: 401 UNAUTHORIZED ERROR - API Key Issue")
+			"error_type": "UNAUTHORIZED",
+			"api_key_provided": len(apiKey) > 0,
+			"api_key_length": len(apiKey),
+			"api_key_masked": maskedAPIKey,
+			"instance": instance,
+			"endpoint": apiURL,
+			"response_body": string(body),
+		}).Error("🚨 WAHA MEDIA DEBUG: 401 UNAUTHORIZED ERROR - API Key Issue")
 		}
 		return fmt.Errorf("WAHA API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
@@ -736,7 +776,6 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		"phone_number": phoneNumber,
 		"duration": duration,
 		"device_id": deviceSettings.Instance.String,
-		"media_type": mediaType,
 		"status_code": resp.StatusCode,
 		"response_body": string(body),
 	}).Error("🚨 WAHA MEDIA DEBUG: ✅ Media sent successfully")
