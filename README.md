@@ -84,6 +84,36 @@ curl -X POST http://localhost:8080/api/ai-whatsapp/webhook/waha/FakhriAidilTLW-0
 - **Health Checks**: Built-in health monitoring for Railway
 - **Auto Migration**: Database schema updates on deployment
 
+#### 🚨 Railway Production Issue Troubleshooting
+
+**Issue**: `Missing required fields (from or message)` in Railway logs
+
+**Root Cause**: Real WAHA webhook payload structure differs from expected format
+
+**Solution Steps**:
+1. **Use Debug Endpoint**: Temporarily change WAHA webhook URL to:
+   ```
+   https://your-railway-app.railway.app/api/ai-whatsapp/debug/waha/FakhriAidilTLW-001
+   ```
+
+2. **Send Test Message**: Send a message through WAHA to capture real payload
+
+3. **Check Railway Logs**: Look for detailed payload structure in logs:
+   ```bash
+   railway logs --follow
+   ```
+
+4. **Analyze Structure**: Find logs with `🚨 WAHA DEBUG` to see actual payload format
+
+5. **Apply Fix**: Based on payload structure, the system will auto-detect and use appropriate extraction method
+
+6. **Switch Back**: Change webhook URL back to production endpoint:
+   ```
+   https://your-railway-app.railway.app/api/ai-whatsapp/webhook/waha/FakhriAidilTLW-001
+   ```
+
+**Reference**: See `WAHA_PRODUCTION_DEBUG_GUIDE.md` for complete debugging instructions
+
 ## 🔧 Redis Setup & Configuration
 
 ### 🚀 Quick Redis Setup
@@ -2597,16 +2627,23 @@ CREATE TABLE `users` (
     - `is_from_me` = `payload.fromMe`
     - `is_group` = `payload.media.Info.IsGroup`
 
-- ✅ **PROCESSING LOGIC**: Implemented conditional message processing based on extracted flags
+- ✅ **PROCESSING LOGIC**: Implemented conditional message processing based extracted flags
   - **Group Messages**: Ignored when `is_group = true`
   - **System Commands**: Processed when `is_from_me = true` and message starts with `%`, `#`, `cmd`, or `&`
   - **Customer Messages**: All other messages treated as normal customer interactions
   - **Response Format**: Standardized JSON format with all extracted fields
 
+- ✅ **PRODUCTION DEBUGGING FEATURES** (Added for Railway deployment issues):
+  - **Debug Endpoint**: `POST /api/ai-whatsapp/debug/waha/{device_id}` for payload analysis
+  - **Enhanced Logging**: Complete request details and payload structure analysis
+  - **Multiple Fallbacks**: 4-tier extraction fallback system for different payload structures
+  - **Production Monitoring**: Error-level logging for visibility in Railway logs
+
 - ✅ **IMPLEMENTATION DETAILS**:
   - **New Function**: `extractWahaWebhookData()` for standardized extraction
   - **Data Structure**: `WahaWebhookData` struct for type-safe data handling
   - **Updated Handler**: `HandleWahaWebhook()` now uses new extraction logic
+  - **Debug Handler**: `DebugWahaWebhook()` for production troubleshooting
   - **Test Endpoint**: `/test/waha/extraction` for testing webhook data extraction
   - **File Modified**: `internal/handlers/ai_whatsapp_handlers.go`
 

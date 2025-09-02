@@ -45,6 +45,9 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 
 	// Test endpoints for webhook data extraction
 	api.Post("/test/waha/extraction", h.TestWahaExtraction)
+	
+	// Production debugging endpoint - logs everything and returns payload structure
+	api.Post("/debug/waha/:device_id", h.DebugWahaWebhook)
 
 	// AI conversation management endpoints
 	api.Post("/ai/conversation/start", h.StartAIConversation)
@@ -239,12 +242,22 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	deviceID := c.Params("device_id")
 	body := c.Body()
 	
-	// Log raw payload for debugging production issues
+	// Enhanced logging for production debugging - log ALL headers and payload details
+	headers := make(map[string]string)
+	c.Request().Header.VisitAll(func(key, value []byte) {
+		headers[string(key)] = string(value)
+	})
+	
 	logrus.WithFields(logrus.Fields{
 		"device_id": deviceID,
 		"payload_size": len(body),
+		"content_type": c.Get("Content-Type"),
+		"user_agent": c.Get("User-Agent"),
+		"headers": headers,
 		"raw_payload": string(body),
-	}).Info("🔍 WAHA: Raw webhook payload received")
+		"method": c.Method(),
+		"url": c.OriginalURL(),
+	}).Error("🚨 WAHA PRODUCTION DEBUG: Complete webhook request details")
 
 	// Parse as generic map first for flexible extraction
 	var rawPayload map[string]interface{}
@@ -394,12 +407,14 @@ type WahaWebhookData struct {
 func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]interface{}) WahaWebhookData {
 	var result WahaWebhookData
 	
-	// Log payload structure for debugging
+	// Enhanced payload structure analysis for production debugging
+	payloadAnalysis := analyzePayloadDepth(webhookPayload)
 	logrus.WithFields(logrus.Fields{
 		"payload_keys": getMapKeys(webhookPayload),
 		"has_payload": webhookPayload["payload"] != nil,
+		"payload_analysis": payloadAnalysis,
 		"full_payload": webhookPayload,
-	}).Info("🔍 WAHA DEBUG: Full webhook payload structure")
+	}).Error("🚨 WAHA PRODUCTION DEBUG: Complete payload structure analysis")
 	
 	// Determine the payload object to work with
 	var payloadObj map[string]interface{}
@@ -477,7 +492,71 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		}
 	}
 	
-	// Log extraction results
+	// PRODUCTION FALLBACK: Try alternative extraction methods if primary extraction failed
+	if result.SenderPhone == "" || result.Message == "" {
+		logrus.Error("🚨 WAHA PRODUCTION: Primary extraction failed, trying fallback methods")
+		
+		// Fallback 1: Try direct top-level fields
+		if result.SenderPhone == "" {
+			if fromVal, ok := webhookPayload["from"].(string); ok {
+				result.SenderPhone = fromVal
+				logrus.Error("🚨 FALLBACK 1: Extracted sender_phone from top-level 'from'")
+			}
+		}
+		if result.Message == "" {
+			if bodyVal, ok := webhookPayload["body"].(string); ok {
+				result.Message = bodyVal
+				logrus.Error("🚨 FALLBACK 1: Extracted message from top-level 'body'")
+			} else if msgVal, ok := webhookPayload["message"].(string); ok {
+				result.Message = msgVal
+				logrus.Error("🚨 FALLBACK 1: Extracted message from top-level 'message'")
+			} else if textVal, ok := webhookPayload["text"].(string); ok {
+				result.Message = textVal
+				logrus.Error("🚨 FALLBACK 1: Extracted message from top-level 'text'")
+			}
+		}
+		
+		// Fallback 2: Try data field without _data prefix
+		if dataObj, ok := webhookPayload["data"].(map[string]interface{}); ok {
+			logrus.Error("🚨 FALLBACK 2: Found 'data' field, trying extraction")
+			if result.SenderPhone == "" {
+				if fromVal, ok := dataObj["from"].(string); ok {
+					result.SenderPhone = fromVal
+					logrus.Error("🚨 FALLBACK 2: Extracted sender_phone from data.from")
+				}
+			}
+			if result.Message == "" {
+				if bodyVal, ok := dataObj["body"].(string); ok {
+					result.Message = bodyVal
+					logrus.Error("🚨 FALLBACK 2: Extracted message from data.body")
+				}
+			}
+		}
+		
+		// Fallback 3: Try message field variations
+		if result.Message == "" {
+			for _, key := range []string{"content", "msg", "messageContent", "textContent"} {
+				if msgVal, ok := webhookPayload[key].(string); ok {
+					result.Message = msgVal
+					logrus.WithField("fallback_key", key).Error("🚨 FALLBACK 3: Extracted message from alternative key")
+					break
+				}
+			}
+		}
+		
+		// Fallback 4: Try phone number variations
+		if result.SenderPhone == "" {
+			for _, key := range []string{"phone", "number", "phoneNumber", "sender", "contact"} {
+				if phoneVal, ok := webhookPayload[key].(string); ok {
+					result.SenderPhone = phoneVal
+					logrus.WithField("fallback_key", key).Error("🚨 FALLBACK 4: Extracted sender_phone from alternative key")
+					break
+				}
+			}
+		}
+	}
+	
+	// Log extraction results with production debugging
 	logrus.WithFields(logrus.Fields{
 		"sender_phone": result.SenderPhone,
 		"sender_name": result.SenderName,
@@ -485,15 +564,16 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		"is_from_me": result.IsFromMe,
 		"is_group": result.IsGroup,
 		"extraction_success": result.SenderPhone != "" && result.Message != "",
-	}).Info("🔍 WAHA: Standardized field extraction completed")
+	}).Error("🚨 WAHA PRODUCTION: Final extraction results")
 	
-	// Log warning if critical fields are missing
+	// Log critical error if fields are still missing after all fallbacks
 	if result.SenderPhone == "" || result.Message == "" {
 		logrus.WithFields(logrus.Fields{
 			"missing_sender_phone": result.SenderPhone == "",
 			"missing_message": result.Message == "",
-			"payload_keys": getMapKeys(payloadObj),
-		}).Warn("⚠️ WAHA: Critical field extraction failed - check payload structure")
+			"all_payload_keys": getMapKeys(webhookPayload),
+			"payload_structure": analyzePayloadDepth(webhookPayload),
+		}).Error("🚨 WAHA PRODUCTION CRITICAL: All extraction methods failed - payload structure unknown")
 	}
 	
 	// Console debug output for checking extracted data
@@ -1070,4 +1150,69 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// DebugWahaWebhook is a special debug endpoint for production WAHA webhook debugging
+// Logs complete payload structure and returns detailed analysis without processing
+func (h *AIWhatsappHandlers) DebugWahaWebhook(c *fiber.Ctx) error {
+	deviceID := c.Params("device_id")
+	body := c.Body()
+	
+	// Log ALL request details for production debugging
+	headers := make(map[string]string)
+	c.Request().Header.VisitAll(func(key, value []byte) {
+		headers[string(key)] = string(value)
+	})
+	
+	logrus.WithFields(logrus.Fields{
+		"device_id": deviceID,
+		"payload_size": len(body),
+		"content_type": c.Get("Content-Type"),
+		"user_agent": c.Get("User-Agent"),
+		"headers": headers,
+		"raw_payload": string(body),
+		"method": c.Method(),
+		"url": c.OriginalURL(),
+		"ip": c.IP(),
+	}).Error("🚨 WAHA DEBUG ENDPOINT: Complete webhook request details")
+	
+	// Parse as generic map for structure analysis
+	var rawPayload map[string]interface{}
+	if err := json.Unmarshal(body, &rawPayload); err != nil {
+		logrus.WithError(err).Error("🚨 WAHA DEBUG: Failed to parse JSON")
+		return c.Status(400).JSON(fiber.Map{
+			"success": false,
+			"error": "Invalid JSON format",
+			"raw_body": string(body),
+		})
+	}
+	
+	// Perform complete payload analysis
+	payloadAnalysis := analyzePayloadDepth(rawPayload)
+	extractedData := h.extractWahaWebhookData(rawPayload)
+	
+	// Log detailed analysis
+	logrus.WithFields(logrus.Fields{
+		"payload_keys": getMapKeys(rawPayload),
+		"payload_analysis": payloadAnalysis,
+		"extracted_data": extractedData,
+		"extraction_success": extractedData.SenderPhone != "" && extractedData.Message != "",
+	}).Error("🚨 WAHA DEBUG: Complete payload analysis")
+	
+	// Return comprehensive debug information
+	return c.JSON(fiber.Map{
+		"success": true,
+		"debug_info": fiber.Map{
+			"device_id": deviceID,
+			"payload_size": len(body),
+			"headers": headers,
+			"raw_payload": rawPayload,
+			"payload_keys": getMapKeys(rawPayload),
+			"payload_analysis": payloadAnalysis,
+			"extracted_data": extractedData,
+			"extraction_success": extractedData.SenderPhone != "" && extractedData.Message != "",
+			"timestamp": time.Now().Unix(),
+		},
+		"message": "Debug data logged successfully",
+	})
 }
