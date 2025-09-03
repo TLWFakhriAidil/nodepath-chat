@@ -4,6 +4,76 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 **Live Demo**: https://nodepath-chat-production.up.railway.app/
 
+## 🏗️ System Architecture Overview
+
+### Technology Stack
+- **Backend**: Go 1.21+ with Fiber framework
+- **Frontend**: React 18 with TypeScript and Vite
+- **Database**: MySQL 5.7 with connection pooling (200 max connections)
+- **Cache/Queue**: Redis with clustering support
+- **WhatsApp Integration**: whatsmeow library for multi-device support
+- **AI Integration**: OpenRouter API with fallback to OpenAI
+- **Deployment**: Railway platform with auto-scaling
+- **Real-time**: WebSocket for live updates
+
+### Core Components
+
+#### Backend Architecture (`cmd/server/main.go`)
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Go Fiber API  │◄──►│ MySQL Database   │◄──►│ Redis Cluster   │
+│   (Port 8080)   │    │ (Connection Pool)│    │ (Cache/Queue)   │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  WhatsApp API   │    │  AI Integration  │    │  WebSocket Hub │
+│  (whatsmeow)    │    │ (OpenRouter/AI)  │    │ (Real-time)     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+#### Internal Package Structure
+```
+internal/
+├── config/          # Configuration management
+├── database/        # Database connection and migrations
+├── handlers/        # HTTP request handlers and routing
+├── models/          # Data models and structures
+├── repository/      # Data access layer
+├── services/        # Business logic layer
+├── utils/           # Utility functions
+└── whatsapp/        # WhatsApp service integration
+```
+
+#### Database Schema (MySQL 5.7)
+**Core Tables** (all end with `_nodepath`):
+- `chatbot_flows_nodepath` - Flow definitions (JSON type allowed)
+- `ai_whatsapp_nodepath` - Conversation tracking
+- `device_setting_nodepath` - Device configurations
+- `flow_executions_nodepath` - Flow execution state
+- `conversation_logs_nodepath` - Message history
+
+#### Service Layer Architecture
+- **FlowService**: Manages chatbot flows and node processing
+- **AIService**: Handles AI/OpenRouter integration with caching
+- **AIWhatsappService**: Manages AI conversations and flow executions
+- **DeviceSettingsService**: Device configuration management
+- **ProviderService**: Multi-provider message sending (Wablas, Whacenter, WAHA)
+- **MediaDetectionService**: Centralized media URL detection
+- **WebSocketService**: Real-time communication
+- **HealthService**: System health monitoring
+
+#### Frontend Architecture (`src/`)
+```
+src/
+├── components/      # Reusable UI components
+├── contexts/        # React context providers
+├── hooks/           # Custom React hooks
+├── lib/             # Utility libraries
+├── pages/           # Application pages
+└── types/           # TypeScript type definitions
+```
+
 ## 🚀 Performance Highlights
 
 - **3000+ Concurrent Users**: Optimized for high-scale real-time messaging
@@ -16,35 +86,292 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 - **Rate Limiting**: 100 requests/minute per IP for API protection
 - **Media Optimization**: Automatic image compression and thumbnail generation
 
-## 🏗️ High-Performance System Architecture
+## 🔧 API Endpoints & Routing
 
+### Core API Structure (`internal/handlers/handlers.go`)
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   React SPA     │◄──►│   Go Fiber API   │◄──►│ Multi-WhatsApp  │
-│  Flow Builder   │    │ (3000+ Users)    │    │   Devices (10)  │
-│   + WebSocket   │    │   + whatsmeow    │    │   (whatsmeow)   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  localStorage   │    │ MySQL Database   │    │  OpenRouter AI  │
-│   (Frontend)    │    │ (Pool: 200 conn) │    │ (Cached 5min)   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   WebSocket     │    │ Redis Cluster    │    │   CDN + Media   │
-│ Real-time Msgs  │    │ (High Avail.)    │    │  Optimization   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+/api/
+├── flows/                    # Flow management
+│   ├── GET /                # Get all flows
+│   ├── POST /               # Create new flow
+│   ├── GET /:id             # Get flow by ID
+│   ├── PUT /:id             # Update flow
+│   └── DELETE /:id          # Delete flow
+├── executions/              # Flow execution management
+│   ├── GET /                # Get all executions
+│   ├── POST /complete/:id   # Complete execution
+│   └── DELETE /:id          # Delete execution
+├── whatsapp/                # WhatsApp operations
+│   ├── POST /send-message   # Send text message
+│   └── POST /send-media     # Send media message
+├── queue/                   # Queue management
+│   ├── GET /stats           # Queue statistics
+│   └── POST /clear          # Clear queue
+├── ai/                      # AI operations
+│   ├── POST /validate-key   # Validate API key
+│   └── GET /models          # Get supported models
+├── analytics/               # Analytics data
+│   ├── GET /overview        # System overview
+│   └── GET /flow/:id/stats  # Flow statistics
+├── health/                  # Health monitoring
+│   └── GET /                # Health check
+├── config/                  # Configuration
+│   └── GET /                # Get system config
+├── device-settings/         # Device management
+│   ├── GET /                # Get all devices
+│   ├── POST /               # Create device
+│   ├── GET /:id             # Get device by ID
+│   ├── PUT /:id             # Update device
+│   └── DELETE /:id          # Delete device
+├── ai-whatsapp/             # AI WhatsApp integration
+│   ├── GET /                # Get conversations
+│   ├── POST /               # Create conversation
+│   ├── PUT /:id             # Update conversation
+│   └── DELETE /:id          # Delete conversation
+├── auth/                    # Authentication
+│   ├── POST /login          # User login
+│   └── POST /logout         # User logout
+└── webhooks/                # Webhook handlers
+    └── POST /:id_device/:instance  # Generic webhook
+```
 
-🔄 Performance Features:
-• Rate Limiting: 100 req/min per IP
-• Connection Pooling: 200 max DB connections
-• Message Queuing: Redis-based async processing
-• Media Compression: Auto image/video optimization
-• WebSocket Broadcasting: Real-time updates to all clients
-• AI Response Caching: 5-minute TTL for common queries
+### Webhook Processing Flow
 ```
+Incoming Webhook → Device Settings Handler → Flow Engine → AI Fallback
+                                    ↓
+                            Message Validation
+                                    ↓
+                            Device Command Detection (%, #, cmd)
+                                    ↓
+                            Flow Processing (Priority)
+                                    ↓
+                            AI Conversation (Fallback)
+```
+
+## 🔄 Flow Processing Engine
+
+### Supported Node Types (`internal/whatsapp/whatsapp_service.go`)
+- **start**: Flow entry point
+- **message**: Text message nodes
+- **image**: Image nodes with URL support
+- **audio**: Audio file nodes
+- **video**: Video nodes
+- **delay**: Timed delay nodes
+- **condition**: Conditional branching (equals, contains, default)
+- **stage**: Stage management nodes
+- **user_reply**: User input handling
+- **waiting_reply_times**: Wait for user response
+- **ai_prompt**: AI response generation
+- **advanced_ai_prompt**: Advanced AI with JSON parsing
+- **manual**: Manual intervention nodes
+
+### Flow Execution Pipeline
+```
+1. Webhook Received → processWebhookMessage()
+2. Flow Detection → GetFlowsByDevice()
+3. Execution Check → GetActiveExecution()
+4. New Execution → CreateFlowExecution() (if needed)
+5. Flow Data → GetFlowByID()
+6. Node Processing → processNodeByType()
+7. Response Delivery → SendMessageFromDevice()
+8. State Update → UpdateFlowExecution()
+```
+
+### AI Integration Rules
+- **Default API**: `https://openrouter.ai/api/v1/chat/completions`
+- **Special Devices**: SCHQ-S94, SCHQ-S12 use `https://api.openai.com/v1/chat/completions`
+- **Model Selection**: Based on `device_setting_nodepath.api_key_option`
+- **Special Models**: SCHQ-S94, SCHQ-S12 use `gpt-4.1`
+- **Payload Structure**:
+```json
+{
+  "model": "model_name",
+  "messages": [
+    {"role": "system", "content": "AI_PROMPT_NODE_DATA"},
+    {"role": "assistant", "content": "last_response"},
+    {"role": "user", "content": "current_input"}
+  ],
+  "temperature": 0.67,
+  "top_p": 1,
+  "repetition_penalty": 1
+}
+```
+
+## 🔧 Provider Integration
+
+### Supported Providers (`internal/services/provider_service.go`)
+- **Wablas**: Text and media message support
+- **Whacenter**: Full WhatsApp API integration
+- **WAHA**: Docker-based WhatsApp API
+
+### Device Commands
+- **%**: Wablas provider trigger
+- **#**: Whacenter provider trigger
+- **cmd**: Toggle human takeover (0=AI active, 1=human only)
+
+## 🗄️ Database Architecture
+
+### Migration System (`internal/database/database.go`)
+- **Auto-migration**: Runs on startup
+- **Column Management**: Add/remove columns dynamically
+- **Table Naming**: All tables end with `_nodepath`
+- **Connection**: Uses `MYSQL_URI` environment variable
+
+### Key Tables Structure
+```sql
+-- Flow definitions (JSON allowed)
+chatbot_flows_nodepath {
+  id, name, description, nodes (JSON), edges (JSON),
+  created_at, updated_at, user_devices
+}
+
+-- Conversation tracking
+ai_whatsapp_nodepath {
+  id, prospect_number, device, niche, conversation,
+  stage, human, created_at, updated_at
+}
+
+-- Device configurations
+device_setting_nodepath {
+  id_device, provider, api_key, api_key_option,
+  instance, phone_number, user_id
+}
+
+-- Flow execution state
+ flow_executions_nodepath {
+   id, flow_id, prospect_number, device,
+   current_node, status, created_at, updated_at
+ }
+ ```
+
+## ⚡ Performance Optimization
+
+### High-Scale Architecture (3000+ Concurrent Users)
+- **Connection Pooling**: MySQL with 200 max connections
+- **Redis Clustering**: High-availability caching and queue management
+- **Rate Limiting**: 100 requests/minute per IP for API protection
+- **WebSocket Broadcasting**: Real-time updates to all clients
+- **AI Response Caching**: 5-minute TTL for common queries
+- **Media Compression**: Auto image/video optimization
+- **CDN Integration**: Optimized media file delivery
+
+### Memory Management
+- **Goroutine Pooling**: Efficient concurrent request handling
+- **Circuit Breakers**: AI API failure protection
+- **Semaphore Control**: Concurrent AI request limiting
+- **Queue Processing**: Redis-based async message processing
+
+### Error Handling & Recovery
+```go
+// Circuit Breaker Pattern for AI API calls
+if s.circuitBreaker.State() == gobreaker.StateOpen {
+    return "", fmt.Errorf("AI service temporarily unavailable")
+}
+
+// Retry Logic with Exponential Backoff
+for attempt := 1; attempt <= maxRetries; attempt++ {
+    if err := processMessage(); err == nil {
+        break
+    }
+    time.Sleep(time.Duration(attempt) * time.Second)
+}
+```
+
+## 🚀 Deployment & Environment
+
+### Railway Platform Configuration
+- **Port**: 8080 (both local and production)
+- **Build Command**: `CGO_ENABLED=0 go build -o main ./cmd/server`
+- **Start Command**: `./main`
+- **Health Check**: `/api/health` endpoint
+- **Auto-scaling**: Based on CPU/memory usage
+
+### Environment Variables
+```bash
+# Database Connection
+MYSQL_URI=mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway
+
+# Redis Configuration (Optional)
+REDIS_URL=redis://default:password@host:6379
+
+# Server Configuration
+PORT=8080
+ENVIRONMENT=production
+
+# AI API Keys (Device-specific)
+# Default: OpenRouter API
+# SCHQ-S94, SCHQ-S12: OpenAI API
+```
+
+### Testing Configuration
+- **Test Device**: `FakhriAidilTLW-001`
+- **Test Flow**: `flow_ai_1756016272`
+- **Test Phone**: `601137508067`
+- **Build Verification**: `go build -o test-build ./cmd/server`
+
+## 🔧 Development Workflow
+
+### Local Development
+```bash
+# 1. Clone repository
+git clone <repository-url>
+cd nodepath-chat-1
+
+# 2. Install dependencies
+npm install
+go mod tidy
+
+# 3. Setup environment
+cp .env.example .env
+# Edit .env with your database credentials
+
+# 4. Start development servers
+# Backend (Terminal 1)
+go run ./cmd/server
+
+# Frontend (Terminal 2)
+npm run dev
+```
+
+### Production Deployment
+```bash
+# 1. Build frontend
+npm run build
+
+# 2. Build backend (Railway compatible)
+CGO_ENABLED=0 go build -o main ./cmd/server
+
+# 3. Deploy to Railway
+railway up
+```
+
+### Code Quality & Testing
+- **Compilation Check**: `go build -o test-build ./cmd/server`
+- **Frontend Build**: `npm run build`
+- **Error Handling**: Comprehensive logging with logrus
+- **Performance Monitoring**: Built-in health checks
+- **Database Migrations**: Auto-migration on startup
+
+## 📊 Monitoring & Analytics
+
+### Health Monitoring
+- **Endpoint**: `/api/health`
+- **Database**: Connection status check
+- **Redis**: Cache availability check
+- **WhatsApp**: Device connection status
+- **AI Services**: API availability check
+
+### Analytics Dashboard
+- **System Overview**: `/api/analytics/overview`
+- **Flow Statistics**: `/api/analytics/flow/:id/stats`
+- **Queue Monitoring**: `/api/queue/stats`
+- **Real-time Metrics**: WebSocket-based updates
+
+### Performance Metrics
+- **Response Time**: < 200ms for API calls
+- **Throughput**: 3000+ concurrent users
+- **Uptime**: 99.9% availability target
+- **Error Rate**: < 0.1% for critical operations
 
 ## 🔧 Recent Updates & Fixes
 
