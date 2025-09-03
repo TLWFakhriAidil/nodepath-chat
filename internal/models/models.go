@@ -203,7 +203,7 @@ type AIWhatsapp struct {
 	Intro           string          `json:"intro" db:"intro"`
 	Human           int             `json:"human" db:"human"` // 0 = AI active, 1 = human takeover
 	CatatanStaff    string          `json:"catatan_staff" db:"catatan_staff"`
-	Balas           int             `json:"balas" db:"balas"`
+	Balas           string          `json:"balas" db:"balas"` // Timestamp for throttling
 	DataImage       string          `json:"data_image" db:"data_image"`
 	ConvStage       string          `json:"conv_stage" db:"conv_stage"`
 	Niche           string          `json:"niche" db:"niche"`
