@@ -43,6 +43,36 @@ export default function ConditionNode({ data, id }: NodeProps) {
     setConditions(conditions.filter(c => c.id !== conditionId));
   };
 
+  // Helper function to get handle color based on index
+  const getHandleColor = (index: number) => {
+    const colors = [
+      'bg-green-500',
+      'bg-red-500',
+      'bg-blue-500',
+      'bg-yellow-500',
+      'bg-purple-500',
+      'bg-pink-500',
+      'bg-indigo-500',
+      'bg-cyan-500'
+    ];
+    return colors[index % colors.length];
+  };
+
+  // Helper function to get label color based on index
+  const getLabelColor = (index: number) => {
+    const colors = [
+      'text-green-500',
+      'text-red-500',
+      'text-blue-500',
+      'text-yellow-500',
+      'text-purple-500',
+      'text-pink-500',
+      'text-indigo-500',
+      'text-cyan-500'
+    ];
+    return colors[index % colors.length];
+  };
+
   return (
     <div className="bg-card rounded-lg shadow-node border border-border min-w-[250px] max-w-[350px]">
       <Handle 
@@ -133,9 +163,9 @@ export default function ConditionNode({ data, id }: NodeProps) {
           </div>
         ) : (
           <div className="bg-muted/50 rounded p-3 text-sm text-black space-y-1">
-            {conditions.map((condition) => (
+            {conditions.map((condition, index) => (
               <div key={condition.id} className="flex justify-between">
-                <span className="font-medium text-black">{condition.label}:</span>
+                <span className={`font-medium ${getLabelColor(index)}`}>{condition.label}:</span>
                 <span className="text-gray-600">
                   {condition.type === 'default' ? 'Default' : `${condition.type} "${condition.value}"`}
                 </span>
@@ -145,26 +175,32 @@ export default function ConditionNode({ data, id }: NodeProps) {
         )}
       </div>
       
-      {/* Condition outputs */}
-      <div className="flex justify-between px-4 pb-2 text-xs font-medium">
-        {conditions.slice(0, 2).map((condition, index) => (
-          <div key={condition.id} className={index === 0 ? "text-green-500" : "text-red-500"}>
+      {/* Condition outputs - SHOW ALL CONDITIONS */}
+      <div className="flex flex-wrap justify-around px-4 pb-2 text-xs font-medium gap-1">
+        {conditions.map((condition, index) => (
+          <div key={condition.id} className={getLabelColor(index)}>
             {condition.label}
           </div>
         ))}
       </div>
       
-      {/* Dynamic handles based on conditions */}
-      {conditions.slice(0, 2).map((condition, index) => (
-        <Handle 
-          key={condition.id}
-          id={condition.id}
-          type="source" 
-          position={Position.Bottom} 
-          style={{ left: `${25 + (index * 50)}%` }}
-          className={`w-3 h-3 border-2 border-white ${index === 0 ? 'bg-green-500' : 'bg-red-500'}`}
-        />
-      ))}
+      {/* Dynamic handles based on ALL conditions */}
+      {conditions.map((condition, index) => {
+        const totalConditions = conditions.length;
+        const spacing = 100 / (totalConditions + 1);
+        const leftPosition = spacing * (index + 1);
+        
+        return (
+          <Handle 
+            key={`handle-${condition.id}`}
+            id={`condition-${index}`}
+            type="source" 
+            position={Position.Bottom} 
+            style={{ left: `${leftPosition}%` }}
+            className={`w-3 h-3 border-2 border-white ${getHandleColor(index)}`}
+          />
+        );
+      })}
     </div>
   );
 }

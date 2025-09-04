@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+﻿import React, { useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
   addEdge,
@@ -155,7 +155,7 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                  type === 'waiting_reply_times' ? 'Wait Reply Times' :
                  'New Node',
           message: type === 'message' ? 'Enter your message here...' : undefined,
-          condition: type === 'condition' ? 'user_input contains "yes"' : undefined,
+          conditions: type === 'condition' ? [{ id: '1', type: 'contains', value: '1,2,3,4,5,6', label: '1,2,3,4,5,6', nextNodeId: '' },{ id: '2', type: 'contains', value: '7,8,9,10,11,12', label: '7,8,9,10,11,12', nextNodeId: '' },{ id: '3', type: 'contains', value: '13,14,15,16,17,18', label: '13,14,15,16,17,18', nextNodeId: '' },{ id: '4', type: 'default', label: 'Default', nextNodeId: '' }] : undefined,
           delay: type === 'delay' ? 5 : undefined,
           imageUrl: type === 'image' ? '' : undefined,
 
