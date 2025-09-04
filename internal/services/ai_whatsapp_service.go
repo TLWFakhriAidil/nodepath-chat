@@ -732,7 +732,7 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 						"extracted_url": mediaInfo.MediaURL,
 						"media_type": mediaInfo.MediaType,
 						"item_index": i,
-					}).Info("ðŸ”§ AI RESPONSE: EXTRACTING MEDIA URL USING NEW DETECTION SERVICE")
+					}).Info("Ã°Å¸â€Â§ AI RESPONSE: EXTRACTING MEDIA URL USING NEW DETECTION SERVICE")
 					item.Content = mediaInfo.MediaURL
 					item.Type = mediaInfo.MediaType
 				}
@@ -749,7 +749,7 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 						"corrected_type": mediaInfo.MediaType,
 						"content": item.Content,
 						"item_index": i,
-					}).Info("ðŸ”§ AI RESPONSE: AUTO-CORRECTING TEXT TO MEDIA TYPE FOR URL")
+					}).Info("Ã°Å¸â€Â§ AI RESPONSE: AUTO-CORRECTING TEXT TO MEDIA TYPE FOR URL")
 					
 					item.Type = mediaInfo.MediaType
 				}
@@ -762,7 +762,7 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 				"type": item.Type,
 				"content": item.Content,
 				"item_index": i,
-			}).Warn("âš ï¸ AI RESPONSE: MEDIA TYPE WITH NON-HTTP URL")
+			}).Warn("Ã¢Å¡Â Ã¯Â¸Â AI RESPONSE: MEDIA TYPE WITH NON-HTTP URL")
 		}
 	}
 
@@ -797,7 +797,7 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 			}
 			return items
 		}(),
-	}).Info("ðŸ” AI RESPONSE: PARSED AI RESPONSE ITEMS FOR TRACING")
+	}).Info("Ã°Å¸â€Â AI RESPONSE: PARSED AI RESPONSE ITEMS FOR TRACING")
 
 	return &aiResponse, nil
 }
@@ -915,7 +915,7 @@ func (s *aiWhatsappService) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 // Flow execution methods
 
 // StartFlowExecution starts a new flow execution in ai_whatsapp_nodepath
-func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error) {
+/* REMOVED - uses deleted database columns`nfunc (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error) {
 	logrus.WithFields(logrus.Fields{
 		"prospect_num":   prospectNum,
 		"id_device":      idDevice,

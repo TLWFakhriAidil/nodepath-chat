@@ -1,4 +1,4 @@
-﻿package repository
+package repository
 
 import (
 	"database/sql"
@@ -146,23 +146,23 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		waitingForReplyValue = nil
 	}
 	
-	/*	if ai.FlowReference.Valid {
+	if ai.FlowReference.Valid {
 		flowReferenceValue = ai.FlowReference.String
 	} else {
 		flowReferenceValue = nil
-	}*/ flowReferenceValue = nil
+	}
 	
-	/*	if ai.ExecutionID.Valid {
+	if ai.ExecutionID.Valid {
 		executionIDValue = ai.ExecutionID.String
 	} else {
 		executionIDValue = nil
-	}*/ executionIDValue = nil
+	}
 	
-	/*	if ai.ExecutionStatus.Valid {
+	if ai.ExecutionStatus.Valid {
 		executionStatusValue = ai.ExecutionStatus.String
 	} else {
 		executionStatusValue = nil
-	}*/ executionStatusValue = nil
+	}
 
 	_, err := r.db.Exec(query,
 		ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, convLastValue,
@@ -237,7 +237,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 		&ai.CurrentNodeID, &ai.WaitingForReply, &ai.FlowID, &ai.LastNodeID,
-		// &ai.ExecutionStatus, &ai.ExecutionID,
+		&ai.ExecutionStatus, &ai.ExecutionID,
 	)
 
 	ai.ConvCurrent = convCurrentSQL
@@ -1253,7 +1253,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 		&ai.CurrentNodeID, &ai.WaitingForReply, &ai.FlowID, &ai.LastNodeID,
-		// &ai.ExecutionStatus, &ai.ExecutionID,
+		&ai.ExecutionStatus, &ai.ExecutionID,
 	)
 
 	ai.ConvCurrent = convCurrentSQL
