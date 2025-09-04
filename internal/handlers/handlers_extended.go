@@ -14,9 +14,9 @@ import (
 
 // GetExecutions returns all executions
 func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
-	// flowReference removed
+	flowReference := c.Query("flow_reference")
 
-	if false {
+	if flowReference != "" {
 		// Use AI WhatsApp repository to get executions
 		// Get userID from context
 		userID, ok := c.Locals("user_id").(string)
@@ -29,7 +29,7 @@ func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
 				userIDInt = id
 			}
 		}
-		// GetAllAIWhatsappData call removed
+		executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userIDInt)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to get executions by flow")
 			return h.errorResponse(c, 500, "Failed to retrieve executions")
@@ -43,7 +43,7 @@ func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
 
 // GetExecution returns a specific execution
 func (h *Handlers) GetExecution(c *fiber.Ctx) error {
-	prospectNum := c.Params("id")
+	executionID := c.Params("id")
 	if executionID == "" {
 		return h.errorResponse(c, 400, "Execution ID is required")
 	}
@@ -64,13 +64,13 @@ func (h *Handlers) GetExecution(c *fiber.Ctx) error {
 
 // CompleteExecution marks an execution as completed
 func (h *Handlers) CompleteExecution(c *fiber.Ctx) error {
-	prospectNum := c.Params("id")
+	executionID := c.Params("id")
 	if executionID == "" {
 		return h.errorResponse(c, 400, "Execution ID is required")
 	}
 
 	// Use AI WhatsApp service to complete execution
-	err := // CompleteFlowExecution removed //(executionID, "")
+	err := h.aiWhatsappHandlers.AIWhatsappService.CompleteFlowExecution(executionID, "")
 	if err != nil {
 		logrus.WithError(err).Error("Failed to complete execution")
 		return h.errorResponse(c, 500, "Failed to complete execution")
@@ -81,13 +81,13 @@ func (h *Handlers) CompleteExecution(c *fiber.Ctx) error {
 
 // DeleteExecution deletes an execution
 func (h *Handlers) DeleteExecution(c *fiber.Ctx) error {
-	prospectNum := c.Params("id")
+	executionID := c.Params("id")
 	if executionID == "" {
 		return h.errorResponse(c, 400, "Execution ID is required")
 	}
 
 	// Update execution status to failed/deleted
-	err := // UpdateFlowExecution removed //(executionID, "", "", nil, "failed")
+	err := h.aiWhatsappHandlers.AIWhatsappService.UpdateFlowExecution(executionID, "", "", nil, "failed")
 	if err != nil {
 		logrus.WithError(err).Error("Failed to delete execution")
 		return h.errorResponse(c, 500, "Failed to delete execution")
