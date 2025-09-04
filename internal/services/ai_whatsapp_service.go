@@ -732,7 +732,7 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 						"extracted_url": mediaInfo.MediaURL,
 						"media_type": mediaInfo.MediaType,
 						"item_index": i,
-					}).Info("🔧 AI RESPONSE: EXTRACTING MEDIA URL USING NEW DETECTION SERVICE")
+					}).Info("ðŸ”§ AI RESPONSE: EXTRACTING MEDIA URL USING NEW DETECTION SERVICE")
 					item.Content = mediaInfo.MediaURL
 					item.Type = mediaInfo.MediaType
 				}
@@ -749,7 +749,7 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 						"corrected_type": mediaInfo.MediaType,
 						"content": item.Content,
 						"item_index": i,
-					}).Info("🔧 AI RESPONSE: AUTO-CORRECTING TEXT TO MEDIA TYPE FOR URL")
+					}).Info("ðŸ”§ AI RESPONSE: AUTO-CORRECTING TEXT TO MEDIA TYPE FOR URL")
 					
 					item.Type = mediaInfo.MediaType
 				}
@@ -762,7 +762,7 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 				"type": item.Type,
 				"content": item.Content,
 				"item_index": i,
-			}).Warn("⚠️ AI RESPONSE: MEDIA TYPE WITH NON-HTTP URL")
+			}).Warn("âš ï¸ AI RESPONSE: MEDIA TYPE WITH NON-HTTP URL")
 		}
 	}
 
@@ -797,7 +797,7 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 			}
 			return items
 		}(),
-	}).Info("🔍 AI RESPONSE: PARSED AI RESPONSE ITEMS FOR TRACING")
+	}).Info("ðŸ” AI RESPONSE: PARSED AI RESPONSE ITEMS FOR TRACING")
 
 	return &aiResponse, nil
 }
