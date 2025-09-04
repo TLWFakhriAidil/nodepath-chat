@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
   addEdge,
@@ -264,10 +264,10 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
   }, [flowId, setNodes, setEdges, toast, deleteNode, updateNodeData]);
 
   const saveFlowToStorage = useCallback(async () => {
-    if (!flowName.trim()) {
+    if (!flowName || flowName === "") {
       toast({
-        title: "Flow name required",
-        description: "Please enter a name for your flow",
+        title: "Flow type required",
+        description: "Please select a flow type (WasapBot Exama or Chatbot AI)",
         variant: "destructive"
       });
       return;
@@ -498,12 +498,14 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                 </h3>
                 
                 <div className="space-y-1.5">
-                  <Input
-                    placeholder="Flow name..."
-                    value={flowName}
-                    onChange={(e) => setFlowName(e.target.value)}
-                    className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
-                  />
+                  
+                  <Select value={flowName} onValueChange={setFlowName}>
+                    <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"><SelectValue placeholder="Select flow type..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="WasapBot Exama">WasapBot Exama</SelectItem><SelectItem
+                       value="Chatbot AI">Chatbot AI</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Input
                     placeholder="Enter your niche..."
                     value={niche}
@@ -514,13 +516,17 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                     <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50">
                       <SelectValue placeholder="Select device..." />
                     </SelectTrigger>
+                    
                     <SelectContent>
+                      
                       {deviceOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>
                       ))}
+                    
                     </SelectContent>
+                  
                   </Select>
                 </div>
               </div>

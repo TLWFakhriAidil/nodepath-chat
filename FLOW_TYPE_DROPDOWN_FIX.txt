@@ -1,0 +1,38 @@
+// FLOW TYPE DROPDOWN FIX
+// Change the Flow name input to a dropdown in src/components/ChatbotBuilder.tsx
+
+// 1. REPLACE lines 500-505 (the Input field for flow name):
+// OLD:
+//                  <Input
+//                    placeholder="Flow name..."
+//                    value={flowName}
+//                    onChange={(e) => setFlowName(e.target.value)}
+//                    className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50"
+//                  />
+
+// NEW:
+                  <Select value={flowName} onValueChange={setFlowName}>
+                    <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50 focus:border-primary/50">
+                      <SelectValue placeholder="Select flow type..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="WasapBot Exama">WasapBot Exama</SelectItem>
+                      <SelectItem value="Chatbot AI">Chatbot AI</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+// 2. REPLACE line 267 (validation check):
+// OLD:
+//    if (!flowName.trim()) {
+
+// NEW:
+    if (!flowName || flowName === "") {
+
+// 3. REPLACE lines 269-270 (error message):
+// OLD:
+//        title: "Flow name required",
+//        description: "Please enter a name for your flow",
+
+// NEW:
+        title: "Flow type required",
+        description: "Please select a flow type (WasapBot Exama or Chatbot AI)",
