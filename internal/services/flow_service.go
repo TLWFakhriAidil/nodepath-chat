@@ -503,4 +503,17 @@ func (s *FlowService) ReplaceVariables(text string, variables map[string]interfa
 		}
 	}
 	return result
+}// CONDITION FIX WRAPPER
+// Add this at the end of flow_service.go
+
+// EvaluateConditionNodeWrapper wraps the original method to handle ALL conditions
+func (s *FlowService) EvaluateConditionNodeWrapper(flow *models.ChatbotFlow, conditionNodeID string, userInput string) (*models.FlowNode, error) {
+	// First try the patched version
+	result, err := s.EvaluateConditionNodePatch(flow, conditionNodeID, userInput)
+	if err == nil {
+		return result, nil
+	}
+	
+	// Fallback to original if patch fails
+	return s.EvaluateConditionNode(flow, conditionNodeID, userInput)
 }
