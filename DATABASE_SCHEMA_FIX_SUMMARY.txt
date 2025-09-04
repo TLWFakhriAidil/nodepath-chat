@@ -1,0 +1,30 @@
+// DATABASE SCHEMA FIX SUMMARY
+// 
+// Changes made to match ai_whatsapp_nodepath table schema:
+//
+// 1. ADDED to AIWhatsapp struct in models.go:
+//    - ID int `json:"id" db:"id"` // Primary key
+//
+// 2. REMOVED from AIWhatsapp struct (don't exist in database):
+//    - FlowReference
+//    - CurrentNode (replaced by CurrentNodeID)
+//    - Variables
+//    - ExecutionStatus
+//    - ExecutionID
+//
+// 3. Repository fixes needed in ai_whatsapp_repository.go:
+//    - Remove ExecutionStatus and ExecutionID from SELECT queries
+//    - Remove ExecutionStatus and ExecutionID from Scan() calls
+//    - Set flowReferenceValue = nil (field removed)
+//    - Set executionIDValue = nil (field removed)
+//    - Set executionStatusValue = nil (field removed)
+//
+// The database table has these columns:
+// - id (primary key) - ADDED TO STRUCT
+// - id_prospect, id_device, prospect_num
+// - stage, conv_last, conv_current, conv_stage
+// - human, balas, bot_balas
+// - flow_id, current_node_id, last_node_id, waiting_for_reply
+// - date_order, niche, intro, jam, keywordiklan, marketer
+// - catatan_staff, data_image
+// - created_at, updated_at, update_today

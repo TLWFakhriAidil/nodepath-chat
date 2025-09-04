@@ -1,4 +1,4 @@
-package models
+﻿package models
 
 import (
 	"database/sql"
@@ -38,9 +38,6 @@ const (
 type ExecutionStatus string
 
 const (
-	ExecutionStatusActive    ExecutionStatus = "active"
-	ExecutionStatusCompleted ExecutionStatus = "completed"
-	ExecutionStatusFailed    ExecutionStatus = "failed"
 )
 
 
@@ -192,6 +189,7 @@ type WebSocketMessage struct {
 
 // AIWhatsapp represents an AI WhatsApp conversation record with flow execution capabilities
 type AIWhatsapp struct {
+	ID              int             `json:"id" db:"id"`  // Primary key - ADDED
 	IDProspect      int             `json:"id_prospect" db:"id_prospect"`
 	IDDevice        string          `json:"id_device" db:"id_device"`
 	ProspectNum     string          `json:"prospect_num" db:"prospect_num"`
@@ -211,12 +209,6 @@ type AIWhatsapp struct {
 	KeywordIklan    string          `json:"keywordiklan" db:"keywordiklan"`
 	Marketer        string          `json:"marketer" db:"marketer"`
 	UpdateToday     *time.Time      `json:"update_today" db:"update_today"`
-	// Flow execution fields
-	FlowReference   sql.NullString  `json:"flow_reference" db:"flow_reference"`   // Reference to chatbot flow being executed
-	CurrentNode     sql.NullString  `json:"current_node" db:"current_node"`       // Current node in the flow execution
-	Variables       json.RawMessage `json:"variables" db:"variables"`             // Flow execution variables (JSON)
-	ExecutionStatus sql.NullString  `json:"execution_status" db:"execution_status"` // Flow execution status (active, completed, failed)
-	ExecutionID     sql.NullString  `json:"execution_id" db:"execution_id"`       // Unique execution identifier
 	// Flow tracking fields for user reply handling
 	CurrentNodeID   sql.NullString  `json:"current_node_id" db:"current_node_id"`   // Current node ID in the chatbot flow
 	WaitingForReply sql.NullInt32   `json:"waiting_for_reply" db:"waiting_for_reply"` // 1 = waiting for user reply, 0 = not waiting
