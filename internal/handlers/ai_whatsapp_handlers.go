@@ -44,6 +44,8 @@ func (h *AIWhatsappHandlers) SetMainHandlers(mainHandlers *Handlers) {
 
 // SetupAIWhatsappRoutes sets up AI WhatsApp webhook routes
 func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
+	logrus.Info("🔧 AI_WHATSAPP: Setting up AI WhatsApp routes...")
+	
 	// Webhook endpoints for receiving WhatsApp messages
 	api.Post("/webhook/whatsapp/:device_id", h.HandleWhatsappWebhook)
 	api.Post("/webhook/wablas/:device_id", h.HandleWablasWebhook)
@@ -77,8 +79,10 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 	api.Post("/ai/analytics", h.GetAnalytics)
 
 	// Data table endpoints
-	api.Get("/ai/whatsapp/data", h.GetAllAIWhatsappData)
-	api.Delete("/ai/whatsapp/data/:id", h.DeleteAIWhatsappData)
+	api.Get("/data", h.GetAllAIWhatsappData)
+	api.Delete("/data/:id", h.DeleteAIWhatsappData)
+	
+	logrus.Info("✅ AI_WHATSAPP: All AI WhatsApp routes registered successfully")
 }
 
 // WhatsappWebhookRequest represents incoming WhatsApp webhook data
@@ -1142,6 +1146,9 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 
 // GetAllAIWhatsappData retrieves all AI WhatsApp conversation records for data table display
 func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
+	logrus.Info("📊 AI_WHATSAPP: GetAllAIWhatsappData endpoint called")
+	logrus.Infof("📊 AI_WHATSAPP: Request path: %s", c.Path())
+	logrus.Infof("📊 AI_WHATSAPP: Request query: %s", c.Request().URI().QueryString())
 	// Parse query parameters for pagination and filtering
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 50)
