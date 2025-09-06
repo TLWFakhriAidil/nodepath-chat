@@ -29,7 +29,8 @@ import {
   User,
   Calendar,
   Filter,
-  Download
+  Download,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -185,6 +186,47 @@ const AIWhatsappDataTable = () => {
   const exportData = () => {
     // TODO: Implement export functionality
     console.log('Export data functionality to be implemented');
+  };
+
+  /**
+   * Delete AI WhatsApp conversation record
+   * @param id - The id_prospect of the conversation to delete
+   */
+  const deleteConversation = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/ai/whatsapp/data/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Remove the deleted conversation from the local state
+        setConversations(prev => prev.filter(conv => conv.id_prospect !== id));
+        // Update total records count
+        setTotalRecords(prev => prev - 1);
+        // Refresh data to ensure consistency
+        fetchAIWhatsappData();
+      } else {
+        throw new Error(result.message || 'Failed to delete conversation');
+      }
+    } catch (err) {
+      console.error('Error deleting conversation:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete conversation');
+    }
   };
 
   // Format conversation data for display
@@ -347,12 +389,13 @@ const AIWhatsappDataTable = () => {
                     <TableHead>Marketer</TableHead>
                     <TableHead>Last Conversation</TableHead>
                     <TableHead>Updated</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {conversations.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
+                      <TableCell colSpan={9} className="text-center py-8">
                         <div className="flex flex-col items-center gap-2">
                           <MessageSquare className="w-8 h-8 text-gray-400" />
                           <p className="text-gray-500">No conversations found</p>
@@ -399,6 +442,17 @@ const AIWhatsappDataTable = () => {
                             <Calendar className="w-3 h-3" />
                             {format(new Date(conversation.updated_at), 'MMM dd, HH:mm')}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteConversation(conversation.id_prospect)}
+                            className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                            title="Delete conversation"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))

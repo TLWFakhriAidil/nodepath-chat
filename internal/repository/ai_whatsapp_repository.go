@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"nodepath-chat/internal/models"
@@ -39,6 +40,7 @@ type AIWhatsappRepository interface {
 
 	// Delete operations
 	DeleteAIWhatsapp(id int) error
+	DeleteAIWhatsappData(id string, userID int) error
 	DeleteConversationLogs(prospectNum string) error
 
 	// Analytics operations
@@ -48,7 +50,7 @@ type AIWhatsappRepository interface {
 	GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID int) (map[string]interface{}, error)
 
 	// Data table operations
-	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error)
+	GetAllAIWhatsappData(limit, offset int, deviceFilter string, deviceIDs []string, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error)
 	
 	// Database access for transactions
 	GetDB() *sql.DB
@@ -416,7 +418,7 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 }
 
 // GetAllAIWhatsappData retrieves all AI WhatsApp conversation records with pagination and filtering
-func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error) {
+func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter string, deviceIDs []string, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error) {
 	// Build base query with JOIN to filter by user
 	baseQuery := `
 		SELECT a.id_prospect, a.id_device, a.prospect_num, a.stage, a.date_order, a.conv_last, 
@@ -440,11 +442,27 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 	args = append(args, userID)
 	countArgs = append(countArgs, userID)
 
-	// Add device filter
+	// Add device filter (single device ID)
 	if deviceFilter != "" {
 		conditions = append(conditions, "a.id_device = ?")
 		args = append(args, deviceFilter)
 		countArgs = append(countArgs, deviceFilter)
+	}
+
+	// Add device IDs filter (multiple device IDs from frontend)
+	if len(deviceIDs) > 0 {
+		// Create placeholders for IN clause
+		placeholders := make([]string, len(deviceIDs))
+		for i := range placeholders {
+			placeholders[i] = "?"
+		}
+		conditions = append(conditions, fmt.Sprintf("a.id_device IN (%s)", strings.Join(placeholders, ",")))
+		
+		// Add device IDs to args
+		for _, deviceID := range deviceIDs {
+			args = append(args, deviceID)
+			countArgs = append(countArgs, deviceID)
+		}
 	}
 
 	// Add stage filter
@@ -1416,6 +1434,42 @@ func (r *aiWhatsappRepository) DeleteAIWhatsapp(id int) error {
 	}
 
 	logrus.WithField("id_prospect", id).Info("AI WhatsApp conversation deleted successfully")
+	return nil
+}
+
+// DeleteAIWhatsappData deletes an AI WhatsApp conversation by ID with user authorization
+func (r *aiWhatsappRepository) DeleteAIWhatsappData(id string, userID int) error {
+	// First verify the record belongs to the user
+	verifyQuery := `
+		SELECT COUNT(*) 
+		FROM ai_whatsapp_nodepath a 
+		JOIN device_setting_nodepath d ON a.id_device = d.id_device 
+		WHERE a.id_prospect = ? AND d.user_id = ?
+	`
+	
+	var count int
+	err := r.db.QueryRow(verifyQuery, id, userID).Scan(&count)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to verify AI WhatsApp data ownership")
+		return fmt.Errorf("failed to verify data ownership: %w", err)
+	}
+	
+	if count == 0 {
+		return fmt.Errorf("AI WhatsApp data not found or access denied")
+	}
+	
+	// Delete the record
+	deleteQuery := `DELETE FROM ai_whatsapp_nodepath WHERE id_prospect = ?`
+	_, err = r.db.Exec(deleteQuery, id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to delete AI WhatsApp data")
+		return fmt.Errorf("failed to delete AI WhatsApp data: %w", err)
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"id_prospect": id,
+		"user_id": userID,
+	}).Info("AI WhatsApp data deleted successfully")
 	return nil
 }
 
