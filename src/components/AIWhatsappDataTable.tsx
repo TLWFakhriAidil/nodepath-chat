@@ -126,7 +126,7 @@ const AIWhatsappDataTable = () => {
         params.append('user_device_ids', device_ids.join(','));
       }
       
-      const response = await fetch(`/api/ai/whatsapp/data?${params}`);
+      const response = await fetch(`/api/ai-whatsapp/data?${params}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -199,7 +199,7 @@ const AIWhatsappDataTable = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/ai/whatsapp/data/${id}`, {
+      const response = await fetch(`/api/ai-whatsapp/data/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
