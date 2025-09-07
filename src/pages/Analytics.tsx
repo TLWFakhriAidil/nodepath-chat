@@ -72,6 +72,7 @@ const Analytics = () => {
   const fetchAnalyticsData = async () => {
     // Check if user has devices before fetching
     if (!has_devices) {
+      console.log('Analytics: No devices available, showing popup');
       setShowDeviceRequiredPopup(true);
       setLoading(false);
       return;
@@ -98,18 +99,31 @@ const Analytics = () => {
         params.append('deviceIds', device_ids.join(','));
       }
       
-      const response = await fetch(`/api/ai/analytics?${params.toString()}`, {
+      const apiUrl = `/api/ai-whatsapp/ai/analytics?${params.toString()}`;
+      console.log('Analytics: Making API call to:', apiUrl);
+      console.log('Analytics: Device IDs from context:', device_ids);
+      console.log('Analytics: Selected device:', selectedDevice);
+      console.log('Analytics: Date range:', dateRange);
+      
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
       });
       
+      console.log('Analytics: Response status:', response.status);
+      console.log('Analytics: Response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Analytics: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('Analytics: Received data:', data);
       setAnalyticsData(data);
     } catch (err) {
       console.error('Error fetching analytics data:', err);
