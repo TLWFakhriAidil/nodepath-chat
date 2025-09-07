@@ -195,15 +195,60 @@ func main() {
 		}))
 	}
 
-	// Health check endpoint with performance metrics
+	// Health check endpoint with performance metrics and database status
 	app.Get("/healthz", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"status":              "ok",
-			"time":                time.Now().Unix(),
+		// Check database connectivity
+		dbStatus := "unavailable"
+		dbError := ""
+		if db != nil {
+			if err := db.Ping(); err != nil {
+				dbStatus = "error"
+				dbError = err.Error()
+			} else {
+				dbStatus = "connected"
+			}
+		}
+
+		// Check Redis connectivity
+		redisStatus := "unavailable"
+		redisError := ""
+		if concreteRedisClient != nil {
+			if err := concreteRedisClient.Ping(c.Context()).Err(); err != nil {
+				redisStatus = "error"
+				redisError = err.Error()
+			} else {
+				redisStatus = "connected"
+			}
+		}
+
+		// Determine overall status
+		overallStatus := "ok"
+		if dbStatus == "error" || redisStatus == "error" {
+			overallStatus = "degraded"
+		}
+
+		healthData := fiber.Map{
+			"status":                overallStatus,
+			"time":                  time.Now().Unix(),
 			"websocket_connections": websocketService.GetConnectionCount(),
-			"max_concurrent_users": cfg.MaxConcurrentUsers,
-			"cdn_enabled":          cfg.CDNEnabled,
-		})
+			"max_concurrent_users":  cfg.MaxConcurrentUsers,
+			"cdn_enabled":           cfg.CDNEnabled,
+			"database": fiber.Map{
+				"status": dbStatus,
+				"error":  dbError,
+			},
+			"redis": fiber.Map{
+				"status": redisStatus,
+				"error":  redisError,
+			},
+			"fallback_auth_enabled": db == nil,
+		}
+
+		// Return appropriate status code
+		if overallStatus == "degraded" {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(healthData)
+		}
+		return c.JSON(healthData)
 	})
 
 	// WebSocket endpoint for real-time communication

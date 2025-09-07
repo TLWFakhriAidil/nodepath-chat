@@ -555,6 +555,13 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 
 // GetAnalyticsData retrieves analytics data from ai_whatsapp_nodepath table with date filtering
 func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID int) (map[string]interface{}, error) {
+	logrus.WithFields(logrus.Fields{
+		"startDate": startDate.Format("2006-01-02"),
+		"endDate": endDate.Format("2006-01-02"),
+		"idDevice": idDevice,
+		"userID": userID,
+	}).Info("GetAnalyticsData called")
+	
 	// Base query for filtering by date_order with user-specific filtering
 	baseQuery := `
 		SELECT 
@@ -574,9 +581,12 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 	if idDevice != "" && idDevice != "all" {
 		baseQuery += " AND a.id_device = ?"
 		args = append(args, idDevice)
+		logrus.WithField("deviceFilter", idDevice).Info("Adding device filter to analytics query")
 	}
 
 	// Execute main analytics query
+	logrus.WithField("query", baseQuery).WithField("args", args).Info("Executing analytics query")
+	
 	var totalConversations, aiActive, humanTakeover, uniqueDevices, uniqueNiches, conversationsWithStage int
 	err := r.db.QueryRow(baseQuery, args...).Scan(
 		&totalConversations, &aiActive, &humanTakeover, &uniqueDevices, &uniqueNiches, &conversationsWithStage,
@@ -585,6 +595,15 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		logrus.WithError(err).Error("Failed to get analytics data")
 		return nil, fmt.Errorf("failed to get analytics data: %w", err)
 	}
+	
+	logrus.WithFields(logrus.Fields{
+		"totalConversations": totalConversations,
+		"aiActive": aiActive,
+		"humanTakeover": humanTakeover,
+		"uniqueDevices": uniqueDevices,
+		"uniqueNiches": uniqueNiches,
+		"conversationsWithStage": conversationsWithStage,
+	}).Info("Analytics query results")
 
 	// Get daily breakdown
 	dailyQuery := `

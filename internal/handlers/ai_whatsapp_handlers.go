@@ -42,43 +42,76 @@ func (h *AIWhatsappHandlers) SetMainHandlers(mainHandlers *Handlers) {
 	h.mainHandlers = mainHandlers
 }
 
+// getAuthMiddleware returns the authentication middleware from main handlers
+func (h *AIWhatsappHandlers) getAuthMiddleware() fiber.Handler {
+	if h.mainHandlers != nil && h.mainHandlers.authHandlers != nil {
+		return h.mainHandlers.authHandlers.AuthMiddleware()
+	}
+	// Fallback: return a middleware that always denies access
+	return func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Authentication middleware not available",
+		})
+	}
+}
+
+// getDeviceRequiredMiddleware returns the device required middleware from main handlers
+func (h *AIWhatsappHandlers) getDeviceRequiredMiddleware() fiber.Handler {
+	if h.mainHandlers != nil && h.mainHandlers.authHandlers != nil {
+		return h.mainHandlers.authHandlers.DeviceRequiredMiddleware()
+	}
+	// Fallback: return a middleware that always denies access
+	return func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"success": false,
+			"error":   "Device required middleware not available",
+		})
+	}
+}
+
 // SetupAIWhatsappRoutes sets up AI WhatsApp webhook routes
 func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
-	// Webhook endpoints for receiving WhatsApp messages
+	// Webhook endpoints for receiving WhatsApp messages (no auth required for webhooks)
 	api.Post("/webhook/whatsapp/:device_id", h.HandleWhatsappWebhook)
 	api.Post("/webhook/wablas/:device_id", h.HandleWablasWebhook)
 	api.Post("/webhook/whacenter/:device_id", h.HandleWhacenterWebhook)
 	api.Post("/webhook/waha/:device_id", h.HandleWahaWebhook)
 
-	// Test endpoints for webhook data extraction
+	// Test endpoints for webhook data extraction (no auth required for testing)
 	api.Post("/test/waha/extraction", h.TestWahaExtraction)
 	
-	// Production debugging endpoint - logs everything and returns payload structure
+	// Production debugging endpoint - logs everything and returns payload structure (no auth required for debugging)
 	api.Post("/debug/waha/:device_id", h.DebugWahaWebhook)
 
-	// AI conversation management endpoints
-	api.Post("/ai/conversation/start", h.StartAIConversation)
-	api.Post("/ai/conversation/process", h.ProcessAIMessage)
-	api.Post("/ai/conversation/toggle-human", h.ToggleHumanTakeover)
-	api.Get("/ai/conversation/history/:prospect_num", h.GetConversationHistory)
-	api.Get("/ai/conversation/status/:prospect_num", h.GetConversationStatus)
-
-	// AI settings management
-	api.Get("/ai/settings/:staff_id", h.GetAISettings)
-	api.Post("/ai/settings", h.CreateAISettings)
-	api.Put("/ai/settings/:staff_id", h.UpdateAISettings)
-	api.Delete("/ai/settings/:staff_id", h.DeleteAISettings)
-
-	// Device command processing
+	// Device command processing (no auth required for webhook commands)
 	api.Post("/ai/device/command", h.ProcessDeviceCommand)
 
+	// Protected routes requiring authentication
+	protected := api.Group("/ai")
+	protected.Use(h.getAuthMiddleware())
+	protected.Use(h.getDeviceRequiredMiddleware())
+
+	// AI conversation management endpoints
+	protected.Post("/conversation/start", h.StartAIConversation)
+	protected.Post("/conversation/process", h.ProcessAIMessage)
+	protected.Post("/conversation/toggle-human", h.ToggleHumanTakeover)
+	protected.Get("/conversation/history/:prospect_num", h.GetConversationHistory)
+	protected.Get("/conversation/status/:prospect_num", h.GetConversationStatus)
+
+	// AI settings management
+	protected.Get("/settings/:staff_id", h.GetAISettings)
+	protected.Post("/settings", h.CreateAISettings)
+	protected.Put("/settings/:staff_id", h.UpdateAISettings)
+	protected.Delete("/settings/:staff_id", h.DeleteAISettings)
+
 	// Analytics endpoints
-	api.Get("/ai/analytics", h.GetAnalytics)
-	api.Post("/ai/analytics", h.GetAnalytics)
+	protected.Get("/analytics", h.GetAnalytics)
+	protected.Post("/analytics", h.GetAnalytics)
 
 	// Data table endpoints
-	api.Get("/ai-whatsapp/data", h.GetAllAIWhatsappData)
-	api.Delete("/ai-whatsapp/data/:id", h.DeleteAIWhatsappData)
+	protected.Get("/ai-whatsapp/data", h.GetAllAIWhatsappData)
+	protected.Delete("/ai-whatsapp/data/:id", h.DeleteAIWhatsappData)
 }
 
 // WhatsappWebhookRequest represents incoming WhatsApp webhook data
@@ -1025,6 +1058,22 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 		req.StartDate = c.Query("startDate", "")
 		req.EndDate = c.Query("endDate", "")
 		req.DeviceID = c.Query("idDevice", "")
+		
+		// Handle deviceIds parameter (comma-separated list from frontend)
+		deviceIds := c.Query("deviceIds", "")
+		logrus.WithFields(logrus.Fields{
+			"deviceIds": deviceIds,
+			"idDevice": req.DeviceID,
+			"startDate": req.StartDate,
+			"endDate": req.EndDate,
+		}).Info("Analytics request received")
+		
+		if deviceIds != "" && req.DeviceID == "" {
+			// Use the first device ID from the list for now
+			// TODO: Enhance repository to handle multiple device IDs
+			req.DeviceID = "all" // Set to "all" to include all user devices
+			logrus.Info("Using all devices for analytics since deviceIds parameter was provided")
+		}
 	} else {
 		// Handle POST request with JSON body
 		if err := c.BodyParser(&req); err != nil {

@@ -50,6 +50,15 @@ type AuthResponse struct {
 func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 	logrus.Info("Processing user registration request")
 
+	// Check if database connection is available
+	if ah.db == nil {
+		logrus.Error("Database connection is not available")
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"success": false,
+			"error":   "Database service is not available",
+		})
+	}
+
 	var req RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
 		logrus.WithError(err).Error("Failed to parse registration request")
@@ -177,9 +186,15 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 	})
 }
 
-// Login handles user authentication
+// Login handles user authentication with fallback for database unavailability
 func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 	logrus.Info("Processing user login request")
+
+	// Check if database connection is available
+	if ah.db == nil {
+		logrus.Warn("Database connection is not available, using fallback authentication")
+		return ah.loginWithFallback(c)
+	}
 
 	var req LoginRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -499,6 +514,11 @@ func (ah *AuthHandlers) DeviceRequiredMiddleware() fiber.Handler {
 
 // CheckUserDevices returns device count and device IDs for a user
 func (ah *AuthHandlers) CheckUserDevices(userID int) (int, []string, error) {
+	// Check if database connection is available
+	if ah.db == nil {
+		return 0, nil, fmt.Errorf("database connection is not available")
+	}
+
 	var deviceIDs []string
 	var count int
 
@@ -579,5 +599,76 @@ func (ah *AuthHandlers) SetupTemplateRoutes(app *fiber.App) {
 	// Serve register page
 	app.Get("/register", func(c *fiber.Ctx) error {
 		return c.SendFile("./web/templates/register.html")
+	})
+}
+
+// loginWithFallback provides temporary authentication when database is unavailable
+func (ah *AuthHandlers) loginWithFallback(c *fiber.Ctx) error {
+	var req LoginRequest
+	if err := c.BodyParser(&req); err != nil {
+		logrus.WithError(err).Error("Failed to parse login request")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid request format",
+		})
+	}
+
+	// Validate required fields
+	if req.Email == "" || req.Password == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Email and password are required",
+		})
+	}
+
+	// Fallback credentials for development when database is unavailable
+	// In production, this should be removed or use environment variables
+	fallbackCredentials := map[string]string{
+		"admin@nodepath.com": "admin123",
+		"test@nodepath.com":  "test123",
+		"demo@nodepath.com":  "demo123",
+	}
+
+	// Check fallback credentials
+	if expectedPassword, exists := fallbackCredentials[req.Email]; exists && expectedPassword == req.Password {
+		// Create a temporary user object
+		user := models.User{
+			ID:       generateUUID(),
+			Email:    req.Email,
+			FullName: "Fallback User",
+			IsActive: true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		// Generate session token
+		token, err := generateSessionToken()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to generate session token")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "Internal server error",
+			})
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"user_id": user.ID,
+			"email":   user.Email,
+		}).Info("User logged in successfully with fallback authentication")
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"success": true,
+			"message": "Login successful (fallback mode - database unavailable)",
+			"data": AuthResponse{
+				User:  user,
+				Token: token,
+			},
+		})
+	}
+
+	// Invalid credentials
+	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+		"success": false,
+		"error":   "Invalid email or password (fallback mode)",
 	})
 }
