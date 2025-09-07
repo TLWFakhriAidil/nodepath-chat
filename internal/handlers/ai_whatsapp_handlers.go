@@ -77,7 +77,8 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 	api.Post("/ai/analytics", h.GetAnalytics)
 
 	// Data table endpoints
-	api.Get("/ai/whatsapp/data", h.GetAllAIWhatsappData)
+	api.Get("/ai-whatsapp/data", h.GetAllAIWhatsappData)
+	api.Delete("/ai-whatsapp/data/:id", h.DeleteAIWhatsappData)
 }
 
 // WhatsappWebhookRequest represents incoming WhatsApp webhook data
@@ -1184,6 +1185,84 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 			"total_records": total,
 			"limit":        limit,
 		},
+	})
+}
+
+// DeleteAIWhatsappData deletes an AI WhatsApp conversation record by ID
+func (h *AIWhatsappHandlers) DeleteAIWhatsappData(c *fiber.Ctx) error {
+	// Get ID from URL parameter
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		logrus.WithError(err).Error("Invalid ID parameter")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"message": "Invalid ID parameter",
+		})
+	}
+
+	// Get user ID from authentication context
+	userID, ok := c.Locals("userID").(int)
+	if !ok {
+		logrus.Error("User ID not found in context")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"message": "Authentication required",
+		})
+	}
+
+	// First, verify the record exists and belongs to the user's devices
+	record, err := h.AIRepo.GetAIWhatsappByID(id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get AI WhatsApp record")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "Failed to retrieve record",
+		})
+	}
+
+	if record == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"success": false,
+			"message": "Record not found",
+		})
+	}
+
+	// Verify the record belongs to a device owned by the user
+	deviceSettings, err := h.DeviceRepo.GetDeviceSettingsByDevice(record.IDDevice)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get device settings")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "Failed to verify device ownership",
+		})
+	}
+
+	if !deviceSettings.UserID.Valid || int(deviceSettings.UserID.Int32) != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"success": false,
+			"message": "Access denied: record belongs to different user",
+		})
+	}
+
+	// Delete the record
+	err = h.AIRepo.DeleteAIWhatsapp(id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to delete AI WhatsApp record")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "Failed to delete record",
+		})
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"id_prospect": id,
+		"user_id":     userID,
+		"id_device":   record.IDDevice,
+	}).Info("AI WhatsApp record deleted successfully")
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": "Record deleted successfully",
 	})
 }
 
