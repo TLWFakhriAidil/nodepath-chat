@@ -107,9 +107,9 @@ const Analytics = () => {
       
       const response = await fetch(apiUrl, {
         method: 'GET',
+        credentials: 'include', // Use cookie-based authentication
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
       });
       
