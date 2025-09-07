@@ -4,8 +4,6 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 **Live Demo**: https://nodepath-chat-production.up.railway.app/
 
-**Last Updated**: January 2025
-
 ## 🏗️ System Architecture Overview
 
 ### Technology Stack

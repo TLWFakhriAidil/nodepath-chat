@@ -29,7 +29,7 @@ func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
 				userIDInt = id
 			}
 		}
-		executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", []string{}, flowReference, "", userIDInt)
+		executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userIDInt)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to get executions by flow")
 			return h.errorResponse(c, 500, "Failed to retrieve executions")
@@ -266,7 +266,7 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	}
 	
 	// Get executions for the flow using AI WhatsApp repository
-	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", []string{}, flowReference, "", userID)
+	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow executions")
 		return h.errorResponse(c, 500, "Failed to get flow statistics")

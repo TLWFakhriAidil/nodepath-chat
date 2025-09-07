@@ -44,8 +44,6 @@ func (h *AIWhatsappHandlers) SetMainHandlers(mainHandlers *Handlers) {
 
 // SetupAIWhatsappRoutes sets up AI WhatsApp webhook routes
 func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
-	logrus.Info("🔧 AI_WHATSAPP: Setting up AI WhatsApp routes...")
-	
 	// Webhook endpoints for receiving WhatsApp messages
 	api.Post("/webhook/whatsapp/:device_id", h.HandleWhatsappWebhook)
 	api.Post("/webhook/wablas/:device_id", h.HandleWablasWebhook)
@@ -79,10 +77,7 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 	api.Post("/ai/analytics", h.GetAnalytics)
 
 	// Data table endpoints
-	api.Get("/data", h.GetAllAIWhatsappData)
-	api.Delete("/data/:id", h.DeleteAIWhatsappData)
-	
-	logrus.Info("✅ AI_WHATSAPP: All AI WhatsApp routes registered successfully")
+	api.Get("/ai/whatsapp/data", h.GetAllAIWhatsappData)
 }
 
 // WhatsappWebhookRequest represents incoming WhatsApp webhook data
@@ -1146,26 +1141,12 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 
 // GetAllAIWhatsappData retrieves all AI WhatsApp conversation records for data table display
 func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
-	logrus.Info("📊 AI_WHATSAPP: GetAllAIWhatsappData endpoint called")
-	logrus.Infof("📊 AI_WHATSAPP: Request path: %s", c.Path())
-	logrus.Infof("📊 AI_WHATSAPP: Request query: %s", c.Request().URI().QueryString())
 	// Parse query parameters for pagination and filtering
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 50)
 	deviceFilter := c.Query("device_id", "")
 	stageFilter := c.Query("stage", "")
 	search := c.Query("search", "")
-	
-	// Handle user_device_ids parameter from frontend (comma-separated string)
-	userDeviceIDs := c.Query("user_device_ids", "")
-	var deviceIDs []string
-	if userDeviceIDs != "" {
-		deviceIDs = strings.Split(userDeviceIDs, ",")
-		// Trim whitespace from each device ID
-		for i := range deviceIDs {
-			deviceIDs[i] = strings.TrimSpace(deviceIDs[i])
-		}
-	}
 
 	// Calculate offset for pagination
 	offset := (page - 1) * limit
@@ -1181,7 +1162,7 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 	}
 
 	// Get data from repository with user-specific filtering
-	data, total, err := h.AIRepo.GetAllAIWhatsappData(limit, offset, deviceFilter, deviceIDs, stageFilter, search, userID)
+	data, total, err := h.AIRepo.GetAllAIWhatsappData(limit, offset, deviceFilter, stageFilter, search, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get AI WhatsApp data")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -1203,44 +1184,6 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 			"total_records": total,
 			"limit":        limit,
 		},
-	})
-}
-
-// DeleteAIWhatsappData deletes an AI WhatsApp conversation record
-func (h *AIWhatsappHandlers) DeleteAIWhatsappData(c *fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return h.errorResponse(c, fiber.StatusBadRequest, "ID is required")
-	}
-
-	// Get user ID from authentication context
-	userID, ok := c.Locals("userID").(int)
-	if !ok {
-		logrus.Error("User ID not found in context")
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"success": false,
-			"message": "Authentication required",
-		})
-	}
-
-	// Delete the record with user authorization check
-	err := h.AIRepo.DeleteAIWhatsappData(id, userID)
-	if err != nil {
-		logrus.WithError(err).WithField("id", id).Error("Failed to delete AI WhatsApp data")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"success": false,
-			"message": "Failed to delete AI WhatsApp data",
-		})
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"id": id,
-		"user_id": userID,
-	}).Info("AI WhatsApp data deleted successfully")
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "AI WhatsApp data deleted successfully",
 	})
 }
 

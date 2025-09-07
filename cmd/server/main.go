@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -265,29 +264,8 @@ func main() {
 		return c.Send(data)
 	})
 
-	// Setup template routes for login/register pages
-	handlers.SetupTemplateRoutes(app)
-
-	// Catch-all route for React Router (SPA) - MUST be registered before API routes
-	app.Use(func(c *fiber.Ctx) error {
-		// Skip API routes - let them be handled by the API group
-		if strings.HasPrefix(c.Path(), "/api/") {
-			return c.Next()
-		}
-		// For all other routes, serve the React app
-		logrus.Infof("📄 SPA: Serving index.html for: %s", c.Path())
-		return c.SendFile("./dist/index.html")
-	})
-
-	// Static files for React app
-	app.Static("/static", "./static") // Keep for backward compatibility
-	app.Static("/assets", "./dist/assets") // Serve React build assets
-
-	// Setup API routes
-	api := app.Group("/api")
-
 	// Add request logging middleware for debugging
-	api.Use(func(c *fiber.Ctx) error {
+	app.Use(func(c *fiber.Ctx) error {
 		logrus.WithFields(logrus.Fields{
 			"method": c.Method(),
 			"path":   c.Path(),
@@ -296,7 +274,21 @@ func main() {
 		return c.Next()
 	})
 
+	// Setup template routes for login/register pages
+	handlers.SetupTemplateRoutes(app)
+
+	// Setup API routes
+	api := app.Group("/api")
 	handlers.SetupRoutes(api)
+
+	// Static files for React app (after API routes)
+	app.Static("/", "./dist")
+	app.Static("/static", "./static") // Keep for backward compatibility
+
+	// Catch-all route for React Router (SPA)
+	app.Get("/*", func(c *fiber.Ctx) error {
+		return c.SendFile("./dist/index.html")
+	})
 
 	// Start background services
 	go whatsappService.StartQueueProcessor()
