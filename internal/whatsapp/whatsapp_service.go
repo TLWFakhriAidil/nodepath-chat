@@ -1020,15 +1020,36 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		actualAPIKey = deviceSettings.APIKey.String
 	}
 
+	// Get conversation history (conv_last) for AI context
+	var conversationHistory []models.ConversationMessage
+	if execution.ConvLast.Valid && execution.ConvLast.String != "" && execution.ConvLast.String != "null" {
+		conversationHistory = append(conversationHistory, models.ConversationMessage{
+			Role:    "assistant",
+			Content: execution.ConvLast.String,
+		})
+		logrus.WithFields(logrus.Fields{
+			"conv_last_length": len(execution.ConvLast.String),
+			"conv_last_preview": func() string {
+				if len(execution.ConvLast.String) > 100 {
+					return execution.ConvLast.String[:100] + "..."
+				}
+				return execution.ConvLast.String
+			}(),
+		}).Info("🔍 AI_PROMPT_DEBUG: Retrieved conv_last for AI context")
+	} else {
+		logrus.Info("🔍 AI_PROMPT_DEBUG: No conv_last found, starting fresh conversation")
+	}
+
 	// Generate AI response
 	logrus.WithFields(logrus.Fields{
 		"id_device": execution.IDDevice,
 		"api_provider": apiProvider,
 		"api_key_provided": actualAPIKey != "",
 		"user_input": userInput,
+		"conversation_history_count": len(conversationHistory),
 	}).Info("🤖 AI_PROMPT: Generating AI response")
 	
-	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, actualAPIKey, execution.IDDevice, []models.ConversationMessage{})
+	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, actualAPIKey, execution.IDDevice, conversationHistory)
 	if err != nil {
 		logrus.WithError(err).Error("🤖 AI_PROMPT: Failed to generate AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
@@ -1249,15 +1270,36 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 		actualAPIKey = deviceSettings.APIKey.String
 	}
 
+	// Get conversation history (conv_last) for AI context
+	var conversationHistory []models.ConversationMessage
+	if execution.ConvLast.Valid && execution.ConvLast.String != "" && execution.ConvLast.String != "null" {
+		conversationHistory = append(conversationHistory, models.ConversationMessage{
+			Role:    "assistant",
+			Content: execution.ConvLast.String,
+		})
+		logrus.WithFields(logrus.Fields{
+			"conv_last_length": len(execution.ConvLast.String),
+			"conv_last_preview": func() string {
+				if len(execution.ConvLast.String) > 100 {
+					return execution.ConvLast.String[:100] + "..."
+				}
+				return execution.ConvLast.String
+			}(),
+		}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Retrieved conv_last for AI context")
+	} else {
+		logrus.Info("🔍 ADVANCED_AI_PROMPT_DEBUG: No conv_last found, starting fresh conversation")
+	}
+
 	// Generate AI response with advanced JSON parsing
 	logrus.WithFields(logrus.Fields{
 		"id_device": execution.IDDevice,
 		"api_provider": apiProvider,
 		"api_key_provided": actualAPIKey != "",
 		"user_input": userInput,
+		"conversation_history_count": len(conversationHistory),
 	}).Info("🤖 ADVANCED_AI_PROMPT: Generating AI response")
 
-	rawResponse, err := s.aiService.GenerateResponse(systemPrompt, userInput, actualAPIKey, execution.IDDevice, []models.ConversationMessage{})
+	rawResponse, err := s.aiService.GenerateResponse(systemPrompt, userInput, actualAPIKey, execution.IDDevice, conversationHistory)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to generate advanced AI response")
 		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
