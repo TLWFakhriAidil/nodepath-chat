@@ -475,6 +475,30 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 
 			// Add bot response to conversation
 			logrus.WithFields(logrus.Fields{
+				"execution_id": aiExecution.IDProspect,
+				"message_type": "BOT",
+				"response":     response,
+			}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
+
+			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
+			} else {
+				logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: Bot response added to ai_whatsapp_nodepath successfully")
+			}
+		} else {
+			logrus.WithField("execution_id", aiExecution.IDProspect).Info("🔇 FLOW: Skipping conversation logging for empty response")
+		}
+
+		// Save bot response to conversation history (single save point for bot response)
+		if response != "" {
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"response":     response,
+			}).Info("✅ FLOW: Response sent successfully")
+
+			// Add bot response to conversation
+			logrus.WithFields(logrus.Fields{
 					"execution_id": aiExecution.IDProspect,
 					"message_type": "BOT",
 					"response":     response,
@@ -2231,6 +2255,11 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 				logrus.WithError(err).Error("❌ USER_REPLY: Failed to send response after resume")
 				return err
 			}
+			// Save fallback response to conversation
+			err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", response, "")
+			if err != nil {
+				logrus.WithError(err).Error("❌ USER_REPLY: Failed to save bot response to conversation")
+			}
 		} else {
 			
 			// Send each processed message
@@ -2260,6 +2289,12 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 				if i < len(messages)-1 && msg.Delay > 0 {
 					time.Sleep(msg.Delay)
 				}
+			}
+			
+			// Save the complete response to conversation history
+			err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", response, "")
+			if err != nil {
+				logrus.WithError(err).Error("❌ USER_REPLY: Failed to save bot response to conversation")
 			}
 		}
 	}
