@@ -70,14 +70,10 @@ const Analytics = () => {
    * Automatically filters by user's device IDs from device context
    */
   const fetchAnalyticsData = async () => {
-    // Check if user has devices before fetching
-    if (!has_devices) {
-      console.log('Analytics: No devices available, showing popup');
-      setShowDeviceRequiredPopup(true);
-      setLoading(false);
-      return;
-    }
-
+    // Remove device check - let backend handle it
+    console.log('Analytics: Fetching data...');
+    console.log('Analytics: Device IDs from context:', device_ids);
+    
     try {
       setLoading(true);
       setError(null);

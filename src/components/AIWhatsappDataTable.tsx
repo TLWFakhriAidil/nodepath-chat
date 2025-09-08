@@ -102,13 +102,10 @@ const AIWhatsappDataTable = () => {
    * Automatically filters by user's device IDs from device context
    */
   const fetchAIWhatsappData = async () => {
-    // Check if user has devices before fetching
-    if (!has_devices) {
-      setShowDeviceRequiredPopup(true);
-      setLoading(false);
-      return;
-    }
-
+    // Remove device check - let backend handle it
+    console.log('AIWhatsappDataTable: Fetching data...');
+    console.log('AIWhatsappDataTable: Device IDs from context:', device_ids);
+    
     setLoading(true);
     setError(null);
     
@@ -126,7 +123,7 @@ const AIWhatsappDataTable = () => {
         params.append('user_device_ids', device_ids.join(','));
       }
       
-      const response = await fetch(`/api/ai-whatsapp/data?${params}`);
+      const response = await fetch(`/api/ai-whatsapp/ai-whatsapp/data?${params}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
