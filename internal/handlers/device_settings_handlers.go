@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -8,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
+	"regexp"
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/services"
 
@@ -2296,7 +2299,9 @@ func (h *Handlers) sendImageMessage(to, imageURL string, deviceSettings *models.
 		h.sendWhacenterImageMessage(to, imageURL, deviceSettings)
 	case "wablas":
 		h.sendWablasImageMessage(to, imageURL, deviceSettings)
-
+	case "waha":
+		// For WAHA, use the multimedia function with empty caption
+		h.sendWahaMultimediaMessage(to, imageURL, "", deviceSettings)
 	default:
 		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for image message")
 	}
@@ -2602,7 +2607,13 @@ func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *mo
 	// Determine provider based on instance length
 	provider := h.determineProviderFromInstance(deviceSettings.Instance.String)
 
-	// Determine file type based on extension
+	// For WAHA provider, use special handling matching PHP implementation
+	if provider == "waha" {
+		h.sendWahaMultimediaMessage(to, fileURL, reply, deviceSettings)
+		return
+	}
+
+	// Determine file type based on extension for other providers
 	fileType := h.getFileType(fileURL)
 
 	switch provider {
@@ -2610,9 +2621,169 @@ func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *mo
 		h.sendWablasMultimediaMessage(to, fileURL, fileType, deviceSettings)
 	case "whacenter":
 		h.sendWhacenterMultimediaMessage(to, fileURL, fileType, deviceSettings)
-
 	default:
 		logrus.WithField("provider", provider).Warn("⚠️ WHATSAPP: Unsupported provider for multimedia message")
+	}
+}
+
+// sendWahaMultimediaMessage sends multimedia message via WAHA provider - EXACTLY matching PHP implementation
+func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, deviceSettings *models.DeviceSettings) {
+	logrus.WithFields(logrus.Fields{
+		"to": to,
+		"file_url": fileURL,
+		"provider": "waha",
+		"device_id": deviceSettings.IDDevice,
+	}).Debug("Sending multimedia message via WAHA")
+
+	// Fixed API key as per PHP code
+	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
+	
+	// Prepare variables matching PHP
+	session := deviceSettings.Instance.String
+	number := regexp.MustCompile(`[^0-9]`).ReplaceAllString(to, "")
+	chatId := number + "@c.us"
+	
+	var apiURL string
+	var data map[string]interface{}
+	
+	// Check file type and prepare request - EXACTLY as PHP
+	if strings.Contains(fileURL, ".mp4") {
+		// Video file
+		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendVideo"
+		data = map[string]interface{}{
+			"session": session,
+			"chatId":  chatId,
+			"file": map[string]interface{}{
+				"mimetype": "video/mp4",
+				"url":      fileURL,
+				"filename": "Video",
+			},
+			"caption": caption,
+		}
+	} else if strings.Contains(fileURL, ".mp3") {
+		// Audio file - using sendFile endpoint as per PHP
+		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendFile"
+		data = map[string]interface{}{
+			"session": session,
+			"chatId":  chatId,
+			"file": map[string]interface{}{
+				"mimetype": "audio/mp3",
+				"url":      fileURL,
+				"filename": "Audio",
+			},
+			"caption": caption,
+		}
+	} else {
+		// Image or other files - detect mimetype
+		// Parse URL to get extension
+		parsedURL, _ := url.Parse(fileURL)
+		path := parsedURL.Path
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext != "" && ext[0] == '.' {
+			ext = ext[1:] // Remove leading dot
+		}
+		
+		// Mimetype map matching PHP
+		mimeMap := map[string]string{
+			"jpg":  "image/jpeg",
+			"jpeg": "image/jpeg",
+			"png":  "image/png",
+			"gif":  "image/gif",
+			"webp": "image/webp",
+			"bmp":  "image/bmp",
+			"svg":  "image/svg+xml",
+		}
+		
+		// Step 1: Try to use extension
+		mimetype := ""
+		if ext != "" {
+			if mime, ok := mimeMap[ext]; ok {
+				mimetype = mime
+			}
+		}
+		
+		// Step 2: Try to detect from headers (simplified for Go)
+		if mimetype == "" {
+			// Try to get content type from URL
+			headReq, err := http.NewRequest("HEAD", fileURL, nil)
+			if err == nil {
+				client := &http.Client{Timeout: 5 * time.Second}
+				if headResp, err := client.Do(headReq); err == nil {
+					defer headResp.Body.Close()
+					if contentType := headResp.Header.Get("Content-Type"); contentType != "" {
+						mimetype = contentType
+					}
+				}
+			}
+		}
+		
+		// Step 3: Fallback default
+		if mimetype == "" {
+			mimetype = "image/jpeg"
+		}
+		
+		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendImage"
+		data = map[string]interface{}{
+			"session": session,
+			"chatId":  chatId,
+			"file": map[string]interface{}{
+				"mimetype": mimetype,
+				"url":      fileURL,
+				"filename": "Image",
+			},
+			"caption": caption,
+		}
+	}
+	
+	// Marshal the data
+	jsonPayload, err := json.Marshal(data)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to marshal payload")
+		return
+	}
+	
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
+		return
+	}
+	
+	// Set headers exactly as PHP
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Api-Key", apiKey)
+	
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to send multimedia message")
+		return
+	}
+	defer resp.Body.Close()
+	
+	// Read response
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Error("❌ WAHA: Failed to read response body")
+		return
+	}
+	
+	// Log response
+	logFields := logrus.Fields{
+		"to":            to,
+		"status_code":   resp.StatusCode,
+		"response_body": string(respBody),
+		"url":           apiURL,
+		"file_url":      fileURL,
+	}
+	
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logFields["status"] = "success"
+		logrus.WithFields(logFields).Info("📤 WAHA: Multimedia message sent successfully")
+	} else {
+		logFields["status"] = "error"
+		logrus.WithFields(logFields).Error("❌ WAHA: Multimedia message failed")
 	}
 }
 

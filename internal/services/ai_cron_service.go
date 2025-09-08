@@ -8,6 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	urlPkg "net/url"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -981,172 +984,133 @@ func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *
 	}
 }
 
-// sendWahaMultimediaMessage sends multimedia message via WAHA provider
-func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
+// sendWahaMultimediaMessage sends multimedia message via WAHA provider - EXACTLY matching PHP implementation
+func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, deviceSettings *models.DeviceSettings) error {
 	logrus.WithFields(logrus.Fields{
 		"to": to,
-		"file_type": fileType,
+		"file_url": fileURL,
 		"provider": "waha",
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending multimedia message via WAHA")
 
-	if !deviceSettings.Instance.Valid {
-		logrus.Error("❌ WAHA: No instance available")
-		return fmt.Errorf("no instance available")
-	}
-
-	if !deviceSettings.APIKey.Valid {
-		logrus.Error("❌ WAHA: No API key available")
-		return fmt.Errorf("no API key available")
-	}
-
-	// Helper function to extract file extension from URL
-	getFileExtension := func(url string) string {
-		// Remove query parameters and fragments
-		if idx := strings.Index(url, "?"); idx != -1 {
-			url = url[:idx]
+	// Fixed API key as per PHP code
+	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
+	
+	// Prepare variables matching PHP
+	session := deviceSettings.Instance.String
+	number := regexp.MustCompile(`[^0-9]`).ReplaceAllString(to, "")
+	chatId := number + "@c.us"
+	
+	var url string
+	var data map[string]interface{}
+	
+	// Check file type and prepare request - EXACTLY as PHP
+	if strings.Contains(fileURL, ".mp4") {
+		// Video file
+		url = "https://waha-plus-production-705f.up.railway.app/api/sendVideo"
+		data = map[string]interface{}{
+			"session": session,
+			"chatId":  chatId,
+			"file": map[string]interface{}{
+				"mimetype": "video/mp4",
+				"url":      fileURL,
+				"filename": "Video",
+			},
+			"caption": caption,
 		}
-		if idx := strings.Index(url, "#"); idx != -1 {
-			url = url[:idx]
+	} else if strings.Contains(fileURL, ".mp3") {
+		// Audio file - using sendFile endpoint as per PHP
+		url = "https://waha-plus-production-705f.up.railway.app/api/sendFile"
+		data = map[string]interface{}{
+			"session": session,
+			"chatId":  chatId,
+			"file": map[string]interface{}{
+				"mimetype": "audio/mp3",
+				"url":      fileURL,
+				"filename": "Audio",
+			},
+			"caption": caption,
 		}
-		// Extract extension
-		if idx := strings.LastIndex(url, "."); idx != -1 {
-			return strings.ToLower(url[idx+1:])
+	} else {
+		// Image or other files - detect mimetype
+		// Parse URL to get extension
+		parsedURL, _ := urlPkg.Parse(fileURL)
+		path := parsedURL.Path
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext != "" && ext[0] == '.' {
+			ext = ext[1:] // Remove leading dot
 		}
-		return ""
-	}
-
-	// Determine WAHA endpoint and mimetype based on file type
-	var endpoint, mimetype, filename string
-	switch fileType {
-	case "image":
-		endpoint = "/api/sendImage"
-		ext := getFileExtension(fileURL)
-		switch ext {
-		case "jpg", "jpeg":
+		
+		// Mimetype map matching PHP
+		mimeMap := map[string]string{
+			"jpg":  "image/jpeg",
+			"jpeg": "image/jpeg",
+			"png":  "image/png",
+			"gif":  "image/gif",
+			"webp": "image/webp",
+			"bmp":  "image/bmp",
+			"svg":  "image/svg+xml",
+		}
+		
+		// Step 1: Try to use extension
+		mimetype := ""
+		if ext != "" {
+			if mime, ok := mimeMap[ext]; ok {
+				mimetype = mime
+			}
+		}
+		
+		// Step 2: Try to detect from headers (simplified for Go)
+		if mimetype == "" {
+			// Try to get content type from URL
+			headReq, err := http.NewRequest("HEAD", fileURL, nil)
+			if err == nil {
+				client := &http.Client{Timeout: 5 * time.Second}
+				if headResp, err := client.Do(headReq); err == nil {
+					defer headResp.Body.Close()
+					if contentType := headResp.Header.Get("Content-Type"); contentType != "" {
+						mimetype = contentType
+					}
+				}
+			}
+		}
+		
+		// Step 3: Fallback default
+		if mimetype == "" {
 			mimetype = "image/jpeg"
-			filename = "file.jpeg"
-		case "png":
-			mimetype = "image/png"
-			filename = "file.png"
-		case "gif":
-			mimetype = "image/gif"
-			filename = "file.gif"
-		case "webp":
-			mimetype = "image/webp"
-			filename = "file.webp"
-		default:
-			// Default to jpeg if extension is unknown
-			mimetype = "image/jpeg"
-			filename = "file.jpeg"
 		}
-	case "video":
-		endpoint = "/api/sendVideo"
-		ext := getFileExtension(fileURL)
-		switch ext {
-		case "mp4":
-			mimetype = "video/mp4"
-			filename = "file.mp4"
-		case "avi":
-			mimetype = "video/avi"
-			filename = "file.avi"
-		case "mov":
-			mimetype = "video/mov"
-			filename = "file.mov"
-		case "mkv":
-			mimetype = "video/mkv"
-			filename = "file.mkv"
-		default:
-			// Default to mp4 if extension is unknown
-			mimetype = "video/mp4"
-			filename = "file.mp4"
+		
+		url = "https://waha-plus-production-705f.up.railway.app/api/sendImage"
+		data = map[string]interface{}{
+			"session": session,
+			"chatId":  chatId,
+			"file": map[string]interface{}{
+				"mimetype": mimetype,
+				"url":      fileURL,
+				"filename": "Image",
+			},
+			"caption": caption,
 		}
-	case "audio":
-		endpoint = "/api/sendVoice"
-		ext := getFileExtension(fileURL)
-		switch ext {
-		case "mp3":
-			mimetype = "audio/mp3"
-		case "wav":
-			mimetype = "audio/wav"
-		case "ogg":
-			mimetype = "audio/ogg"
-		case "m4a":
-			mimetype = "audio/m4a"
-		default:
-			// Default to mp3 if extension is unknown
-			mimetype = "audio/mp3"
-		}
-		filename = "" // Voice messages don't need filename
-	case "document":
-		endpoint = "/api/sendDocument"
-		ext := getFileExtension(fileURL)
-		switch ext {
-		case "pdf":
-			mimetype = "application/pdf"
-			filename = "file.pdf"
-		case "doc":
-			mimetype = "application/msword"
-			filename = "file.doc"
-		case "docx":
-			mimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-			filename = "file.docx"
-		case "txt":
-			mimetype = "text/plain"
-			filename = "file.txt"
-		default:
-			// Default to pdf if extension is unknown
-			mimetype = "application/pdf"
-			filename = "file.pdf"
-		}
-	default:
-		endpoint = "/api/sendImage" // default to image
-		mimetype = "image/jpeg"
-		filename = "file.jpeg"
-	}
-
-	// Prepare request payload according to WAHA API specification
-	fileData := map[string]interface{}{
-		"mimetype": mimetype,
-		"url":      fileURL,
 	}
 	
-	// Add filename for non-voice media types
-	if fileType != "audio" && filename != "" {
-		fileData["filename"] = filename
-	}
-
-	payload := map[string]interface{}{
-		"session": deviceSettings.Instance.String,
-		"chatId":  to + "@c.us",
-		"file":    fileData,
-		"caption": "", // Empty caption, can be modified if needed
-	}
-
-	jsonPayload, err := json.Marshal(payload)
+	// Marshal the data
+	jsonPayload, err := json.Marshal(data)
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to marshal payload")
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
-
-	// Create HTTP request to WAHA API base URL + endpoint
-	// Using the API base URL from device settings instance field
-	apiBaseURL := deviceSettings.Instance.String
-	if !strings.HasPrefix(apiBaseURL, "http") {
-		apiBaseURL = "https://" + apiBaseURL
-	}
-	url := fmt.Sprintf("%s%s", strings.TrimSuffix(apiBaseURL, "/"), endpoint)
 	
+	// Create HTTP request
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-
-	// Set headers according to WAHA API specification
+	
+	// Set headers exactly as PHP
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Api-Key", deviceSettings.APIKey.String)
-
+	req.Header.Set("X-Api-Key", apiKey)
+	
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -1155,23 +1119,23 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, fileType string, 
 		return fmt.Errorf("failed to send multimedia message: %w", err)
 	}
 	defer resp.Body.Close()
-
-	// Read response body for error details
+	
+	// Read response
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to read response body")
 		return fmt.Errorf("failed to read response: %w", err)
 	}
-
-	// Log response details
+	
+	// Log response
 	logFields := logrus.Fields{
-		"to":          to,
-		"file_type":   fileType,
-		"endpoint":    endpoint,
-		"status_code": resp.StatusCode,
+		"to":            to,
+		"status_code":   resp.StatusCode,
 		"response_body": string(respBody),
+		"url":           url,
+		"file_url":      fileURL,
 	}
-
+	
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		logFields["status"] = "success"
 		logrus.WithFields(logFields).Info("📤 WAHA: Multimedia message sent successfully")
