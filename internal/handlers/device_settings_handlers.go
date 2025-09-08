@@ -2136,6 +2136,7 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 }
 
 // sendWhatsappResponse sends AI response back to WhatsApp through the appropriate provider
+// This function now properly implements the PHP logic for onemessage combining
 func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response interface{}) {
 	logrus.WithFields(logrus.Fields{
 		"to": to,
@@ -2168,30 +2169,92 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 		return
 	}
 
-	// Send each response message
-	for _, respItem := range aiResponse.Response {
+	// Process response items with onemessage combining logic (matching PHP implementation)
+	var textParts []string
+	isOnemessageActive := false
+	
+	for index, respItem := range aiResponse.Response {
 		if respItem.Content == "" {
+			logrus.WithField("index", index).Warning("⚠️ WHATSAPP: Empty content in response item")
 			continue
 		}
 
-		switch respItem.Type {
-		case "text":
-			h.sendTextMessage(to, respItem.Content, deviceSettings, provider)
-		case "image":
-			h.sendImageMessage(to, respItem.Content, deviceSettings, provider)
-		case "audio":
-			// Send audio message using sendChatMessage for multimedia support
-			h.sendChatMessage(to, "", respItem.Content, deviceSettings, 1*time.Second)
-		case "video":
-			// Send video message using sendChatMessage for multimedia support
-			h.sendChatMessage(to, "", respItem.Content, deviceSettings, 1*time.Second)
-		default:
-			// Default to text message
-			h.sendTextMessage(to, respItem.Content, deviceSettings, provider)
+		// Check if this is a text with "Jenis": "onemessage"
+		if respItem.Type == "text" && respItem.Jenis == "onemessage" {
+			// Start or continue collecting text parts
+			textParts = append(textParts, respItem.Content)
+			isOnemessageActive = true
+
+			logrus.WithFields(logrus.Fields{
+				"index": index,
+				"parts_count": len(textParts),
+			}).Debug("📝 WHATSAPP: Collecting onemessage part")
+
+			// Check if next part is also onemessage
+			isLastPart := index == len(aiResponse.Response)-1
+			nextIsNotOnemessage := false
+			
+			if !isLastPart {
+				nextItem := aiResponse.Response[index+1]
+				nextIsNotOnemessage = nextItem.Type != "text" || nextItem.Jenis != "onemessage"
+			}
+
+			// If this is the last part OR next part is not onemessage, send combined
+			if isLastPart || nextIsNotOnemessage {
+				combinedMessage := strings.Join(textParts, "\n")
+				h.sendTextMessage(to, combinedMessage, deviceSettings, provider)
+				
+				logrus.WithFields(logrus.Fields{
+					"combined_parts": len(textParts),
+					"message_length": len(combinedMessage),
+				}).Info("✅ WHATSAPP: Sent combined onemessage")
+
+				// Reset for next group
+				textParts = []string{}
+				isOnemessageActive = false
+			}
+		} else {
+			// If we were collecting onemessage parts, flush them first
+			if isOnemessageActive && len(textParts) > 0 {
+				combinedMessage := strings.Join(textParts, "\n")
+				h.sendTextMessage(to, combinedMessage, deviceSettings, provider)
+				
+				logrus.WithFields(logrus.Fields{
+					"combined_parts": len(textParts),
+				}).Info("✅ WHATSAPP: Flushed onemessage parts before non-onemessage item")
+
+				textParts = []string{}
+				isOnemessageActive = false
+			}
+
+			// Process normal item (text without onemessage, image, audio, video)
+			switch respItem.Type {
+			case "text":
+				h.sendTextMessage(to, respItem.Content, deviceSettings, provider)
+			case "image":
+				h.sendImageMessage(to, respItem.Content, deviceSettings, provider)
+			case "audio":
+				// Send audio message using sendChatMessage for multimedia support
+				h.sendChatMessage(to, "", respItem.Content, deviceSettings, 1*time.Second)
+			case "video":
+				// Send video message using sendChatMessage for multimedia support
+				h.sendChatMessage(to, "", respItem.Content, deviceSettings, 1*time.Second)
+			default:
+				// Default to text message
+				h.sendTextMessage(to, respItem.Content, deviceSettings, provider)
+			}
 		}
 
 		// Add small delay between messages to avoid rate limiting
 		time.Sleep(5000 * time.Millisecond)
+	}
+
+	// Handle any remaining onemessage parts (shouldn't happen but just in case)
+	if isOnemessageActive && len(textParts) > 0 {
+		combinedMessage := strings.Join(textParts, "\n")
+		h.sendTextMessage(to, combinedMessage, deviceSettings, provider)
+		
+		logrus.WithField("parts", len(textParts)).Warning("⚠️ WHATSAPP: Flushed remaining onemessage parts at end")
 	}
 }
 

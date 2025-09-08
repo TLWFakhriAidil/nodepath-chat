@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -142,6 +143,7 @@ type aiWhatsappService struct {
 	// Advanced rate limiter for API calls
 	rateLimiter           *APIRateLimiter
 	cfg                   *config.Config
+	responseProcessor     *AIResponseProcessor
 }
 
 // maskAPIKeyForLogging masks API key for logging purposes
@@ -163,6 +165,9 @@ func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo rep
 	// Start cleanup routine for inactive device limiters
 	rateLimiter.StartCleanupRoutine()
 
+	// Initialize AI response processor with default delay
+	responseProcessor := NewAIResponseProcessor(5 * time.Second)
+
 	return &aiWhatsappService{
 		aiRepo:                aiRepo,
 		deviceRepo:            deviceRepo,
@@ -171,9 +176,10 @@ func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo rep
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second, // Reduced from 30s for better real-time performance
 		},
-		circuitBreaker: &CircuitBreakerWhatsapp{}, // Initialize circuit breaker
-		rateLimiter:    rateLimiter,
-		cfg:            cfg,
+		circuitBreaker:    &CircuitBreakerWhatsapp{}, // Initialize circuit breaker
+		rateLimiter:       rateLimiter,
+		cfg:               cfg,
+		responseProcessor: responseProcessor,
 	}
 }
 
@@ -354,7 +360,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		return nil, fmt.Errorf("failed to call AI API: %w", err)
 	}
 
-	// Parse AI response
+	// Parse AI response using the new processor
 	parsedResponse, err := s.ParseAIResponse(aiResponse)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to parse AI response")
@@ -367,9 +373,84 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update conversation stage")
 		}
+		// Also update the AIWhatsapp record
+		if aiConv != nil {
+			aiConv.Stage = parsedResponse.Stage
+			s.aiRepo.UpdateAIWhatsapp(aiConv)
+		}
 	}
 
+	// Build conversation log entries matching PHP implementation
+	var convLogEntries []string
+	
 	// Log user message
+	convLogEntries = append(convLogEntries, fmt.Sprintf("USER: %s", currentText))
+	
+	// Process response items for logging (with onemessage combining logic)
+	var textParts []string
+	isOnemessageActive := false
+	
+	for index, respItem := range parsedResponse.Response {
+		if respItem.Type == "text" && respItem.Jenis == "onemessage" {
+			textParts = append(textParts, respItem.Content)
+			isOnemessageActive = true
+			
+			// Check if next item is also onemessage
+			isLastItem := index == len(parsedResponse.Response)-1
+			nextIsNotOnemessage := false
+			if !isLastItem {
+				nextItem := parsedResponse.Response[index+1]
+				nextIsNotOnemessage = nextItem.Type != "text" || nextItem.Jenis != "onemessage"
+			}
+			
+			// If last or next is different, add combined entry
+			if isLastItem || nextIsNotOnemessage {
+				combinedMessage := strings.Join(textParts, "\n")
+				convLogEntries = append(convLogEntries, fmt.Sprintf("BOT_COMBINED: %s", strconv.Quote(combinedMessage)))
+				textParts = []string{}
+				isOnemessageActive = false
+			}
+		} else {
+			// Flush any pending onemessage parts
+			if isOnemessageActive && len(textParts) > 0 {
+				combinedMessage := strings.Join(textParts, "\n")
+				convLogEntries = append(convLogEntries, fmt.Sprintf("BOT_COMBINED: %s", strconv.Quote(combinedMessage)))
+				textParts = []string{}
+				isOnemessageActive = false
+			}
+			
+			// Add regular entry
+			switch respItem.Type {
+			case "text":
+				convLogEntries = append(convLogEntries, fmt.Sprintf("BOT: %s", strconv.Quote(respItem.Content)))
+			case "image", "audio", "video":
+				convLogEntries = append(convLogEntries, fmt.Sprintf("BOT: %s", respItem.Content))
+			}
+		}
+	}
+	
+	// Update conv_last in database
+	if aiConv != nil {
+		// Append to existing conv_last
+		existingConv := ""
+		if aiConv.ConvLast != nil {
+			existingConv = string(aiConv.ConvLast)
+			if existingConv != "" && existingConv != "null" {
+				existingConv += "\n"
+			}
+		}
+		
+		newConvLast := existingConv + strings.Join(convLogEntries, "\n")
+		aiConv.ConvLast = json.RawMessage(strconv.Quote(newConvLast))
+		aiConv.ConvCurrent = sql.NullString{} // Clear conv_current
+		
+		err = s.aiRepo.UpdateAIWhatsapp(aiConv)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update conversation history")
+		}
+	}
+
+	// Log conversation using existing methods for compatibility
 	var staffID string
 	if aiConv != nil {
 		staffID = aiConv.IDDevice
@@ -682,124 +763,51 @@ func (s *aiWhatsappService) callAIAPI(apiURL, apiKey, deviceID string, payload A
 	return apiResponse.Choices[0].Message.Content, nil
 }
 
-// ParseAIResponse parses the AI response JSON
+// ParseAIResponse parses the AI response JSON using the new processor
 func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappResponse, error) {
-	// Clean the response text
-	responseText = strings.TrimSpace(responseText)
+	// Use the new AI response processor
+	processedMessages, err := s.responseProcessor.ProcessAIResponse(responseText, nil)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to process AI response")
+		return nil, err
+	}
+
+	// Convert processed messages back to AIWhatsappResponse format for compatibility
+	var responseItems []AIWhatsappResponseItem
+	for _, msg := range processedMessages {
+		responseItems = append(responseItems, AIWhatsappResponseItem{
+			Type:    msg.Type,
+			Content: msg.Content,
+			// Note: Jenis field is not preserved here as it's handled in processing
+		})
+	}
+
+	// Extract stage from the raw response (processor handles this internally)
+	// For now, we'll parse it quickly to get the stage
+	var tempResponse struct {
+		Stage string `json:"Stage"`
+	}
 	
-	// Try to extract JSON from markdown code blocks if present
+	// Try to extract stage from response
+	responseText = strings.TrimSpace(responseText)
 	if strings.Contains(responseText, "```json") {
 		start := strings.Index(responseText, "```json") + 7
 		end := strings.Index(responseText[start:], "```")
 		if end != -1 {
 			responseText = responseText[start : start+end]
 		}
-	} else if strings.Contains(responseText, "```") {
-		start := strings.Index(responseText, "```") + 3
-		end := strings.Index(responseText[start:], "```")
-		if end != -1 {
-			responseText = responseText[start : start+end]
-		}
+	}
+	
+	json.Unmarshal([]byte(responseText), &tempResponse)
+	stage := tempResponse.Stage
+	if stage == "" {
+		stage = "Problem Identification" // Default stage
 	}
 
-	var aiResponse AIWhatsappResponse
-	err := json.Unmarshal([]byte(responseText), &aiResponse)
-	if err != nil {
-		logrus.WithError(err).WithField("response_text", responseText).Error("Failed to parse AI response JSON")
-		return nil, fmt.Errorf("failed to parse AI response: %w", err)
-	}
-
-	// Validate response structure
-	if aiResponse.Stage == "" {
-		aiResponse.Stage = "default"
-	}
-
-	if len(aiResponse.Response) == 0 {
-		return nil, fmt.Errorf("empty response from AI")
-	}
-
-	// Post-process response items to ensure proper media URL handling
-	for i := range aiResponse.Response {
-		item := &aiResponse.Response[i]
-		
-		// Extract media URLs using the new detection service
-		if item.Type == "text" {
-			if s.mediaDetectionService.HasMedia(item.Content) {
-				mediaInfo := s.mediaDetectionService.ExtractFirstMedia(item.Content)
-				if mediaInfo != nil {
-					logrus.WithFields(logrus.Fields{
-						"original_content": item.Content,
-						"extracted_url": mediaInfo.MediaURL,
-						"media_type": mediaInfo.MediaType,
-						"item_index": i,
-					}).Info("🔧 AI RESPONSE: EXTRACTING MEDIA URL USING NEW DETECTION SERVICE")
-					item.Content = mediaInfo.MediaURL
-					item.Type = mediaInfo.MediaType
-				}
-			}
-		}
-		
-		// Auto-detect media URLs (image, audio, video) and correct the type if needed
-		if item.Type == "text" {
-			if s.mediaDetectionService.HasMedia(item.Content) {
-				mediaInfo := s.mediaDetectionService.ExtractFirstMedia(item.Content)
-				if mediaInfo != nil {
-					logrus.WithFields(logrus.Fields{
-						"original_type": "text",
-						"corrected_type": mediaInfo.MediaType,
-						"content": item.Content,
-						"item_index": i,
-					}).Info("🔧 AI RESPONSE: AUTO-CORRECTING TEXT TO MEDIA TYPE FOR URL")
-					
-					item.Type = mediaInfo.MediaType
-				}
-			}
-		}
-		
-		// Ensure media URLs are properly formatted
-		if (item.Type == "image" || item.Type == "audio" || item.Type == "video") && !strings.HasPrefix(item.Content, "http") {
-			logrus.WithFields(logrus.Fields{
-				"type": item.Type,
-				"content": item.Content,
-				"item_index": i,
-			}).Warn("⚠️ AI RESPONSE: MEDIA TYPE WITH NON-HTTP URL")
-		}
-	}
-
-	// Console log for tracing parsed AI response items
-	logrus.WithFields(logrus.Fields{
-		"stage": aiResponse.Stage,
-		"response_count": len(aiResponse.Response),
-		"parsed_items": func() []map[string]interface{} {
-			items := make([]map[string]interface{}, len(aiResponse.Response))
-			for i, item := range aiResponse.Response {
-				items[i] = map[string]interface{}{
-					"index": i,
-					"type": item.Type,
-					"content_length": len(item.Content),
-					"is_media_url": strings.HasPrefix(item.Content, "http") && (item.Type == "image" || item.Type == "audio" || item.Type == "video"),
-					"media_type": func() string {
-						if s.mediaDetectionService.HasMedia(item.Content) {
-							mediaInfo := s.mediaDetectionService.ExtractFirstMedia(item.Content)
-							if mediaInfo != nil {
-								return mediaInfo.MediaType
-							}
-						}
-						return "none"
-					}(),
-					"content_preview": func() string {
-						if len(item.Content) > 100 {
-							return item.Content[:100] + "..."
-						}
-						return item.Content
-					}(),
-				}
-			}
-			return items
-		}(),
-	}).Info("🔍 AI RESPONSE: PARSED AI RESPONSE ITEMS FOR TRACING")
-
-	return &aiResponse, nil
+	return &AIWhatsappResponse{
+		Stage:    stage,
+		Response: responseItems,
+	}, nil
 }
 
 // formatResponseForLogging formats the response items for logging

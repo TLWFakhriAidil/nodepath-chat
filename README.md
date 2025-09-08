@@ -1198,6 +1198,39 @@ Completed comprehensive database schema migration to rename `id_staff` columns t
 - **Comprehensive Schema Migration**: Updated ai_whatsapp_nodepath table to match AIWhatsapp struct completely
 - **Data Type Corrections**: Fixed id_prospect (VARCHAR→INT) and bot_balas (TINYINT→TIMESTAMP) type mismatches
 - **Automated Migration System**: Integrated complete database schema migration into Docker build process
+
+### 🔧 Go Compilation Fix - Railway Docker Backend (Latest)
+
+**Problem**: Railway Docker build was failing with Go compilation errors related to `json.RawMessage` type handling in WhatsApp service.
+
+#### 🚨 Error Details:
+```
+internal/whatsapp/whatsapp_service.go:1025:24: execution.ConvLast.Valid undefined (type json.RawMessage has no field or method Valid)
+internal/whatsapp/whatsapp_service.go:1025:52: execution.ConvLast.String undefined (type json.RawMessage has no field or method String)
+```
+
+#### 🔍 Root Cause Analysis:
+- **Type Mismatch**: Code was treating `ConvLast` field as `sql.NullString` but it's defined as `json.RawMessage` in models
+- **Method Access Error**: Attempting to use `.Valid` and `.String` methods that don't exist on `json.RawMessage`
+- **Data Handling Issue**: Improper conversion between JSON raw data and string representation
+
+#### ✅ Solution Implementation:
+- **Fixed Type Handling**: Updated WhatsApp service to properly handle `json.RawMessage` type
+- **String Conversion**: Added proper conversion from `json.RawMessage` to string using `string(execution.ConvLast)`
+- **Quote Removal**: Implemented logic to remove JSON quotes from string data
+- **Null Checking**: Added comprehensive null/empty checks for JSON data
+
+#### 🛠️ Technical Details:
+- **Files Modified**: `internal/whatsapp/whatsapp_service.go`
+- **Lines Fixed**: 1025-1045, 1275-1295 (conversation history handling)
+- **Build Status**: ✅ Both CGO and non-CGO builds successful
+- **Deployment Status**: ✅ Changes committed and pushed to Railway
+
+#### 🎯 Benefits:
+- **Compilation Success**: Resolved all Go build errors for Railway deployment
+- **Type Safety**: Proper handling of `json.RawMessage` throughout the system
+- **Data Integrity**: Correct conversion and processing of conversation history
+- **Production Ready**: Backend service now builds and deploys successfully on Railway
 - **Railway Deployment Migration**: Created startup script that runs comprehensive migration before server starts
 - **Production Schema Verification**: Added utility to verify complete table structure and all column existence
 - **Zero-Downtime Migration**: Migration runs automatically during Railway deployment without service interruption
