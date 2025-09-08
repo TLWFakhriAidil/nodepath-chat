@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"nodepath-chat/internal/models"
@@ -562,38 +563,104 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		"userID": userID,
 	}).Info("GetAnalyticsData called")
 	
-	// Base query for filtering by date_order with user-specific filtering
-	baseQuery := `
+	// First, let's get the user's devices
+	var userDevices []string
+	deviceQuery := `SELECT id_device FROM device_setting_nodepath WHERE user_id = ?`
+	rows, err := r.db.Query(deviceQuery, userID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var device string
+			if err := rows.Scan(&device); err == nil {
+				userDevices = append(userDevices, device)
+			}
+		}
+		logrus.WithFields(logrus.Fields{
+			"userID": userID,
+			"devices": userDevices,
+		}).Info("User devices found")
+	}
+	
+	// If no devices found for user, return empty data
+	if len(userDevices) == 0 {
+		logrus.WithField("userID", userID).Warn("No devices found for user")
+		return map[string]interface{}{
+			"summary": map[string]interface{}{
+				"total_conversations":       0,
+				"ai_active":                 0,
+				"human_takeover":            0,
+				"unique_devices":            0,
+				"unique_niches":             0,
+				"conversations_with_stage":  0,
+				"ai_active_percentage":      0.0,
+				"human_takeover_percentage": 0.0,
+			},
+			"daily_data":         []map[string]interface{}{},
+			"stage_distribution": []map[string]interface{}{},
+			"date_range": map[string]interface{}{
+				"start_date": startDate.Format("2006-01-02"),
+				"end_date":   endDate.Format("2006-01-02"),
+			},
+		}, nil
+	}
+	
+	// Build query with IN clause for user's devices
+	placeholders := make([]string, len(userDevices))
+	args := []interface{}{}
+	for i, device := range userDevices {
+		placeholders[i] = "?"
+		args = append(args, device)
+	}
+	args = append(args, startDate, endDate)
+	
+	// Base query using IN clause instead of JOIN
+	baseQuery := fmt.Sprintf(`
 		SELECT 
 			COUNT(*) as total_conversations,
-			COUNT(CASE WHEN a.human = 0 THEN 1 END) as ai_active,
-			COUNT(CASE WHEN a.human = 1 THEN 1 END) as human_takeover,
-			COUNT(DISTINCT a.id_device) as unique_devices,
-			COUNT(DISTINCT a.niche) as unique_niches,
-			COUNT(CASE WHEN a.stage IS NOT NULL AND a.stage != '' THEN 1 END) as conversations_with_stage
-		FROM ai_whatsapp_nodepath a
-		JOIN device_setting_nodepath d ON a.id_device = d.id_device
-		WHERE d.user_id = ? AND a.date_order BETWEEN ? AND ?
-	`
+			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_active,
+			COUNT(CASE WHEN human = 1 THEN 1 END) as human_takeover,
+			COUNT(DISTINCT id_device) as unique_devices,
+			COUNT(DISTINCT niche) as unique_niches,
+			COUNT(CASE WHEN stage IS NOT NULL AND stage != '' THEN 1 END) as conversations_with_stage
+		FROM ai_whatsapp_nodepath
+		WHERE id_device IN (%s) AND date_order BETWEEN ? AND ?
+	`, strings.Join(placeholders, ","))
 
-	// Add device filter if specified
-	args := []interface{}{userID, startDate, endDate}
+	// Add specific device filter if specified
 	if idDevice != "" && idDevice != "all" {
-		baseQuery += " AND a.id_device = ?"
+		baseQuery += " AND id_device = ?"
 		args = append(args, idDevice)
-		logrus.WithField("deviceFilter", idDevice).Info("Adding device filter to analytics query")
+		logrus.WithField("deviceFilter", idDevice).Info("Adding specific device filter to analytics query")
 	}
 
 	// Execute main analytics query
 	logrus.WithField("query", baseQuery).WithField("args", args).Info("Executing analytics query")
 	
 	var totalConversations, aiActive, humanTakeover, uniqueDevices, uniqueNiches, conversationsWithStage int
-	err := r.db.QueryRow(baseQuery, args...).Scan(
+	err = r.db.QueryRow(baseQuery, args...).Scan(
 		&totalConversations, &aiActive, &humanTakeover, &uniqueDevices, &uniqueNiches, &conversationsWithStage,
 	)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get analytics data")
-		return nil, fmt.Errorf("failed to get analytics data: %w", err)
+		// Return empty data instead of error
+		return map[string]interface{}{
+			"summary": map[string]interface{}{
+				"total_conversations":       0,
+				"ai_active":                 0,
+				"human_takeover":            0,
+				"unique_devices":            0,
+				"unique_niches":             0,
+				"conversations_with_stage":  0,
+				"ai_active_percentage":      0.0,
+				"human_takeover_percentage": 0.0,
+			},
+			"daily_data":         []map[string]interface{}{},
+			"stage_distribution": []map[string]interface{}{},
+			"date_range": map[string]interface{}{
+				"start_date": startDate.Format("2006-01-02"),
+				"end_date":   endDate.Format("2006-01-02"),
+			},
+		}, nil
 	}
 	
 	logrus.WithFields(logrus.Fields{
@@ -606,87 +673,101 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 	}).Info("Analytics query results")
 
 	// Get daily breakdown
-	dailyQuery := `
+	dailyQuery := fmt.Sprintf(`
 		SELECT 
-			DATE(a.date_order) as date,
+			DATE(date_order) as date,
 			COUNT(*) as conversations,
-			COUNT(CASE WHEN a.human = 0 THEN 1 END) as ai_conversations,
-			COUNT(CASE WHEN a.human = 1 THEN 1 END) as human_conversations
-		FROM ai_whatsapp_nodepath a
-		JOIN device_setting_nodepath d ON a.id_device = d.id_device
-		WHERE d.user_id = ? AND a.date_order BETWEEN ? AND ?
-	`
+			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_conversations,
+			COUNT(CASE WHEN human = 1 THEN 1 END) as human_conversations
+		FROM ai_whatsapp_nodepath
+		WHERE id_device IN (%s) AND date_order BETWEEN ? AND ?
+	`, strings.Join(placeholders, ","))
 
-	dailyArgs := []interface{}{userID, startDate, endDate}
+	// Reset args for daily query
+	dailyArgs := []interface{}{}
+	for _, device := range userDevices {
+		dailyArgs = append(dailyArgs, device)
+	}
+	dailyArgs = append(dailyArgs, startDate, endDate)
+	
 	if idDevice != "" && idDevice != "all" {
-		dailyQuery += " AND a.id_device = ?"
+		dailyQuery += " AND id_device = ?"
 		dailyArgs = append(dailyArgs, idDevice)
 	}
 	dailyQuery += " GROUP BY DATE(date_order) ORDER BY DATE(date_order)"
 
-	rows, err := r.db.Query(dailyQuery, dailyArgs...)
+	dailyRows, err := r.db.Query(dailyQuery, dailyArgs...)
+	var dailyData []map[string]interface{}
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get daily analytics data")
-		return nil, fmt.Errorf("failed to get daily analytics data: %w", err)
-	}
-	defer rows.Close()
+		// Don't return error, just use empty daily data
+		dailyData = []map[string]interface{}{}
+	} else {
+		defer dailyRows.Close()
+		
+		for dailyRows.Next() {
+			var date string
+			var conversations, aiConversations, humanConversations int
+			err := dailyRows.Scan(&date, &conversations, &aiConversations, &humanConversations)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to scan daily analytics data")
+				continue
+			}
 
-	var dailyData []map[string]interface{}
-	for rows.Next() {
-		var date string
-		var conversations, aiConversations, humanConversations int
-		err := rows.Scan(&date, &conversations, &aiConversations, &humanConversations)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to scan daily analytics data")
-			continue
+			dailyData = append(dailyData, map[string]interface{}{
+				"date":                date,
+				"conversations":       conversations,
+				"ai_conversations":    aiConversations,
+				"human_conversations": humanConversations,
+			})
 		}
-
-		dailyData = append(dailyData, map[string]interface{}{
-			"date":                date,
-			"conversations":       conversations,
-			"ai_conversations":    aiConversations,
-			"human_conversations": humanConversations,
-		})
 	}
 
 	// Get stage distribution
-	stageQuery := `
+	stageQuery := fmt.Sprintf(`
 		SELECT 
-			a.stage,
+			stage,
 			COUNT(*) as count
-		FROM ai_whatsapp_nodepath a
-		JOIN device_setting_nodepath d ON a.id_device = d.id_device
-		WHERE d.user_id = ? AND a.date_order BETWEEN ? AND ? AND a.stage IS NOT NULL AND a.stage != ''
-	`
+		FROM ai_whatsapp_nodepath
+		WHERE id_device IN (%s) AND date_order BETWEEN ? AND ? AND stage IS NOT NULL AND stage != ''
+	`, strings.Join(placeholders, ","))
 
-	stageArgs := []interface{}{userID, startDate, endDate}
+	// Reset args for stage query
+	stageArgs := []interface{}{}
+	for _, device := range userDevices {
+		stageArgs = append(stageArgs, device)
+	}
+	stageArgs = append(stageArgs, startDate, endDate)
+	
 	if idDevice != "" && idDevice != "all" {
-		stageQuery += " AND a.id_device = ?"
+		stageQuery += " AND id_device = ?"
 		stageArgs = append(stageArgs, idDevice)
 	}
 	stageQuery += " GROUP BY stage ORDER BY count DESC"
 
 	stageRows, err := r.db.Query(stageQuery, stageArgs...)
+	var stageDistribution []map[string]interface{}
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get stage distribution data")
-		return nil, fmt.Errorf("failed to get stage distribution data: %w", err)
-	}
-	defer stageRows.Close()
+		// Don't return error, just use empty stage data
+		stageDistribution = []map[string]interface{}{}
+	} else {
+		defer stageRows.Close()
+		
+		for stageRows.Next() {
+			var stage string
+			var count int
+			err := stageRows.Scan(&stage, &count)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to scan stage distribution data")
+				continue
+			}
 
-	var stageDistribution []map[string]interface{}
-	for stageRows.Next() {
-		var stage string
-		var count int
-		err := stageRows.Scan(&stage, &count)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to scan stage distribution data")
-			continue
+			stageDistribution = append(stageDistribution, map[string]interface{}{
+				"stage": stage,
+				"count": count,
+			})
 		}
-
-		stageDistribution = append(stageDistribution, map[string]interface{}{
-			"stage": stage,
-			"count": count,
-		})
 	}
 
 	// Calculate percentages safely (avoid division by zero)
