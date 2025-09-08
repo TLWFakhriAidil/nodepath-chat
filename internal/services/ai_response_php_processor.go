@@ -31,8 +31,19 @@ type ProcessedAIMessage struct {
 
 // ProcessAIResponsePHP processes AI response exactly like PHP code
 func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messages []ProcessedAIMessage, err error) {
+	// Log raw input for debugging
+	logrus.WithFields(logrus.Fields{
+		"raw_content": replyContent,
+		"content_length": len(replyContent),
+	}).Debug("🔍 AI_PROCESSOR: Raw AI response received")
+	
 	// Remove markdown code blocks if present
 	sanitizedContent := regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(strings.TrimSpace(replyContent), "")
+	
+	// Log sanitized content
+	logrus.WithFields(logrus.Fields{
+		"sanitized_content": sanitizedContent,
+	}).Debug("🔍 AI_PROCESSOR: Sanitized content")
 	
 	var data AIResponseData
 	var replyParts []AIResponsePart
@@ -42,7 +53,10 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 		if data.Stage != "" && len(data.Response) > 0 {
 			stage = data.Stage
 			replyParts = data.Response
-			logrus.Info("✅ Parsed standard JSON format")
+			logrus.WithFields(logrus.Fields{
+				"stage": stage,
+				"parts_count": len(replyParts),
+			}).Info("✅ AI_PROCESSOR: Parsed standard JSON format")
 		}
 	}
 	
@@ -53,7 +67,10 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			stage = strings.TrimSpace(matches[1])
 			responseJSON := matches[2]
 			if err := json.Unmarshal([]byte(responseJSON), &replyParts); err == nil {
-				logrus.Info("✅ Parsed Stage: Response: format")
+				logrus.WithFields(logrus.Fields{
+					"stage": stage,
+					"parts_count": len(replyParts),
+				}).Info("✅ AI_PROCESSOR: Parsed Stage: Response: format")
 			}
 		}
 	}
@@ -66,7 +83,10 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 				if data.Stage != "" && len(data.Response) > 0 {
 					stage = data.Stage
 					replyParts = data.Response
-					logrus.Info("✅ Parsed clean JSON format")
+					logrus.WithFields(logrus.Fields{
+						"stage": stage,
+						"parts_count": len(replyParts),
+					}).Info("✅ AI_PROCESSOR: Parsed clean JSON format")
 				}
 			}
 		}
@@ -82,15 +102,102 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 				if decodedContent.Stage != "" && len(decodedContent.Response) > 0 {
 					stage = decodedContent.Stage
 					replyParts = decodedContent.Response
-					logrus.Info("✅ Parsed encapsulated JSON format")
+					logrus.WithFields(logrus.Fields{
+						"stage": stage,
+						"parts_count": len(replyParts),
+					}).Info("✅ AI_PROCESSOR: Parsed encapsulated JSON format")
 				}
 			}
 		}
 	}
 	
-	// Plain text fallback
+	// Before fallback, check if content contains image patterns
 	if len(replyParts) == 0 {
-		logrus.Warning("Plain text response detected. Using fallback handling.")
+		// Multiple patterns for detecting images in AI responses
+		patterns := []struct {
+			name    string
+			pattern *regexp.Regexp
+		}{
+			{"Gambar X: [URL]", regexp.MustCompile(`Gambar\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
+			{"Image X: [URL]", regexp.MustCompile(`Image\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
+			{"[Text](URL)", regexp.MustCompile(`\[[^\]]+\]\((https?://[^\)]+\.(?:jpg|jpeg|png|gif|webp)[^\)]*)\)`)},
+			{"![Text](URL)", regexp.MustCompile(`!\[[^\]]*\]\((https?://[^\)]+)\)`)},
+		}
+		
+		var allImageURLs []string
+		cleanText := replyContent
+		
+		// Check each pattern
+		for _, p := range patterns {
+			matches := p.pattern.FindAllStringSubmatch(replyContent, -1)
+			if len(matches) > 0 {
+				logrus.WithFields(logrus.Fields{
+					"pattern": p.name,
+					"matches": len(matches),
+				}).Info("🖼️ AI_PROCESSOR: Detected image pattern")
+				
+				for _, match := range matches {
+					if len(match) >= 2 {
+						allImageURLs = append(allImageURLs, match[1])
+						// Remove the matched pattern from clean text
+						cleanText = strings.ReplaceAll(cleanText, match[0], "")
+					}
+				}
+			}
+		}
+		
+		// Also check for direct image URLs
+		directImagePattern := regexp.MustCompile(`https?://[^\s\[\]\(\)]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^\s\[\]\(\)]*)?`)
+		directMatches := directImagePattern.FindAllString(replyContent, -1)
+		for _, url := range directMatches {
+			// Check if not already captured
+			isDuplicate := false
+			for _, existing := range allImageURLs {
+				if existing == url {
+					isDuplicate = true
+					break
+				}
+			}
+			if !isDuplicate {
+				allImageURLs = append(allImageURLs, url)
+				cleanText = strings.ReplaceAll(cleanText, url, "")
+			}
+		}
+		
+		// If we found images, create structured response
+		if len(allImageURLs) > 0 {
+			logrus.WithField("total_images", len(allImageURLs)).Info("🖼️ AI_PROCESSOR: Creating structured response with images")
+			
+			// Clean up the text
+			cleanText = strings.TrimSpace(cleanText)
+			cleanText = regexp.MustCompile(`\s+\n`).ReplaceAllString(cleanText, "\n")
+			cleanText = regexp.MustCompile(`\n{3,}`).ReplaceAllString(cleanText, "\n\n")
+			
+			// Add clean text first if exists
+			if cleanText != "" {
+				replyParts = append(replyParts, AIResponsePart{
+					Type:    "text",
+					Content: cleanText,
+				})
+			}
+			
+			// Add each image
+			for _, imageURL := range allImageURLs {
+				replyParts = append(replyParts, AIResponsePart{
+					Type:    "image",
+					Content: imageURL,
+				})
+			}
+			
+			if stage == "" {
+				stage = "Response with Images"
+			}
+		}
+	}
+	
+	// Plain text fallback - only if no structured format detected
+	if len(replyParts) == 0 {
+		logrus.Warning("⚠️ AI_PROCESSOR: Plain text response detected. Using fallback handling.")
 		if stage == "" {
 			stage = "Problem Identification"
 		}
@@ -99,12 +206,26 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 		}
 	}
 	
+	// Log the parts we're about to process
+	logrus.WithFields(logrus.Fields{
+		"stage": stage,
+		"parts_count": len(replyParts),
+	}).Info("📋 AI_PROCESSOR: Processing response parts")
+	
 	// Process reply parts exactly like PHP
 	textParts := []string{}
 	isOnemessageActive := false
 	delay := time.Duration(delayMs) * time.Millisecond
 	
 	for index, part := range replyParts {
+		// Log each part being processed
+		logrus.WithFields(logrus.Fields{
+			"index": index,
+			"type": part.Type,
+			"jenis": part.Jenis,
+			"content_preview": truncateString(part.Content, 100),
+		}).Debug("🔄 AI_PROCESSOR: Processing part")
+		
 		// Validate part structure
 		if part.Type == "" || part.Content == "" {
 			logrus.WithField("part", part).Warning("Invalid response part structure")
@@ -138,7 +259,7 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 				logrus.WithFields(logrus.Fields{
 					"combined_parts": len(textParts),
 					"message_length": len(combinedMessage),
-				}).Info("✅ Combined onemessage parts")
+				}).Info("✅ AI_PROCESSOR: Combined onemessage parts")
 				
 				// Reset
 				textParts = []string{}
@@ -195,5 +316,19 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 		})
 	}
 	
+	// Log final processed messages
+	logrus.WithFields(logrus.Fields{
+		"stage": stage,
+		"total_messages": len(messages),
+	}).Info("✅ AI_PROCESSOR: Response processing complete")
+	
 	return stage, messages, nil
+}
+
+// truncateString truncates a string to max length for logging
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
