@@ -1022,18 +1022,23 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 
 	// Get conversation history (conv_last) for AI context
 	var conversationHistory []models.ConversationMessage
-	if execution.ConvLast.Valid && execution.ConvLast.String != "" && execution.ConvLast.String != "null" {
+	convLastStr := string(execution.ConvLast)
+	if len(execution.ConvLast) > 0 && convLastStr != "" && convLastStr != "null" && convLastStr != "\"\"" {
+		// Remove quotes if present
+		if len(convLastStr) >= 2 && convLastStr[0] == '"' && convLastStr[len(convLastStr)-1] == '"' {
+			convLastStr = convLastStr[1 : len(convLastStr)-1]
+		}
 		conversationHistory = append(conversationHistory, models.ConversationMessage{
 			Role:    "assistant",
-			Content: execution.ConvLast.String,
+			Content: convLastStr,
 		})
 		logrus.WithFields(logrus.Fields{
-			"conv_last_length": len(execution.ConvLast.String),
+			"conv_last_length": len(convLastStr),
 			"conv_last_preview": func() string {
-				if len(execution.ConvLast.String) > 100 {
-					return execution.ConvLast.String[:100] + "..."
+				if len(convLastStr) > 100 {
+					return convLastStr[:100] + "..."
 				}
-				return execution.ConvLast.String
+				return convLastStr
 			}(),
 		}).Info("🔍 AI_PROMPT_DEBUG: Retrieved conv_last for AI context")
 	} else {
@@ -1272,18 +1277,23 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 
 	// Get conversation history (conv_last) for AI context
 	var conversationHistory []models.ConversationMessage
-	if execution.ConvLast.Valid && execution.ConvLast.String != "" && execution.ConvLast.String != "null" {
+	convLastStr := string(execution.ConvLast)
+	if len(execution.ConvLast) > 0 && convLastStr != "" && convLastStr != "null" && convLastStr != "\"\"" {
+		// Remove quotes if present
+		if len(convLastStr) >= 2 && convLastStr[0] == '"' && convLastStr[len(convLastStr)-1] == '"' {
+			convLastStr = convLastStr[1 : len(convLastStr)-1]
+		}
 		conversationHistory = append(conversationHistory, models.ConversationMessage{
 			Role:    "assistant",
-			Content: execution.ConvLast.String,
+			Content: convLastStr,
 		})
 		logrus.WithFields(logrus.Fields{
-			"conv_last_length": len(execution.ConvLast.String),
+			"conv_last_length": len(convLastStr),
 			"conv_last_preview": func() string {
-				if len(execution.ConvLast.String) > 100 {
-					return execution.ConvLast.String[:100] + "..."
+				if len(convLastStr) > 100 {
+					return convLastStr[:100] + "..."
 				}
-				return execution.ConvLast.String
+				return convLastStr
 			}(),
 		}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Retrieved conv_last for AI context")
 	} else {
