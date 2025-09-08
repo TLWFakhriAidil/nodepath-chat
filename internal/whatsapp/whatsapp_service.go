@@ -38,7 +38,6 @@ type Service struct {
 	deviceSettingsService *services.DeviceSettingsService
 	providerService       *services.ProviderService
 	mediaDetectionService *services.MediaDetectionService
-	smartMediaDetector    *services.SmartMediaDetector
 	urlValidator          *utils.URLValidator
 
 	// Message processing queue for performance
@@ -68,7 +67,6 @@ func NewService(cfg *config.Config, queueService *services.QueueService, flowSer
 		deviceSettingsService: deviceSettingsService,
 		providerService:       providerService,
 		mediaDetectionService: mediaDetectionService,
-		smartMediaDetector:    services.NewSmartMediaDetector(),
 		urlValidator:          utils.NewURLValidator(),
 		messageQueue:          make(chan *WebhookMessage, 1000), // Buffered queue for performance
 	}
@@ -426,57 +424,44 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 				"phone_number": phoneNumber,
 			}).Info("🔇 FLOW: Skipping empty response to prevent <nil> message")
 		} else {
-			// Use smart media detector to extract and validate all media URLs
-			validMedia, cleanText := s.smartMediaDetector.ExtractAndValidateMedia(response)
-			
-			if len(validMedia) > 0 {
-				logrus.WithFields(logrus.Fields{
-					"media_count": len(validMedia),
-					"device_id":   deviceID,
-				}).Info("🖼️ FLOW: Smart detector found valid media URLs")
-				
-				// Send clean text first if it's not empty
-				if strings.TrimSpace(cleanText) != "" {
-					err = s.SendMessageFromDevice(deviceID, phoneNumber, cleanText)
-					if err != nil {
-						logrus.WithError(err).Error("❌ FLOW: Failed to send text part of response")
-						return err
-					}
-					// Small delay between text and images
-					time.Sleep(1 * time.Second)
-				}
-				
-				// Send each media URL as a separate message
-				for i, mediaInfo := range validMedia {
-					logrus.WithFields(logrus.Fields{
-						"index":      i,
-						"media_type": mediaInfo.MediaType,
-						"media_url":  mediaInfo.MediaURL,
-					}).Info("📤 FLOW: Sending validated media message")
-					
-					err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
-					if err != nil {
-						logrus.WithError(err).WithFields(logrus.Fields{
-							"media_url":  mediaInfo.MediaURL,
-							"media_type": mediaInfo.MediaType,
-						}).Error("❌ FLOW: Failed to send media message")
-						// Continue with other media even if one fails
-					}
-					
-					// Small delay between media messages
-					if i < len(validMedia)-1 {
-						time.Sleep(1 * time.Second)
-					}
-				}
-			} else {
-				// No valid media found, send as plain text
+			// Process AI response using PHP-compatible logic
+			_, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
+			if err != nil {
+				logrus.WithError(err).Error("Failed to process AI response")
+				// Fallback to sending as plain text
 				err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
 				if err != nil {
-					logrus.WithError(err).WithFields(logrus.Fields{
-						"device_id":    deviceID,
-						"phone_number": phoneNumber,
-					}).Error("❌ FLOW: Failed to send response message")
+					logrus.WithError(err).Error("❌ FLOW: Failed to send response message")
 					return err
+				}
+			} else {
+				// Send each processed message
+				for i, msg := range messages {
+					logrus.WithFields(logrus.Fields{
+						"index": i,
+						"type":  msg.Type,
+						"content_length": len(msg.Content),
+					}).Info("📤 FLOW: Sending processed message")
+					
+					if msg.Type == "text" {
+						err = s.SendMessageFromDevice(deviceID, phoneNumber, msg.Content)
+						if err != nil {
+							logrus.WithError(err).Error("❌ FLOW: Failed to send text message")
+						}
+					} else if msg.Type == "image" || msg.Type == "audio" || msg.Type == "video" {
+						err = s.SendMediaMessage(deviceID, phoneNumber, msg.Content)
+						if err != nil {
+							logrus.WithError(err).WithFields(logrus.Fields{
+								"media_url":  msg.Content,
+								"media_type": msg.Type,
+							}).Error("❌ FLOW: Failed to send media message")
+						}
+					}
+					
+					// Add delay between messages
+					if i < len(messages)-1 && msg.Delay > 0 {
+						time.Sleep(msg.Delay)
+					}
 				}
 			}
 		}
@@ -2236,54 +2221,45 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 			"response_length": len(response),
 		}).Info("📤 USER_REPLY: Sending response after flow resume")
 		
-		// Use smart media detector to extract and validate all media URLs
-		validMedia, cleanText := s.smartMediaDetector.ExtractAndValidateMedia(response)
-		
-		if len(validMedia) > 0 {
-			logrus.WithFields(logrus.Fields{
-				"media_count": len(validMedia),
-				"device_id":   execution.IDDevice,
-			}).Info("🖼️ USER_REPLY: Smart detector found valid media URLs")
-			
-			// Send clean text first if it's not empty
-			if strings.TrimSpace(cleanText) != "" {
-				err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, cleanText)
-				if err != nil {
-					logrus.WithError(err).Error("❌ USER_REPLY: Failed to send text part of response")
-					return err
-				}
-				// Small delay between text and images
-				time.Sleep(1 * time.Second)
-			}
-			
-			// Send each media URL as a separate message
-			for i, mediaInfo := range validMedia {
-				logrus.WithFields(logrus.Fields{
-					"index":      i,
-					"media_type": mediaInfo.MediaType,
-					"media_url":  mediaInfo.MediaURL,
-				}).Info("📤 USER_REPLY: Sending validated media message")
-				
-				err = s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, mediaInfo.MediaURL)
-				if err != nil {
-					logrus.WithError(err).WithFields(logrus.Fields{
-						"media_url":  mediaInfo.MediaURL,
-						"media_type": mediaInfo.MediaType,
-					}).Error("❌ USER_REPLY: Failed to send media message")
-					// Continue with other media even if one fails
-				}
-				
-				// Small delay between media messages
-				if i < len(validMedia)-1 {
-					time.Sleep(1 * time.Second)
-				}
-			}
-		} else {
-			// No valid media found, send as plain text
+		// Process AI response using PHP-compatible logic
+		_, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process AI response")
+			// Fallback to sending as plain text
 			err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, response)
 			if err != nil {
 				logrus.WithError(err).Error("❌ USER_REPLY: Failed to send response after resume")
 				return err
+			}
+		} else {
+			
+			// Send each processed message
+			for i, msg := range messages {
+				logrus.WithFields(logrus.Fields{
+					"index": i,
+					"type":  msg.Type,
+					"content_length": len(msg.Content),
+				}).Info("📤 USER_REPLY: Sending processed message")
+				
+				if msg.Type == "text" {
+					err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, msg.Content)
+					if err != nil {
+						logrus.WithError(err).Error("❌ USER_REPLY: Failed to send text message")
+					}
+				} else if msg.Type == "image" || msg.Type == "audio" || msg.Type == "video" {
+					err = s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, msg.Content)
+					if err != nil {
+						logrus.WithError(err).WithFields(logrus.Fields{
+							"media_url":  msg.Content,
+							"media_type": msg.Type,
+						}).Error("❌ USER_REPLY: Failed to send media message")
+					}
+				}
+				
+				// Add delay between messages
+				if i < len(messages)-1 && msg.Delay > 0 {
+					time.Sleep(msg.Delay)
+				}
 			}
 		}
 	}
