@@ -1248,6 +1248,46 @@ internal/whatsapp/whatsapp_service.go:1025:52: execution.ConvLast.String undefin
 - **Field Consistency**: Ensured struct definition and usage consistency across all handlers
 - **Constructor Fix**: Updated NewAIWhatsappHandlers to properly initialize exported fields
 - **Railway Deployment Ready**: Resolved all compilation issues for successful Docker build
+
+### 🔧 AI Response URL Validation Fix (Latest)
+
+**Problem**: AI-generated responses containing broken image URLs were being sent to users, resulting in 404 errors and poor user experience.
+
+#### 🚨 Issue Details:
+```
+AI Response Example:
+Gambar 1: [ `https://chatbot.growrvsb.com/public/images/chatgpt/23141741665515]` 
+Gambar 2: [ `https://chatbot.growrvsb.com/public/images/chatgpt/23141741665523]` 
+Gambar 3: [ `https://chatbot.growrvsb.com/public/images/chatgpt/23141741665533]` 
+```
+
+#### 🔍 Root Cause Analysis:
+- **No URL Validation**: System was sending media URLs without checking accessibility
+- **404 Errors**: AI-generated URLs were often broken or non-existent
+- **Poor UX**: Users received broken media links instead of helpful content
+- **Missing Sanitization**: URL validation was not integrated into the media sending pipeline
+
+#### ✅ Solution Implementation:
+- **URL Validator Service**: Created comprehensive URL validation utility (`internal/utils/url_validator.go`)
+- **HTTP Status Checking**: Validates URLs with HEAD requests to check accessibility
+- **Media Type Detection**: Determines media type from Content-Type headers and file extensions
+- **Fallback Messaging**: Sends informative text messages when URLs are invalid
+- **Integration**: Added URL validation to `SendMediaMessage` function in WhatsApp service
+
+#### 🛠️ Technical Details:
+- **Files Created**: `internal/utils/url_validator.go`, `internal/utils/url_validator_test.go`
+- **Files Modified**: `internal/whatsapp/whatsapp_service.go`
+- **Validation Features**: Format checking, HTTP status validation, media type detection
+- **Timeout Configuration**: 10-second timeout for URL validation requests
+- **Fallback Strategy**: Graceful degradation to text messages for broken URLs
+
+#### 🎯 Benefits:
+- **Improved UX**: Users no longer receive broken media links
+- **Error Prevention**: 404 errors eliminated through proactive URL validation
+- **Graceful Fallback**: Informative messages sent when media is unavailable
+- **Performance**: Quick validation prevents unnecessary media sending attempts
+- **Logging**: Comprehensive logging for URL validation success/failure tracking
+- **Production Ready**: Integrated validation prevents broken AI responses in production
 - **Performance Optimization**: Maintained high-performance structure while fixing access issues
 
 ### ✅ Conversation History Management System (Latest)

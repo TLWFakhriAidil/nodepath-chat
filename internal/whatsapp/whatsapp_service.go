@@ -11,6 +11,7 @@ import (
 	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/services"
+	"nodepath-chat/internal/utils"
 
 	"github.com/sirupsen/logrus"
 )
@@ -37,6 +38,7 @@ type Service struct {
 	deviceSettingsService *services.DeviceSettingsService
 	providerService       *services.ProviderService
 	mediaDetectionService *services.MediaDetectionService
+	urlValidator          *utils.URLValidator
 
 	// Message processing queue for performance
 	messageQueue chan *WebhookMessage
@@ -65,6 +67,7 @@ func NewService(cfg *config.Config, queueService *services.QueueService, flowSer
 		deviceSettingsService: deviceSettingsService,
 		providerService:       providerService,
 		mediaDetectionService: mediaDetectionService,
+		urlValidator:          utils.NewURLValidator(),
 		messageQueue:          make(chan *WebhookMessage, 1000), // Buffered queue for performance
 	}
 
@@ -175,6 +178,7 @@ func (s *Service) SendMessageFromDevice(deviceID, phoneNumber, message string) e
 }
 
 // SendMediaMessage sends a media message through the appropriate provider
+// Now includes URL validation to prevent sending broken links
 func (s *Service) SendMediaMessage(deviceID, phoneNumber, mediaURL string) error {
 	// Console log for tracing media URL extraction
 	logrus.WithFields(logrus.Fields{
@@ -189,6 +193,26 @@ func (s *Service) SendMediaMessage(deviceID, phoneNumber, mediaURL string) error
 			return mediaURL
 		}(),
 	}).Info("📤 MEDIA: Sending media message - URL EXTRACTED FOR TRACING")
+
+	// Validate URL before sending to prevent 404 errors
+	isValid, mediaType, validationErr := s.urlValidator.ValidateMediaURL(mediaURL)
+	if !isValid {
+		logrus.WithError(validationErr).WithFields(logrus.Fields{
+			"device_id":    deviceID,
+			"phone_number": phoneNumber,
+			"media_url":    mediaURL,
+		}).Warn("❌ MEDIA: URL validation failed, sending fallback message instead")
+		
+		// Send fallback text message instead of broken media URL
+		fallbackMessage := fmt.Sprintf("Sorry, the media content is currently unavailable. Please try again later.\n\nOriginal URL: %s", mediaURL)
+		return s.SendMessageFromDevice(deviceID, phoneNumber, fallbackMessage)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"device_id":    deviceID,
+		"media_url":    mediaURL,
+		"media_type":   mediaType,
+	}).Info("✅ MEDIA: URL validation successful, proceeding with media send")
 
 	// Get device settings by device_id
 	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(deviceID)
