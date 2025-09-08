@@ -424,35 +424,57 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 				"phone_number": phoneNumber,
 			}).Info("🔇 FLOW: Skipping empty response to prevent <nil> message")
 		} else {
-			// Check if response contains media URLs using the new detection service
+			// Check if response contains media URLs and extract all of them
 			if s.mediaDetectionService.HasMedia(response) {
-				mediaInfo := s.mediaDetectionService.ExtractFirstMedia(response)
-				if mediaInfo != nil {
+				// Extract all media URLs from the response
+				allMedia := s.mediaDetectionService.ExtractAllMedia(response)
+				if len(allMedia) > 0 {
 					logrus.WithFields(logrus.Fields{
-					"media_type": mediaInfo.MediaType,
-					"media_url":  mediaInfo.MediaURL,
-					"device_id":  deviceID,
-				}).Info("🖼️ FLOW: Extracted media URL using new detection service, sending as media message")
-				
-				// Send as media message instead of text
-				err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
-					if err != nil {
-						logrus.WithError(err).WithFields(logrus.Fields{
-							"device_id":    deviceID,
-							"phone_number": phoneNumber,
-							"media_url":    mediaInfo.MediaURL,
-					"media_type":   mediaInfo.MediaType,
-						}).Error("❌ FLOW: Failed to send media message")
-						return err
+						"media_count": len(allMedia),
+						"device_id":   deviceID,
+					}).Info("🖼️ FLOW: Found multiple media URLs in response")
+					
+					// Get clean text without media URLs
+					cleanText := s.mediaDetectionService.RemoveMediaURLs(response)
+					
+					// Send clean text first if it's not empty
+					if strings.TrimSpace(cleanText) != "" {
+						err = s.SendMessageFromDevice(deviceID, phoneNumber, cleanText)
+						if err != nil {
+							logrus.WithError(err).Error("❌ FLOW: Failed to send text part of response")
+							return err
+						}
+						// Small delay between text and images
+						time.Sleep(1 * time.Second)
+					}
+					
+					// Send each media URL as a separate message
+					for i, mediaInfo := range allMedia {
+						logrus.WithFields(logrus.Fields{
+							"index":      i,
+							"media_type": mediaInfo.MediaType,
+							"media_url":  mediaInfo.MediaURL,
+						}).Info("📤 FLOW: Sending media message")
+						
+						err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
+						if err != nil {
+							logrus.WithError(err).WithFields(logrus.Fields{
+								"media_url":  mediaInfo.MediaURL,
+								"media_type": mediaInfo.MediaType,
+							}).Error("❌ FLOW: Failed to send media message")
+							// Continue with other media even if one fails
+						}
+						
+						// Small delay between media messages
+						if i < len(allMedia)-1 {
+							time.Sleep(1 * time.Second)
+						}
 					}
 				} else {
-					// Fallback to text if extraction failed
+					// No media extracted, send as text
 					err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
 					if err != nil {
-						logrus.WithError(err).WithFields(logrus.Fields{
-							"device_id":    deviceID,
-							"phone_number": phoneNumber,
-						}).Error("❌ FLOW: Failed to send response message")
+						logrus.WithError(err).Error("❌ FLOW: Failed to send response message")
 						return err
 					}
 				}

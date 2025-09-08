@@ -14,6 +14,7 @@ type MediaDetectionService struct {
 	directURLPattern    *regexp.Regexp
 	markdownPattern     *regexp.Regexp
 	aiGeneratedPattern  *regexp.Regexp
+	urlPattern          *regexp.Regexp
 }
 
 // MediaDetectionResult contains the result of media detection
@@ -39,11 +40,15 @@ func NewMediaDetectionService() *MediaDetectionService {
 	// AI-generated format: ! `URL` (exclamation mark followed by backtick-wrapped URL)
 	aiGeneratedPattern := regexp.MustCompile(`!\s*` + "`" + `(https?://[^` + "`" + `\s]+)` + "`" + ``)
 
+	// General URL pattern
+	urlPattern := regexp.MustCompile(`https?://[^\s]+`)
+
 	return &MediaDetectionService{
 		bracketPattern:      bracketPattern,
 		directURLPattern:    directURLPattern,
 		markdownPattern:     markdownPattern,
 		aiGeneratedPattern:  aiGeneratedPattern,
+		urlPattern:          urlPattern,
 	}
 }
 
@@ -207,4 +212,57 @@ func (mds *MediaDetectionService) ExtractFirstMedia(text string) *MediaDetection
 		return &results[0]
 	}
 	return nil
+}
+
+// ExtractAllMedia returns all media URLs found in text
+func (mds *MediaDetectionService) ExtractAllMedia(text string) []MediaDetectionResult {
+	return mds.DetectMedia(text)
+}
+
+// RemoveMediaURLs removes all media URLs from text and returns clean text
+func (mds *MediaDetectionService) RemoveMediaURLs(text string) string {
+	cleanText := text
+	
+	// Remove bracket format media URLs
+	bracketMatches := mds.bracketPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range bracketMatches {
+		if len(match) > 0 {
+			cleanText = strings.ReplaceAll(cleanText, match[0], "")
+		}
+	}
+	
+	// Remove markdown format media URLs
+	markdownMatches := mds.markdownPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range markdownMatches {
+		if len(match) > 0 && mds.getMediaTypeFromURL(match[1]) != "" {
+			cleanText = strings.ReplaceAll(cleanText, match[0], "")
+		}
+	}
+	
+	// Remove AI-generated format media URLs
+	aiGeneratedMatches := mds.aiGeneratedPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range aiGeneratedMatches {
+		if len(match) > 0 && mds.getMediaTypeFromURL(match[1]) != "" {
+			cleanText = strings.ReplaceAll(cleanText, match[0], "")
+		}
+	}
+	
+	// Remove direct URL media
+	urlMatches := mds.urlPattern.FindAllString(text, -1)
+	for _, url := range urlMatches {
+		if mds.getMediaTypeFromURL(url) != "" {
+			cleanText = strings.ReplaceAll(cleanText, url, "")
+		}
+	}
+	
+	// Clean up extra whitespace and newlines
+	cleanText = strings.TrimSpace(cleanText)
+	// Replace multiple newlines with double newline
+	cleanText = regexp.MustCompile(`\n{3,}`).ReplaceAllString(cleanText, "\n\n")
+	// Remove lines that only contain "Gambar X:" or similar
+	cleanText = regexp.MustCompile(`(?m)^(Gambar|Image|Video|Audio)\s*\d*:?\s*$`).ReplaceAllString(cleanText, "")
+	// Clean up extra whitespace again
+	cleanText = strings.TrimSpace(cleanText)
+	
+	return cleanText
 }
