@@ -2247,11 +2247,67 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 			"response_length": len(response),
 		}).Info("📤 USER_REPLY: Sending response after flow resume")
 		
-		// Send the response
-		err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, response)
-		if err != nil {
-			logrus.WithError(err).Error("❌ USER_REPLY: Failed to send response after resume")
-			return err
+		// Check if response contains media URLs and extract all of them
+		if s.mediaDetectionService.HasMedia(response) {
+			// Extract all media URLs from the response
+			allMedia := s.mediaDetectionService.ExtractAllMedia(response)
+			if len(allMedia) > 0 {
+				logrus.WithFields(logrus.Fields{
+					"media_count": len(allMedia),
+					"device_id":   execution.IDDevice,
+				}).Info("🖼️ USER_REPLY: Found multiple media URLs in AI response")
+				
+				// Get clean text without media URLs
+				cleanText := s.mediaDetectionService.RemoveMediaURLs(response)
+				
+				// Send clean text first if it's not empty
+				if strings.TrimSpace(cleanText) != "" {
+					err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, cleanText)
+					if err != nil {
+						logrus.WithError(err).Error("❌ USER_REPLY: Failed to send text part of response")
+						return err
+					}
+					// Small delay between text and images
+					time.Sleep(1 * time.Second)
+				}
+				
+				// Send each media URL as a separate message
+				for i, mediaInfo := range allMedia {
+					logrus.WithFields(logrus.Fields{
+						"index":      i,
+						"media_type": mediaInfo.MediaType,
+						"media_url":  mediaInfo.MediaURL,
+					}).Info("📤 USER_REPLY: Sending media message")
+					
+					err = s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, mediaInfo.MediaURL)
+					if err != nil {
+						logrus.WithError(err).WithFields(logrus.Fields{
+							"media_url":  mediaInfo.MediaURL,
+							"media_type": mediaInfo.MediaType,
+						}).Error("❌ USER_REPLY: Failed to send media message")
+						// Continue with other media even if one fails
+					}
+					
+					// Small delay between media messages
+					if i < len(allMedia)-1 {
+						time.Sleep(1 * time.Second)
+					}
+				}
+			} else {
+				// No media extracted, send as text
+				err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, response)
+				if err != nil {
+					logrus.WithError(err).Error("❌ USER_REPLY: Failed to send response after resume")
+					return err
+				}
+			}
+		} else {
+			// Send the response as plain text
+			err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, response)
+			if err != nil {
+				logrus.WithError(err).Error("❌ USER_REPLY: Failed to send response after resume")
+				return err
+			}
 		}
 		
 		// Save bot response to conversation history
