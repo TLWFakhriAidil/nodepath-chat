@@ -13,6 +13,7 @@ type MediaDetectionService struct {
 	bracketPattern       *regexp.Regexp
 	simpleBracketPattern *regexp.Regexp
 	labeledPattern       *regexp.Regexp
+	markdownLinkPattern  *regexp.Regexp
 	directURLPattern     *regexp.Regexp
 	markdownPattern      *regexp.Regexp
 	aiGeneratedPattern   *regexp.Regexp
@@ -39,11 +40,14 @@ func NewMediaDetectionService() *MediaDetectionService {
 	// Labeled format: "Gambar X: [URL]" or "Image X: [URL]" - common in multilingual AI responses
 	labeledPattern := regexp.MustCompile(`(?:Gambar|Image|Foto|Picture|Video|Audio)\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)
 	
-	// Direct URL pattern: detect common media file extensions
-	directURLPattern := regexp.MustCompile(`https?://[^\s]+\.(jpg|jpeg|png|gif|bmp|webp|svg|mp3|wav|flac|aac|ogg|wma|m4a|mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?[^\s]*)?`)
+	// Markdown link format: [Text](URL) - e.g., [Gambar: 1 Botol Vitac](https://...)
+	markdownLinkPattern := regexp.MustCompile(`\[([^\]]+)\]\((https?://[^\)]+)\)`)
 	
-	// Markdown format: ![alt](URL) or [text](URL)
-	markdownPattern := regexp.MustCompile(`!?\[[^\]]*\]\(([^)]+)\)`)
+	// Direct URL pattern: detect common media file extensions
+	directURLPattern := regexp.MustCompile(`https?://[^\s\[\]()]+\.(jpg|jpeg|png|gif|bmp|webp|svg|mp3|wav|flac|aac|ogg|wma|m4a|mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?[^\s\[\]()]*)?`)
+	
+	// Markdown format: ![alt](URL) for images
+	markdownPattern := regexp.MustCompile(`!\[[^\]]*\]\(([^)]+)\)`)
 	
 	// AI-generated format: ! `URL` (exclamation mark followed by backtick-wrapped URL)
 	aiGeneratedPattern := regexp.MustCompile(`!\s*` + "`" + `(https?://[^` + "`" + `\s]+)` + "`" + ``)
@@ -55,6 +59,7 @@ func NewMediaDetectionService() *MediaDetectionService {
 		bracketPattern:       bracketPattern,
 		simpleBracketPattern: simpleBracketPattern,
 		labeledPattern:       labeledPattern,
+		markdownLinkPattern:  markdownLinkPattern,
 		directURLPattern:     directURLPattern,
 		markdownPattern:      markdownPattern,
 		aiGeneratedPattern:   aiGeneratedPattern,
@@ -123,7 +128,56 @@ func (mds *MediaDetectionService) DetectMedia(text string) []MediaDetectionResul
 		}
 	}
 	
-	// 3. Check for simple bracket format [URL] - just URL in brackets
+	// 3. Check for markdown link format [Text](URL) - e.g., [Gambar: 1 Botol Vitac](https://...)
+	markdownLinkMatches := mds.markdownLinkPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range markdownLinkMatches {
+		if len(match) >= 3 {
+			linkText := strings.TrimSpace(match[1])
+			mediaURL := strings.TrimSpace(match[2])
+			mediaType := mds.getMediaTypeFromURL(mediaURL)
+			
+			// Process if it's a media URL or if link text contains media keywords
+			if mediaType != "" || strings.Contains(strings.ToLower(linkText), "gambar") || 
+			   strings.Contains(strings.ToLower(linkText), "image") ||
+			   strings.Contains(strings.ToLower(linkText), "foto") ||
+			   strings.Contains(strings.ToLower(linkText), "picture") {
+				
+				if mediaType == "" {
+					mediaType = "image" // Default to image for links with media keywords
+				}
+				
+				// Check if this URL was already processed
+				alreadyProcessed := false
+				for _, result := range results {
+					if result.MediaURL == mediaURL {
+						alreadyProcessed = true
+						break
+					}
+				}
+				
+				if !alreadyProcessed {
+					results = append(results, MediaDetectionResult{
+						IsMedia:      true,
+						MediaType:    mediaType,
+						MediaURL:     mediaURL,
+						OriginalText: match[0],
+					})
+					
+					// Remove from clean text
+					cleanText = strings.ReplaceAll(cleanText, match[0], "")
+					
+					logrus.WithFields(logrus.Fields{
+						"media_type": mediaType,
+						"media_url":  mediaURL,
+						"link_text":  linkText,
+						"format":     "markdown_link",
+					}).Info("📎 MEDIA DETECTION: Found markdown link format media URL")
+				}
+			}
+		}
+	}
+	
+	// 4. Check for simple bracket format [URL] - just URL in brackets
 	simpleBracketMatches := mds.simpleBracketPattern.FindAllStringSubmatch(text, -1)
 	for _, match := range simpleBracketMatches {
 		if len(match) >= 2 {
@@ -162,30 +216,41 @@ func (mds *MediaDetectionService) DetectMedia(text string) []MediaDetectionResul
 		}
 	}
 
-	// 4. Check for direct media URLs with file extensions
+	// 5. Check for direct media URLs with file extensions
 	directMatches := mds.directURLPattern.FindAllString(text, -1)
 	for _, url := range directMatches {
 		mediaType := mds.getMediaTypeFromURL(url)
 		if mediaType != "" {
-			results = append(results, MediaDetectionResult{
-				IsMedia:      true,
-				MediaType:    mediaType,
-				MediaURL:     url,
-				OriginalText: url,
-			})
+			// Check if this URL was already processed
+			alreadyProcessed := false
+			for _, result := range results {
+				if result.MediaURL == url {
+					alreadyProcessed = true
+					break
+				}
+			}
 			
-			// Remove from clean text
-			cleanText = strings.ReplaceAll(cleanText, url, "")
-			
-			logrus.WithFields(logrus.Fields{
-				"media_type": mediaType,
-				"media_url":  url,
-				"format":     "direct",
-			}).Info("📎 MEDIA DETECTION: Found direct media URL")
+			if !alreadyProcessed {
+				results = append(results, MediaDetectionResult{
+					IsMedia:      true,
+					MediaType:    mediaType,
+					MediaURL:     url,
+					OriginalText: url,
+				})
+				
+				// Remove from clean text
+				cleanText = strings.ReplaceAll(cleanText, url, "")
+				
+				logrus.WithFields(logrus.Fields{
+					"media_type": mediaType,
+					"media_url":  url,
+					"format":     "direct",
+				}).Info("📎 MEDIA DETECTION: Found direct media URL")
+			}
 		}
 	}
 
-	// 5. Check for markdown format media URLs ![alt](URL) or [text](URL)
+	// 6. Check for markdown format media URLs ![alt](URL)
 	markdownMatches := mds.markdownPattern.FindAllStringSubmatch(text, -1)
 	for _, match := range markdownMatches {
 		if len(match) >= 2 {
@@ -313,6 +378,24 @@ func (mds *MediaDetectionService) RemoveMediaURLs(text string) string {
 	for _, match := range labeledMatches {
 		if len(match) > 0 {
 			cleanText = strings.ReplaceAll(cleanText, match[0], "")
+		}
+	}
+	
+	// Remove markdown link format media URLs [Text](URL)
+	markdownLinkMatches := mds.markdownLinkPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range markdownLinkMatches {
+		if len(match) > 0 {
+			linkText := ""
+			if len(match) > 1 {
+				linkText = match[1]
+			}
+			// Only remove if it's a media link
+			if strings.Contains(strings.ToLower(linkText), "gambar") || 
+			   strings.Contains(strings.ToLower(linkText), "image") ||
+			   strings.Contains(strings.ToLower(linkText), "foto") ||
+			   (len(match) > 2 && mds.getMediaTypeFromURL(match[2]) != "") {
+				cleanText = strings.ReplaceAll(cleanText, match[0], "")
+			}
 		}
 	}
 	
