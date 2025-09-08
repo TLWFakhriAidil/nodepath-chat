@@ -282,12 +282,21 @@ func ExtractImagesFromPlainText(content string) ([]AIResponsePart, string) {
 		pattern *regexp.Regexp
 		isMedia bool
 	}{
-		// Gambar patterns
+		// Gambar patterns with square brackets: Gambar 1: [URL]
 		{"Gambar [URL]", regexp.MustCompile(`(?i)^Gambar\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
+		// Gambar patterns with markdown: Gambar 1: [Text](URL)
+		{"Gambar [Text](URL)", regexp.MustCompile(`(?i)^Gambar\s*\d*\s*:\s*\[[^\]]+\]\((https?://[^\)]+)\)$`), true},
+		// Image patterns with square brackets
 		{"Image [URL]", regexp.MustCompile(`(?i)^Image\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
+		// Image patterns with markdown
+		{"Image [Text](URL)", regexp.MustCompile(`(?i)^Image\s*\d*\s*:\s*\[[^\]]+\]\((https?://[^\)]+)\)$`), true},
+		// Photo/Foto patterns
 		{"Photo [URL]", regexp.MustCompile(`(?i)^(?:Photo|Foto)\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
+		{"Photo [Text](URL)", regexp.MustCompile(`(?i)^(?:Photo|Foto)\s*\d*\s*:\s*\[[^\]]+\]\((https?://[^\)]+)\)$`), true},
+		// Video patterns
 		{"Video [URL]", regexp.MustCompile(`(?i)^Video\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
-		// Markdown formats
+		{"Video [Text](URL)", regexp.MustCompile(`(?i)^Video\s*\d*\s*:\s*\[[^\]]+\]\((https?://[^\)]+)\)$`), true},
+		// Standard markdown formats
 		{"![alt](url)", regexp.MustCompile(`^!\[[^\]]*\]\((https?://[^\)]+)\)$`), true},
 		{"[text](image)", regexp.MustCompile(`^\[[^\]]+\]\((https?://[^\)]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\)]*)?)\)$`), true},
 		// Direct URLs
