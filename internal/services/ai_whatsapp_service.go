@@ -365,7 +365,6 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 	// Call AI API with validation and retry logic
 	var aiResponse string
 	var parsedResponse *AIWhatsappResponse
-	var err error
 	
 	maxRetries := 2
 	for attempt := 0; attempt <= maxRetries; attempt++ {
@@ -377,7 +376,8 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		}
 
 		// Validate AI response format
-		if s.validateAIResponse(aiResponse) {
+		valid, validationErr := s.validateAIResponse(aiResponse)
+		if valid {
 			// Parse valid AI response
 			parsedResponse, err = s.ParseAIResponse(aiResponse)
 			if err != nil {
@@ -388,6 +388,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		}
 
 		// Invalid response - log and retry with stricter prompt
+		logrus.WithError(validationErr).Warn("Invalid AI response format, retrying...")
 		logrus.WithFields(logrus.Fields{
 			"attempt": attempt + 1,
 			"max_retries": maxRetries,
@@ -396,14 +397,17 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 
 		if attempt < maxRetries {
 			// Modify payload with stricter JSON enforcement for retry
-			stricterPrompt := payload["messages"].([]map[string]interface{})[0]["content"].(string) + 
-				"\n\n🚨 CRITICAL ERROR DETECTED: Your previous response was NOT valid JSON! 🚨\n" +
-				"You MUST respond with ONLY valid JSON format starting with { and ending with }.\n" +
-				"NO explanations, NO markdown, NO code blocks, NO plain text - ONLY JSON!\n" +
-				"Example: {\"Stage\": \"Problem Identification\", \"Response\": [{\"type\": \"text\", \"content\": \"Your message here\"}]}\n" +
-				"RESPOND WITH JSON NOW:"
-			
-			payload["messages"].([]map[string]interface{})[0]["content"] = stricterPrompt
+			messages := payload.Messages
+			if len(messages) > 0 {
+				stricterPrompt := messages[0].Content + 
+					"\n\n🚨 CRITICAL ERROR DETECTED: Your previous response was NOT valid JSON! 🚨\n" +
+					"You MUST respond with ONLY valid JSON format starting with { and ending with }.\n" +
+					"NO explanations, NO markdown, NO code blocks, NO plain text - ONLY JSON!\n" +
+					"Example: {\"Stage\": \"Problem Identification\", \"Response\": [{\"type\": \"text\", \"content\": \"Your message here\"}]}\n" +
+					"RESPOND WITH JSON NOW:"
+				
+				payload.Messages[0].Content = stricterPrompt
+			}
 		}
 	}
 

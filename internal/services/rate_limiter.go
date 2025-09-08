@@ -257,7 +257,7 @@ func (rl *APIRateLimiter) StartCleanupRoutine() {
 }
 
 // Helper function for min
-func min(a, b int) int {
+func rateLimiterMin(a, b int) int {
 	if a < b {
 		return a
 	}
