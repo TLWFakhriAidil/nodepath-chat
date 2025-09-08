@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -194,14 +195,12 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 					Delay:   delay,
 				})
 			} else if part.Type == "image" || part.Type == "audio" || part.Type == "video" {
-				// Clean the URL
+				// Clean and decode the URL (exactly like PHP: trim(urldecode($part['content'])))
 				mediaURL := strings.TrimSpace(part.Content)
-				// Remove URL encoding if present
-				if strings.Contains(mediaURL, "%") {
-					// Simple URL decode - you might want to use net/url package for proper decoding
-					mediaURL = strings.ReplaceAll(mediaURL, "%20", " ")
-					mediaURL = strings.ReplaceAll(mediaURL, "%2F", "/")
-					mediaURL = strings.ReplaceAll(mediaURL, "%3A", ":")
+				
+				// URL decode if needed
+				if decodedURL, err := url.QueryUnescape(mediaURL); err == nil {
+					mediaURL = decodedURL
 				}
 				
 				messages = append(messages, ProcessedAIMessage{
