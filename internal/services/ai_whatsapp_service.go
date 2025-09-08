@@ -20,6 +20,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Circuit breaker constants for AI WhatsApp service
 const (
 	whatsappCircuitBreakerThreshold = 5 // Number of consecutive failures before circuit opens
@@ -354,17 +362,55 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 			}).Info("Using hardcoded OpenAI API key for special device")
 		}
 	}
-	aiResponse, err := s.callAIAPI(apiURL, apiKey, idDevice, payload)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to call AI API")
-		return nil, fmt.Errorf("failed to call AI API: %w", err)
+	// Call AI API with validation and retry logic
+	var aiResponse string
+	var parsedResponse *AIWhatsappResponse
+	var err error
+	
+	maxRetries := 2
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Call AI API
+		aiResponse, err = s.callAIAPI(apiURL, apiKey, idDevice, payload)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to call AI API")
+			return nil, fmt.Errorf("failed to call AI API: %w", err)
+		}
+
+		// Validate AI response format
+		if s.validateAIResponse(aiResponse) {
+			// Parse valid AI response
+			parsedResponse, err = s.ParseAIResponse(aiResponse)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to parse AI response")
+				return nil, fmt.Errorf("failed to parse AI response: %w", err)
+			}
+			break // Success, exit retry loop
+		}
+
+		// Invalid response - log and retry with stricter prompt
+		logrus.WithFields(logrus.Fields{
+			"attempt": attempt + 1,
+			"max_retries": maxRetries,
+			"response_preview": aiResponse[:min(200, len(aiResponse))],
+		}).Warn("AI returned non-JSON response, retrying with stricter prompt")
+
+		if attempt < maxRetries {
+			// Modify payload with stricter JSON enforcement for retry
+			stricterPrompt := payload["messages"].([]map[string]interface{})[0]["content"].(string) + 
+				"\n\n🚨 CRITICAL ERROR DETECTED: Your previous response was NOT valid JSON! 🚨\n" +
+				"You MUST respond with ONLY valid JSON format starting with { and ending with }.\n" +
+				"NO explanations, NO markdown, NO code blocks, NO plain text - ONLY JSON!\n" +
+				"Example: {\"Stage\": \"Problem Identification\", \"Response\": [{\"type\": \"text\", \"content\": \"Your message here\"}]}\n" +
+				"RESPOND WITH JSON NOW:"
+			
+			payload["messages"].([]map[string]interface{})[0]["content"] = stricterPrompt
+		}
 	}
 
-	// Parse AI response using the new processor
-	parsedResponse, err := s.ParseAIResponse(aiResponse)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to parse AI response")
-		return nil, fmt.Errorf("failed to parse AI response: %w", err)
+	// If all retries failed, return error
+	if parsedResponse == nil {
+		logrus.WithField("final_response", aiResponse).Error("AI failed to provide valid JSON after all retries")
+		return nil, fmt.Errorf("AI failed to provide valid JSON response after %d attempts", maxRetries+1)
 	}
 
 	// Update conversation stage if changed
@@ -606,6 +652,11 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 
 	// Build the complete prompt content according to the custom instructions
 	content := systemPrompt + "\n\n" +
+		"### CRITICAL: JSON FORMAT REQUIREMENT ###\n" +
+		"YOU MUST RESPOND ONLY IN VALID JSON FORMAT. NO EXCEPTIONS.\n" +
+		"DO NOT use bracket format like [IMAGE: URL] or plain text.\n" +
+		"DO NOT include any text outside the JSON structure.\n" +
+		"ALWAYS use the exact JSON format specified below.\n\n" +
 		"### Instructions:\n" +
 		"1. If the current stage is null or undefined, default to the first stage.\n" +
 		"2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" +
@@ -615,7 +666,7 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 		"   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" +
 		"   - The `Jenis` field is only added to `text` types within the `Response` array.\n" +
 		"   - If the directive is not present, omit the `Jenis` field entirely.\n\n" +
-		"### Response Format:\n" +
+		"### MANDATORY JSON RESPONSE FORMAT:\n" +
 		"{\n" +
 		"  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" +
 		"  \"Response\": [\n" +
@@ -653,7 +704,16 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 		"   - If the input specifies \"I want this section in add response format [onemessage]\":\n" +
 		"      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" +
 		"   - If the directive is not present, omit the `Jenis` field entirely.\n" +
-		"   - Non-text types like `image` never include the `Jenis` field.\n\n"
+		"   - Non-text types like `image` never include the `Jenis` field.\n\n" +
+		"### FINAL WARNING: JSON FORMAT ENFORCEMENT ###\n" +
+		"CRITICAL: Your response will be parsed as JSON. Any deviation from the exact format will cause system errors.\n" +
+		"- Start with { and end with }\n" +
+		"- Include Stage and Response fields exactly as shown\n" +
+		"- For images, use type: \"image\" with content: \"URL\"\n" +
+		"- NO bracket format like [IMAGE: URL] - this will break the system\n" +
+		"- NO plain text responses - only JSON\n" +
+		"- NO explanations outside the JSON structure\n" +
+		"RESPOND ONLY WITH VALID JSON. NOTHING ELSE.\n"
 
 	return content
 }
@@ -693,6 +753,35 @@ func (s *aiWhatsappService) getAIModel(idDevice, apiKeyOption string) string {
 	}
 	// Use API key option for other devices
 	return apiKeyOption
+}
+
+// validateAIResponse validates that the AI response is in proper JSON format
+func (s *aiWhatsappService) validateAIResponse(response string) (bool, error) {
+	// Clean the response
+	cleanResponse := strings.TrimSpace(response)
+	
+	// Check if it starts and ends with braces
+	if !strings.HasPrefix(cleanResponse, "{") || !strings.HasSuffix(cleanResponse, "}") {
+		return false, fmt.Errorf("response does not start with { or end with }")
+	}
+	
+	// Try to parse as JSON
+	var testResponse AIWhatsappResponse
+	err := json.Unmarshal([]byte(cleanResponse), &testResponse)
+	if err != nil {
+		return false, fmt.Errorf("invalid JSON format: %v", err)
+	}
+	
+	// Check required fields
+	if testResponse.Stage == "" {
+		return false, fmt.Errorf("missing Stage field")
+	}
+	
+	if len(testResponse.Response) == 0 {
+		return false, fmt.Errorf("missing or empty Response array")
+	}
+	
+	return true, nil
 }
 
 // callAIAPI calls the AI API with the given payload
