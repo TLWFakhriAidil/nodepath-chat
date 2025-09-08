@@ -10,9 +10,10 @@ import (
 // MediaDetectionService handles detection of media URLs in various formats
 type MediaDetectionService struct {
 	// Regex patterns for different media URL formats
-	bracketPattern    *regexp.Regexp
-	directURLPattern  *regexp.Regexp
-	markdownPattern   *regexp.Regexp
+	bracketPattern      *regexp.Regexp
+	directURLPattern    *regexp.Regexp
+	markdownPattern     *regexp.Regexp
+	aiGeneratedPattern  *regexp.Regexp
 }
 
 // MediaDetectionResult contains the result of media detection
@@ -34,11 +35,15 @@ func NewMediaDetectionService() *MediaDetectionService {
 	
 	// Markdown format: ![alt](URL) or [text](URL)
 	markdownPattern := regexp.MustCompile(`!?\[[^\]]*\]\(([^)]+)\)`)
+	
+	// AI-generated format: ! `URL` (exclamation mark followed by backtick-wrapped URL)
+	aiGeneratedPattern := regexp.MustCompile(`!\s*` + "`" + `(https?://[^` + "`" + `\s]+)` + "`" + ``)
 
 	return &MediaDetectionService{
-		bracketPattern:   bracketPattern,
-		directURLPattern: directURLPattern,
-		markdownPattern:  markdownPattern,
+		bracketPattern:      bracketPattern,
+		directURLPattern:    directURLPattern,
+		markdownPattern:     markdownPattern,
+		aiGeneratedPattern:  aiGeneratedPattern,
 	}
 }
 
@@ -120,6 +125,32 @@ func (mds *MediaDetectionService) DetectMedia(text string) []MediaDetectionResul
 					"media_url":  url,
 					"format":     "markdown",
 				}).Info("📎 MEDIA DETECTION: Found markdown format media URL")
+			}
+		}
+	}
+
+	// 4. Check for AI-generated format media URLs ! `URL`
+	aiGeneratedMatches := mds.aiGeneratedPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range aiGeneratedMatches {
+		if len(match) >= 2 {
+			url := match[1]
+			mediaType := mds.getMediaTypeFromURL(url)
+			if mediaType != "" {
+				results = append(results, MediaDetectionResult{
+					IsMedia:      true,
+					MediaType:    mediaType,
+					MediaURL:     url,
+					OriginalText: match[0],
+				})
+				
+				// Remove from clean text
+				cleanText = strings.ReplaceAll(cleanText, match[0], "")
+				
+				logrus.WithFields(logrus.Fields{
+					"media_type": mediaType,
+					"media_url":  url,
+					"format":     "ai_generated",
+				}).Info("📎 MEDIA DETECTION: Found AI-generated format media URL")
 			}
 		}
 	}

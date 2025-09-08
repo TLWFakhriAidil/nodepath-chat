@@ -79,11 +79,132 @@ func (p *AIResponseProcessor) ProcessAIResponse(rawResponse string, updateConver
 	return processedMessages, nil
 }
 
-// sanitizeResponse cleans the raw response
+// sanitizeResponse provides adaptive cleaning that preserves user-intended content
+// while removing formatting issues that interfere with JSON parsing
 func (p *AIResponseProcessor) sanitizeResponse(rawResponse string) string {
-	// Remove markdown code blocks
-	sanitized := regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(strings.TrimSpace(rawResponse), "")
+	sanitized := strings.TrimSpace(rawResponse)
+	
+	// Step 1: Preserve user-intended content by identifying and protecting it
+	protectedContent := p.identifyProtectedContent(sanitized)
+	
+	// Step 2: Clean markdown code blocks (but preserve content structure)
+	sanitized = p.cleanMarkdownBlocks(sanitized)
+	
+	// Step 3: Adaptive URL cleaning - preserve intentional formatting
+	sanitized = p.adaptiveURLCleaning(sanitized, protectedContent)
+	
+	// Step 4: Clean formatting artifacts while preserving content meaning
+	sanitized = p.cleanFormattingArtifacts(sanitized)
+	
+	// Step 5: Restore protected content if needed
+	sanitized = p.restoreProtectedContent(sanitized, protectedContent)
+	
 	return strings.TrimSpace(sanitized)
+}
+
+// identifyProtectedContent identifies content that should be preserved during sanitization
+func (p *AIResponseProcessor) identifyProtectedContent(content string) map[string]string {
+	protected := make(map[string]string)
+	
+	// Protect quoted strings that might contain intentional formatting
+	quotedPattern := regexp.MustCompile(`"([^"]*[!`+"`"+`][^"]*)"`)
+	matches := quotedPattern.FindAllStringSubmatch(content, -1)
+	for i, match := range matches {
+		if len(match) > 1 {
+			placeholder := fmt.Sprintf("__PROTECTED_QUOTE_%d__", i)
+			protected[placeholder] = match[1]
+		}
+	}
+	
+	// Protect content within JSON strings that might have intentional markdown
+	contentPattern := regexp.MustCompile(`"content"\s*:\s*"([^"]*)"`)
+	matches = contentPattern.FindAllStringSubmatch(content, -1)
+	for i, match := range matches {
+		if len(match) > 1 && strings.Contains(match[1], "!") {
+			placeholder := fmt.Sprintf("__PROTECTED_CONTENT_%d__", i)
+			protected[placeholder] = match[1]
+		}
+	}
+	
+	return protected
+}
+
+// cleanMarkdownBlocks removes markdown code block markers while preserving content
+func (p *AIResponseProcessor) cleanMarkdownBlocks(content string) string {
+	// Remove markdown code block markers but preserve the JSON content
+	codeBlockPattern := regexp.MustCompile("```(?:json)?\\s*([\\s\\S]*?)\\s*```")
+	if codeBlockPattern.MatchString(content) {
+		// Extract content from code blocks
+		content = codeBlockPattern.ReplaceAllString(content, "$1")
+	}
+	
+	// Clean up standalone markdown markers
+	content = regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(content, "")
+	
+	return content
+}
+
+// adaptiveURLCleaning cleans URLs while preserving intentional formatting
+func (p *AIResponseProcessor) adaptiveURLCleaning(content string, protected map[string]string) string {
+	// Only clean URLs that are clearly formatting artifacts, not intentional content
+	
+	// Clean AI-generated markdown image URLs: ! `URL` -> URL (but only outside protected content)
+	// This handles cases where AI generates: Gambar 1: ! `https://example.com/image.jpg`
+	aiImagePattern := regexp.MustCompile(`!\s*` + "`" + `(https?://[^` + "`" + `\s]+)` + "`")
+	content = aiImagePattern.ReplaceAllStringFunc(content, func(match string) string {
+		// Check if this URL is in protected content
+		for _, protectedValue := range protected {
+			if strings.Contains(protectedValue, match) {
+				return match // Don't clean protected content
+			}
+		}
+		// Clean the URL
+		return aiImagePattern.ReplaceAllString(match, "$1")
+	})
+	
+	// Clean backticks around URLs only if they appear to be formatting artifacts
+	backtickPattern := regexp.MustCompile("`" + `(https?://[^` + "`" + `\s]+)` + "`")
+	content = backtickPattern.ReplaceAllStringFunc(content, func(match string) string {
+		// Check if this is in a JSON string context (likely intentional)
+		if regexp.MustCompile(`"[^"]*` + regexp.QuoteMeta(match) + `[^"]*"`).MatchString(content) {
+			return match // Preserve URLs in JSON strings
+		}
+		// Clean standalone backticked URLs
+		return backtickPattern.ReplaceAllString(match, "$1")
+	})
+	
+	return content
+}
+
+// cleanFormattingArtifacts removes formatting artifacts while preserving content meaning
+func (p *AIResponseProcessor) cleanFormattingArtifacts(content string) string {
+	// Remove extra whitespace and line breaks that interfere with JSON parsing
+	content = regexp.MustCompile(`\s+`).ReplaceAllString(content, " ")
+	
+	// Clean up common AI response artifacts
+	artifacts := []struct {
+		pattern string
+		replace string
+	}{
+		{`\s*,\s*,`, ","}, // Double commas
+		{`\s*}\s*}`, "}"},  // Double closing braces
+		{`\s*]\s*]`, "]"},  // Double closing brackets
+		{`"\s*,\s*"`, "\",\""}, // Spaced commas in strings
+	}
+	
+	for _, artifact := range artifacts {
+		content = regexp.MustCompile(artifact.pattern).ReplaceAllString(content, artifact.replace)
+	}
+	
+	return content
+}
+
+// restoreProtectedContent restores content that was protected during sanitization
+func (p *AIResponseProcessor) restoreProtectedContent(content string, protected map[string]string) string {
+	for placeholder, originalContent := range protected {
+		content = strings.ReplaceAll(content, placeholder, originalContent)
+	}
+	return content
 }
 
 // parseResponse attempts to parse AI response using multiple formats

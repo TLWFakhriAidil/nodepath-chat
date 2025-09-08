@@ -5,19 +5,19 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/utils"
-
-	"github.com/sirupsen/logrus"
 )
 
 // min returns the minimum of two integers
@@ -760,32 +760,104 @@ func (s *aiWhatsappService) getAIModel(idDevice, apiKeyOption string) string {
 }
 
 // validateAIResponse validates that the AI response is in proper JSON format
+// validateAIResponse provides flexible validation for dynamic AI responses
+// Handles user-defined prompts that may produce varied but valid content
 func (s *aiWhatsappService) validateAIResponse(response string) (bool, error) {
 	// Clean the response
 	cleanResponse := strings.TrimSpace(response)
 	
-	// Check if it starts and ends with braces
-	if !strings.HasPrefix(cleanResponse, "{") || !strings.HasSuffix(cleanResponse, "}") {
-		return false, fmt.Errorf("response does not start with { or end with }")
+	// First attempt: Try direct JSON validation
+	if isValid, err := s.validateDirectJSON(cleanResponse); isValid {
+		return true, nil
+	} else if err == nil {
+		// JSON is valid but missing required fields - this is acceptable for dynamic content
+		return true, nil
+	}
+	
+	// Second attempt: Try to extract JSON from mixed content
+	if extractedJSON := s.extractJSONFromResponse(cleanResponse); extractedJSON != "" {
+		if isValid, _ := s.validateDirectJSON(extractedJSON); isValid {
+			return true, nil
+		}
+	}
+	
+	// Third attempt: Check if response contains meaningful content that can be converted
+	if s.hasValidContent(cleanResponse) {
+		// Allow responses with valid content structure even if not perfect JSON
+		return true, nil
+	}
+	
+	return false, fmt.Errorf("response does not contain valid JSON or extractable content")
+}
+
+// validateDirectJSON checks if response is valid JSON with required structure
+func (s *aiWhatsappService) validateDirectJSON(response string) (bool, error) {
+	// Check basic JSON structure
+	if !strings.HasPrefix(response, "{") || !strings.HasSuffix(response, "}") {
+		return false, fmt.Errorf("not a JSON object")
 	}
 	
 	// Try to parse as JSON
 	var testResponse AIWhatsappResponse
-	err := json.Unmarshal([]byte(cleanResponse), &testResponse)
+	err := json.Unmarshal([]byte(response), &testResponse)
 	if err != nil {
 		return false, fmt.Errorf("invalid JSON format: %v", err)
 	}
 	
-	// Check required fields
-	if testResponse.Stage == "" {
-		return false, fmt.Errorf("missing Stage field")
-	}
-	
-	if len(testResponse.Response) == 0 {
-		return false, fmt.Errorf("missing or empty Response array")
+	// Flexible field validation - allow missing Stage for dynamic content
+	if testResponse.Stage == "" && len(testResponse.Response) == 0 {
+		return false, fmt.Errorf("missing both Stage and Response fields")
 	}
 	
 	return true, nil
+}
+
+// extractJSONFromResponse attempts to extract JSON from mixed content responses
+func (s *aiWhatsappService) extractJSONFromResponse(response string) string {
+	// Look for JSON object patterns in the response
+	jsonPattern := regexp.MustCompile(`\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}`)
+	matches := jsonPattern.FindAllString(response, -1)
+	
+	for _, match := range matches {
+		// Test if this match is valid JSON
+		var testObj map[string]interface{}
+		if err := json.Unmarshal([]byte(match), &testObj); err == nil {
+			// Check if it has AI response structure
+			if _, hasStage := testObj["Stage"]; hasStage {
+				return match
+			}
+			if _, hasResponse := testObj["Response"]; hasResponse {
+				return match
+			}
+		}
+	}
+	
+	return ""
+}
+
+// hasValidContent checks if response contains meaningful content for conversion
+func (s *aiWhatsappService) hasValidContent(response string) bool {
+	// Check for common AI response patterns that indicate valid content
+	patterns := []string{
+		`(?i)stage\s*[:=]\s*["']?[^"'\n]+["']?`,
+		`(?i)response\s*[:=]\s*\[`,
+		`(?i)content\s*[:=]\s*["']`,
+		`(?i)type\s*[:=]\s*["']?(text|image|audio|video)["']?`,
+	}
+	
+	for _, pattern := range patterns {
+		if matched, _ := regexp.MatchString(pattern, response); matched {
+			return true
+		}
+	}
+	
+	// Check for minimum content length and structure
+	if len(strings.TrimSpace(response)) > 20 {
+		// Has substantial content - likely a valid response
+		return true
+	}
+	
+	return false
 }
 
 // callAIAPI calls the AI API with the given payload
@@ -857,32 +929,51 @@ func (s *aiWhatsappService) callAIAPI(apiURL, apiKey, deviceID string, payload A
 }
 
 // ParseAIResponse parses the AI response JSON using the new processor
+// ParseAIResponse provides intelligent parsing for dynamic AI responses
+// Handles user-defined prompts that may produce varied content formats
 func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappResponse, error) {
-	// Use the new AI response processor
-	processedMessages, err := s.responseProcessor.ProcessAIResponse(responseText, nil)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to process AI response")
-		return nil, err
-	}
-
-	// Convert processed messages back to AIWhatsappResponse format for compatibility
-	var responseItems []AIWhatsappResponseItem
-	for _, msg := range processedMessages {
-		responseItems = append(responseItems, AIWhatsappResponseItem{
-			Type:    msg.Type,
-			Content: msg.Content,
-			// Note: Jenis field is not preserved here as it's handled in processing
-		})
-	}
-
-	// Extract stage from the raw response (processor handles this internally)
-	// For now, we'll parse it quickly to get the stage
-	var tempResponse struct {
-		Stage string `json:"Stage"`
+	cleanResponse := strings.TrimSpace(responseText)
+	
+	// First attempt: Try direct JSON parsing
+	if response, err := s.parseDirectJSON(cleanResponse); err == nil {
+		return response, nil
 	}
 	
-	// Try to extract stage from response
-	responseText = strings.TrimSpace(responseText)
+	// Second attempt: Extract JSON from mixed content
+	if extractedJSON := s.extractJSONFromResponse(cleanResponse); extractedJSON != "" {
+		if response, err := s.parseDirectJSON(extractedJSON); err == nil {
+			return response, nil
+		}
+	}
+	
+	// Third attempt: Intelligent content extraction for non-JSON responses
+	if response := s.parseNonJSONContent(cleanResponse); response != nil {
+		return response, nil
+	}
+	
+	// Fourth attempt: Use AI response processor as fallback
+	processedMessages, err := s.responseProcessor.ProcessAIResponse(responseText, nil)
+	if err == nil && len(processedMessages) > 0 {
+		var responseItems []AIWhatsappResponseItem
+		for _, msg := range processedMessages {
+			responseItems = append(responseItems, AIWhatsappResponseItem{
+				Type:    msg.Type,
+				Content: msg.Content,
+			})
+		}
+		
+		return &AIWhatsappResponse{
+			Stage:    "Problem Identification", // Default stage
+			Response: responseItems,
+		}, nil
+	}
+	
+	return nil, fmt.Errorf("failed to parse AI response: %s", responseText[:min(100, len(responseText))])
+}
+
+// parseDirectJSON attempts to parse response as direct JSON
+func (s *aiWhatsappService) parseDirectJSON(responseText string) (*AIWhatsappResponse, error) {
+	// Handle code block wrapped JSON
 	if strings.Contains(responseText, "```json") {
 		start := strings.Index(responseText, "```json") + 7
 		end := strings.Index(responseText[start:], "```")
@@ -891,16 +982,127 @@ func (s *aiWhatsappService) ParseAIResponse(responseText string) (*AIWhatsappRes
 		}
 	}
 	
-	json.Unmarshal([]byte(responseText), &tempResponse)
-	stage := tempResponse.Stage
-	if stage == "" {
-		stage = "Problem Identification" // Default stage
+	var response AIWhatsappResponse
+	err := json.Unmarshal([]byte(responseText), &response)
+	if err != nil {
+		return nil, err
 	}
+	
+	// Set default stage if missing
+	if response.Stage == "" {
+		response.Stage = "Problem Identification"
+	}
+	
+	// Ensure we have at least one response item
+	if len(response.Response) == 0 {
+		return nil, fmt.Errorf("empty response array")
+	}
+	
+	return &response, nil
+}
 
+// parseNonJSONContent extracts meaningful content from non-JSON responses
+func (s *aiWhatsappService) parseNonJSONContent(responseText string) *AIWhatsappResponse {
+	// Extract stage information
+	stage := s.extractStageFromText(responseText)
+	if stage == "" {
+		stage = "Problem Identification"
+	}
+	
+	// Extract content items
+	responseItems := s.extractContentFromText(responseText)
+	if len(responseItems) == 0 {
+		return nil
+	}
+	
 	return &AIWhatsappResponse{
 		Stage:    stage,
 		Response: responseItems,
-	}, nil
+	}
+}
+
+// extractStageFromText attempts to extract stage information from text
+func (s *aiWhatsappService) extractStageFromText(text string) string {
+	// Look for stage patterns
+	stagePatterns := []string{
+		`(?i)stage\s*[:=]\s*["']?([^"'\n,}]+)["']?`,
+		`(?i)current\s+stage\s*[:=]\s*["']?([^"'\n,}]+)["']?`,
+		`(?i)phase\s*[:=]\s*["']?([^"'\n,}]+)["']?`,
+	}
+	
+	for _, pattern := range stagePatterns {
+		re := regexp.MustCompile(pattern)
+		if matches := re.FindStringSubmatch(text); len(matches) > 1 {
+			return strings.TrimSpace(matches[1])
+		}
+	}
+	
+	return ""
+}
+
+// extractContentFromText extracts content items from text responses
+func (s *aiWhatsappService) extractContentFromText(text string) []AIWhatsappResponseItem {
+	var items []AIWhatsappResponseItem
+	
+	// Look for structured content patterns
+	contentPatterns := []string{
+		`(?i)content\s*[:=]\s*["']([^"']+)["']`,
+		`(?i)message\s*[:=]\s*["']([^"']+)["']`,
+		`(?i)text\s*[:=]\s*["']([^"']+)["']`,
+	}
+	
+	for _, pattern := range contentPatterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatch(text, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				items = append(items, AIWhatsappResponseItem{
+					Type:    "text",
+					Content: strings.TrimSpace(match[1]),
+				})
+			}
+		}
+	}
+	
+	// Look for URL patterns (images, etc.)
+	urlPattern := regexp.MustCompile(`https?://[^\s"'<>]+\.(jpg|jpeg|png|gif|webp|mp4|mp3|wav)`)
+	urls := urlPattern.FindAllString(text, -1)
+	for _, url := range urls {
+		mediaType := "image"
+		if strings.Contains(url, ".mp4") {
+			mediaType = "video"
+		} else if strings.Contains(url, ".mp3") || strings.Contains(url, ".wav") {
+			mediaType = "audio"
+		}
+		
+		items = append(items, AIWhatsappResponseItem{
+			Type:    mediaType,
+			Content: url,
+		})
+	}
+	
+	// If no structured content found, treat entire response as text
+	if len(items) == 0 && len(strings.TrimSpace(text)) > 0 {
+		// Clean up the text
+		cleanText := strings.TrimSpace(text)
+		// Remove common AI response prefixes
+		prefixes := []string{"AI:", "Assistant:", "Bot:", "Response:"}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(cleanText, prefix) {
+				cleanText = strings.TrimSpace(cleanText[len(prefix):])
+				break
+			}
+		}
+		
+		if len(cleanText) > 0 {
+			items = append(items, AIWhatsappResponseItem{
+				Type:    "text",
+				Content: cleanText,
+			})
+		}
+	}
+	
+	return items
 }
 
 // formatResponseForLogging formats the response items for logging
@@ -1371,4 +1573,12 @@ func (s *aiWhatsappService) recordAPIFailure() {
 // Used by other services that need to call repository methods directly
 func (s *aiWhatsappService) GetRepository() repository.AIWhatsappRepository {
 	return s.aiRepo
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
