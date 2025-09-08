@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -1573,12 +1574,4 @@ func (s *aiWhatsappService) recordAPIFailure() {
 // Used by other services that need to call repository methods directly
 func (s *aiWhatsappService) GetRepository() repository.AIWhatsappRepository {
 	return s.aiRepo
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
