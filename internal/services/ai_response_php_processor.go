@@ -37,7 +37,7 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 		"content_length": len(replyContent),
 	}).Debug("🔍 AI_PROCESSOR: Raw AI response received")
 	
-	// Remove markdown code blocks if present
+	// Remove markdown code blocks if present (exactly like PHP: '/^```json|```$/')
 	sanitizedContent := regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(strings.TrimSpace(replyContent), "")
 	
 	// Log sanitized content
@@ -48,156 +48,56 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 	var data AIResponseData
 	var replyParts []AIResponsePart
 	
-	// Try to decode JSON directly
-	if err := json.Unmarshal([]byte(sanitizedContent), &data); err == nil {
-		if data.Stage != "" && len(data.Response) > 0 {
+	// 1. Try to decode JSON directly (is_array($data) && isset($data['Stage']) && isset($data['Response']))
+	err = json.Unmarshal([]byte(sanitizedContent), &data)
+	if err == nil && data.Stage != "" && len(data.Response) > 0 {
+		stage = data.Stage
+		replyParts = data.Response
+		logrus.WithFields(logrus.Fields{
+			"stage": stage,
+			"parts_count": len(replyParts),
+		}).Info("✅ AI_PROCESSOR: Parsed standard JSON format")
+	} else if matches := regexp.MustCompile(`Stage:\s*(.+?)\nResponse:\s*(\[.*?\])$`).FindStringSubmatch(replyContent); len(matches) == 3 {
+		// 2. Fallback for older format (Stage: Response:)
+		stage = strings.TrimSpace(matches[1])
+		responseJSON := matches[2]
+		if err := json.Unmarshal([]byte(responseJSON), &replyParts); err == nil {
+			logrus.WithFields(logrus.Fields{
+				"stage": stage,
+				"parts_count": len(replyParts),
+			}).Info("✅ AI_PROCESSOR: Parsed Stage: Response: format")
+		}
+	} else if regexp.MustCompile(`^\s*{\s*"Stage":\s*".+?",\s*"Response":\s*\[.*\]\s*}\s*$`).MatchString(sanitizedContent) {
+		// 3. Detect clean JSON format
+		if err := json.Unmarshal([]byte(sanitizedContent), &data); err == nil && data.Stage != "" && len(data.Response) > 0 {
 			stage = data.Stage
 			replyParts = data.Response
 			logrus.WithFields(logrus.Fields{
 				"stage": stage,
 				"parts_count": len(replyParts),
-			}).Info("✅ AI_PROCESSOR: Parsed standard JSON format")
+			}).Info("✅ AI_PROCESSOR: Parsed clean JSON format")
+		} else {
+			logrus.WithField("content", sanitizedContent).Error("Failed to parse specified JSON format")
+			// In PHP, this returns early, but we'll continue to plain text fallback
 		}
-	}
-	
-	// If not parsed yet, try Stage: Response: format
-	if len(replyParts) == 0 {
-		stageResponsePattern := regexp.MustCompile(`Stage:\s*(.+?)\nResponse:\s*(\[.*?\])$`)
-		if matches := stageResponsePattern.FindStringSubmatch(replyContent); len(matches) == 3 {
-			stage = strings.TrimSpace(matches[1])
-			responseJSON := matches[2]
-			if err := json.Unmarshal([]byte(responseJSON), &replyParts); err == nil {
-				logrus.WithFields(logrus.Fields{
-					"stage": stage,
-					"parts_count": len(replyParts),
-				}).Info("✅ AI_PROCESSOR: Parsed Stage: Response: format")
-			}
+	} else if len(replyParts) > 0 && replyParts[0].Type == "text" && regexp.MustCompile(`^` + "```" + `json.*` + "```" + `$`).MatchString(replyParts[0].Content) {
+		// 4. Encapsulated JSON within triple backticks (this only runs if replyParts already has content)
+		jsonContent := regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(strings.TrimSpace(replyParts[0].Content), "")
+		var decodedContent AIResponseData
+		if err := json.Unmarshal([]byte(jsonContent), &decodedContent); err == nil && decodedContent.Stage != "" && len(decodedContent.Response) > 0 {
+			stage = decodedContent.Stage
+			replyParts = decodedContent.Response
+			logrus.WithFields(logrus.Fields{
+				"stage": stage,
+				"parts_count": len(replyParts),
+			}).Info("✅ AI_PROCESSOR: Parsed encapsulated JSON format")
+		} else {
+			logrus.WithField("content", replyParts[0].Content).Error("Failed to parse encapsulated JSON")
+			// In PHP, this returns early, but we'll continue to plain text fallback
 		}
-	}
-	
-	// Try detecting clean JSON format
-	if len(replyParts) == 0 {
-		jsonPattern := regexp.MustCompile(`^\s*{\s*"Stage":\s*".+?",\s*"Response":\s*\[.*\]\s*}\s*$`)
-		if jsonPattern.MatchString(sanitizedContent) {
-			if err := json.Unmarshal([]byte(sanitizedContent), &data); err == nil {
-				if data.Stage != "" && len(data.Response) > 0 {
-					stage = data.Stage
-					replyParts = data.Response
-					logrus.WithFields(logrus.Fields{
-						"stage": stage,
-						"parts_count": len(replyParts),
-					}).Info("✅ AI_PROCESSOR: Parsed clean JSON format")
-				}
-			}
-		}
-	}
-	
-	// Check for encapsulated JSON in first response item
-	if len(replyParts) > 0 && replyParts[0].Type == "text" {
-		encapsulatedPattern := regexp.MustCompile(`^` + "```" + `json.*` + "```" + `$`)
-		if encapsulatedPattern.MatchString(replyParts[0].Content) {
-			jsonContent := regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(strings.TrimSpace(replyParts[0].Content), "")
-			var decodedContent AIResponseData
-			if err := json.Unmarshal([]byte(jsonContent), &decodedContent); err == nil {
-				if decodedContent.Stage != "" && len(decodedContent.Response) > 0 {
-					stage = decodedContent.Stage
-					replyParts = decodedContent.Response
-					logrus.WithFields(logrus.Fields{
-						"stage": stage,
-						"parts_count": len(replyParts),
-					}).Info("✅ AI_PROCESSOR: Parsed encapsulated JSON format")
-				}
-			}
-		}
-	}
-	
-	// Before fallback, check if content contains image patterns
-	if len(replyParts) == 0 {
-		// Multiple patterns for detecting images in AI responses
-		patterns := []struct {
-			name    string
-			pattern *regexp.Regexp
-		}{
-			{"Gambar X: [URL]", regexp.MustCompile(`Gambar\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
-			{"Image X: [URL]", regexp.MustCompile(`Image\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
-			{"[Text](URL)", regexp.MustCompile(`\[[^\]]+\]\((https?://[^\)]+\.(?:jpg|jpeg|png|gif|webp)[^\)]*)\)`)},
-			{"![Text](URL)", regexp.MustCompile(`!\[[^\]]*\]\((https?://[^\)]+)\)`)},
-		}
-		
-		var allImageURLs []string
-		cleanText := replyContent
-		
-		// Check each pattern
-		for _, p := range patterns {
-			matches := p.pattern.FindAllStringSubmatch(replyContent, -1)
-			if len(matches) > 0 {
-				logrus.WithFields(logrus.Fields{
-					"pattern": p.name,
-					"matches": len(matches),
-				}).Info("🖼️ AI_PROCESSOR: Detected image pattern")
-				
-				for _, match := range matches {
-					if len(match) >= 2 {
-						allImageURLs = append(allImageURLs, match[1])
-						// Remove the matched pattern from clean text
-						cleanText = strings.ReplaceAll(cleanText, match[0], "")
-					}
-				}
-			}
-		}
-		
-		// Also check for direct image URLs
-		directImagePattern := regexp.MustCompile(`https?://[^\s\[\]\(\)]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^\s\[\]\(\)]*)?`)
-		directMatches := directImagePattern.FindAllString(replyContent, -1)
-		for _, url := range directMatches {
-			// Check if not already captured
-			isDuplicate := false
-			for _, existing := range allImageURLs {
-				if existing == url {
-					isDuplicate = true
-					break
-				}
-			}
-			if !isDuplicate {
-				allImageURLs = append(allImageURLs, url)
-				cleanText = strings.ReplaceAll(cleanText, url, "")
-			}
-		}
-		
-		// If we found images, create structured response
-		if len(allImageURLs) > 0 {
-			logrus.WithField("total_images", len(allImageURLs)).Info("🖼️ AI_PROCESSOR: Creating structured response with images")
-			
-			// Clean up the text
-			cleanText = strings.TrimSpace(cleanText)
-			cleanText = regexp.MustCompile(`\s+\n`).ReplaceAllString(cleanText, "\n")
-			cleanText = regexp.MustCompile(`\n{3,}`).ReplaceAllString(cleanText, "\n\n")
-			
-			// Add clean text first if exists
-			if cleanText != "" {
-				replyParts = append(replyParts, AIResponsePart{
-					Type:    "text",
-					Content: cleanText,
-				})
-			}
-			
-			// Add each image
-			for _, imageURL := range allImageURLs {
-				replyParts = append(replyParts, AIResponsePart{
-					Type:    "image",
-					Content: imageURL,
-				})
-			}
-			
-			if stage == "" {
-				stage = "Response with Images"
-			}
-		}
-	}
-	
-	// Plain text fallback - only if no structured format detected
-	if len(replyParts) == 0 {
-		logrus.Warning("⚠️ AI_PROCESSOR: Plain text response detected. Using fallback handling.")
+	} else {
+		// 5. Plain text fallback - EXACTLY like PHP
+		logrus.Warning("⚠️ AI_PROCESSOR: Plain text response detected. Defaulting to fallback handling.")
 		if stage == "" {
 			stage = "Problem Identification"
 		}
@@ -205,6 +105,13 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			{Type: "text", Content: strings.TrimSpace(replyContent)},
 		}
 	}
+	
+	// Validate we have replyParts
+	if len(replyParts) == 0 {
+		logrus.Error("Failed to decode the response JSON properly.")
+		return stage, messages, nil // Return empty like PHP does
+	}
+	
 	
 	// Log the parts we're about to process
 	logrus.WithFields(logrus.Fields{
