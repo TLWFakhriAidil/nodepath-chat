@@ -97,12 +97,11 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			// In PHP, this returns early, but we'll continue to plain text fallback
 		}
 	} else {
-		// 5. Before plain text fallback, try to extract images from the content
-		// This handles cases where AI returns "Gambar 1: [URL]" format in plain text
-		extractedParts, _ := ExtractImagesFromPlainText(replyContent)
+		// 5. DYNAMIC EXTRACTION - Extract ALL URLs and let the system determine what they are
+		extractedParts := ExtractAllMediaDynamically(replyContent)
 		
 		if len(extractedParts) > 0 {
-			// We found structured content in the plain text
+			// We found content with media
 			replyParts = extractedParts
 			if stage == "" {
 				stage = "Response with Media"
@@ -110,9 +109,9 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			logrus.WithFields(logrus.Fields{
 				"parts_count": len(replyParts),
 				"stage": stage,
-			}).Info("🎯 AI_PROCESSOR: Extracted structured content from plain text response")
+			}).Info("🎯 AI_PROCESSOR: Dynamically extracted content from response")
 		} else {
-			// 6. True plain text fallback - no structure found at all
+			// 6. True plain text fallback - no URLs found at all
 			logrus.Warning("⚠️ AI_PROCESSOR: Plain text response detected. Defaulting to fallback handling.")
 			if stage == "" {
 				stage = "Problem Identification"
@@ -128,7 +127,6 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 		logrus.Error("Failed to decode the response JSON properly.")
 		return stage, messages, nil // Return empty like PHP does
 	}
-	
 	
 	// Log the parts we're about to process
 	logrus.WithFields(logrus.Fields{
@@ -247,6 +245,179 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 	return stage, messages, nil
 }
 
+// ExtractAllMediaDynamically extracts ALL URLs and determines their type dynamically
+// This handles ANY format users might create in their prompts
+func ExtractAllMediaDynamically(content string) []AIResponsePart {
+	var parts []AIResponsePart
+	
+	// Find ALL URLs in the content using a very broad pattern
+	// This will catch URLs in ANY format: [URL], (URL), <URL>, "URL", 'URL', or just URL
+	urlPattern := regexp.MustCompile(`https?://[^\s<>"{}|\\\^` + "`" + `\[\]]+`)
+	allURLs := urlPattern.FindAllString(content, -1)
+	
+	if len(allURLs) == 0 {
+		return parts // No URLs found, return empty
+	}
+	
+	// Clean up URLs (remove trailing punctuation that might be captured)
+	cleanedURLs := make(map[string]bool)
+	for _, rawURL := range allURLs {
+		// Remove common trailing characters that aren't part of URLs
+		cleanURL := strings.TrimRight(rawURL, ".,;:!?)]}")
+		// Remove any remaining brackets or parentheses
+		cleanURL = strings.Trim(cleanURL, "[]()") 
+		
+		if cleanURL != "" && !cleanedURLs[cleanURL] {
+			cleanedURLs[cleanURL] = true
+		}
+	}
+	
+	// Build a map of URL positions in the original text
+	type urlPosition struct {
+		url   string
+		start int
+		end   int
+	}
+	
+	var urlPositions []urlPosition
+	for url := range cleanedURLs {
+		// Find all occurrences of this URL in the content
+		index := strings.Index(content, url)
+		if index >= 0 {
+			urlPositions = append(urlPositions, urlPosition{
+				url:   url,
+				start: index,
+				end:   index + len(url),
+			})
+		}
+	}
+	
+	// Sort URLs by their position in the text
+	for i := 0; i < len(urlPositions); i++ {
+		for j := i + 1; j < len(urlPositions); j++ {
+			if urlPositions[j].start < urlPositions[i].start {
+				urlPositions[i], urlPositions[j] = urlPositions[j], urlPositions[i]
+			}
+		}
+	}
+	
+	// Process content and extract text between URLs
+	lastEnd := 0
+	for _, pos := range urlPositions {
+		// Get text before this URL
+		if pos.start > lastEnd {
+			textBefore := strings.TrimSpace(content[lastEnd:pos.start])
+			// Clean up the text (remove URL indicators like "Gambar 1:", "Image:", etc.)
+			textBefore = cleanTextFromMediaIndicators(textBefore)
+			if textBefore != "" {
+				parts = append(parts, AIResponsePart{
+					Type:    "text",
+					Content: textBefore,
+				})
+			}
+		}
+		
+		// Determine media type by checking the URL
+		mediaType := determineMediaType(pos.url)
+		parts = append(parts, AIResponsePart{
+			Type:    mediaType,
+			Content: pos.url,
+		})
+		
+		// Find the end of the URL context (including any brackets, parentheses, etc.)
+		contextEnd := pos.end
+		for contextEnd < len(content) && (content[contextEnd] == ']' || content[contextEnd] == ')' || content[contextEnd] == '}') {
+			contextEnd++
+		}
+		lastEnd = contextEnd
+	}
+	
+	// Get any remaining text after the last URL
+	if lastEnd < len(content) {
+		remainingText := strings.TrimSpace(content[lastEnd:])
+		remainingText = cleanTextFromMediaIndicators(remainingText)
+		if remainingText != "" {
+			parts = append(parts, AIResponsePart{
+				Type:    "text",
+				Content: remainingText,
+			})
+		}
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"total_urls": len(cleanedURLs),
+		"total_parts": len(parts),
+	}).Info("🔍 AI_PROCESSOR: Dynamically extracted media from content")
+	
+	return parts
+}
+
+// determineMediaType checks URL to determine if it's image, video, audio, or generic media
+func determineMediaType(url string) string {
+	lowerURL := strings.ToLower(url)
+	
+	// Check by file extension
+	imageExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+	for _, ext := range imageExts {
+		if strings.Contains(lowerURL, ext) {
+			return "image"
+		}
+	}
+	
+	videoExts := []string{".mp4", ".avi", ".mov", ".webm", ".mkv", ".m4v"}
+	for _, ext := range videoExts {
+		if strings.Contains(lowerURL, ext) {
+			return "video"
+		}
+	}
+	
+	audioExts := []string{".mp3", ".wav", ".ogg", ".m4a", ".aac"}
+	for _, ext := range audioExts {
+		if strings.Contains(lowerURL, ext) {
+			return "audio"
+		}
+	}
+	
+	// Check for common image hosting patterns
+	if strings.Contains(lowerURL, "/images/") || 
+	   strings.Contains(lowerURL, "/image/") ||
+	   strings.Contains(lowerURL, "/img/") ||
+	   strings.Contains(lowerURL, "/photo/") ||
+	   strings.Contains(lowerURL, "/gambar/") ||
+	   strings.Contains(lowerURL, "chatgpt") { // Your specific pattern
+		return "image"
+	}
+	
+	// Default to image for unrecognized media
+	return "image"
+}
+
+// cleanTextFromMediaIndicators removes common media indicators from text
+func cleanTextFromMediaIndicators(text string) string {
+	// Remove common patterns that indicate media references
+	patterns := []string{
+		`(?i)Gambar\s*\d*\s*:\s*$`,
+		`(?i)Image\s*\d*\s*:\s*$`,
+		`(?i)Photo\s*\d*\s*:\s*$`,
+		`(?i)Foto\s*\d*\s*:\s*$`,
+		`(?i)Video\s*\d*\s*:\s*$`,
+		`^\[\s*\]$`, // Empty brackets
+		`^\(\s*\)$`, // Empty parentheses
+		`^\d+[.)\s]*$`, // Just numbers like "1." or "1)"
+		`^[*-]\s*$`, // Just bullets
+	}
+	
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		text = re.ReplaceAllString(text, "")
+	}
+	
+	// Clean up multiple blank lines
+	text = regexp.MustCompile(`\n\s*\n\s*\n+`).ReplaceAllString(text, "\n\n")
+	
+	return strings.TrimSpace(text)
+}
+
 // BuildCleanResponse builds a clean response string from processed messages
 // This is what should be saved to the database (text only, no media URLs)
 func BuildCleanResponse(messages []ProcessedAIMessage) string {
@@ -265,136 +436,4 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
-}
-
-// ExtractImagesFromPlainText extracts images from various plain text formats
-// This handles user-defined prompts that result in various response formats
-func ExtractImagesFromPlainText(content string) ([]AIResponsePart, string) {
-	var parts []AIResponsePart
-	
-	// Split content into lines to preserve order
-	lines := strings.Split(content, "\n")
-	var currentTextBlock []string
-	
-	// Define patterns for detecting media
-	imagePatterns := []struct {
-		name    string
-		pattern *regexp.Regexp
-		isMedia bool
-	}{
-		// Gambar patterns with square brackets: Gambar 1: [URL]
-		{"Gambar [URL]", regexp.MustCompile(`(?i)^Gambar\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
-		// Gambar patterns with markdown: Gambar 1: [Text](URL)
-		{"Gambar [Text](URL)", regexp.MustCompile(`(?i)^Gambar\s*\d*\s*:\s*\[[^\]]+\]\((https?://[^\)]+)\)$`), true},
-		// Image patterns with square brackets
-		{"Image [URL]", regexp.MustCompile(`(?i)^Image\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
-		// Image patterns with markdown
-		{"Image [Text](URL)", regexp.MustCompile(`(?i)^Image\s*\d*\s*:\s*\[[^\]]+\]\((https?://[^\)]+)\)$`), true},
-		// Photo/Foto patterns
-		{"Photo [URL]", regexp.MustCompile(`(?i)^(?:Photo|Foto)\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
-		{"Photo [Text](URL)", regexp.MustCompile(`(?i)^(?:Photo|Foto)\s*\d*\s*:\s*\[[^\]]+\]\((https?://[^\)]+)\)$`), true},
-		// Video patterns
-		{"Video [URL]", regexp.MustCompile(`(?i)^Video\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
-		{"Video [Text](URL)", regexp.MustCompile(`(?i)^Video\s*\d*\s*:\s*\[[^\]]+\]\((https?://[^\)]+)\)$`), true},
-		// Standard markdown formats
-		{"![alt](url)", regexp.MustCompile(`^!\[[^\]]*\]\((https?://[^\)]+)\)$`), true},
-		{"[text](image)", regexp.MustCompile(`^\[[^\]]+\]\((https?://[^\)]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\)]*)?)\)$`), true},
-		// Direct URLs
-		{"Direct image", regexp.MustCompile(`^https?://[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\s]*)?$`), true},
-		{"Direct video", regexp.MustCompile(`^https?://[^\s]+\.(?:mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?[^\s]*)?$`), true},
-	}
-	
-	// Process line by line to maintain order
-	for _, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" {
-			// Keep empty lines in text blocks
-			if len(currentTextBlock) > 0 {
-				currentTextBlock = append(currentTextBlock, "")
-			}
-			continue
-		}
-		
-		mediaFound := false
-		
-		// Check if this line is a media reference
-		for _, p := range imagePatterns {
-			if matches := p.pattern.FindStringSubmatch(trimmedLine); len(matches) > 0 {
-				// Flush any accumulated text before adding media
-				if len(currentTextBlock) > 0 {
-					textContent := strings.TrimSpace(strings.Join(currentTextBlock, "\n"))
-					if textContent != "" {
-						parts = append(parts, AIResponsePart{
-							Type:    "text",
-							Content: textContent,
-						})
-					}
-					currentTextBlock = []string{}
-				}
-				
-				// Add the media
-				mediaURL := matches[1]
-				mediaType := "image"
-				
-				// Determine media type
-				if strings.Contains(strings.ToLower(p.name), "video") ||
-				   strings.Contains(mediaURL, ".mp4") ||
-				   strings.Contains(mediaURL, ".avi") ||
-				   strings.Contains(mediaURL, ".mov") ||
-				   strings.Contains(mediaURL, ".webm") {
-					mediaType = "video"
-				}
-				
-				parts = append(parts, AIResponsePart{
-					Type:    mediaType,
-					Content: mediaURL,
-				})
-				
-				mediaFound = true
-				break
-			}
-		}
-		
-		// If not media, add to current text block
-		if !mediaFound {
-			currentTextBlock = append(currentTextBlock, trimmedLine)
-		}
-	}
-	
-	// Flush any remaining text
-	if len(currentTextBlock) > 0 {
-		textContent := strings.TrimSpace(strings.Join(currentTextBlock, "\n"))
-		if textContent != "" {
-			parts = append(parts, AIResponsePart{
-				Type:    "text",
-				Content: textContent,
-			})
-		}
-	}
-	
-	// Build clean text (text parts only, for saving to database)
-	var cleanTextParts []string
-	for _, part := range parts {
-		if part.Type == "text" {
-			cleanTextParts = append(cleanTextParts, part.Content)
-		}
-	}
-	cleanText := strings.Join(cleanTextParts, "\n\n")
-	
-	// Log what we found
-	if len(parts) > 0 {
-		var mediaCount int
-		for _, p := range parts {
-			if p.Type != "text" {
-				mediaCount++
-			}
-		}
-		logrus.WithFields(logrus.Fields{
-			"total_parts": len(parts),
-			"media_count": mediaCount,
-			"text_parts": len(parts) - mediaCount,
-		}).Info("🔍 AI_PROCESSOR: Extracted and ordered content from plain text")
-	}
-	
-	return parts, cleanText
 }
