@@ -97,13 +97,29 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			// In PHP, this returns early, but we'll continue to plain text fallback
 		}
 	} else {
-		// 5. Plain text fallback - EXACTLY like PHP
-		logrus.Warning("⚠️ AI_PROCESSOR: Plain text response detected. Defaulting to fallback handling.")
-		if stage == "" {
-			stage = "Problem Identification"
-		}
-		replyParts = []AIResponsePart{
-			{Type: "text", Content: strings.TrimSpace(replyContent)},
+		// 5. Before plain text fallback, try to extract images from the content
+		// This handles cases where AI returns "Gambar 1: [URL]" format in plain text
+		extractedParts, _ := ExtractImagesFromPlainText(replyContent)
+		
+		if len(extractedParts) > 0 {
+			// We found structured content in the plain text
+			replyParts = extractedParts
+			if stage == "" {
+				stage = "Response with Media"
+			}
+			logrus.WithFields(logrus.Fields{
+				"parts_count": len(replyParts),
+				"stage": stage,
+			}).Info("🎯 AI_PROCESSOR: Extracted structured content from plain text response")
+		} else {
+			// 6. True plain text fallback - no structure found at all
+			logrus.Warning("⚠️ AI_PROCESSOR: Plain text response detected. Defaulting to fallback handling.")
+			if stage == "" {
+				stage = "Problem Identification"
+			}
+			replyParts = []AIResponsePart{
+				{Type: "text", Content: strings.TrimSpace(replyContent)},
+			}
 		}
 	}
 	
@@ -237,4 +253,131 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// ExtractImagesFromPlainText extracts images from various plain text formats
+// This handles user-defined prompts that result in various response formats
+func ExtractImagesFromPlainText(content string) ([]AIResponsePart, string) {
+	var parts []AIResponsePart
+	cleanText := content
+	
+	// Define patterns that indicate images in various formats users might prompt
+	imagePatterns := []struct {
+		name    string
+		pattern *regexp.Regexp
+	}{
+		// Gambar 1: [URL] format (Malaysian/Indonesian)
+		{"Gambar [URL]", regexp.MustCompile(`(?i)Gambar\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
+		// Image 1: [URL] format (English)
+		{"Image [URL]", regexp.MustCompile(`(?i)Image\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
+		// Photo/Foto variations
+		{"Photo [URL]", regexp.MustCompile(`(?i)(?:Photo|Foto)\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
+		// Markdown image syntax ![alt](url)
+		{"![alt](url)", regexp.MustCompile(`!\[[^\]]*\]\((https?://[^\)]+)\)`)},
+		// Markdown link syntax that might be images [text](url.jpg)
+		{"[text](image)", regexp.MustCompile(`\[[^\]]+\]\((https?://[^\)]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\)]*)?)\)`)},
+		// Direct image URLs with common extensions
+		{"Direct images", regexp.MustCompile(`https?://[^\s\[\]\(\)<>]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\s\[\]\(\)<>]*)?`)},
+		// Numbered format: 1. https://... or 1) https://...
+		{"Numbered URLs", regexp.MustCompile(`(?m)^\s*\d+[\.\)]\s*(https?://[^\s]+(?:jpg|jpeg|png|gif|webp))`)},
+		// Bullet format: * https://... or - https://...
+		{"Bullet URLs", regexp.MustCompile(`(?m)^\s*[\*\-]\s*(https?://[^\s]+(?:jpg|jpeg|png|gif|webp))`)},
+	}
+	
+	var allImageURLs []string
+	foundPatterns := make(map[string]bool)
+	
+	// Try each pattern to find images
+	for _, p := range imagePatterns {
+		matches := p.pattern.FindAllStringSubmatch(content, -1)
+		if len(matches) > 0 {
+			foundPatterns[p.name] = true
+			for _, match := range matches {
+				if len(match) >= 2 {
+					imageURL := match[1]
+					// Check for duplicates
+					isDuplicate := false
+					for _, existing := range allImageURLs {
+						if existing == imageURL {
+							isDuplicate = true
+							break
+						}
+					}
+					if !isDuplicate {
+						allImageURLs = append(allImageURLs, imageURL)
+						// Remove the entire match from clean text
+						cleanText = strings.ReplaceAll(cleanText, match[0], "")
+					}
+				}
+			}
+		}
+	}
+	
+	// Also check for video patterns
+	videoPatterns := []string{
+		`(?i)Video\s*\d*\s*:\s*\[(https?://[^\]]+)\]`,
+		`https?://[^\s\[\]\(\)<>]+\.(?:mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?[^\s\[\]\(\)<>]*)?`,
+	}
+	
+	for _, pattern := range videoPatterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatch(content, -1)
+		for _, match := range matches {
+			if len(match) >= 2 {
+				videoURL := match[1]
+				if videoURL == "" && len(match) >= 1 {
+					videoURL = match[0]
+				}
+				// Check for duplicates
+				isDuplicate := false
+				for _, existing := range allImageURLs {
+					if existing == videoURL {
+						isDuplicate = true
+						break
+					}
+				}
+				if !isDuplicate {
+					// Add as video type
+					parts = append(parts, AIResponsePart{
+						Type:    "video",
+						Content: videoURL,
+					})
+					cleanText = strings.ReplaceAll(cleanText, match[0], "")
+				}
+			}
+		}
+	}
+	
+	// Clean up the text
+	cleanText = strings.TrimSpace(cleanText)
+	// Remove multiple blank lines
+	cleanText = regexp.MustCompile(`\n\s*\n\s*\n+`).ReplaceAllString(cleanText, "\n\n")
+	// Remove orphaned punctuation or numbering
+	cleanText = regexp.MustCompile(`(?m)^\s*\d+[\.\)]\s*$`).ReplaceAllString(cleanText, "")
+	cleanText = regexp.MustCompile(`(?m)^\s*[\*\-]\s*$`).ReplaceAllString(cleanText, "")
+	cleanText = strings.TrimSpace(cleanText)
+	
+	// Build response parts
+	if cleanText != "" {
+		parts = append([]AIResponsePart{{Type: "text", Content: cleanText}}, parts...)
+	}
+	
+	// Add all found images
+	for _, imageURL := range allImageURLs {
+		parts = append(parts, AIResponsePart{
+			Type:    "image",
+			Content: imageURL,
+		})
+	}
+	
+	// Log what we found
+	if len(allImageURLs) > 0 || len(parts) > 0 {
+		logrus.WithFields(logrus.Fields{
+			"patterns_matched": foundPatterns,
+			"images_found": len(allImageURLs),
+			"total_parts": len(parts),
+		}).Info("🔍 AI_PROCESSOR: Extracted media from plain text")
+	}
+	
+	return parts, cleanText
 }
