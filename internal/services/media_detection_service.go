@@ -10,11 +10,13 @@ import (
 // MediaDetectionService handles detection of media URLs in various formats
 type MediaDetectionService struct {
 	// Regex patterns for different media URL formats
-	bracketPattern      *regexp.Regexp
-	directURLPattern    *regexp.Regexp
-	markdownPattern     *regexp.Regexp
-	aiGeneratedPattern  *regexp.Regexp
-	urlPattern          *regexp.Regexp
+	bracketPattern       *regexp.Regexp
+	simpleBracketPattern *regexp.Regexp
+	labeledPattern       *regexp.Regexp
+	directURLPattern     *regexp.Regexp
+	markdownPattern      *regexp.Regexp
+	aiGeneratedPattern   *regexp.Regexp
+	urlPattern           *regexp.Regexp
 }
 
 // MediaDetectionResult contains the result of media detection
@@ -31,6 +33,12 @@ func NewMediaDetectionService() *MediaDetectionService {
 	// Bracket format: [IMAGE: URL], [AUDIO: URL], [VIDEO: URL] with optional backticks
 	bracketPattern := regexp.MustCompile(`\[(IMAGE|AUDIO|VIDEO):\s*` + "`" + `?([^\]` + "`" + `]+)` + "`" + `?\]`)
 	
+	// Simple bracket format: [URL] - just URL in square brackets (common in AI responses)
+	simpleBracketPattern := regexp.MustCompile(`\[(https?://[^\]]+)\]`)
+	
+	// Labeled format: "Gambar X: [URL]" or "Image X: [URL]" - common in multilingual AI responses
+	labeledPattern := regexp.MustCompile(`(?:Gambar|Image|Foto|Picture|Video|Audio)\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)
+	
 	// Direct URL pattern: detect common media file extensions
 	directURLPattern := regexp.MustCompile(`https?://[^\s]+\.(jpg|jpeg|png|gif|bmp|webp|svg|mp3|wav|flac|aac|ogg|wma|m4a|mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?[^\s]*)?`)
 	
@@ -44,11 +52,13 @@ func NewMediaDetectionService() *MediaDetectionService {
 	urlPattern := regexp.MustCompile(`https?://[^\s]+`)
 
 	return &MediaDetectionService{
-		bracketPattern:      bracketPattern,
-		directURLPattern:    directURLPattern,
-		markdownPattern:     markdownPattern,
-		aiGeneratedPattern:  aiGeneratedPattern,
-		urlPattern:          urlPattern,
+		bracketPattern:       bracketPattern,
+		simpleBracketPattern: simpleBracketPattern,
+		labeledPattern:       labeledPattern,
+		directURLPattern:     directURLPattern,
+		markdownPattern:      markdownPattern,
+		aiGeneratedPattern:   aiGeneratedPattern,
+		urlPattern:           urlPattern,
 	}
 }
 
@@ -84,8 +94,75 @@ func (mds *MediaDetectionService) DetectMedia(text string) []MediaDetectionResul
 			}).Info("📎 MEDIA DETECTION: Found bracket format media URL")
 		}
 	}
+	
+	// 2. Check for labeled format "Gambar X: [URL]" - common in AI responses
+	labeledMatches := mds.labeledPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range labeledMatches {
+		if len(match) >= 2 {
+			mediaURL := strings.TrimSpace(match[1])
+			mediaType := mds.getMediaTypeFromURL(mediaURL)
+			if mediaType == "" {
+				mediaType = "image" // Default to image for labeled formats
+			}
+			
+			results = append(results, MediaDetectionResult{
+				IsMedia:      true,
+				MediaType:    mediaType,
+				MediaURL:     mediaURL,
+				OriginalText: match[0],
+			})
+			
+			// Remove from clean text
+			cleanText = strings.ReplaceAll(cleanText, match[0], "")
+			
+			logrus.WithFields(logrus.Fields{
+				"media_type": mediaType,
+				"media_url":  mediaURL,
+				"format":     "labeled",
+			}).Info("📎 MEDIA DETECTION: Found labeled format media URL (Gambar/Image)")
+		}
+	}
+	
+	// 3. Check for simple bracket format [URL] - just URL in brackets
+	simpleBracketMatches := mds.simpleBracketPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range simpleBracketMatches {
+		if len(match) >= 2 {
+			mediaURL := strings.TrimSpace(match[1])
+			mediaType := mds.getMediaTypeFromURL(mediaURL)
+			
+			// Only process if it's a media URL (has media extension)
+			if mediaType != "" {
+				// Check if this URL was already processed by labeled pattern
+				alreadyProcessed := false
+				for _, result := range results {
+					if result.MediaURL == mediaURL {
+						alreadyProcessed = true
+						break
+					}
+				}
+				
+				if !alreadyProcessed {
+					results = append(results, MediaDetectionResult{
+						IsMedia:      true,
+						MediaType:    mediaType,
+						MediaURL:     mediaURL,
+						OriginalText: match[0],
+					})
+					
+					// Remove from clean text
+					cleanText = strings.ReplaceAll(cleanText, match[0], "")
+					
+					logrus.WithFields(logrus.Fields{
+						"media_type": mediaType,
+						"media_url":  mediaURL,
+						"format":     "simple_bracket",
+					}).Info("📎 MEDIA DETECTION: Found simple bracket format media URL")
+				}
+			}
+		}
+	}
 
-	// 2. Check for direct media URLs with file extensions
+	// 4. Check for direct media URLs with file extensions
 	directMatches := mds.directURLPattern.FindAllString(text, -1)
 	for _, url := range directMatches {
 		mediaType := mds.getMediaTypeFromURL(url)
@@ -108,7 +185,7 @@ func (mds *MediaDetectionService) DetectMedia(text string) []MediaDetectionResul
 		}
 	}
 
-	// 3. Check for markdown format media URLs ![alt](URL) or [text](URL)
+	// 5. Check for markdown format media URLs ![alt](URL) or [text](URL)
 	markdownMatches := mds.markdownPattern.FindAllStringSubmatch(text, -1)
 	for _, match := range markdownMatches {
 		if len(match) >= 2 {
@@ -134,7 +211,7 @@ func (mds *MediaDetectionService) DetectMedia(text string) []MediaDetectionResul
 		}
 	}
 
-	// 4. Check for AI-generated format media URLs ! `URL`
+	// 6. Check for AI-generated format media URLs ! `URL`
 	aiGeneratedMatches := mds.aiGeneratedPattern.FindAllStringSubmatch(text, -1)
 	for _, match := range aiGeneratedMatches {
 		if len(match) >= 2 {
@@ -227,6 +304,22 @@ func (mds *MediaDetectionService) RemoveMediaURLs(text string) string {
 	bracketMatches := mds.bracketPattern.FindAllStringSubmatch(text, -1)
 	for _, match := range bracketMatches {
 		if len(match) > 0 {
+			cleanText = strings.ReplaceAll(cleanText, match[0], "")
+		}
+	}
+	
+	// Remove labeled format media URLs (Gambar X: [URL])
+	labeledMatches := mds.labeledPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range labeledMatches {
+		if len(match) > 0 {
+			cleanText = strings.ReplaceAll(cleanText, match[0], "")
+		}
+	}
+	
+	// Remove simple bracket format media URLs
+	simpleBracketMatches := mds.simpleBracketPattern.FindAllStringSubmatch(text, -1)
+	for _, match := range simpleBracketMatches {
+		if len(match) > 0 && mds.getMediaTypeFromURL(match[1]) != "" {
 			cleanText = strings.ReplaceAll(cleanText, match[0], "")
 		}
 	}
