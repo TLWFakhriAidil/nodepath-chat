@@ -253,62 +253,78 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 	// Find ALL URLs in the content using a very broad pattern
 	// This will catch URLs in ANY format: [URL], (URL), <URL>, "URL", 'URL', or just URL
 	urlPattern := regexp.MustCompile(`https?://[^\s<>"{}|\\\^` + "`" + `\[\]]+`)
-	allURLs := urlPattern.FindAllString(content, -1)
+	allMatches := urlPattern.FindAllStringIndex(content, -1)
 	
-	if len(allURLs) == 0 {
+	if len(allMatches) == 0 {
 		return parts // No URLs found, return empty
 	}
 	
-	// Clean up URLs (remove trailing punctuation that might be captured)
-	cleanedURLs := make(map[string]bool)
-	for _, rawURL := range allURLs {
-		// Remove common trailing characters that aren't part of URLs
-		cleanURL := strings.TrimRight(rawURL, ".,;:!?)]}")
-		// Remove any remaining brackets or parentheses
-		cleanURL = strings.Trim(cleanURL, "[]()") 
+	// Process content and build parts
+	lastEnd := 0
+	
+	for _, match := range allMatches {
+		urlStart := match[0]
+		urlEnd := match[1]
+		url := content[urlStart:urlEnd]
 		
-		if cleanURL != "" && !cleanedURLs[cleanURL] {
-			cleanedURLs[cleanURL] = true
-		}
-	}
-	
-	// Build a map of URL positions in the original text
-	type urlPosition struct {
-		url   string
-		start int
-		end   int
-	}
-	
-	var urlPositions []urlPosition
-	for url := range cleanedURLs {
-		// Find all occurrences of this URL in the content
-		index := strings.Index(content, url)
-		if index >= 0 {
-			urlPositions = append(urlPositions, urlPosition{
-				url:   url,
-				start: index,
-				end:   index + len(url),
-			})
-		}
-	}
-	
-	// Sort URLs by their position in the text
-	for i := 0; i < len(urlPositions); i++ {
-		for j := i + 1; j < len(urlPositions); j++ {
-			if urlPositions[j].start < urlPositions[i].start {
-				urlPositions[i], urlPositions[j] = urlPositions[j], urlPositions[i]
+		// Clean the URL
+		url = strings.TrimRight(url, ".,;:!?)]}")
+		
+		// Look for context around the URL to remove (like "Gambar 1: [URL]")
+		contextStart := urlStart
+		contextEnd := urlEnd
+		
+		// Check backwards for media indicators
+		beforeURL := ""
+		if urlStart > 0 {
+			// Look back up to 50 characters or to the previous newline
+			lookbackStart := urlStart - 50
+			if lookbackStart < 0 {
+				lookbackStart = 0
+			}
+			beforeURL = content[lookbackStart:urlStart]
+			
+			// Find media indicator patterns before the URL
+			indicatorPatterns := []string{
+				`(?i)Gambar\s*\d*\s*:\s*\[?$`,
+				`(?i)Image\s*\d*\s*:\s*\[?$`,
+				`(?i)Photo\s*\d*\s*:\s*\[?$`,
+				`(?i)Foto\s*\d*\s*:\s*\[?$`,
+				`(?i)Video\s*\d*\s*:\s*\[?$`,
+			}
+			
+			for _, pattern := range indicatorPatterns {
+				re := regexp.MustCompile(pattern)
+				if matches := re.FindStringIndex(beforeURL); matches != nil {
+					// Found an indicator, extend context to include it
+					contextStart = lookbackStart + matches[0]
+					break
+				}
 			}
 		}
-	}
-	
-	// Process content and extract text between URLs
-	lastEnd := 0
-	for _, pos := range urlPositions {
-		// Get text before this URL
-		if pos.start > lastEnd {
-			textBefore := strings.TrimSpace(content[lastEnd:pos.start])
-			// Clean up the text (remove URL indicators like "Gambar 1:", "Image:", etc.)
-			textBefore = cleanTextFromMediaIndicators(textBefore)
+		
+		// Check after URL for closing brackets/parentheses
+		if urlEnd < len(content) {
+			afterURL := ""
+			lookAheadEnd := urlEnd + 10
+			if lookAheadEnd > len(content) {
+				lookAheadEnd = len(content)
+			}
+			afterURL = content[urlEnd:lookAheadEnd]
+			
+			// Count how many closing brackets/parentheses to include
+			for i, char := range afterURL {
+				if char == ']' || char == ')' || char == '}' || char == '>' {
+					contextEnd = urlEnd + i + 1
+				} else {
+					break
+				}
+			}
+		}
+		
+		// Extract text before this media (if any)
+		if contextStart > lastEnd {
+			textBefore := strings.TrimSpace(content[lastEnd:contextStart])
 			if textBefore != "" {
 				parts = append(parts, AIResponsePart{
 					Type:    "text",
@@ -317,25 +333,19 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 			}
 		}
 		
-		// Determine media type by checking the URL
-		mediaType := determineMediaType(pos.url)
+		// Add the media
+		mediaType := determineMediaType(url)
 		parts = append(parts, AIResponsePart{
 			Type:    mediaType,
-			Content: pos.url,
+			Content: url,
 		})
 		
-		// Find the end of the URL context (including any brackets, parentheses, etc.)
-		contextEnd := pos.end
-		for contextEnd < len(content) && (content[contextEnd] == ']' || content[contextEnd] == ')' || content[contextEnd] == '}') {
-			contextEnd++
-		}
 		lastEnd = contextEnd
 	}
 	
 	// Get any remaining text after the last URL
 	if lastEnd < len(content) {
 		remainingText := strings.TrimSpace(content[lastEnd:])
-		remainingText = cleanTextFromMediaIndicators(remainingText)
 		if remainingText != "" {
 			parts = append(parts, AIResponsePart{
 				Type:    "text",
@@ -345,7 +355,7 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 	}
 	
 	logrus.WithFields(logrus.Fields{
-		"total_urls": len(cleanedURLs),
+		"total_urls": len(allMatches),
 		"total_parts": len(parts),
 	}).Info("🔍 AI_PROCESSOR: Dynamically extracted media from content")
 	

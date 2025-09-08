@@ -417,24 +417,30 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 			"response_length": len(response),
 		}).Info("📤 FLOW: Sending response back to user")
 
-		// Skip sending if response is empty (already handled by advanced AI nodes)
-		if response == "" {
-			logrus.WithFields(logrus.Fields{
-				"device_id":    deviceID,
-				"phone_number": phoneNumber,
-			}).Info("🔇 FLOW: Skipping empty response to prevent <nil> message")
-		} else {
-			// Process AI response using PHP-compatible logic
-			_, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
+	// Skip sending if response is empty (already handled by advanced AI nodes)
+	cleanResponse := "" // Track what we actually send to save to database
+	
+	if response == "" {
+		logrus.WithFields(logrus.Fields{
+			"device_id":    deviceID,
+			"phone_number": phoneNumber,
+		}).Info("🔇 FLOW: Skipping empty response to prevent <nil> message")
+	} else {
+		// Process AI response using PHP-compatible logic
+		_, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process AI response")
+			// Fallback to sending as plain text
+			err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
 			if err != nil {
-				logrus.WithError(err).Error("Failed to process AI response")
-				// Fallback to sending as plain text
-				err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
-				if err != nil {
-					logrus.WithError(err).Error("❌ FLOW: Failed to send response message")
-					return err
-				}
-			} else {
+				logrus.WithError(err).Error("❌ FLOW: Failed to send response message")
+				return err
+			}
+			cleanResponse = response // Save what we sent (fallback)
+		} else {
+				// Track what we actually send for saving to database
+				var actualSentContent []string
+				
 				// Send each processed message
 				for i, msg := range messages {
 					logrus.WithFields(logrus.Fields{
@@ -447,6 +453,9 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 						err = s.SendMessageFromDevice(deviceID, phoneNumber, msg.Content)
 						if err != nil {
 							logrus.WithError(err).Error("❌ FLOW: Failed to send text message")
+						} else {
+							// Track what we successfully sent
+							actualSentContent = append(actualSentContent, msg.Content)
 						}
 					} else if msg.Type == "image" || msg.Type == "audio" || msg.Type == "video" {
 						err = s.SendMediaMessage(deviceID, phoneNumber, msg.Content)
@@ -456,6 +465,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 								"media_type": msg.Type,
 							}).Error("❌ FLOW: Failed to send media message")
 						}
+						// Note: We don't add media URLs to actualSentContent as we only save text
 					}
 
 					// Add delay between messages
@@ -463,20 +473,15 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 						time.Sleep(msg.Delay)
 					}
 				}
+				
+				// Save what we ACTUALLY SENT (not the raw response)
+				cleanResponse = strings.Join(actualSentContent, "\n\n")
 			}
 		}
 
 		// Save bot response to conversation history (single save point for bot response)
-		if response != "" {
-			// Build clean response from processed messages (text only, no media URLs)
-			cleanResponse := response
-			
-			// If we processed the response, use the clean version
-			_, messages, err := services.ProcessAIResponsePHP(response, 0)
-			if err == nil && len(messages) > 0 {
-				cleanResponse = services.BuildCleanResponse(messages)
-			}
-			
+		// cleanResponse was already set above with actual sent content
+		if cleanResponse != "" {
 			logrus.WithFields(logrus.Fields{
 				"phone_number": phoneNumber,
 				"clean_response": cleanResponse,
@@ -2247,6 +2252,9 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 			}
 		} else {
 
+			// Track what we actually send for saving to database
+			var actualSentContent []string
+			
 			// Send each processed message
 			for i, msg := range messages {
 				logrus.WithFields(logrus.Fields{
@@ -2259,6 +2267,9 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 					err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, msg.Content)
 					if err != nil {
 						logrus.WithError(err).Error("❌ USER_REPLY: Failed to send text message")
+					} else {
+						// Track what we successfully sent
+						actualSentContent = append(actualSentContent, msg.Content)
 					}
 				} else if msg.Type == "image" || msg.Type == "audio" || msg.Type == "video" {
 					err = s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, msg.Content)
@@ -2268,6 +2279,7 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 							"media_type": msg.Type,
 						}).Error("❌ USER_REPLY: Failed to send media message")
 					}
+					// Note: We don't add media URLs to actualSentContent as we only save text
 				}
 
 				// Add delay between messages
@@ -2276,11 +2288,17 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 				}
 			}
 
-			// Save the CLEAN response to conversation history (text only, no media URLs)
-			cleanResponse := services.BuildCleanResponse(messages)
-			err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", cleanResponse, "")
-			if err != nil {
-				logrus.WithError(err).Error("❌ USER_REPLY: Failed to save bot response to conversation")
+			// Save what we ACTUALLY SENT to conversation history (text only, no media URLs or indicators)
+			cleanResponse := strings.Join(actualSentContent, "\n\n")
+			if cleanResponse != "" {
+				err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", cleanResponse, "")
+				if err != nil {
+					logrus.WithError(err).Error("❌ USER_REPLY: Failed to save bot response to conversation")
+				} else {
+					logrus.WithFields(logrus.Fields{
+						"saved_content": cleanResponse,
+					}).Info("✅ USER_REPLY: Saved actual sent content to conversation history")
+				}
 			}
 		}
 	}
