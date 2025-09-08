@@ -247,6 +247,18 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 	return stage, messages, nil
 }
 
+// BuildCleanResponse builds a clean response string from processed messages
+// This is what should be saved to the database (text only, no media URLs)
+func BuildCleanResponse(messages []ProcessedAIMessage) string {
+	var textParts []string
+	for _, msg := range messages {
+		if msg.Type == "text" {
+			textParts = append(textParts, msg.Content)
+		}
+	}
+	return strings.Join(textParts, "\n\n")
+}
+
 // truncateString truncates a string to max length for logging
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -259,124 +271,120 @@ func truncateString(s string, maxLen int) string {
 // This handles user-defined prompts that result in various response formats
 func ExtractImagesFromPlainText(content string) ([]AIResponsePart, string) {
 	var parts []AIResponsePart
-	cleanText := content
 	
-	// Define patterns that indicate images in various formats users might prompt
+	// Split content into lines to preserve order
+	lines := strings.Split(content, "\n")
+	var currentTextBlock []string
+	
+	// Define patterns for detecting media
 	imagePatterns := []struct {
 		name    string
 		pattern *regexp.Regexp
+		isMedia bool
 	}{
-		// Gambar 1: [URL] format (Malaysian/Indonesian)
-		{"Gambar [URL]", regexp.MustCompile(`(?i)Gambar\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
-		// Image 1: [URL] format (English)
-		{"Image [URL]", regexp.MustCompile(`(?i)Image\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
-		// Photo/Foto variations
-		{"Photo [URL]", regexp.MustCompile(`(?i)(?:Photo|Foto)\s*\d*\s*:\s*\[(https?://[^\]]+)\]`)},
-		// Markdown image syntax ![alt](url)
-		{"![alt](url)", regexp.MustCompile(`!\[[^\]]*\]\((https?://[^\)]+)\)`)},
-		// Markdown link syntax that might be images [text](url.jpg)
-		{"[text](image)", regexp.MustCompile(`\[[^\]]+\]\((https?://[^\)]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\)]*)?)\)`)},
-		// Direct image URLs with common extensions
-		{"Direct images", regexp.MustCompile(`https?://[^\s\[\]\(\)<>]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\s\[\]\(\)<>]*)?`)},
-		// Numbered format: 1. https://... or 1) https://...
-		{"Numbered URLs", regexp.MustCompile(`(?m)^\s*\d+[\.\)]\s*(https?://[^\s]+(?:jpg|jpeg|png|gif|webp))`)},
-		// Bullet format: * https://... or - https://...
-		{"Bullet URLs", regexp.MustCompile(`(?m)^\s*[\*\-]\s*(https?://[^\s]+(?:jpg|jpeg|png|gif|webp))`)},
+		// Gambar patterns
+		{"Gambar [URL]", regexp.MustCompile(`(?i)^Gambar\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
+		{"Image [URL]", regexp.MustCompile(`(?i)^Image\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
+		{"Photo [URL]", regexp.MustCompile(`(?i)^(?:Photo|Foto)\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
+		{"Video [URL]", regexp.MustCompile(`(?i)^Video\s*\d*\s*:\s*\[(https?://[^\]]+)\]$`), true},
+		// Markdown formats
+		{"![alt](url)", regexp.MustCompile(`^!\[[^\]]*\]\((https?://[^\)]+)\)$`), true},
+		{"[text](image)", regexp.MustCompile(`^\[[^\]]+\]\((https?://[^\)]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\)]*)?)\)$`), true},
+		// Direct URLs
+		{"Direct image", regexp.MustCompile(`^https?://[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\s]*)?$`), true},
+		{"Direct video", regexp.MustCompile(`^https?://[^\s]+\.(?:mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?[^\s]*)?$`), true},
 	}
 	
-	var allImageURLs []string
-	foundPatterns := make(map[string]bool)
-	
-	// Try each pattern to find images
-	for _, p := range imagePatterns {
-		matches := p.pattern.FindAllStringSubmatch(content, -1)
-		if len(matches) > 0 {
-			foundPatterns[p.name] = true
-			for _, match := range matches {
-				if len(match) >= 2 {
-					imageURL := match[1]
-					// Check for duplicates
-					isDuplicate := false
-					for _, existing := range allImageURLs {
-						if existing == imageURL {
-							isDuplicate = true
-							break
-						}
-					}
-					if !isDuplicate {
-						allImageURLs = append(allImageURLs, imageURL)
-						// Remove the entire match from clean text
-						cleanText = strings.ReplaceAll(cleanText, match[0], "")
-					}
-				}
+	// Process line by line to maintain order
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" {
+			// Keep empty lines in text blocks
+			if len(currentTextBlock) > 0 {
+				currentTextBlock = append(currentTextBlock, "")
 			}
+			continue
+		}
+		
+		mediaFound := false
+		
+		// Check if this line is a media reference
+		for _, p := range imagePatterns {
+			if matches := p.pattern.FindStringSubmatch(trimmedLine); len(matches) > 0 {
+				// Flush any accumulated text before adding media
+				if len(currentTextBlock) > 0 {
+					textContent := strings.TrimSpace(strings.Join(currentTextBlock, "\n"))
+					if textContent != "" {
+						parts = append(parts, AIResponsePart{
+							Type:    "text",
+							Content: textContent,
+						})
+					}
+					currentTextBlock = []string{}
+				}
+				
+				// Add the media
+				mediaURL := matches[1]
+				mediaType := "image"
+				
+				// Determine media type
+				if strings.Contains(strings.ToLower(p.name), "video") ||
+				   strings.Contains(mediaURL, ".mp4") ||
+				   strings.Contains(mediaURL, ".avi") ||
+				   strings.Contains(mediaURL, ".mov") ||
+				   strings.Contains(mediaURL, ".webm") {
+					mediaType = "video"
+				}
+				
+				parts = append(parts, AIResponsePart{
+					Type:    mediaType,
+					Content: mediaURL,
+				})
+				
+				mediaFound = true
+				break
+			}
+		}
+		
+		// If not media, add to current text block
+		if !mediaFound {
+			currentTextBlock = append(currentTextBlock, trimmedLine)
 		}
 	}
 	
-	// Also check for video patterns
-	videoPatterns := []string{
-		`(?i)Video\s*\d*\s*:\s*\[(https?://[^\]]+)\]`,
-		`https?://[^\s\[\]\(\)<>]+\.(?:mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?[^\s\[\]\(\)<>]*)?`,
-	}
-	
-	for _, pattern := range videoPatterns {
-		re := regexp.MustCompile(pattern)
-		matches := re.FindAllStringSubmatch(content, -1)
-		for _, match := range matches {
-			if len(match) >= 2 {
-				videoURL := match[1]
-				if videoURL == "" && len(match) >= 1 {
-					videoURL = match[0]
-				}
-				// Check for duplicates
-				isDuplicate := false
-				for _, existing := range allImageURLs {
-					if existing == videoURL {
-						isDuplicate = true
-						break
-					}
-				}
-				if !isDuplicate {
-					// Add as video type
-					parts = append(parts, AIResponsePart{
-						Type:    "video",
-						Content: videoURL,
-					})
-					cleanText = strings.ReplaceAll(cleanText, match[0], "")
-				}
-			}
+	// Flush any remaining text
+	if len(currentTextBlock) > 0 {
+		textContent := strings.TrimSpace(strings.Join(currentTextBlock, "\n"))
+		if textContent != "" {
+			parts = append(parts, AIResponsePart{
+				Type:    "text",
+				Content: textContent,
+			})
 		}
 	}
 	
-	// Clean up the text
-	cleanText = strings.TrimSpace(cleanText)
-	// Remove multiple blank lines
-	cleanText = regexp.MustCompile(`\n\s*\n\s*\n+`).ReplaceAllString(cleanText, "\n\n")
-	// Remove orphaned punctuation or numbering
-	cleanText = regexp.MustCompile(`(?m)^\s*\d+[\.\)]\s*$`).ReplaceAllString(cleanText, "")
-	cleanText = regexp.MustCompile(`(?m)^\s*[\*\-]\s*$`).ReplaceAllString(cleanText, "")
-	cleanText = strings.TrimSpace(cleanText)
-	
-	// Build response parts
-	if cleanText != "" {
-		parts = append([]AIResponsePart{{Type: "text", Content: cleanText}}, parts...)
+	// Build clean text (text parts only, for saving to database)
+	var cleanTextParts []string
+	for _, part := range parts {
+		if part.Type == "text" {
+			cleanTextParts = append(cleanTextParts, part.Content)
+		}
 	}
-	
-	// Add all found images
-	for _, imageURL := range allImageURLs {
-		parts = append(parts, AIResponsePart{
-			Type:    "image",
-			Content: imageURL,
-		})
-	}
+	cleanText := strings.Join(cleanTextParts, "\n\n")
 	
 	// Log what we found
-	if len(allImageURLs) > 0 || len(parts) > 0 {
+	if len(parts) > 0 {
+		var mediaCount int
+		for _, p := range parts {
+			if p.Type != "text" {
+				mediaCount++
+			}
+		}
 		logrus.WithFields(logrus.Fields{
-			"patterns_matched": foundPatterns,
-			"images_found": len(allImageURLs),
 			"total_parts": len(parts),
-		}).Info("🔍 AI_PROCESSOR: Extracted media from plain text")
+			"media_count": mediaCount,
+			"text_parts": len(parts) - mediaCount,
+		}).Info("🔍 AI_PROCESSOR: Extracted and ordered content from plain text")
 	}
 	
 	return parts, cleanText

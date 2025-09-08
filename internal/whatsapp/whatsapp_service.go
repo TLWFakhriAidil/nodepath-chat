@@ -468,43 +468,28 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 
 		// Save bot response to conversation history (single save point for bot response)
 		if response != "" {
-			logrus.WithFields(logrus.Fields{
-				"phone_number": phoneNumber,
-				"response":     response,
-			}).Info("✅ FLOW: Response sent successfully")
-
-			// Add bot response to conversation
-			logrus.WithFields(logrus.Fields{
-				"execution_id": aiExecution.IDProspect,
-				"message_type": "BOT",
-				"response":     response,
-			}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
-
-			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
-			if err != nil {
-				logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
-			} else {
-				logrus.WithField("execution_id", aiExecution.IDProspect).Info("✅ FLOW: Bot response added to ai_whatsapp_nodepath successfully")
+			// Build clean response from processed messages (text only, no media URLs)
+			cleanResponse := response
+			
+			// If we processed the response, use the clean version
+			_, messages, err := services.ProcessAIResponsePHP(response, 0)
+			if err == nil && len(messages) > 0 {
+				cleanResponse = services.BuildCleanResponse(messages)
 			}
-		} else {
-			logrus.WithField("execution_id", aiExecution.IDProspect).Info("🔇 FLOW: Skipping conversation logging for empty response")
-		}
-
-		// Save bot response to conversation history (single save point for bot response)
-		if response != "" {
+			
 			logrus.WithFields(logrus.Fields{
 				"phone_number": phoneNumber,
-				"response":     response,
+				"clean_response": cleanResponse,
 			}).Info("✅ FLOW: Response sent successfully")
 
 			// Add bot response to conversation
 			logrus.WithFields(logrus.Fields{
 				"execution_id": aiExecution.IDProspect,
 				"message_type": "BOT",
-				"response":     response,
+				"response":     cleanResponse,
 			}).Info("💬 FLOW: Adding bot response to ai_whatsapp_nodepath")
 
-			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
+			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", cleanResponse, "")
 			if err != nil {
 				logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
 			} else {
@@ -2268,7 +2253,7 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 					"index":          i,
 					"type":           msg.Type,
 					"content_length": len(msg.Content),
-				}).Info("📤 ")
+				}).Info("📤 USER_REPLY: Sending processed message")
 
 				if msg.Type == "text" {
 					err = s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, msg.Content)
@@ -2291,8 +2276,9 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 				}
 			}
 
-			// Save the complete response to conversation history
-			err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", response, "")
+			// Save the CLEAN response to conversation history (text only, no media URLs)
+			cleanResponse := services.BuildCleanResponse(messages)
+			err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", cleanResponse, "")
 			if err != nil {
 				logrus.WithError(err).Error("❌ USER_REPLY: Failed to save bot response to conversation")
 			}
