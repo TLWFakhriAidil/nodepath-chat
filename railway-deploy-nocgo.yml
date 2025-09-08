@@ -1,0 +1,99 @@
+# Railway deployment configuration for CGO-free Go builds
+# This ensures the application builds and runs without CGO dependencies
+
+name: nodepath-chat-nocgo
+
+build:
+  # Use Dockerfile for consistent builds
+  builder: dockerfile
+  
+  # Build environment variables
+  env:
+    CGO_ENABLED: "0"
+    GOOS: linux
+    GOARCH: amd64
+    GO111MODULE: "on"
+
+deploy:
+  # Health check configuration
+  healthcheck:
+    path: "/health"
+    timeout: 30s
+    interval: 30s
+    retries: 3
+  
+  # Restart policy
+  restart_policy:
+    type: on_failure
+    max_retries: 10
+  
+  # Resource limits for high performance
+  resources:
+    memory: 1024Mi
+    cpu: 1000m
+  
+  # Environment variables
+  env:
+    PORT: "8080"
+    APP_ENV: "production"
+    CGO_ENABLED: "0"
+
+# Service configuration
+services:
+  web:
+    port: 8080
+    protocol: http
+    
+    # Concurrency settings for 3000+ devices
+    concurrency:
+      type: connections
+      hard_limit: 100
+      soft_limit: 80
+    
+    # Auto-scaling configuration
+    autoscaling:
+      min_replicas: 2
+      max_replicas: 10
+      target_cpu: 70
+      target_memory: 80
+
+# Database configuration
+database:
+  # Use existing MySQL database
+  type: mysql
+  version: "5.7"
+  
+# Monitoring and logging
+monitoring:
+  enabled: true
+  metrics:
+    - cpu
+    - memory
+    - network
+    - database_connections
+  
+  alerts:
+    - type: cpu
+      threshold: 80
+    - type: memory
+      threshold: 85
+    - type: response_time
+      threshold: 2000ms
+
+# Performance optimizations
+optimizations:
+  # Enable HTTP/2
+  http2: true
+  
+  # Enable compression
+  compression: true
+  
+  # Connection pooling
+  connection_pool:
+    max_connections: 100
+    idle_timeout: 30s
+    
+  # Caching
+  cache:
+    enabled: true
+    ttl: 300s

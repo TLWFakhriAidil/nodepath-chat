@@ -4,6 +4,25 @@ A comprehensive full-stack WhatsApp AI chatbot platform with visual flow builder
 
 **Live Demo**: https://nodepath-chat-production.up.railway.app/
 
+## 🚀 CGO-Free Deployment
+
+The application is optimized for **CGO-free deployment** on Railway platform, ensuring:
+- ✅ **No C dependencies** - Faster builds and better compatibility
+- ✅ **Static binaries** - Reduced deployment size and improved security
+- ✅ **Railway optimized** - Configured for Railway's containerized environment
+- ✅ **High performance** - Handles 3000+ concurrent devices efficiently
+
+### Quick Deployment Test
+```bash
+# Test CGO-free build (Linux/macOS)
+bash test-nocgo.sh
+
+# Test CGO-free build (Windows)
+powershell -ExecutionPolicy Bypass -File test-nocgo.ps1
+```
+
+See [DEPLOYMENT-NOCGO.md](./DEPLOYMENT-NOCGO.md) for detailed deployment guide.
+
 ## 🏗️ System Architecture Overview
 
 ### Technology Stack

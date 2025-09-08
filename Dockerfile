@@ -26,8 +26,14 @@ RUN npm run build
 # Backend build stage
 FROM golang:1.24-alpine AS backend-builder
 
-# Install build dependencies
-RUN apk add --no-cache git build-base ca-certificates
+# Install minimal dependencies for CGO-free builds
+RUN apk add --no-cache git ca-certificates tzdata
+
+# Set CGO environment variables for static builds
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=amd64
+ENV GO111MODULE=on
 
 # Set working directory
 WORKDIR /src
@@ -41,14 +47,14 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/server ./cmd/server
+# Build the application with static linking
+RUN go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /app/bin/server ./cmd/server
 
-# Build migration utility
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/migrate ./debug/fix_production_schema.go
+# Build migration utility with static linking
+RUN go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /app/bin/migrate ./debug/fix_production_schema.go
 
-# Build the Railway migration runner
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/railway_migration_runner ./debug/railway_migration_runner.go
+# Build the Railway migration runner with static linking
+RUN go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /app/bin/railway_migration_runner ./debug/railway_migration_runner.go
 
 # Final stage
 FROM alpine:latest
