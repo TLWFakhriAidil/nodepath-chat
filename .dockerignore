@@ -54,9 +54,71 @@ test-*.sh
 # Test files
 *_test.go
 test-*
+test-build
+test-server
+test-migrate
+test-railway-migration
+
+# Debug files (exclude most debug scripts to reduce context size)
+debug/*.go
+!debug/fix_production_schema.go
+!debug/railway_migration_runner.go
+
+# Media and large files
+media/
+whatsapp_sessions/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+*.svg
+*.ico
+
+# Database files
+*.sql
+!production_fix_jam_column.sql
 
 # Development folders
 New folder
 supabase
+bun.lockb
+
+# Large dependency files
+package-lock.json
+
+# Backup and temporary files
+*.bak
+*.backup
+*.tmp
+*.temp
+
+# Analysis and documentation files
+*.md
+*.txt
+!README.md
+ANALYTICS_*.md
+RAILWAY_*.md
+LOCAL_*.md
+INTEGRATION_*.md
+FINAL_*.md
+CONDITION_*.txt
+WAHA_*.txt
+WAHA_*.go
+
+# PHP files (not needed for Go backend)
+*.php
+
+# Additional build artifacts
+bin/
+main
+server
+
 # public - commented out because we need it for the Docker build
 # src - commented out because we need it for the Docker build
