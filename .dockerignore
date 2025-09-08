@@ -91,7 +91,7 @@ supabase
 bun.lockb
 
 # Large dependency files
-package-lock.json
+# package-lock.json (needed for Docker build)
 
 # Backup and temporary files
 *.bak

@@ -1078,6 +1078,7 @@ req.Header.Set("X-Api-Key", deviceSettings.APIKey.String)
 - **Missing Import Fix**: Added missing `bytes` package import in `ai_cron_service.go` to resolve `undefined: bytes` error
 - **DeviceService Field Fix**: Corrected field reference from `h.DeviceService.GetDeviceSettingsByID()` to `h.deviceSettingsService.GetByIDDevice()` in `device_settings_handlers.go`
 - **Database IP Configuration**: Updated MYSQL_URI from `159.89.198.71` to `157.245.206.124` in `.env` file for correct database server connection
+- **🔧 npm ci Build Fix**: Resolved Railway Docker build failure by including `package-lock.json` in build context
 
 #### 🎯 Benefits:
 - **Successful Railway Deployment**: Fixed Docker build process for Railway platform
@@ -1087,6 +1088,42 @@ req.Header.Set("X-Api-Key", deviceSettings.APIKey.String)
 - **WAHA API Integration**: Resolved build errors preventing WAHA multimedia messaging functionality
 - **Handler Functionality**: Fixed device settings handlers for proper WAHA device status checking
 - **Database Connectivity**: Established proper database connection using correct IP address for reliable data operations
+- **Frontend Build Success**: Fixed npm ci dependency installation in Docker frontend-builder stage
+
+### 🔧 npm ci Build Fix - Railway Docker Frontend
+**Date**: Current Session
+
+#### 🚨 Problem Identified:
+```
+npm error The `npm ci` command can only install with an existing package-lock.json or
+npm error npm-shrinkwrap.json with lockfileVersion >= 1. Run an install with npm@5 or
+npm error later to generate a package-lock.json file, then try again.
+```
+
+#### 🔍 Root Cause Analysis:
+- **Issue**: `package-lock.json` was excluded in `.dockerignore` file
+- **Conflict**: Project uses both `bun.lockb` (local development) and `package-lock.json` (Docker build)
+- **Impact**: Railway Docker build failed at frontend-builder stage during `npm ci` execution
+- **Location**: `.dockerignore` line 94 under "Large dependency files" section
+
+#### ✅ Solution Implemented:
+1. **Modified `.dockerignore`**: Commented out `package-lock.json` exclusion
+2. **Build Context Fix**: Ensured `package-lock.json` is available during Docker build
+3. **Local Testing**: Verified Docker build completes successfully with `docker build -t nodepath-chat-test .`
+4. **Repository Update**: Committed fix and pushed to trigger Railway deployment
+
+#### 🎯 Technical Details:
+- **File Modified**: `.dockerignore` (line 94)
+- **Change**: `package-lock.json` → `# package-lock.json (needed for Docker build)`
+- **Build Stage**: frontend-builder (Dockerfile lines 8-12)
+- **Command Fixed**: `RUN npm ci` now has access to required lockfile
+- **Deployment**: Railway will automatically rebuild with fixed configuration
+
+#### 🚀 Deployment Status:
+- **Local Build**: ✅ Successful (`docker build` exits with code 0)
+- **Repository**: ✅ Changes committed and pushed
+- **Railway**: 🔄 Automatic deployment triggered
+- **Frontend**: ✅ npm ci dependency installation now works
 
 ### 🗄️ Database Schema Migration: ID Staff to ID Device (Complete)
 **Date**: Current Session
