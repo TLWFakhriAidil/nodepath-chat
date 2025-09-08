@@ -469,18 +469,30 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 					}
 				}
 				
-				// Save EACH message to conversation history separately (including media URLs)
+				// Save EACH message to conversation history separately
+				// Format the save based on message type to match PHP behavior
 				if sendSuccess {
-					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", msg.Content, "")
+					var saveContent string
+					
+					// Format based on type (matching PHP format)
+					if msg.Type == "text" {
+						// For text, save as-is
+						saveContent = msg.Content
+					} else {
+						// For media (image/video/audio), save just the URL
+						saveContent = msg.Content
+					}
+					
+					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", saveContent, "")
 					if err != nil {
 						logrus.WithError(err).WithFields(logrus.Fields{
 							"type": msg.Type,
-							"content": msg.Content,
+							"content": saveContent,
 						}).Error("❌ FLOW: Failed to save message to conversation")
 					} else {
 						logrus.WithFields(logrus.Fields{
 							"type": msg.Type,
-							"saved": msg.Content,
+							"saved": saveContent,
 						}).Debug("✅ FLOW: Saved message to conversation")
 					}
 				}
@@ -2272,19 +2284,30 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 					}
 				}
 				
-				// Save EACH message to conversation history separately (including media URLs)
-				// This matches what was actually sent to the user
+				// Save EACH message to conversation history separately
+				// Format the save based on message type to match PHP behavior
 				if sendSuccess {
-					err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", msg.Content, "")
+					var saveContent string
+					
+					// Format based on type (matching PHP format)
+					if msg.Type == "text" {
+						// For text, save as-is
+						saveContent = msg.Content
+					} else {
+						// For media (image/video/audio), save just the URL
+						saveContent = msg.Content
+					}
+					
+					err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", saveContent, "")
 					if err != nil {
 						logrus.WithError(err).WithFields(logrus.Fields{
 							"type": msg.Type,
-							"content": msg.Content,
+							"content": saveContent,
 						}).Error("❌ USER_REPLY: Failed to save message to conversation")
 					} else {
 						logrus.WithFields(logrus.Fields{
 							"type": msg.Type,
-							"saved": msg.Content,
+							"saved": saveContent,
 						}).Debug("✅ USER_REPLY: Saved message to conversation")
 					}
 				}
