@@ -123,7 +123,12 @@ const AIWhatsappDataTable = () => {
         params.append('user_device_ids', device_ids.join(','));
       }
       
-      const response = await fetch(`/api/ai-whatsapp/ai-whatsapp/data?${params}`);
+      const response = await fetch(`/api/ai-whatsapp/ai/ai-whatsapp/data?${params}`, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
