@@ -338,7 +338,12 @@ func (s *aiCronService) executeFollowUp(prospectNum, message string) {
 	}
 
 	// Process the follow-up message through AI service
-	_, err = s.aiWhatsappService.ProcessAIConversation(prospectNum, deviceID, message, aiConv.Stage)
+	// Get stage value from NullString
+	stage := ""
+	if aiConv.Stage.Valid {
+		stage = aiConv.Stage.String
+	}
+	_, err = s.aiWhatsappService.ProcessAIConversation(prospectNum, deviceID, message, stage)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process follow-up message")
 		return
@@ -462,11 +467,16 @@ func (s *aiCronService) processConversation(conv models.AIWhatsapp) error {
 	}
 
 	// Process AI conversation
+	// Get stage value from NullString
+	stage := ""
+	if conv.Stage.Valid {
+		stage = conv.Stage.String
+	}
 	response, err := s.aiWhatsappService.ProcessAIConversation(
 		conv.ProspectNum,
 		conv.IDDevice,
 		currentText,
-		conv.Stage,
+		stage,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to process AI conversation: %w", err)

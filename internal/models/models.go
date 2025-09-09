@@ -195,7 +195,7 @@ type AIWhatsapp struct {
 	IDProspect      int             `json:"id_prospect" db:"id_prospect"`
 	IDDevice        string          `json:"id_device" db:"id_device"`
 	ProspectNum     string          `json:"prospect_num" db:"prospect_num"`
-	Stage           string          `json:"stage" db:"stage"`
+	Stage           sql.NullString  `json:"stage" db:"stage"`
 	DateOrder       *time.Time      `json:"date_order" db:"date_order"`
 	ConvLast        json.RawMessage `json:"conv_last" db:"conv_last"`
 	ConvCurrent     sql.NullString  `json:"conv_current" db:"conv_current"`
@@ -205,7 +205,7 @@ type AIWhatsapp struct {
 	CatatanStaff    string          `json:"catatan_staff" db:"catatan_staff"`
 	Balas           string          `json:"balas" db:"balas"` // Timestamp for throttling
 	DataImage       string          `json:"data_image" db:"data_image"`
-	ConvStage       string          `json:"conv_stage" db:"conv_stage"`
+	ConvStage       sql.NullString  `json:"conv_stage" db:"conv_stage"`
 	Niche           string          `json:"niche" db:"niche"`
 	BotBalas        *time.Time      `json:"bot_balas" db:"bot_balas"`
 	KeywordIklan    string          `json:"keywordiklan" db:"keywordiklan"`
@@ -235,7 +235,7 @@ type ConversationLog struct {
 	IDDevice    string    `json:"id_device" db:"id_device"`
 	Message     string    `json:"message" db:"message"`
 	Sender      string    `json:"sender" db:"sender"` // 'user' or 'bot'
-	Stage       string    `json:"stage" db:"stage"`
+	Stage       sql.NullString `json:"stage" db:"stage"`
 	Timestamp   time.Time `json:"timestamp" db:"timestamp"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -739,7 +740,7 @@ func (h *AIWhatsappHandlers) StartAIConversation(c *fiber.Ctx) error {
 	aiWhatsapp := &models.AIWhatsapp{
 		ProspectNum: req.ProspectNum,
 		IDDevice:    req.IDDevice,
-		Stage:       req.Stage,
+		Stage:       sql.NullString{String: req.Stage, Valid: req.Stage != ""},
 		Human:       0, // AI active by default
 		Niche:       req.Niche,
 	}
@@ -1000,8 +1001,8 @@ func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, device
 	}
 
 	var stage string
-	if aiConv != nil {
-		stage = aiConv.Stage
+	if aiConv != nil && aiConv.Stage.Valid {
+		stage = aiConv.Stage.String
 	}
 
 	// Process AI conversation

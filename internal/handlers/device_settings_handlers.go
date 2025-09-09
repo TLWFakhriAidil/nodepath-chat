@@ -1827,7 +1827,9 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider strin
 				"error": err.Error(),
 			}).Warn("⚠️ WEBHOOK: Failed to get AI conversation stage")
 		} else if aiConv != nil {
-			stage = aiConv.Stage
+			if aiConv.Stage.Valid {
+				stage = aiConv.Stage.String
+			}
 			logrus.WithFields(logrus.Fields{
 				"id_device": idDevice,
 				"from": from,

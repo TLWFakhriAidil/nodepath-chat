@@ -279,7 +279,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		newAIConv := &models.AIWhatsapp{
 			IDDevice:    idDevice, // Use idDevice for device identification
 			ProspectNum: prospectNum,
-			Stage:       initialStage,
+			Stage:       sql.NullString{String: initialStage, Valid: initialStage != ""},
 			Human:       0,         // AI is active by default
 			Niche:       niche,
 			DateOrder:   &now,
@@ -429,7 +429,7 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		}
 		// Also update the AIWhatsapp record
 		if aiConv != nil {
-			aiConv.Stage = parsedResponse.Stage
+			aiConv.Stage = sql.NullString{String: parsedResponse.Stage, Valid: parsedResponse.Stage != ""}
 			s.aiRepo.UpdateAIWhatsapp(aiConv)
 		}
 	}
@@ -549,7 +549,7 @@ func (s *aiWhatsappService) UpdateConversationStage(prospectNum, stage string) e
 		return fmt.Errorf("conversation not found for prospect: %s", prospectNum)
 	}
 	
-	aiConv.Stage = stage
+	aiConv.Stage = sql.NullString{String: stage, Valid: stage != ""}
 	return s.aiRepo.UpdateAIWhatsapp(aiConv)
 }
 
@@ -560,7 +560,7 @@ func (s *aiWhatsappService) LogConversation(prospectNum string, idDevice string,
 		IDDevice:    idDevice,
 		Message:     message,
 		Sender:      sender,
-		Stage:       stage,
+		Stage:       sql.NullString{String: stage, Valid: stage != ""},
 	}
 
 	return s.aiRepo.CreateConversationLog(convLog)
@@ -1145,7 +1145,7 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		newAIConv := &models.AIWhatsapp{
 			IDDevice:    idDevice,
 			ProspectNum: prospectNum,
-			Stage:       "welcome", // Default initial stage
+			Stage:       sql.NullString{String: "welcome", Valid: true}, // Default initial stage
 			Human:       0,         // AI is active by default
 			Niche:       niche,
 			DateOrder:   &now,
@@ -1285,7 +1285,7 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 		aiConv = &models.AIWhatsapp{
 			IDDevice:        idDevice,
 			ProspectNum:     prospectNum,
-			Stage:           "flow_start",
+			Stage:           sql.NullString{String: "flow_start", Valid: true},
 			Human:           0,
 			DateOrder:       &now,
 			Intro:           flowIntro,  // Set intro from flow data
