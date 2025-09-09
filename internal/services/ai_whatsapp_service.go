@@ -46,6 +46,9 @@ type AIWhatsappService interface {
 	// Update conversation stage
 	UpdateConversationStage(prospectNum, stage string) error
 	
+	// Update stage in database for AI response tracking
+	UpdateStage(phoneNumber, deviceID, stage string) error
+	
 	// Log conversation
 	LogConversation(prospectNum string, idDevice string, message, sender, stage string) error
 	
@@ -1574,4 +1577,46 @@ func (s *aiWhatsappService) recordAPIFailure() {
 // Used by other services that need to call repository methods directly
 func (s *aiWhatsappService) GetRepository() repository.AIWhatsappRepository {
 	return s.aiRepo
+}
+
+// UpdateStage updates the stage field in ai_whatsapp_nodepath
+func (s *aiWhatsappService) UpdateStage(phoneNumber, deviceID, stage string) error {
+	// Get active execution
+	execution, err := s.GetActiveFlowExecution(phoneNumber, deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to get active execution: %w", err)
+	}
+	
+	if execution == nil {
+		// No active execution, try to update by phone number and device ID
+		query := `UPDATE ai_whatsapp_nodepath SET stage = ? WHERE prospect_num = ? AND id_device = ? ORDER BY id DESC LIMIT 1`
+		result, err := s.aiRepo.GetDB().Exec(query, stage, phoneNumber, deviceID)
+		if err != nil {
+			return fmt.Errorf("failed to update stage: %w", err)
+		}
+		
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected > 0 {
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id": deviceID,
+				"stage": stage,
+			}).Info("✅ Updated stage in ai_whatsapp_nodepath")
+		}
+		return nil
+	}
+	
+	// Update stage for active execution
+	query := `UPDATE ai_whatsapp_nodepath SET stage = ? WHERE execution_id = ?`
+	_, err = s.aiRepo.GetDB().Exec(query, stage, execution.ExecutionID.String)
+	if err != nil {
+		return fmt.Errorf("failed to update stage for execution: %w", err)
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"execution_id": execution.ExecutionID.String,
+		"stage": stage,
+	}).Info("✅ Updated stage for flow execution")
+	
+	return nil
 }

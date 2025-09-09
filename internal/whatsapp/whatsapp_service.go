@@ -425,7 +425,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 		}).Info("🔇 FLOW: Skipping empty response to prevent <nil> message")
 	} else {
 		// Process AI response using PHP-compatible logic
-		_, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
+		stage, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
 		if err != nil {
 			logrus.WithError(err).Error("Failed to process AI response")
 			// Fallback to sending as plain text
@@ -440,6 +440,20 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 				logrus.WithError(err).Error("❌ FLOW: Failed to save fallback response to conversation")
 			}
 		} else {
+			// Save the stage if we got one
+			if stage != "" {
+				logrus.WithFields(logrus.Fields{
+					"phone_number": phoneNumber,
+					"device_id":    deviceID,
+					"stage":        stage,
+				}).Info("📋 FLOW: Saving AI stage to database")
+				
+				// Update the stage in ai_whatsapp_nodepath
+				err = s.aiWhatsappService.UpdateStage(phoneNumber, deviceID, stage)
+				if err != nil {
+					logrus.WithError(err).WithField("stage", stage).Error("❌ FLOW: Failed to update stage")
+				}
+			}
 			// Send each processed message and save EACH ONE separately
 			for i, msg := range messages {
 				logrus.WithFields(logrus.Fields{
@@ -2240,7 +2254,7 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 		}).Info("📤 USER_REPLY: Sending response after flow resume")
 
 		// Process AI response using PHP-compatible logic
-		_, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
+		stage, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
 		if err != nil {
 			logrus.WithError(err).Error("Failed to process AI response")
 			// Fallback to sending as plain text
@@ -2255,6 +2269,19 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 				logrus.WithError(err).Error("❌ USER_REPLY: Failed to save bot response to conversation")
 			}
 		} else {
+			// Save the stage if we got one
+			if stage != "" {
+				logrus.WithFields(logrus.Fields{
+					"execution_id": execution.ExecutionID.String,
+					"stage":        stage,
+				}).Info("📋 USER_REPLY: Saving AI stage to database")
+				
+				// Update the stage in ai_whatsapp_nodepath
+				err = s.aiWhatsappService.UpdateStage(execution.ProspectNum, execution.IDDevice, stage)
+				if err != nil {
+					logrus.WithError(err).WithField("stage", stage).Error("❌ USER_REPLY: Failed to update stage")
+				}
+			}
 			// Send each processed message and save EACH ONE to conversation history
 			for i, msg := range messages {
 				logrus.WithFields(logrus.Fields{
