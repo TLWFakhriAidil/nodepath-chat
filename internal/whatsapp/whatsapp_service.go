@@ -497,7 +497,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 						saveContent = msg.Content
 					}
 					
-					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", saveContent, "")
+					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", saveContent, stage)
 					if err != nil {
 						logrus.WithError(err).WithFields(logrus.Fields{
 							"type": msg.Type,
@@ -2325,7 +2325,7 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 						saveContent = msg.Content
 					}
 					
-					err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", saveContent, "")
+					err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", saveContent, stage)
 					if err != nil {
 						logrus.WithError(err).WithFields(logrus.Fields{
 							"type": msg.Type,
