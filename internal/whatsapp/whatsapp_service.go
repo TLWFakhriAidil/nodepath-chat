@@ -1040,6 +1040,57 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	// Replace variables in system prompt
 	originalSystemPrompt := systemPrompt
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
+	
+	// STANDARDIZED: Add the standardized format from PHP to the AI nodes prompt
+	systemPrompt = systemPrompt + "\n\n" +
+		"### Instructions:\n" +
+		"1. If the current stage is null or undefined, default to the first stage.\n" +
+		"2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" +
+		"3. Follow all rules and steps strictly. Do not skip or ignore any rules or instructions.\n\n" +
+		"4. **Do not repeat the same sentences or phrases that have been used in the recent conversation history.**\n" +
+		"5. If the input contains the phrase \"I want this section in add response format [onemessage]\":\n" +
+		"   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" +
+		"   - The `Jenis` field is only added to `text` types within the `Response` array.\n" +
+		"   - If the directive is not present, omit the `Jenis` field entirely.\n\n" +
+		"### Response Format:\n" +
+		"{\n" +
+		"  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the first response message here.\"},\n" +
+		"    {\"type\": \"image\", \"content\": \"https://example.com/image1.jpg\"},\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the second response message here.\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"### Example Response:\n" +
+		"// If the directive is present\n" +
+		"{\n" +
+		"  \"Stage\": \"Problem Identification\",\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"// If the directive is NOT present\n" +
+		"{\n" +
+		"  \"Stage\": \"Problem Identification\",\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
+		"    {\"type\": \"text\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"### Important Rules:\n" +
+		"1. **Include the `Stage` field in every response**:\n" +
+		"   - The `Stage` field must explicitly specify the current stage.\n" +
+		"   - If the stage is unclear or missing, default to first stage.\n\n" +
+		"2. **Use the Correct Response Format**:\n" +
+		"   - Divide long responses into multiple short \"text\" segments for better readability.\n" +
+		"   - Include all relevant images provided in the input, interspersed naturally with text responses.\n" +
+		"   - If multiple images are provided, create separate `image` entries for each.\n\n" +
+		"3. **Dynamic Field for [onemessage]**:\n" +
+		"   - If the input specifies \"I want this section in add response format [onemessage]\":\n" +
+		"      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" +
+		"   - If the directive is not present, omit the `Jenis` field entirely.\n" +
+		"   - Non-text types like `image` never include the `Jenis` field.\n\n"
 
 	// 🔍 DEBUG TRACE: Log variable replacement
 	logrus.WithFields(logrus.Fields{
@@ -1295,6 +1346,57 @@ func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, executio
 	// Replace variables in system prompt
 	originalSystemPrompt := systemPrompt
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
+	
+	// STANDARDIZED: Add the standardized format from PHP to the AI nodes prompt
+	systemPrompt = systemPrompt + "\n\n" +
+		"### Instructions:\n" +
+		"1. If the current stage is null or undefined, default to the first stage.\n" +
+		"2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" +
+		"3. Follow all rules and steps strictly. Do not skip or ignore any rules or instructions.\n\n" +
+		"4. **Do not repeat the same sentences or phrases that have been used in the recent conversation history.**\n" +
+		"5. If the input contains the phrase \"I want this section in add response format [onemessage]\":\n" +
+		"   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" +
+		"   - The `Jenis` field is only added to `text` types within the `Response` array.\n" +
+		"   - If the directive is not present, omit the `Jenis` field entirely.\n\n" +
+		"### Response Format:\n" +
+		"{\n" +
+		"  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the first response message here.\"},\n" +
+		"    {\"type\": \"image\", \"content\": \"https://example.com/image1.jpg\"},\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the second response message here.\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"### Example Response:\n" +
+		"// If the directive is present\n" +
+		"{\n" +
+		"  \"Stage\": \"Problem Identification\",\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
+		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"// If the directive is NOT present\n" +
+		"{\n" +
+		"  \"Stage\": \"Problem Identification\",\n" +
+		"  \"Response\": [\n" +
+		"    {\"type\": \"text\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
+		"    {\"type\": \"text\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
+		"  ]\n" +
+		"}\n\n" +
+		"### Important Rules:\n" +
+		"1. **Include the `Stage` field in every response**:\n" +
+		"   - The `Stage` field must explicitly specify the current stage.\n" +
+		"   - If the stage is unclear or missing, default to first stage.\n\n" +
+		"2. **Use the Correct Response Format**:\n" +
+		"   - Divide long responses into multiple short \"text\" segments for better readability.\n" +
+		"   - Include all relevant images provided in the input, interspersed naturally with text responses.\n" +
+		"   - If multiple images are provided, create separate `image` entries for each.\n\n" +
+		"3. **Dynamic Field for [onemessage]**:\n" +
+		"   - If the input specifies \"I want this section in add response format [onemessage]\":\n" +
+		"      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" +
+		"   - If the directive is not present, omit the `Jenis` field entirely.\n" +
+		"   - Non-text types like `image` never include the `Jenis` field.\n\n"
 
 	// 🔍 DEBUG TRACE: Log variable replacement for advanced AI prompt
 	logrus.WithFields(logrus.Fields{

@@ -300,14 +300,15 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		}).Info("New prospect record created successfully")
 	}
 
-	// Get AI settings
-	var aiSettings *models.AISettings
-	if aiConv != nil {
-		aiSettings, err = s.GetAISettings(aiConv.IDDevice)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to get AI settings")
-			return nil, fmt.Errorf("failed to get AI settings: %w", err)
-		}
+	// STANDARDIZED: AI prompts MUST come from AI nodes only
+	// We no longer get AI settings from database, only from nodes
+	// For backward compatibility, we'll create empty settings
+	aiSettings := &models.AISettings{
+		ID:             "from_node",
+		IDDevice:       idDevice,
+		SystemPrompt:   "", // Must be provided by AI node
+		ClosingPrompt:  "",
+		InstancePrompt: "",
 	}
 
 	// Build AI prompt content
@@ -526,14 +527,14 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 
 // GetAISettings retrieves AI settings for a staff member
 func (s *aiWhatsappService) GetAISettings(idDevice string) (*models.AISettings, error) {
-	// For now, return a default AI settings since the method doesn't exist
-	// TODO: Implement GetAISettingsByStaff method in repository
+	// STANDARDIZED: AI settings should ONLY come from AI nodes prompt
+	// Return empty settings - the actual prompt will come from AI nodes
 	return &models.AISettings{
 		ID:             "default",
 		IDDevice:       idDevice,
-		SystemPrompt:   "You are a helpful AI assistant.",
-		ClosingPrompt:  "Thank you for using our service.",
-		InstancePrompt: "Please provide more details.",
+		SystemPrompt:   "", // Empty - must come from AI nodes prompt only
+		ClosingPrompt:  "",
+		InstancePrompt: "",
 	}, nil
 }
 
@@ -649,22 +650,20 @@ func (s *aiWhatsappService) ProcessDeviceCommand(prospectNum, command, idDevice 
 
 // buildAIPromptContent builds the AI prompt content according to custom instructions
 func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, stage string) string {
-	var systemPrompt string
-	if aiSettings != nil {
-		systemPrompt = aiSettings.SystemPrompt
+	// STANDARDIZED: AI prompt MUST come from AI nodes prompt ONLY
+	// No other sources allowed
+	var ainodesprompt string
+	if aiSettings != nil && aiSettings.SystemPrompt != "" {
+		ainodesprompt = aiSettings.SystemPrompt
+	}
+	
+	// If no AI nodes prompt, return error message
+	if ainodesprompt == "" {
+		return "ERROR: No AI nodes prompt configured. Please configure AI nodes prompt in the chatbot flow."
 	}
 
-	if systemPrompt == "" {
-		systemPrompt = "You are a helpful AI assistant for WhatsApp conversations."
-	}
-
-	// Build the complete prompt content according to the custom instructions
-	content := systemPrompt + "\n\n" +
-		"### CRITICAL: JSON FORMAT REQUIREMENT ###\n" +
-		"YOU MUST RESPOND ONLY IN VALID JSON FORMAT. NO EXCEPTIONS.\n" +
-		"DO NOT use bracket format like [IMAGE: URL] or plain text.\n" +
-		"DO NOT include any text outside the JSON structure.\n" +
-		"ALWAYS use the exact JSON format specified below.\n\n" +
+	// Build prompt exactly as PHP does
+	content := ainodesprompt + "\n\n" +
 		"### Instructions:\n" +
 		"1. If the current stage is null or undefined, default to the first stage.\n" +
 		"2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" +
@@ -674,7 +673,7 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 		"   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" +
 		"   - The `Jenis` field is only added to `text` types within the `Response` array.\n" +
 		"   - If the directive is not present, omit the `Jenis` field entirely.\n\n" +
-		"### MANDATORY JSON RESPONSE FORMAT:\n" +
+		"### Response Format:\n" +
 		"{\n" +
 		"  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" +
 		"  \"Response\": [\n" +
@@ -712,16 +711,7 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 		"   - If the input specifies \"I want this section in add response format [onemessage]\":\n" +
 		"      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" +
 		"   - If the directive is not present, omit the `Jenis` field entirely.\n" +
-		"   - Non-text types like `image` never include the `Jenis` field.\n\n" +
-		"### FINAL WARNING: JSON FORMAT ENFORCEMENT ###\n" +
-		"CRITICAL: Your response will be parsed as JSON. Any deviation from the exact format will cause system errors.\n" +
-		"- Start with { and end with }\n" +
-		"- Include Stage and Response fields exactly as shown\n" +
-		"- For images, use type: \"image\" with content: \"URL\"\n" +
-		"- NO bracket format like [IMAGE: URL] - this will break the system\n" +
-		"- NO plain text responses - only JSON\n" +
-		"- NO explanations outside the JSON structure\n" +
-		"RESPOND ONLY WITH VALID JSON. NOTHING ELSE.\n"
+		"   - Non-text types like `image` never include the `Jenis` field.\n\n"
 
 	return content
 }
