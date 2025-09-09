@@ -885,10 +885,8 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 	switch currentNode.Type {
 	case models.NodeTypeStart:
 		return s.processStartNode(flow, aiExecution, currentNode, userInput)
-	case models.NodeTypeAIPrompt, "prompt": // Handle both 'ai_prompt' and 'prompt' types
+	case models.NodeTypeAIPrompt, models.NodeTypeAdvancedAIPrompt, "prompt": // Handle all AI prompt types with one function
 		return s.processAIPromptNode(flow, aiExecution, currentNode, userInput)
-	case models.NodeTypeAdvancedAIPrompt:
-		return s.processAdvancedAIPromptNode(flow, aiExecution, currentNode, userInput)
 	case models.NodeTypeManual:
 		return s.processManualNode(flow, aiExecution, currentNode, userInput)
 	case models.NodeTypeMessage:
@@ -914,14 +912,16 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 	}
 }
 
-// processAIPromptNode processes an AI prompt node
+// processAIPromptNode processes all types of AI prompt nodes (ai_prompt, advanced_ai_prompt, prompt)
+// This is the SINGLE standardized function for ALL AI processing nodes
 func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	logrus.WithFields(logrus.Fields{
 		"node_id":      node.ID,
+		"node_type":    node.Type,
 		"user_input":   userInput,
 		"prospect_num": execution.ProspectNum,
 		"id_device":    execution.IDDevice,
-	}).Info("🤖 AI_PROMPT: Processing AI prompt node")
+	}).Info("🤖 AI_PROMPT: Processing AI prompt node (standardized)")
 
 	// Get AI configuration from node data
 	var systemPrompt, instance, apiProvider string
@@ -936,32 +936,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	if inst, ok := node.Data["instance"].(string); ok {
 		instance = inst
 	}
+
 	if ap, ok := node.Data["apiprovider"].(string); ok {
 		apiProvider = ap
 	} else if ap, ok := node.Data["apiProvider"].(string); ok {
 		apiProvider = ap
 	}
-
-	// 🔍 DEBUG TRACE: Log extracted node data for debugging
-	logrus.WithFields(logrus.Fields{
-		"node_id":                        node.ID,
-		"extracted_system_prompt_length": len(systemPrompt),
-		"extracted_system_prompt_preview": func() string {
-			if len(systemPrompt) > 200 {
-				return systemPrompt[:200] + "..."
-			}
-			return systemPrompt
-		}(),
-		"extracted_instance":     instance,
-		"extracted_api_provider": apiProvider,
-		"node_data_keys": func() []string {
-			keys := make([]string, 0, len(node.Data))
-			for k := range node.Data {
-				keys = append(keys, k)
-			}
-			return keys
-		}(),
-	}).Info("🔍 AI_PROMPT_DEBUG: Extracted node configuration")
 
 	// Get device settings for fallback values
 	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(execution.IDDevice)
@@ -979,32 +959,6 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		apiProvider = deviceSettings.Provider
 	}
 
-	// 🔍 DEBUG TRACE: Log device settings and final values
-	logrus.WithFields(logrus.Fields{
-		"node_id":               node.ID,
-		"device_settings_found": deviceSettings != nil,
-		"device_instance_valid": func() bool {
-			if deviceSettings != nil {
-				return deviceSettings.Instance.Valid
-			}
-			return false
-		}(),
-		"device_instance_value": func() string {
-			if deviceSettings != nil && deviceSettings.Instance.Valid {
-				return deviceSettings.Instance.String
-			}
-			return "null"
-		}(),
-		"device_provider": func() string {
-			if deviceSettings != nil {
-				return deviceSettings.Provider
-			}
-			return "null"
-		}(),
-		"final_instance":             instance,
-		"final_api_provider":         apiProvider,
-		"final_system_prompt_length": len(systemPrompt),
-	}).Info("🔍 AI_PROMPT_DEBUG: Device settings and final configuration")
 	// Use global settings as final fallback
 	if apiProvider == "" {
 		apiProvider = flow.Niche
@@ -1038,10 +992,10 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	}
 
 	// Replace variables in system prompt
-	originalSystemPrompt := systemPrompt
 	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
-	
-	// STANDARDIZED: Add the standardized format from PHP to the AI nodes prompt
+
+	// STANDARDIZED: Add the standardized format instructions for ALL AI nodes
+	// This ensures consistent response format across all AI prompt types
 	systemPrompt = systemPrompt + "\n\n" +
 		"### Instructions:\n" +
 		"1. If the current stage is null or undefined, default to the first stage.\n" +
@@ -1092,504 +1046,157 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		"   - If the directive is not present, omit the `Jenis` field entirely.\n" +
 		"   - Non-text types like `image` never include the `Jenis` field.\n\n"
 
-	// 🔍 DEBUG TRACE: Log variable replacement
-	logrus.WithFields(logrus.Fields{
-		"node_id":                node.ID,
-		"variables_count":        len(variables),
-		"original_prompt_length": len(originalSystemPrompt),
-		"final_prompt_length":    len(systemPrompt),
-		"prompt_changed":         originalSystemPrompt != systemPrompt,
-	}).Info("🔍 AI_PROMPT_DEBUG: Variable replacement completed")
-
-	// 🔍 DEBUG TRACE: Log final AI service call parameters
-	logrus.WithFields(logrus.Fields{
-		"node_id":              node.ID,
-		"system_prompt_length": len(systemPrompt),
-		"system_prompt_preview": func() string {
-			if len(systemPrompt) > 300 {
-				return systemPrompt[:300] + "..."
-			}
-			return systemPrompt
-		}(),
-		"user_input":   userInput,
-		"instance":     instance,
-		"api_provider": apiProvider,
-		"device_id":    execution.IDDevice,
-		"prospect_num": execution.ProspectNum,
-	}).Info("🔍 AI_PROMPT_DEBUG: Final parameters for AI service call")
-
 	// Get actual API key from device settings
 	var actualAPIKey string
 	if deviceSettings != nil && deviceSettings.APIKey.Valid {
 		actualAPIKey = deviceSettings.APIKey.String
 	}
 
-	// Get conversation history (conv_last) for AI context
+	// Get conversation history
 	var conversationHistory []models.ConversationMessage
-	convLastStr := string(execution.ConvLast)
-	if len(execution.ConvLast) > 0 && convLastStr != "" && convLastStr != "null" && convLastStr != "\"\"" {
-		// Remove quotes if present
-		if len(convLastStr) >= 2 && convLastStr[0] == '"' && convLastStr[len(convLastStr)-1] == '"' {
-			convLastStr = convLastStr[1 : len(convLastStr)-1]
+	if len(execution.ConvLast) > 0 {
+		var convLastStr string
+		if err := json.Unmarshal(execution.ConvLast, &convLastStr); err == nil {
+			// Successfully unmarshaled
+		} else {
+			// If unmarshal fails, use it as string
+			convLastStr = string(execution.ConvLast)
 		}
-		conversationHistory = append(conversationHistory, models.ConversationMessage{
-			Role:    "assistant",
-			Content: convLastStr,
-		})
-		logrus.WithFields(logrus.Fields{
-			"conv_last_length": len(convLastStr),
-			"conv_last_preview": func() string {
-				if len(convLastStr) > 100 {
-					return convLastStr[:100] + "..."
-				}
-				return convLastStr
-			}(),
-		}).Info("🔍 AI_PROMPT_DEBUG: Retrieved conv_last for AI context")
-	} else {
-		logrus.Info("🔍 AI_PROMPT_DEBUG: No conv_last found, starting fresh conversation")
+		// Remove quotes if present
+		convLastStr = strings.Trim(convLastStr, "\"")
+		
+		if convLastStr != "" && convLastStr != "null" {
+			conversationHistory = append(conversationHistory, models.ConversationMessage{
+				Role:    "assistant",
+				Content: convLastStr,
+			})
+		}
 	}
 
-	// Generate AI response
-	logrus.WithFields(logrus.Fields{
-		"id_device":                  execution.IDDevice,
-		"api_provider":               apiProvider,
-		"api_key_provided":           actualAPIKey != "",
-		"user_input":                 userInput,
-		"conversation_history_count": len(conversationHistory),
-	}).Info("🤖 AI_PROMPT: Generating AI response")
-
-	response, err := s.aiService.GenerateResponse(systemPrompt, userInput, actualAPIKey, execution.IDDevice, conversationHistory)
+	// Call AI service with configuration
+	response, err := s.aiService.GenerateResponse(
+		systemPrompt,
+		userInput,
+		actualAPIKey,
+		execution.IDDevice,
+		conversationHistory,
+	)
 	if err != nil {
 		logrus.WithError(err).Error("🤖 AI_PROMPT: Failed to generate AI response")
-		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
+		return "I'm sorry, I couldn't process your request. Please try again later.", nil
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"response_length": len(response),
-		"node_id":         node.ID,
-		"ai_response":     response,
+		"node_type":       node.Type,
 	}).Info("🤖 AI_PROMPT: AI response generated successfully")
 
-	// Check if next node exists and advance to it
-	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
-	if err == nil && nextNode != nil {
-		if nextNode.Type == models.NodeTypeDelay {
-			// Advance to delay node and process it immediately
-			// This ensures the delay is scheduled properly
+	// For advanced_ai_prompt nodes, parse the response and handle it
+	if node.Type == models.NodeTypeAdvancedAIPrompt || node.Type == "advanced_ai_prompt" {
+		// Parse the AI response JSON for advanced nodes
+		parsedResponse, err := s.aiWhatsappService.ParseAIResponse(response)
+		if err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"raw_response": response,
+				"node_id":      node.ID,
+			}).Warn("Failed to parse JSON response, treating as plain text")
+			// Fallback to plain text if JSON parsing fails
+		} else if parsedResponse != nil {
+			// Successfully parsed JSON response - handle multiple response items
 			logrus.WithFields(logrus.Fields{
-				"prospect_id":  execution.IDProspect,
-				"current_node": node.ID,
-				"next_node":    nextNode.ID,
-				"next_type":    nextNode.Type,
-				"ai_response":  response,
-			}).Info("🤖 AI_PROMPT: AI response generated, advancing to delay node")
+				"stage":          parsedResponse.Stage,
+				"response_count": len(parsedResponse.Response),
+				"node_id":        node.ID,
+			}).Info("Successfully parsed JSON response with multiple items")
 
-			// Update execution to delay node
-			s.updateCurrentNode(execution, nextNode.ID)
-			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
-			if err != nil {
-				logrus.WithError(err).Error("Failed to update execution to delay node")
-				return response, err
+			// Update stage if provided
+			if parsedResponse.Stage != "" {
+				execution.Stage.String = parsedResponse.Stage
+				execution.Stage.Valid = true
+				if err := s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active"); err != nil {
+					logrus.WithError(err).Warn("Failed to update execution stage")
+				}
 			}
 
-			// Process the delay node immediately to schedule the next message
-			_, err = s.processDelayNode(flow, execution, nextNode, userInput)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to process delay node")
-				return response, err
-			}
+			// Send individual messages from parsed response
+			if len(parsedResponse.Response) > 0 {
+				for i, item := range parsedResponse.Response {
+					if i > 0 {
+						time.Sleep(2 * time.Second) // Add delay between messages
+					}
 
-			return response, nil
+					switch item.Type {
+					case "text":
+						err := s.SendMessageFromDevice(execution.ProspectNum, item.Content, execution.IDDevice)
+						if err != nil {
+							logrus.WithError(err).Error("Failed to send text message")
+						}
+					case "image", "audio", "video":
+						err := s.SendMediaMessage(execution.ProspectNum, item.Content, execution.IDDevice)
+						if err != nil {
+							logrus.WithError(err).WithFields(logrus.Fields{
+								"media_type": item.Type,
+								"media_url":  item.Content,
+							}).Error("Failed to send media message")
+						}
+					default:
+						logrus.WithField("type", item.Type).Warn("Unknown response type")
+					}
+				}
+				// Return empty string since we've already sent the messages
+				return "", nil
+			}
 		}
+	}
 
-		// For non-delay nodes, continue processing immediately
-		s.updateCurrentNode(execution, nextNode.ID)
+	// Handle the next node advancement
+	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+	if err != nil || nextNode == nil {
+		logrus.WithError(err).Warn("No next node found after AI prompt")
+		// Mark execution as completed
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "completed")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to complete flow execution")
+		}
+		return response, nil
+	}
+
+	// Check if the next node is a delay node
+	if nextNode.Type == models.NodeTypeDelay {
+		logrus.WithFields(logrus.Fields{
+			"prospect_id":  execution.IDProspect,
+			"current_node": node.ID,
+			"next_node":    nextNode.ID,
+			"next_type":    nextNode.Type,
+		}).Info("🔄 AI_PROMPT: Response sent, advancing to delay node")
+
+		// Update execution to delay node
+		execution.CurrentNode.String = nextNode.ID
+		execution.CurrentNode.Valid = true
 		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
 		if err != nil {
-			logrus.WithError(err).Error("Failed to update execution after AI prompt node")
-			return response, err
+			logrus.WithError(err).Error("Failed to update execution to delay node")
 		}
 
-		// Recursively process the next node if it's not a delay
-		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
+		// Process delay node to schedule next message
+		_, err = s.processDelayNode(flow, execution, nextNode, userInput)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to process next node after AI prompt")
-			return response, err
+			logrus.WithError(err).Error("Failed to process delay node after AI prompt")
 		}
 
-		// Combine responses if next node generated content
-		if nextResponse != "" {
-			return response + "\n" + nextResponse, nil
-		}
-	} else {
-		// End of flow
-		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
+		return response, nil
 	}
+
+	// Update execution to the next node
+	execution.CurrentNode.String = nextNode.ID
+	execution.CurrentNode.Valid = true
+	s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
 
 	return response, nil
 }
 
-// processAdvancedAIPromptNode processes an advanced AI prompt node with JSON response parsing
-func (s *Service) processAdvancedAIPromptNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
-	// Get AI configuration from node data
-	var systemPrompt, instance, apiProvider string
-
-	// Check node data for configuration
-	if sp, ok := node.Data["system_prompt"].(string); ok {
-		systemPrompt = sp
-	}
-	if inst, ok := node.Data["instance"].(string); ok {
-		instance = inst
-	}
-	if ap, ok := node.Data["apiprovider"].(string); ok {
-		apiProvider = ap
-	}
-
-	// 🔍 DEBUG TRACE: Log extracted node configuration for advanced AI prompt
-	logrus.WithFields(logrus.Fields{
-		"node_id":              node.ID,
-		"node_type":            "advanced_ai_prompt",
-		"system_prompt_length": len(systemPrompt),
-		"system_prompt_preview": func() string {
-			if len(systemPrompt) > 100 {
-				return systemPrompt[:100] + "..."
-			}
-			return systemPrompt
-		}(),
-		"instance_from_node":     instance,
-		"api_provider_from_node": apiProvider,
-		"user_input":             userInput,
-		"node_data_keys": func() []string {
-			keys := make([]string, 0, len(node.Data))
-			for k := range node.Data {
-				keys = append(keys, k)
-			}
-			return keys
-		}(),
-	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Extracted node configuration")
-
-	// Get device settings for fallback values
-	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(execution.IDDevice)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to get device settings for advanced AI prompt")
-	}
-
-	// Use device settings as fallback
-	if instance == "" && deviceSettings != nil {
-		if deviceSettings.Instance.Valid {
-			instance = deviceSettings.Instance.String
-		}
-	}
-	if apiProvider == "" && deviceSettings != nil {
-		apiProvider = deviceSettings.Provider
-	}
-
-	// 🔍 DEBUG TRACE: Log device settings and final values for advanced AI prompt
-	logrus.WithFields(logrus.Fields{
-		"node_id":               node.ID,
-		"device_settings_found": deviceSettings != nil,
-		"device_instance_valid": func() bool {
-			if deviceSettings != nil {
-				return deviceSettings.Instance.Valid
-			}
-			return false
-		}(),
-		"device_instance_value": func() string {
-			if deviceSettings != nil && deviceSettings.Instance.Valid {
-				return deviceSettings.Instance.String
-			}
-			return "null"
-		}(),
-		"device_provider": func() string {
-			if deviceSettings != nil {
-				return deviceSettings.Provider
-			}
-			return "null"
-		}(),
-		"final_instance":             instance,
-		"final_api_provider":         apiProvider,
-		"final_system_prompt_length": len(systemPrompt),
-	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Device settings and final configuration")
-
-	// Use global settings as fallback
-	if apiProvider == "" {
-		apiProvider = flow.Niche
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"system_prompt_length": len(systemPrompt),
-		"instance":             instance,
-		"api_provider":         apiProvider,
-	}).Info("🤖 ADVANCED_AI_PROMPT: Configuration loaded")
-
-	// Check if we have complete AI configuration
-	if systemPrompt == "" {
-		logrus.Error("🤖 ADVANCED_AI_PROMPT: No system prompt configured")
-		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
-	}
-	if instance == "" {
-		logrus.Error("🤖 ADVANCED_AI_PROMPT: No instance configured")
-		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
-	}
-	if apiProvider == "" {
-		logrus.Error("🤖 ADVANCED_AI_PROMPT: No API provider configured")
-		return "I'm sorry, I'm not configured to handle this request. Please contact support.", nil
-	}
-
-	// Get execution variables for prompt replacement
-	variables, err := s.aiWhatsappService.GetFlowExecutionVariables(execution.ProspectNum, execution.IDDevice)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to get execution variables")
-		variables = make(map[string]interface{})
-	}
-
-	// Replace variables in system prompt
-	originalSystemPrompt := systemPrompt
-	systemPrompt = s.flowService.ReplaceVariables(systemPrompt, variables)
-	
-	// STANDARDIZED: Add the standardized format from PHP to the AI nodes prompt
-	systemPrompt = systemPrompt + "\n\n" +
-		"### Instructions:\n" +
-		"1. If the current stage is null or undefined, default to the first stage.\n" +
-		"2. Always analyze the user's input to determine the appropriate stage. If the input context is unclear, guide the user within the default stage context.\n" +
-		"3. Follow all rules and steps strictly. Do not skip or ignore any rules or instructions.\n\n" +
-		"4. **Do not repeat the same sentences or phrases that have been used in the recent conversation history.**\n" +
-		"5. If the input contains the phrase \"I want this section in add response format [onemessage]\":\n" +
-		"   - Add the `Jenis` field with the value `onemessage` at the item level for each text response.\n" +
-		"   - The `Jenis` field is only added to `text` types within the `Response` array.\n" +
-		"   - If the directive is not present, omit the `Jenis` field entirely.\n\n" +
-		"### Response Format:\n" +
-		"{\n" +
-		"  \"Stage\": \"[Stage]\",  // Specify the current stage explicitly.\n" +
-		"  \"Response\": [\n" +
-		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the first response message here.\"},\n" +
-		"    {\"type\": \"image\", \"content\": \"https://example.com/image1.jpg\"},\n" +
-		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Provide the second response message here.\"}\n" +
-		"  ]\n" +
-		"}\n\n" +
-		"### Example Response:\n" +
-		"// If the directive is present\n" +
-		"{\n" +
-		"  \"Stage\": \"Problem Identification\",\n" +
-		"  \"Response\": [\n" +
-		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
-		"    {\"type\": \"text\", \"Jenis\": \"onemessage\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
-		"  ]\n" +
-		"}\n\n" +
-		"// If the directive is NOT present\n" +
-		"{\n" +
-		"  \"Stage\": \"Problem Identification\",\n" +
-		"  \"Response\": [\n" +
-		"    {\"type\": \"text\", \"content\": \"Maaf kak, Layla kena reconfirm balik dulu masalah utama anak akak ni.\"},\n" +
-		"    {\"type\": \"text\", \"content\": \"Kurang selera makan, sembelit, atau kerap demam?\"}\n" +
-		"  ]\n" +
-		"}\n\n" +
-		"### Important Rules:\n" +
-		"1. **Include the `Stage` field in every response**:\n" +
-		"   - The `Stage` field must explicitly specify the current stage.\n" +
-		"   - If the stage is unclear or missing, default to first stage.\n\n" +
-		"2. **Use the Correct Response Format**:\n" +
-		"   - Divide long responses into multiple short \"text\" segments for better readability.\n" +
-		"   - Include all relevant images provided in the input, interspersed naturally with text responses.\n" +
-		"   - If multiple images are provided, create separate `image` entries for each.\n\n" +
-		"3. **Dynamic Field for [onemessage]**:\n" +
-		"   - If the input specifies \"I want this section in add response format [onemessage]\":\n" +
-		"      - Add `\"Jenis\": \"onemessage\"` to each `text` type in the `Response` array.\n" +
-		"   - If the directive is not present, omit the `Jenis` field entirely.\n" +
-		"   - Non-text types like `image` never include the `Jenis` field.\n\n"
-
-	// 🔍 DEBUG TRACE: Log variable replacement for advanced AI prompt
-	logrus.WithFields(logrus.Fields{
-		"node_id":                node.ID,
-		"variables_count":        len(variables),
-		"original_prompt_length": len(originalSystemPrompt),
-		"final_prompt_length":    len(systemPrompt),
-		"prompt_changed":         originalSystemPrompt != systemPrompt,
-	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Variable replacement completed")
-
-	// 🔍 DEBUG TRACE: Log final AI service call parameters for advanced AI prompt
-	logrus.WithFields(logrus.Fields{
-		"node_id":              node.ID,
-		"system_prompt_length": len(systemPrompt),
-		"system_prompt_preview": func() string {
-			if len(systemPrompt) > 300 {
-				return systemPrompt[:300] + "..."
-			}
-			return systemPrompt
-		}(),
-		"user_input":   userInput,
-		"instance":     instance,
-		"api_provider": apiProvider,
-		"device_id":    execution.IDDevice,
-		"prospect_num": execution.ProspectNum,
-	}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Final parameters for AI service call")
-
-	// Get actual API key from device settings
-	var actualAPIKey string
-	if deviceSettings != nil && deviceSettings.APIKey.Valid {
-		actualAPIKey = deviceSettings.APIKey.String
-	}
-
-	// Get conversation history (conv_last) for AI context
-	var conversationHistory []models.ConversationMessage
-	convLastStr := string(execution.ConvLast)
-	if len(execution.ConvLast) > 0 && convLastStr != "" && convLastStr != "null" && convLastStr != "\"\"" {
-		// Remove quotes if present
-		if len(convLastStr) >= 2 && convLastStr[0] == '"' && convLastStr[len(convLastStr)-1] == '"' {
-			convLastStr = convLastStr[1 : len(convLastStr)-1]
-		}
-		conversationHistory = append(conversationHistory, models.ConversationMessage{
-			Role:    "assistant",
-			Content: convLastStr,
-		})
-		logrus.WithFields(logrus.Fields{
-			"conv_last_length": len(convLastStr),
-			"conv_last_preview": func() string {
-				if len(convLastStr) > 100 {
-					return convLastStr[:100] + "..."
-				}
-				return convLastStr
-			}(),
-		}).Info("🔍 ADVANCED_AI_PROMPT_DEBUG: Retrieved conv_last for AI context")
-	} else {
-		logrus.Info("🔍 ADVANCED_AI_PROMPT_DEBUG: No conv_last found, starting fresh conversation")
-	}
-
-	// Generate AI response with advanced JSON parsing
-	logrus.WithFields(logrus.Fields{
-		"id_device":                  execution.IDDevice,
-		"api_provider":               apiProvider,
-		"api_key_provided":           actualAPIKey != "",
-		"user_input":                 userInput,
-		"conversation_history_count": len(conversationHistory),
-	}).Info("🤖 ADVANCED_AI_PROMPT: Generating AI response")
-
-	rawResponse, err := s.aiService.GenerateResponse(systemPrompt, userInput, actualAPIKey, execution.IDDevice, conversationHistory)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to generate advanced AI response")
-		return "I'm sorry, I'm having trouble processing your request right now. Please try again later.", nil
-	}
-
-	// Parse the AI response JSON to extract media URLs and handle multiple response items
-	var response string
-	parsedResponse, err := s.aiWhatsappService.ParseAIResponse(rawResponse)
-	if err != nil {
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"raw_response": rawResponse,
-			"node_id":      node.ID,
-		}).Warn("🧠 ADVANCED_AI: Failed to parse JSON response, treating as plain text")
-		// Fallback to plain text if JSON parsing fails
-		response = rawResponse
-	} else {
-		// Successfully parsed JSON response - handle multiple response items
-		logrus.WithFields(logrus.Fields{
-			"stage":          parsedResponse.Stage,
-			"response_count": len(parsedResponse.Response),
-			"node_id":        node.ID,
-		}).Info("🧠 ADVANCED_AI: Successfully parsed JSON response with multiple items")
-
-		// Process each response item and send them individually
-		for i, item := range parsedResponse.Response {
-			logrus.WithFields(logrus.Fields{
-				"item_index":     i,
-				"item_type":      item.Type,
-				"content_length": len(item.Content),
-			}).Info("🧠 ADVANCED_AI: Processing response item")
-
-			switch item.Type {
-			case "text":
-				err := s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, item.Content)
-				if err != nil {
-					logrus.WithError(err).Error("Failed to send text message from advanced AI")
-				}
-			case "image", "audio", "video":
-				err := s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, item.Content)
-				if err != nil {
-					logrus.WithError(err).WithFields(logrus.Fields{
-						"media_type": item.Type,
-						"media_url":  item.Content,
-					}).Error("Failed to send media message from advanced AI")
-				}
-			default:
-				logrus.WithField("type", item.Type).Warn("Unknown response type in advanced AI")
-			}
-
-			// Add delay between messages for better user experience
-			if i < len(parsedResponse.Response)-1 {
-				time.Sleep(2 * time.Second)
-			}
-		}
-
-		// Update conversation stage if provided
-		if parsedResponse.Stage != "" {
-			err = s.aiWhatsappService.UpdateConversationStage(execution.ProspectNum, parsedResponse.Stage)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to update conversation stage")
-			}
-		}
-
-		// For JSON responses, we've already sent all messages, so return empty string
-		// to prevent duplicate sending in the main flow processing logic
-		response = ""
-	}
-
-	// Check if next node exists and advance to it
-	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
-	if err == nil && nextNode != nil {
-		if nextNode.Type == models.NodeTypeDelay {
-			// Advance to delay node and process it immediately
-			// This ensures the delay is scheduled properly
-			logrus.WithFields(logrus.Fields{
-				"prospect_id":  execution.IDProspect,
-				"current_node": node.ID,
-				"next_node":    nextNode.ID,
-				"next_type":    nextNode.Type,
-			}).Info("🧠 ADVANCED_AI: Advanced AI response generated, advancing to delay node")
-
-			// Update execution to delay node
-			s.updateCurrentNode(execution, nextNode.ID)
-			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
-			if err != nil {
-				logrus.WithError(err).Error("Failed to update execution to delay node")
-				return response, err
-			}
-
-			// Process the delay node immediately to schedule the next message
-			_, err = s.processDelayNode(flow, execution, nextNode, userInput)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to process delay node")
-				return response, err
-			}
-
-			return response, nil
-		}
-
-		// For non-delay nodes, continue processing immediately
-		s.updateCurrentNode(execution, nextNode.ID)
-		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
-		if err != nil {
-			logrus.WithError(err).Error("Failed to update execution after advanced AI prompt node")
-			return response, err
-		}
-
-		// Recursively process the next node if it's not a delay
-		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to process next node after advanced AI prompt")
-			return response, err
-		}
-
-		// Combine responses if next node generated content
-		if nextResponse != "" {
-			return response + "\n" + nextResponse, nil
-		}
-	} else {
-		// End of flow
-		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
-	}
-
-	return response, nil
-}
+// processAdvancedAIPromptNode is DEPRECATED - ALL AI processing now goes through processAIPromptNode
+// The standardized processAIPromptNode handles all AI node types (ai_prompt, advanced_ai_prompt, prompt)
 
 // processManualNode processes a manual node (human intervention required)
 func (s *Service) processManualNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
