@@ -1180,9 +1180,26 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 
 			// Send individual messages from parsed response
 			if len(parsedResponse.Response) > 0 {
-				// Collect all text messages for conversation history (not including media URLs)
-				var combinedBotResponse string
+				// Save the user input first (only once at the beginning)
+				if userInput != "" {
+					logrus.WithFields(logrus.Fields{
+						"user_input": userInput,
+						"stage": parsedResponse.Stage,
+					}).Info("🔍 Saving user message to conversation")
+					
+					err = s.aiWhatsappService.SaveConversationHistory(
+						execution.ProspectNum,
+						execution.IDDevice,
+						userInput,
+						"", // Empty bot response for user message only
+						parsedResponse.Stage,
+					)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to save user message to conversation history")
+					}
+				}
 				
+				// Now send and save each bot message
 				for i, item := range parsedResponse.Response {
 					if i > 0 {
 						time.Sleep(2 * time.Second) // Add delay between messages
@@ -1190,17 +1207,34 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 
 					switch item.Type {
 					case "text":
-						err := s.SendMessageFromDevice(execution.ProspectNum, item.Content, execution.IDDevice)
+						// Send message with correct parameter order: deviceID, phoneNumber, message
+						err := s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, item.Content)
 						if err != nil {
 							logrus.WithError(err).Error("Failed to send text message")
 						}
-						// Add to combined response for conversation history
-						if combinedBotResponse != "" {
-							combinedBotResponse += "\n"
+						
+						// Save each bot message separately to conversation history
+						logrus.WithFields(logrus.Fields{
+							"bot_response": item.Content,
+							"stage": parsedResponse.Stage,
+							"message_index": i,
+						}).Info("🔍 Saving individual bot message to conversation")
+						
+						// Save this specific bot response
+						err = s.aiWhatsappService.SaveConversationHistory(
+							execution.ProspectNum,
+							execution.IDDevice,
+							"", // Empty user message for bot-only messages
+							item.Content,
+							parsedResponse.Stage,
+						)
+						if err != nil {
+							logrus.WithError(err).Error("Failed to save bot message to conversation history")
 						}
-						combinedBotResponse += item.Content
+						
 					case "image", "audio", "video":
-						err := s.SendMediaMessage(execution.ProspectNum, item.Content, execution.IDDevice)
+						// Send media with correct parameter order: deviceID, phoneNumber, mediaURL
+						err := s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, item.Content)
 						if err != nil {
 							logrus.WithError(err).WithFields(logrus.Fields{
 								"media_type": item.Type,
@@ -1210,27 +1244,6 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 						// Don't include media URLs in conversation history
 					default:
 						logrus.WithField("type", item.Type).Warn("Unknown response type")
-					}
-				}
-				
-				// Save conversation history with combined response (only text, no JSON)
-				if combinedBotResponse != "" {
-					// Log what we're saving to conversation
-					logrus.WithFields(logrus.Fields{
-						"user_input": userInput,
-						"bot_response": combinedBotResponse,
-						"stage": parsedResponse.Stage,
-					}).Info("🔍 Saving to Conversation History")
-					
-					err = s.aiWhatsappService.SaveConversationHistory(
-						execution.ProspectNum,
-						execution.IDDevice,
-						userInput,
-						combinedBotResponse,
-						parsedResponse.Stage,
-					)
-					if err != nil {
-						logrus.WithError(err).Error("Failed to save conversation history")
 					}
 				}
 				
