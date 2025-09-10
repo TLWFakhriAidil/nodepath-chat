@@ -322,8 +322,66 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 
 			// If we have a current node, process through the flow
 			if aiExecution.CurrentNodeID.Valid && aiExecution.CurrentNodeID.String != "" {
-				// Process through the flow using current node
-				return s.processNewFlowExecution(aiExecution, content, phoneNumber, deviceID)
+				// FIX: Don't call processNewFlowExecution for existing executions
+				// This prevents saving user message twice
+				
+				// Get the flow data
+				flow, err := s.flowService.GetFlow(aiExecution.FlowReference.String)
+				if err != nil {
+					logrus.WithError(err).Error("❌ FLOW: Failed to get flow for existing execution")
+					return err
+				}
+				
+				if flow == nil {
+					logrus.WithField("flow_reference", aiExecution.FlowReference.String).Error("❌ FLOW: Flow not found for existing execution")
+					return fmt.Errorf("flow not found")
+				}
+				
+				logrus.WithFields(logrus.Fields{
+					"execution_id": aiExecution.ExecutionID.String,
+					"current_node": aiExecution.CurrentNodeID.String,
+					"user_input":   content,
+				}).Info("💬 FLOW: Processing existing execution WITHOUT re-saving user message")
+				
+				// Save user message only once for existing execution
+				err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "")
+				if err != nil {
+					logrus.WithError(err).Error("Failed to save user message for existing execution")
+				}
+				
+				// Process the message through flow WITHOUT processNewFlowExecution
+				response, err := s.processFlowMessage(flow, aiExecution, content)
+				if err != nil {
+					logrus.WithError(err).Error("❌ FLOW: Failed to process flow message for existing execution")
+					return err
+				}
+				
+				// Send response if not empty
+				if response != "" && strings.TrimSpace(response) != "" {
+					// Check for media
+					if s.mediaDetectionService.HasMedia(response) {
+						mediaInfo := s.mediaDetectionService.ExtractFirstMedia(response)
+						if mediaInfo != nil {
+							err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
+						} else {
+							err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+						}
+					} else {
+						err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+					}
+					
+					if err != nil {
+						logrus.WithError(err).Error("Failed to send response for existing execution")
+					}
+					
+					// Save bot response
+					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
+					if err != nil {
+						logrus.WithError(err).Error("Failed to save bot response for existing execution")
+					}
+				}
+				
+				return nil
 			} else {
 				// Handle the user reply and resume flow from the correct node
 				return s.handleUserReplyResume(aiExecution, content)
@@ -1598,6 +1656,36 @@ func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models
 	// Check if next node exists and advance to it
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
+		// FIX: If next node is user_reply, advance to it and set waiting state
+		if nextNode.Type == models.NodeTypeUserReply || nextNode.Type == "user_reply" {
+			logrus.WithFields(logrus.Fields{
+				"current_node": node.ID,
+				"next_node":    nextNode.ID,
+				"next_type":    nextNode.Type,
+			}).Info("📝 MESSAGE: Next node is user_reply, advancing and setting waiting state")
+			
+			// Update to user_reply node and set waiting flag
+			s.updateCurrentNode(execution, nextNode.ID)
+			err = s.updateFlowTrackingFields(execution, nextNode.ID, flow.ID, true)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to update flow tracking for user_reply after message")
+			}
+			
+			// Update flow execution in database
+			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
+			if err != nil {
+				logrus.WithError(err).Error("Failed to update execution to user_reply after message")
+			}
+			
+			// Return message to send but DON'T continue processing
+			logrus.WithFields(logrus.Fields{
+				"message": message,
+				"waiting_for_reply": true,
+			}).Info("✅ MESSAGE: Sending message and waiting for user reply")
+			
+			return message, nil
+		}
+		
 		if nextNode.Type == models.NodeTypeDelay {
 			// Advance to delay node and process it immediately
 			// This ensures the delay is scheduled properly
@@ -1712,6 +1800,31 @@ func (s *Service) processImageNode(flow *models.ChatbotFlow, execution *models.A
 	// Check if next node exists and advance to it
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err == nil && nextNode != nil {
+		// FIX: If next node is user_reply, advance to it and set waiting state
+		if nextNode.Type == models.NodeTypeUserReply || nextNode.Type == "user_reply" {
+			logrus.WithFields(logrus.Fields{
+				"current_node": node.ID,
+				"next_node":    nextNode.ID,
+				"next_type":    nextNode.Type,
+			}).Info("🖼️ IMAGE: Next node is user_reply, advancing and setting waiting state")
+			
+			// Update to user_reply node and set waiting flag
+			s.updateCurrentNode(execution, nextNode.ID)
+			err = s.updateFlowTrackingFields(execution, nextNode.ID, flow.ID, true)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to update flow tracking for user_reply after image")
+			}
+			
+			// Update flow execution in database
+			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
+			if err != nil {
+				logrus.WithError(err).Error("Failed to update execution to user_reply after image")
+			}
+			
+			// Return image URL to send but DON'T continue processing
+			return imageURL, nil
+		}
+		
 		if nextNode.Type == models.NodeTypeDelay {
 			// Advance to delay node and process it immediately
 			// This ensures the delay is scheduled properly
