@@ -335,11 +335,8 @@ func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiK
 		return nil, fmt.Errorf("circuit breaker is open, API temporarily unavailable")
 	}
 
-	// Determine provider based on API key or device ID
+	// Use OpenRouter as the standard provider for all devices
 	provider := "openrouter"
-	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
-		provider = "openai"
-	}
 
 	// Check rate limits before making request
 	if err := s.rateLimiter.CheckRateLimit(provider, deviceID); err != nil {

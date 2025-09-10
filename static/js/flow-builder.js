@@ -52,13 +52,7 @@ class FlowBuilder {
                 color: '#4f46e5',
                 description: 'AI-powered response node'
             },
-            {
-                type: 'manual',
-                label: 'Manual',
-                icon: '💬',
-                color: '#059669',
-                description: 'Manual response node'
-            },
+
             {
                 type: 'condition',
                 label: 'Condition',
@@ -225,13 +219,7 @@ class FlowBuilder {
                     temperature: 0.7,
                     max_tokens: 1000
                 };
-            case 'manual':
-                return {
-                    content: '',
-                    media_type: 'text',
-                    media_url: '',
-                    buttons: []
-                };
+
             case 'condition':
                 return {
                     variable: '',

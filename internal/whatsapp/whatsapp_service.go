@@ -887,8 +887,7 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 		return s.processStartNode(flow, aiExecution, currentNode, userInput)
 	case models.NodeTypeAIPrompt, models.NodeTypeAdvancedAIPrompt, "prompt": // Handle all AI prompt types with one function
 		return s.processAIPromptNode(flow, aiExecution, currentNode, userInput)
-	case models.NodeTypeManual:
-		return s.processManualNode(flow, aiExecution, currentNode, userInput)
+
 	case models.NodeTypeMessage:
 		return s.processMessageNode(flow, aiExecution, currentNode, userInput)
 	case models.NodeTypeImage:
@@ -905,8 +904,7 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 		return s.processStageNode(flow, aiExecution, currentNode, userInput)
 	case models.NodeTypeUserReply:
 		return s.processUserReplyNode(flow, aiExecution, currentNode, userInput)
-	case models.NodeTypeWaitingReplyTimes:
-		return s.processWaitingReplyTimesNode(flow, aiExecution, currentNode, userInput)
+
 	default:
 		return s.processDefaultNode(flow, aiExecution, currentNode, userInput)
 	}
@@ -1195,81 +1193,7 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	return response, nil
 }
 
-// processAdvancedAIPromptNode is DEPRECATED - ALL AI processing now goes through processAIPromptNode
-// The standardized processAIPromptNode handles all AI node types (ai_prompt, advanced_ai_prompt, prompt)
 
-// processManualNode processes a manual node (human intervention required)
-func (s *Service) processManualNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
-	// For now, just return a message indicating manual intervention
-	// Human mode would be implemented through a separate table or field
-	logrus.WithFields(logrus.Fields{
-		"prospect_id": execution.IDProspect,
-		"node_id":     node.ID,
-	}).Info("👤 MANUAL: Manual intervention node triggered")
-
-	// Get manual response message
-	message := "Your message has been forwarded to our support team. We'll get back to you soon."
-	if msg, ok := node.Data["message"].(string); ok {
-		message = msg
-	}
-
-	// Check if next node exists and advance to it
-	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
-	if err == nil && nextNode != nil {
-		if nextNode.Type == models.NodeTypeDelay {
-			// Advance to delay node and process it immediately
-			// This ensures the delay is scheduled properly
-			logrus.WithFields(logrus.Fields{
-				"prospect_id":  execution.IDProspect,
-				"current_node": node.ID,
-				"next_node":    nextNode.ID,
-				"next_type":    nextNode.Type,
-			}).Info("👤 MANUAL: Manual response sent, advancing to delay node")
-
-			// Update execution to delay node
-			s.updateCurrentNode(execution, nextNode.ID)
-			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
-			if err != nil {
-				logrus.WithError(err).Error("Failed to update execution to delay node")
-				return message, err
-			}
-
-			// Process the delay node immediately to schedule the next message
-			_, err = s.processDelayNode(flow, execution, nextNode, userInput)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to process delay node")
-				return message, err
-			}
-
-			return message, nil
-		}
-
-		// For non-delay nodes, continue processing immediately
-		s.updateCurrentNode(execution, nextNode.ID)
-		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
-		if err != nil {
-			logrus.WithError(err).Error("Failed to update execution after manual node")
-			return message, err
-		}
-
-		// Recursively process the next node if it's not a delay
-		nextResponse, err := s.processFlowMessage(flow, execution, userInput)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to process next node after manual")
-			return message, err
-		}
-
-		// Combine responses if next node generated content
-		if nextResponse != "" {
-			return message + "\n" + nextResponse, nil
-		}
-	} else {
-		// End of flow
-		s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
-	}
-
-	return message, nil
-}
 
 // processMessageNode processes a simple message node
 func (s *Service) processMessageNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
@@ -2150,53 +2074,6 @@ func (s *Service) processUserReplyNode(flow *models.ChatbotFlow, execution *mode
 	}).Info("✅ USER_REPLY: Flow set to waiting for user reply state")
 
 	// Return empty response as we're now waiting for user input
-	return "", nil
-}
-
-// processWaitingReplyTimesNode processes a waiting reply times node
-func (s *Service) processWaitingReplyTimesNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
-	// Handle reply timing logic and move to next node
-	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
-	if err == nil && nextNode != nil {
-		if nextNode.Type == models.NodeTypeDelay {
-			// Advance to delay node and process it immediately
-			// This ensures the delay is scheduled properly
-			logrus.WithFields(logrus.Fields{
-				"prospect_id":  execution.IDProspect,
-				"current_node": node.ID,
-				"next_node":    nextNode.ID,
-				"next_type":    nextNode.Type,
-			}).Info("⏱️ WAITING_REPLY: Reply timing processed, advancing to delay node")
-
-			// Update execution to delay node
-			s.updateCurrentNode(execution, nextNode.ID)
-			err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
-			if err != nil {
-				logrus.WithError(err).Error("Failed to update execution to delay node")
-				return "", err
-			}
-
-			// Process the delay node immediately to schedule the next message
-			_, err = s.processDelayNode(flow, execution, nextNode, userInput)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to process delay node")
-				return "", err
-			}
-
-			return "", nil
-		}
-
-		// For non-delay nodes, continue processing immediately
-		s.updateCurrentNode(execution, nextNode.ID)
-		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
-		if err != nil {
-			logrus.WithError(err).Error("Failed to update execution after waiting reply times node")
-			return "", err
-		}
-
-		// Recursively process the next node if it's not a delay
-		return s.processFlowMessage(flow, execution, userInput)
-	}
 	return "", nil
 }
 

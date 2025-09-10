@@ -31,11 +31,9 @@ import StartNode from './nodes/StartNode';
 import ImageNode from './nodes/ImageNode';
 import AudioNode from './nodes/AudioNode';
 import VideoNode from './nodes/VideoNode';
-import ManualNode from './nodes/ManualNode';
 import PromptNode from './nodes/PromptNode';
 import StageNode from './nodes/StageNode';
 import UserReplyNode from './nodes/UserReplyNode';
-import WaitingReplyTimesNode from './nodes/WaitingReplyTimesNode';
 
 const nodeTypes: NodeTypes = {
   message: MessageNode,
@@ -45,11 +43,9 @@ const nodeTypes: NodeTypes = {
   image: ImageNode,
   audio: AudioNode,
   video: VideoNode,
-  manual: ManualNode,
   prompt: PromptNode,
   stage: StageNode,
   user_reply: UserReplyNode,
-  waiting_reply_times: WaitingReplyTimesNode,
 };
 
 const initialNodes: Node[] = [
@@ -149,10 +145,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                  type === 'image' ? 'New Image' :
                  type === 'audio' ? 'New Audio' :
                  type === 'video' ? 'New Video' :
-                 type === 'manual' ? 'Manual Response' :
                  type === 'prompt' ? 'AI Prompt' :
                  type === 'user_reply' ? 'User Reply' :
-                 type === 'waiting_reply_times' ? 'Wait Reply Times' :
                  'New Node',
           message: type === 'message' ? 'Enter your message here...' : undefined,
           conditions: type === 'condition' ? [{ id: '1', type: 'contains', value: '1,2,3,4,5,6', label: '1,2,3,4,5,6', nextNodeId: '' },{ id: '2', type: 'contains', value: '7,8,9,10,11,12', label: '7,8,9,10,11,12', nextNodeId: '' },{ id: '3', type: 'contains', value: '13,14,15,16,17,18', label: '13,14,15,16,17,18', nextNodeId: '' },{ id: '4', type: 'default', label: 'Default', nextNodeId: '' }] : undefined,
@@ -162,12 +156,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
           audioUrl: type === 'audio' ? '' : undefined,
           videoUrl: type === 'video' ? '' : undefined,
           duration: type === 'audio' || type === 'video' ? (type === 'audio' ? 30 : 60) : undefined,
-          expectedInput: type === 'manual' ? '' : undefined,
-          responseOutput: type === 'manual' ? '' : undefined,
           systemPrompt: type === 'prompt' ? 'You are a helpful assistant that responds clearly and concisely.' : undefined,
           stageName: type === 'stage' ? '' : undefined,
-          waitTime: type === 'waiting_reply_times' ? 5 : undefined,
-          waitTimeSeconds: type === 'waiting_reply_times' ? 5 : undefined,
           node_type: type === 'prompt' ? 'ai_prompt' : undefined,
           onDelete: deleteNode,
           onUpdate: updateNodeData,

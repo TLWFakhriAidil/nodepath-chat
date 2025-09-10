@@ -1,3 +1,0 @@
-Test file created to verify GitHub push functionality
-Created at: 2025-09-03
-This is a test to confirm that the repository can push directly to the main branch on GitHub.

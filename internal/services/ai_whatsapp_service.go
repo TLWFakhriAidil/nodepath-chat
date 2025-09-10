@@ -349,23 +349,13 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 			"api_key_preview": maskAPIKeyForLogging(apiKey),
 		}).Info("Using device-specific API key")
 	} else {
-		// Use default OpenRouter key for non-special devices
-		if idDevice != "SCHQ-S94" && idDevice != "SCHQ-S12" {
-			apiKey = s.cfg.OpenRouterDefaultKey
-			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"api_key_source": "default_openrouter",
-				"api_key_preview": maskAPIKeyForLogging(apiKey),
-			}).Info("Using default OpenRouter API key")
-		} else {
-			// For special devices, use the hardcoded OpenAI key from custom instructions
-			apiKey = "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"
-			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"api_key_source": "hardcoded_openai",
-				"api_key_preview": maskAPIKeyForLogging(apiKey),
-			}).Info("Using hardcoded OpenAI API key for special device")
-		}
+		// Use default OpenRouter key for all devices
+		apiKey = s.cfg.OpenRouterDefaultKey
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"api_key_source": "default_openrouter",
+			"api_key_preview": maskAPIKeyForLogging(apiKey),
+		}).Info("Using default OpenRouter API key")
 	}
 	// Call AI API with validation and retry logic
 	var aiResponse string
@@ -735,21 +725,13 @@ func (s *aiWhatsappService) getLastAIResponse(aiConv *models.AIWhatsapp) string 
 
 // getAPIURL determines the API URL based on device ID
 func (s *aiWhatsappService) getAPIURL(idDevice string) string {
-	// Special devices use OpenAI API
-	if idDevice == "SCHQ-S94" || idDevice == "SCHQ-S12" {
-		return "https://api.openai.com/v1/chat/completions"
-	}
-	// Default to OpenRouter API
+	// Use OpenRouter API for all devices
 	return "https://openrouter.ai/api/v1/chat/completions"
 }
 
 // getAIModel determines the AI model based on device and API key option
 func (s *aiWhatsappService) getAIModel(idDevice, apiKeyOption string) string {
-	// Special devices use GPT-4
-	if idDevice == "SCHQ-S94" || idDevice == "SCHQ-S12" {
-		return "gpt-4"
-	}
-	// Use API key option for other devices
+	// Use API key option for all devices
 	return apiKeyOption
 }
 
@@ -863,9 +845,6 @@ func (s *aiWhatsappService) callAIAPI(apiURL, apiKey, deviceID string, payload A
 
 	// Check rate limiting
 	provider := "openrouter"
-	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
-		provider = "openai"
-	}
 
 	if err := s.rateLimiter.CheckRateLimit(provider, deviceID); err != nil {
 		return "", fmt.Errorf("rate limit exceeded for device %s on provider %s: %w", deviceID, provider, err)

@@ -16,6 +16,8 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/crypto v0.23.0
+	gorm.io/driver/mysql v1.6.0
+	gorm.io/gorm v1.30.3
 )
 
 require (
@@ -43,6 +45,4 @@ require (
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
-	gorm.io/driver/mysql v1.6.0 // indirect
-	gorm.io/gorm v1.30.3 // indirect
 )

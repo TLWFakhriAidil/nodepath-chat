@@ -1,3 +1,0 @@
-# Removing duplicate code block from line 1149 to line 1340
-
-The duplicate block needs to be removed. It's the old implementation that wasn't replaced properly.
