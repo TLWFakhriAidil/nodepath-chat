@@ -433,7 +433,6 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
 
   const nodeTypeButtons = [
     { type: 'message', label: 'Send Message', icon: MessageSquare, color: 'bg-gradient-to-r from-blue-500 to-cyan-500', gradient: 'gradient-primary' },
-    { type: 'manual', label: 'Manual Response', icon: MessageSquare, color: 'bg-gradient-to-r from-pink-500 to-rose-500', gradient: 'gradient-pink' },
     { type: 'prompt', label: 'AI Prompt', icon: Sparkles, color: 'bg-gradient-to-r from-purple-500 to-violet-500', gradient: 'gradient-purple' },
     { type: 'stage', label: 'Stage', icon: Play, color: 'bg-gradient-to-r from-amber-500 to-orange-500', gradient: 'gradient-warning' },
     { type: 'image', label: 'Send Image', icon: Image, color: 'bg-gradient-to-r from-blue-500 to-indigo-500', gradient: 'gradient-info' },
@@ -442,7 +441,6 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
     { type: 'delay', label: 'Delay', icon: Clock, color: 'bg-gradient-to-r from-orange-500 to-red-500', gradient: 'gradient-warning' },
     { type: 'condition', label: 'Conditions', icon: GitBranch, color: 'bg-gradient-to-r from-violet-500 to-purple-500', gradient: 'gradient-purple' },
     { type: 'user_reply', label: 'User Reply', icon: MessageCircle, color: 'bg-gradient-to-r from-green-500 to-teal-500', gradient: 'gradient-success' },
-    { type: 'waiting_reply_times', label: 'Waiting Reply Times', icon: Timer, color: 'bg-gradient-to-r from-orange-500 to-amber-500', gradient: 'gradient-warning' },
   ];
 
   return (
@@ -673,7 +671,6 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                     case 'image': return 'hsl(200 100% 60%)'
                     case 'audio': return 'hsl(120 100% 60%)'
                     case 'video': return 'hsl(280 100% 60%)'
-                    case 'manual': return 'hsl(340 100% 60%)'
                     case 'prompt': return 'hsl(260 100% 60%)'
                     case 'stage': return 'hsl(35 100% 60%)'
                     default: return 'hsl(var(--muted-foreground))'

@@ -2435,16 +2435,77 @@ func (s *Service) updateFlowTrackingFields(execution *models.AIWhatsapp, current
 	return nil
 }
 
-// processUserReplyNode processes a user reply node by setting waiting state
+// processUserReplyNode processes a user reply node by setting waiting state or advancing if we have input
 func (s *Service) processUserReplyNode(flow *models.ChatbotFlow, execution *models.AIWhatsapp, node *models.FlowNode, userInput string) (string, error) {
 	logrus.WithFields(logrus.Fields{
 		"prospect_id": execution.IDProspect,
 		"node_id":     node.ID,
 		"user_input":  userInput,
-	}).Info("💬 USER_REPLY: Processing user reply node - setting waiting state")
+		"has_input":   userInput != "",
+	}).Info("💬 USER_REPLY: Processing user reply node")
+
+	// CRITICAL FIX: Check if we have user input - if yes, advance to next node
+	if userInput != "" {
+		logrus.WithFields(logrus.Fields{
+			"prospect_id": execution.IDProspect,
+			"node_id":     node.ID,
+			"user_input":  userInput,
+		}).Info("💬 USER_REPLY: User input received, advancing to next node")
+
+		// Get the next node after user_reply
+		nextNode, err := s.flowService.GetNextNode(flow, node.ID)
+		if err != nil || nextNode == nil {
+			logrus.WithFields(logrus.Fields{
+				"node_id": node.ID,
+				"error":   err,
+			}).Info("🏁 USER_REPLY: No next node found after user_reply - completing flow")
+			
+			// Complete the flow if no next node
+			s.aiWhatsappService.CompleteFlowExecution(execution.ProspectNum, execution.IDDevice)
+			return "", nil
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"current_node": node.ID,
+			"next_node":    nextNode.ID,
+			"next_type":    nextNode.Type,
+		}).Info("🔄 USER_REPLY: Found next node after user_reply, advancing flow")
+
+		// Update execution to the next node
+		s.updateCurrentNode(execution, nextNode.ID)
+		
+		// Clear the waiting flag since we're moving forward
+		err = s.updateFlowTrackingFields(execution, nextNode.ID, flow.ID, false)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update flow tracking fields")
+			// Continue anyway
+		}
+
+		// Update the flow execution in database
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update flow execution to next node")
+			// Continue anyway
+		}
+
+		// Now process the next node with the user input
+		logrus.WithFields(logrus.Fields{
+			"next_node_id":   nextNode.ID,
+			"next_node_type": nextNode.Type,
+			"user_input":     userInput,
+		}).Info("⚙️ USER_REPLY: Processing next node after user_reply")
+
+		// Recursively process the next node
+		return s.processFlowMessage(flow, execution, userInput)
+	}
+
+	// If no user input, set waiting state (original behavior for initial setup)
+	logrus.WithFields(logrus.Fields{
+		"prospect_id": execution.IDProspect,
+		"node_id":     node.ID,
+	}).Info("💬 USER_REPLY: No user input yet, setting waiting state")
 
 	// Set the flow to waiting for user reply state
-	// Update the flow tracking fields to indicate we're waiting for user input
 	err := s.updateFlowTrackingFields(execution, node.ID, flow.ID, true)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to update flow tracking fields for waiting state")

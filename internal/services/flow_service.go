@@ -248,7 +248,7 @@ func (s *FlowService) GetDefaultFlowForDevice(idDevice string) (*models.ChatbotF
 	}
 	
 	if len(flows) == 0 {
-		return nil, nil // No flows found for device
+		return nil, nil
 	}
 	
 	return flows[0], nil // Return the first flow as default
@@ -259,98 +259,51 @@ func (s *FlowService) GetStartNode(flow *models.ChatbotFlow) (*models.FlowNode, 
 	if flow.Nodes == nil || len(*flow.Nodes) == 0 {
 		return nil, fmt.Errorf("flow has no nodes")
 	}
-	
+
 	var nodes []*models.FlowNode
-	err := json.Unmarshal(*flow.Nodes, &nodes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse nodes JSON: %w", err)
+	if err := json.Unmarshal(*flow.Nodes, &nodes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal nodes: %w", err)
 	}
-	
-	// Find the start node (type="start" or first node)
+
+	// Find the start node
 	for _, node := range nodes {
-		if string(node.Type) == "start" {
+		if node.Type == "start" {
 			return node, nil
 		}
 	}
-	
-	// If no start node found, return the first node
-	if len(nodes) > 0 {
-		return nodes[0], nil
-	}
-	
-	return nil, fmt.Errorf("no nodes found in flow")
+
+	return nil, fmt.Errorf("no start node found in flow")
 }
 
-// UpdateFlow updates an existing flow
-func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
-	flow.UpdatedAt = time.Now()
-
-	query := `
-		UPDATE chatbot_flows_nodepath 
-		SET name = ?, niche = ?, id_device = ?, nodes = ?, edges = ?, updated_at = ?
-		WHERE id = ?
-	`
-
-	_, err := s.db.Exec(query,
-		flow.Name, flow.Niche, flow.IdDevice, flow.Nodes, flow.Edges, 
-		flow.UpdatedAt, flow.ID,
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to update flow: %w", err)
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"flow_reference": flow.ID,
-		"name":    flow.Name,
-	}).Info("Flow updated successfully")
-
-	return nil
-}
-
-// DeleteFlow deletes a flow
-func (s *FlowService) DeleteFlow(flowID string) error {
-	query := `DELETE FROM chatbot_flows_nodepath WHERE id = ?`
-	_, err := s.db.Exec(query, flowID)
-	if err != nil {
-		return fmt.Errorf("failed to delete flow: %w", err)
-	}
-
-	logrus.WithField("flow_reference", flowID).Info("Flow deleted successfully")
-	return nil
-}
-
-// GetFlowNodes parses and returns the nodes from a flow
+// GetFlowNodes extracts all nodes from a flow's nodes JSON
 func (s *FlowService) GetFlowNodes(flow *models.ChatbotFlow) ([]*models.FlowNode, error) {
-	if flow.Nodes == nil {
-		return []*models.FlowNode{}, nil
+	if flow.Nodes == nil || len(*flow.Nodes) == 0 {
+		return nil, fmt.Errorf("flow has no nodes")
 	}
 
 	var nodes []*models.FlowNode
-	err := json.Unmarshal(*flow.Nodes, &nodes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse flow nodes: %w", err)
+	if err := json.Unmarshal(*flow.Nodes, &nodes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal nodes: %w", err)
 	}
 
 	return nodes, nil
 }
 
-// GetFlowEdges parses and returns the edges from a flow
+// GetFlowEdges extracts edges from a flow's edges JSON
 func (s *FlowService) GetFlowEdges(flow *models.ChatbotFlow) ([]*models.FlowEdge, error) {
-	if flow.Edges == nil {
-		return []*models.FlowEdge{}, nil
+	if flow.Edges == nil || len(*flow.Edges) == 0 {
+		return []*models.FlowEdge{}, nil // Return empty array if no edges
 	}
 
 	var edges []*models.FlowEdge
-	err := json.Unmarshal(*flow.Edges, &edges)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse flow edges: %w", err)
+	if err := json.Unmarshal(*flow.Edges, &edges); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal edges: %w", err)
 	}
 
 	return edges, nil
 }
 
-// FindNodeByID finds a node by its ID in the flow
+// FindNodeByID finds a node by its ID in the flow's nodes
 func (s *FlowService) FindNodeByID(flow *models.ChatbotFlow, nodeID string) (*models.FlowNode, error) {
 	nodes, err := s.GetFlowNodes(flow)
 	if err != nil {
@@ -363,17 +316,62 @@ func (s *FlowService) FindNodeByID(flow *models.ChatbotFlow, nodeID string) (*mo
 		}
 	}
 
-	return nil, fmt.Errorf("node not found: %s", nodeID)
+	return nil, fmt.Errorf("node with ID %s not found", nodeID)
 }
 
-// GetNextNode finds the next node in the flow based on current node and edges
+// UpdateFlow updates an existing flow
+func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
+	if s.db == nil {
+		logrus.Warn("Database not available, flow update skipped (fallback mode)")
+		return nil // Return success in fallback mode
+	}
+	
+	flow.UpdatedAt = time.Now()
+
+	query := `
+		UPDATE chatbot_flows_nodepath 
+		SET name = ?, niche = ?, id_device = ?,
+		    nodes = ?, edges = ?, updated_at = ?
+		WHERE id = ?
+	`
+
+	_, err := s.db.Exec(query,
+		flow.Name, flow.Niche, flow.IdDevice, flow.Nodes, flow.Edges, 
+		flow.UpdatedAt, flow.ID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update flow: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteFlow deletes a flow by ID
+func (s *FlowService) DeleteFlow(flowID string) error {
+	if s.db == nil {
+		logrus.Warn("Database not available, flow deletion skipped (fallback mode)")
+		return nil // Return success in fallback mode
+	}
+	
+	query := `DELETE FROM chatbot_flows_nodepath WHERE id = ?`
+	_, err := s.db.Exec(query, flowID)
+	
+	if err != nil {
+		return fmt.Errorf("failed to delete flow: %w", err)
+	}
+	
+	return nil
+}
+
+// GetNextNode finds the next node in the flow based on the current node
 func (s *FlowService) GetNextNode(flow *models.ChatbotFlow, currentNodeID string) (*models.FlowNode, error) {
 	edges, err := s.GetFlowEdges(flow)
 	if err != nil {
 		return nil, err
 	}
 
-	// Find the edge that starts from the current node
+	// Find edge from current node
 	var nextNodeID string
 	for _, edge := range edges {
 		if edge.Source == currentNodeID {
@@ -383,7 +381,7 @@ func (s *FlowService) GetNextNode(flow *models.ChatbotFlow, currentNodeID string
 	}
 
 	if nextNodeID == "" {
-		return nil, nil // No next node (end of flow)
+		return nil, fmt.Errorf("no next node found for node %s", currentNodeID)
 	}
 
 	return s.FindNodeByID(flow, nextNodeID)
@@ -391,105 +389,9 @@ func (s *FlowService) GetNextNode(flow *models.ChatbotFlow, currentNodeID string
 
 // EvaluateConditionNode evaluates a condition node and returns the appropriate next node based on user input
 func (s *FlowService) EvaluateConditionNode(flow *models.ChatbotFlow, conditionNodeID string, userInput string) (*models.FlowNode, error) {
-	// Get the condition node
-	conditionNode, err := s.FindNodeByID(flow, conditionNodeID)
-	if err != nil {
-		return nil, err
-	}
-
-	if conditionNode == nil {
-		return nil, fmt.Errorf("condition node not found: %s", conditionNodeID)
-	}
-
-	// Get edges from this condition node
-	edges, err := s.GetFlowEdges(flow)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get conditions from node data
-	conditions, ok := conditionNode.Data["conditions"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("no conditions found in condition node %s", conditionNodeID)
-	}
-
-	// Find outgoing edges from this condition node
-	var outgoingEdges []models.FlowEdge
-	for _, edge := range edges {
-		if edge.Source == conditionNodeID {
-			outgoingEdges = append(outgoingEdges, *edge)
-		}
-	}
-
-	if len(outgoingEdges) == 0 {
-		return nil, fmt.Errorf("no outgoing edges found for condition node %s", conditionNodeID)
-	}
-
-	// Normalize user input for comparison
-	userInputLower := strings.ToLower(strings.TrimSpace(userInput))
-
-	// Evaluate each condition
-	for i, conditionInterface := range conditions {
-		condition, ok := conditionInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Get condition properties
-		conditionType, _ := condition["type"].(string)
-		conditionValue, _ := condition["value"].(string)
-
-		// Normalize condition value for comparison
-		conditionValueLower := strings.ToLower(strings.TrimSpace(conditionValue))
-
-		// Evaluate condition based on type
-		var matches bool
-		switch conditionType {
-		case "equals":
-			matches = userInputLower == conditionValueLower
-		case "contains":
-			matches = strings.Contains(userInputLower, conditionValueLower)
-		case "default":
-			// Default condition matches if no other conditions match
-			continue
-		default:
-			// Fallback: treat as equals
-			matches = userInputLower == conditionValueLower
-		}
-
-		// If condition matches, find the corresponding edge
-		if matches && i < len(outgoingEdges) {
-			targetNodeID := outgoingEdges[i].Target
-			return s.FindNodeByID(flow, targetNodeID)
-		}
-	}
-
-	// If no conditions match, try to find a default condition
-	for i, conditionInterface := range conditions {
-		condition, ok := conditionInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		conditionType, _ := condition["type"].(string)
-		if conditionType == "default" && i < len(outgoingEdges) {
-			targetNodeID := outgoingEdges[i].Target
-			return s.FindNodeByID(flow, targetNodeID)
-		}
-	}
-
-	// If no conditions match and no default, use the first edge as fallback
-	if len(outgoingEdges) > 0 {
-		targetNodeID := outgoingEdges[0].Target
-		return s.FindNodeByID(flow, targetNodeID)
-	}
-
-	return nil, fmt.Errorf("no valid next node found for condition node %s", conditionNodeID)
+	// Use the fixed version from condition_evaluation_fix.go
+	return s.EvaluateConditionNodeFixed(flow, conditionNodeID, userInput)
 }
-
-
-
-
 
 // ReplaceVariables replaces variables in text with actual values
 func (s *FlowService) ReplaceVariables(text string, variables map[string]interface{}) string {
@@ -503,17 +405,4 @@ func (s *FlowService) ReplaceVariables(text string, variables map[string]interfa
 		}
 	}
 	return result
-}// CONDITION FIX WRAPPER
-// Add this at the end of flow_service.go
-
-// EvaluateConditionNodeWrapper wraps the original method to handle ALL conditions
-func (s *FlowService) EvaluateConditionNodeWrapper(flow *models.ChatbotFlow, conditionNodeID string, userInput string) (*models.FlowNode, error) {
-	// First try the patched version
-	result, err := s.EvaluateConditionNodePatch(flow, conditionNodeID, userInput)
-	if err == nil {
-		return result, nil
-	}
-	
-	// Fallback to original if patch fails
-	return s.EvaluateConditionNode(flow, conditionNodeID, userInput)
 }
