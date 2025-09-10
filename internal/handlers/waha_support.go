@@ -21,7 +21,7 @@ func (h *Handlers) sendWahaTextMessage(to, message string, deviceSettings *model
 
 	apiBase := "https://waha-plus-production-705f.up.railway.app"
 	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
-	sessionName := fmt.Sprintf("user_%s", deviceSettings.IDDevice)
+	sessionName := fmt.Sprintf("user_%s", deviceSettings.IDDevice.String)
 	apiURL := fmt.Sprintf("%s/api/sendText", apiBase)
 
 	payload := map[string]interface{}{
@@ -80,7 +80,7 @@ func (h *Handlers) sendWahaImageMessage(to, imageURL string, deviceSettings *mod
 
 	apiBase := "https://waha-plus-production-705f.up.railway.app"
 	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
-	sessionName := fmt.Sprintf("user_%s", deviceSettings.IDDevice)
+	sessionName := fmt.Sprintf("user_%s", deviceSettings.IDDevice.String)
 	apiURL := fmt.Sprintf("%s/api/sendImage", apiBase)
 
 	payload := map[string]interface{}{

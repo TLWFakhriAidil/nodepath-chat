@@ -1163,26 +1163,27 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 			return fmt.Errorf("failed to create AI WhatsApp record: %w", err)
 		}
 		
+		// DISABLED: No longer saving to conversation_log_nodepath table
 		// Create initial conversation log within transaction
-		convLogQuery := `
-			INSERT INTO conversation_log_nodepath (
-				prospect_num, message, sender, stage, created_at
-			) VALUES (?, ?, ?, ?, ?)
-		`
-		
-		_, err = tx.Exec(convLogQuery,
-			prospectNum, userMessage, "user", "welcome", now,
-		)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to create initial conversation log in transaction")
-			return fmt.Errorf("failed to create initial conversation log: %w", err)
-		}
+		// convLogQuery := `
+		// 	INSERT INTO conversation_log_nodepath (
+		// 		prospect_num, message, sender, stage, created_at
+		// 	) VALUES (?, ?, ?, ?, ?)
+		// `
+		// 
+		// _, err = tx.Exec(convLogQuery,
+		// 	prospectNum, userMessage, "user", "welcome", now,
+		// )
+		// if err != nil {
+		// 	logrus.WithError(err).Error("Failed to create initial conversation log in transaction")
+		// 	return fmt.Errorf("failed to create initial conversation log: %w", err)
+		// }
 		
 		logrus.WithFields(logrus.Fields{
 			"prospect_num": prospectNum,
 			"id_device":    idDevice,
 			"niche":        niche,
-		}).Info("AI WhatsApp record and conversation log created successfully in transaction")
+		}).Info("AI WhatsApp record created successfully in transaction")
 		
 		return nil
 	})

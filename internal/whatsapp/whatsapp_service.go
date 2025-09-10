@@ -417,13 +417,6 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 			"response_length": len(response),
 		}).Info("📤 FLOW: Sending response back to user")
 
-	// Skip sending if response is empty (already handled by advanced AI nodes)
-	if response == "" {
-		logrus.WithFields(logrus.Fields{
-			"device_id":    deviceID,
-			"phone_number": phoneNumber,
-		}).Info("🔇 FLOW: Skipping empty response to prevent <nil> message")
-	} else {
 		// Process AI response using PHP-compatible logic
 		stage, messages, err := services.ProcessAIResponsePHP(response, 2000) // 2 second delay
 		if err != nil {
@@ -517,6 +510,12 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 				}
 			}
 		}
+	} else {
+		// Skip sending if response is empty (already handled by advanced AI nodes)
+		logrus.WithFields(logrus.Fields{
+			"device_id":    deviceID,
+			"phone_number": phoneNumber,
+		}).Info("🔇 FLOW: Skipping empty response to prevent <nil> message")
 	}
 	
 	// Continue with execution tracking
@@ -524,7 +523,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 		logrus.WithField("execution_id", aiExecution.IDProspect).Info("ℹ️ FLOW: No response generated from flow processing (Advanced AI nodes handle their own message sending)")
 	}
 
-		// Create AI WhatsApp record as fallback when no flow response is generated
+	// Create AI WhatsApp record as fallback when no flow response is generated
 		// Note: Conversation history was already saved above for user input
 		logrus.WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
@@ -557,7 +556,6 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 				"stage":        existingRecord.Stage,
 			}).Info("✅ FLOW: Using existing AI WhatsApp record, conversation already saved")
 		}
-	}
 
 	return nil
 }
@@ -924,6 +922,13 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	// Get AI configuration from node data
 	var systemPrompt, instance, apiProvider string
 
+	// DEBUG: Log the entire node data
+	logrus.WithFields(logrus.Fields{
+		"node_data": node.Data,
+		"node_id": node.ID,
+		"node_type": node.Type,
+	}).Debug("🔍 DEBUG: AI Node Data Extraction")
+
 	// Check node data for configuration - handle both camelCase and snake_case
 	if sp, ok := node.Data["system_prompt"].(string); ok {
 		systemPrompt = sp
@@ -940,6 +945,13 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	} else if ap, ok := node.Data["apiProvider"].(string); ok {
 		apiProvider = ap
 	}
+	
+	// DEBUG: Log extracted values
+	logrus.WithFields(logrus.Fields{
+		"system_prompt_extracted": systemPrompt,
+		"instance_extracted": instance,
+		"api_provider_extracted": apiProvider,
+	}).Debug("🔍 DEBUG: Extracted AI Configuration")
 
 	// Get device settings for fallback values
 	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(execution.IDDevice)
@@ -1052,8 +1064,15 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 
 	// Get conversation history
 	var conversationHistory []models.ConversationMessage
+	var convLastStr string
+	
+	// DEBUG: Log raw conv_last data
+	logrus.WithFields(logrus.Fields{
+		"conv_last_raw": string(execution.ConvLast),
+		"conv_last_len": len(execution.ConvLast),
+	}).Debug("🔍 DEBUG: Raw ConvLast Data")
+	
 	if len(execution.ConvLast) > 0 {
-		var convLastStr string
 		if err := json.Unmarshal(execution.ConvLast, &convLastStr); err == nil {
 			// Successfully unmarshaled
 		} else {
@@ -1063,6 +1082,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		// Remove quotes if present
 		convLastStr = strings.Trim(convLastStr, "\"")
 		
+		// DEBUG: Log processed conversation
+		logrus.WithFields(logrus.Fields{
+			"conv_last_processed": convLastStr,
+			"conv_last_valid": convLastStr != "" && convLastStr != "null",
+		}).Debug("🔍 DEBUG: Processed ConvLast")
+		
 		if convLastStr != "" && convLastStr != "null" {
 			conversationHistory = append(conversationHistory, models.ConversationMessage{
 				Role:    "assistant",
@@ -1070,6 +1095,15 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 			})
 		}
 	}
+	
+	// DEBUG: Log final prompt and conversation being sent to AI
+	logrus.WithFields(logrus.Fields{
+		"system_prompt": systemPrompt,
+		"user_input": userInput,
+		"conversation_history": conversationHistory,
+		"device_id": execution.IDDevice,
+		"api_key_present": actualAPIKey != "",
+	}).Debug("🔍 DEBUG: AI Request Payload")
 
 	// Call AI service with configuration
 	response, err := s.aiService.GenerateResponse(
@@ -1084,6 +1118,13 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		return "I'm sorry, I couldn't process your request. Please try again later.", nil
 	}
 
+	// DEBUG: Log raw AI response
+	logrus.WithFields(logrus.Fields{
+		"ai_response_raw": response,
+		"response_length": len(response),
+		"node_type":       node.Type,
+	}).Debug("🔍 DEBUG: Raw AI Response")
+	
 	logrus.WithFields(logrus.Fields{
 		"response_length": len(response),
 		"node_type":       node.Type,
@@ -1106,6 +1147,13 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 				"response_count": len(parsedResponse.Response),
 				"node_id":        node.ID,
 			}).Info("Successfully parsed JSON response with multiple items")
+			
+			// DEBUG: Log parsed AI response
+			logrus.WithFields(logrus.Fields{
+				"parsed_stage": parsedResponse.Stage,
+				"parsed_response": parsedResponse.Response,
+				"response_items_count": len(parsedResponse.Response),
+			}).Debug("🔍 DEBUG: Parsed AI Response Structure")
 
 			// Update stage if provided
 			if parsedResponse.Stage != "" {
@@ -1118,6 +1166,9 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 
 			// Send individual messages from parsed response
 			if len(parsedResponse.Response) > 0 {
+				// Collect all text messages for conversation history
+				var combinedBotResponse string
+				
 				for i, item := range parsedResponse.Response {
 					if i > 0 {
 						time.Sleep(2 * time.Second) // Add delay between messages
@@ -1129,6 +1180,11 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 						if err != nil {
 							logrus.WithError(err).Error("Failed to send text message")
 						}
+						// Add to combined response for conversation history
+						if combinedBotResponse != "" {
+							combinedBotResponse += " "
+						}
+						combinedBotResponse += item.Content
 					case "image", "audio", "video":
 						err := s.SendMediaMessage(execution.ProspectNum, item.Content, execution.IDDevice)
 						if err != nil {
@@ -1141,16 +1197,60 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 						logrus.WithField("type", item.Type).Warn("Unknown response type")
 					}
 				}
+				
+				// Save conversation history with combined response
+				if combinedBotResponse != "" {
+					// DEBUG: Log what we're saving to conversation
+					logrus.WithFields(logrus.Fields{
+						"user_input": userInput,
+						"bot_response": combinedBotResponse,
+						"stage": parsedResponse.Stage,
+					}).Debug("🔍 DEBUG: Saving to Conversation History")
+					
+					err = s.aiWhatsappService.SaveConversationHistory(
+						execution.ProspectNum,
+						execution.IDDevice,
+						userInput,
+						combinedBotResponse,
+						parsedResponse.Stage,
+					)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to save conversation history")
+					}
+				}
+				
 				// Return empty string since we've already sent the messages
 				return "", nil
 			}
 		}
 	}
 
-	// Handle the next node advancement
+	// Handle the next node advancement  
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err != nil || nextNode == nil {
 		logrus.WithError(err).Warn("No next node found after AI prompt")
+		
+		// Save conversation history for plain text response
+		if response != "" && node.Type != models.NodeTypeAdvancedAIPrompt {
+			// DEBUG: Log plain text conversation save
+			logrus.WithFields(logrus.Fields{
+				"user_input": userInput,
+				"bot_response": response,
+				"stage": execution.Stage.String,
+			}).Debug("🔍 DEBUG: Saving plain text response to conversation")
+			
+			err = s.aiWhatsappService.SaveConversationHistory(
+				execution.ProspectNum,
+				execution.IDDevice,
+				userInput,
+				response,
+				execution.Stage.String,
+			)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to save plain text conversation history")
+			}
+		}
+		
 		// Mark execution as completed
 		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "completed")
 		if err != nil {
@@ -1167,6 +1267,26 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 			"next_node":    nextNode.ID,
 			"next_type":    nextNode.Type,
 		}).Info("🔄 AI_PROMPT: Response sent, advancing to delay node")
+		
+		// Save conversation history before processing delay
+		if response != "" && node.Type != models.NodeTypeAdvancedAIPrompt {
+			logrus.WithFields(logrus.Fields{
+				"user_input": userInput,
+				"bot_response": response,
+				"stage": execution.Stage.String,
+			}).Debug("🔍 DEBUG: Saving conversation before delay node")
+			
+			err = s.aiWhatsappService.SaveConversationHistory(
+				execution.ProspectNum,
+				execution.IDDevice,
+				userInput,
+				response,
+				execution.Stage.String,
+			)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to save conversation history before delay")
+			}
+		}
 
 		// Update execution to delay node
 		execution.CurrentNode.String = nextNode.ID
@@ -1183,6 +1303,26 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		}
 
 		return response, nil
+	}
+
+	// Save conversation history for other node types
+	if response != "" && node.Type != models.NodeTypeAdvancedAIPrompt {
+		logrus.WithFields(logrus.Fields{
+			"user_input": userInput,
+			"bot_response": response,
+			"stage": execution.Stage.String,
+		}).Debug("🔍 DEBUG: Saving conversation for next node")
+		
+		err = s.aiWhatsappService.SaveConversationHistory(
+			execution.ProspectNum,
+			execution.IDDevice,
+			userInput,
+			response,
+			execution.Stage.String,
+		)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to save conversation history")
+		}
 	}
 
 	// Update execution to the next node
@@ -1674,7 +1814,7 @@ func (s *Service) processDelayNode(flow *models.ChatbotFlow, execution *models.A
 
 	// Create delayed message for queue processing
 	delayedMessage := &services.QueueMessage{
-		ID:          fmt.Sprintf("delayed_%s_%s_%d", execution.IDProspect, nextNode.ID, time.Now().Unix()),
+		ID:          fmt.Sprintf("delayed_%d_%s_%d", execution.IDProspect, nextNode.ID, time.Now().Unix()),
 		DeviceID:    execution.IDDevice,
 		PhoneNumber: execution.ProspectNum,
 		Content:     userInput, // Pass the original user input
