@@ -309,21 +309,27 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"current_node":   aiExecution.CurrentNode.String,
 		}).Info("🔄 FLOW: Found existing active execution in ai_whatsapp_nodepath")
 
-		// Check if the execution is waiting for user reply
-		if aiExecution.WaitingForReply.Valid && aiExecution.WaitingForReply.Int32 == 1 {
+		// Check if the execution is waiting for user reply OR has a current node to process
+		if (aiExecution.WaitingForReply.Valid && aiExecution.WaitingForReply.Int32 == 1) || 
+		   (aiExecution.CurrentNodeID.Valid && aiExecution.CurrentNodeID.String != "") {
 			logrus.WithFields(logrus.Fields{
 				"execution_id":    aiExecution.ExecutionID.String,
 				"current_node_id": aiExecution.CurrentNodeID.String,
 				"flow_id":         aiExecution.FlowID.String,
 				"user_input":      content,
-			}).Info("💬 USER_REPLY: Processing user reply for waiting execution")
+				"waiting_for_reply": aiExecution.WaitingForReply.Int32,
+			}).Info("💬 FLOW: Processing user input through flow execution")
 
-			// Handle the user reply and resume flow from the correct node
-			return s.handleUserReplyResume(aiExecution, content)
+			// If we have a current node, process through the flow
+			if aiExecution.CurrentNodeID.Valid && aiExecution.CurrentNodeID.String != "" {
+				// Process through the flow using current node
+				return s.processNewFlowExecution(aiExecution, content, phoneNumber, deviceID)
+			} else {
+				// Handle the user reply and resume flow from the correct node
+				return s.handleUserReplyResume(aiExecution, content)
+			}
 		} else {
-			// Execution exists but not waiting for reply - this means the flow is already completed or in progress
-			// We should not restart the flow, instead fall back to AI conversation
-			// Note: AI conversation will handle its own conversation saving to prevent duplicates
+			// Execution exists but not explicitly waiting - check if we should still process through flow
 			logrus.WithFields(logrus.Fields{
 				"execution_id":      aiExecution.ExecutionID.String,
 				"current_node_id":   aiExecution.CurrentNodeID.String,
@@ -331,8 +337,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 				"user_input":        content,
 			}).Info("ℹ️ FLOW: Existing execution not waiting for reply, falling back to AI conversation")
 
-			// Fall back to AI conversation instead of restarting flow
-			// AI conversation will handle conversation saving internally
+			// Fall back to AI conversation for completed flows
 			return s.processAIConversation(phoneNumber, content, deviceID)
 		}
 	}
@@ -1270,13 +1275,21 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	// Handle the next node advancement  
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err != nil || nextNode == nil {
-		logrus.WithError(err).Warn("No next node found after AI prompt")
+		logrus.WithError(err).Info("No next node found after AI prompt - keeping execution active for user replies")
 		
-		// Mark execution as completed
-		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "completed")
+		// Keep the AI prompt node as current and set waiting_for_reply flag
+		// This allows the conversation to continue with the same AI prompt when user replies
+		err = s.updateFlowTrackingFields(execution, node.ID, execution.FlowID.String, true)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to complete flow execution")
+			logrus.WithError(err).Error("Failed to update flow tracking for waiting state")
 		}
+		
+		logrus.WithFields(logrus.Fields{
+			"node_id": node.ID,
+			"prospect_num": execution.ProspectNum,
+			"waiting_for_reply": true,
+		}).Info("🔄 AI_PROMPT: Set to wait for user reply")
+		
 		return response, nil
 	}
 
