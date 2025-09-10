@@ -15,12 +15,14 @@ import (
 
 	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/models"
+	"nodepath-chat/internal/repository"
 
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	openRouterBaseURL = "https://openrouter.ai/api/v1"
+	openAIBaseURL     = "https://api.openai.com/v1"
 	defaultModel      = "openai/gpt-4o"
 	maxRetries        = 3
 	retryDelay       = time.Second * 1 // Reduced from 2s for faster retries
@@ -45,6 +47,7 @@ type CircuitBreaker struct {
 // AIService handles AI/OpenRouter integration with caching and concurrency optimization
 type AIService struct {
 	cfg        *config.Config
+	deviceRepo repository.DeviceSettingsRepository
 	httpClient *http.Client
 	// Response cache for frequently asked questions
 	cache     map[string]*CachedResponse
@@ -59,7 +62,7 @@ type AIService struct {
 }
 
 // NewAIService creates a new AI service with performance optimizations
-func NewAIService(cfg *config.Config) *AIService {
+func NewAIService(cfg *config.Config, deviceRepo repository.DeviceSettingsRepository) *AIService {
 	// Initialize rate limiter configuration
 	rateLimiterConfig := &RateLimiterConfig{
 		RequestsPerMinute: 100,
@@ -72,7 +75,8 @@ func NewAIService(cfg *config.Config) *AIService {
 	rateLimiter.StartCleanupRoutine()
 
 	return &AIService{
-		cfg: cfg,
+		cfg:        cfg,
+		deviceRepo: deviceRepo,
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second, // Reduced from 30s for better real-time performance
 		},
@@ -92,41 +96,10 @@ func maskAPIKey(apiKey string) string {
 
 // GenerateResponse generates an AI response using OpenRouter with caching and concurrency control
 func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey, deviceID string, conversationHistory []models.ConversationMessage) (string, error) {
-	// 🔍 DEBUG TRACE: Log initial API key state
-	logrus.WithFields(logrus.Fields{
-		"device_id": deviceID,
-		"api_key_provided": apiKey != "",
-		"api_key_source": func() string {
-			if apiKey != "" {
-				return "parameter"
-			}
-			return "none"
-		}(),
-		"api_key_preview": func() string {
-			if apiKey != "" {
-				return maskAPIKey(apiKey)
-			}
-			return "none"
-		}(),
-	}).Info("🔍 AI_SERVICE_DEBUG: Initial API key state")
+	// Use device-specific API key logic
+	apiKey = s.getAPIKey(apiKey, deviceID)
 
 	if apiKey == "" {
-		apiKey = s.cfg.OpenRouterDefaultKey
-		// 🔍 DEBUG TRACE: Log fallback to default key
-		logrus.WithFields(logrus.Fields{
-			"device_id": deviceID,
-			"api_key_source": "config_default",
-			"api_key_preview": func() string {
-				if apiKey != "" {
-					return maskAPIKey(apiKey)
-				}
-				return "none"
-			}(),
-		}).Info("🔍 AI_SERVICE_DEBUG: Using default API key from config")
-	}
-
-	if apiKey == "" {
-		logrus.WithField("device_id", deviceID).Error("🔍 AI_SERVICE_DEBUG: No API key available after all fallbacks")
 		return "", fmt.Errorf("no API key provided")
 	}
 
@@ -157,11 +130,14 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey, deviceID s
 	// Build messages for OpenRouter
 	messages := s.buildMessages(systemPrompt, userInput, conversationHistory)
 
-	// Create request
+	// Create request with PHP payload structure parameters and device-specific model
 	request := models.OpenRouterRequest{
-		Model:    defaultModel,
-		Messages: messages,
-		Stream:   false,
+		Model:             s.getAIModel(deviceID), // Use device-specific model selection
+		Messages:          messages,
+		Stream:            false,
+		Temperature:       0.67, // Recommended setting from PHP code
+		TopP:              1.0,  // Keep responses within natural probability range
+		RepetitionPenalty: 1.0,  // Avoid repetitive responses
 	}
 
 	// Make API call with retries
@@ -213,9 +189,8 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey, deviceID s
 
 // GenerateAdvancedResponse generates an AI response with structured JSON output for advanced AI prompt nodes
 func (s *AIService) GenerateAdvancedResponse(systemPrompt, userInput, apiKey, deviceID string, conversationHistory []models.ConversationMessage, closingPrompt string) (*models.AIPromptResponse, error) {
-	if apiKey == "" {
-		apiKey = s.cfg.OpenRouterDefaultKey
-	}
+	// Use device-specific API key logic
+	apiKey = s.getAPIKey(apiKey, deviceID)
 
 	if apiKey == "" {
 		return nil, fmt.Errorf("no API key provided")
@@ -227,11 +202,14 @@ func (s *AIService) GenerateAdvancedResponse(systemPrompt, userInput, apiKey, de
 	// Build messages for OpenRouter
 	messages := s.buildMessages(enhancedSystemPrompt, userInput, conversationHistory)
 
-	// Create request
+	// Create request with PHP payload structure parameters and device-specific model
 	request := models.OpenRouterRequest{
-		Model:    defaultModel,
-		Messages: messages,
-		Stream:   false,
+		Model:             s.getAIModel(deviceID), // Use device-specific model selection
+		Messages:          messages,
+		Stream:            false,
+		Temperature:       0.67, // Recommended setting from PHP code
+		TopP:              1.0,  // Keep responses within natural probability range
+		RepetitionPenalty: 1.0,  // Avoid repetitive responses
 	}
 
 	// Make API call with retries
@@ -328,15 +306,72 @@ func (s *AIService) buildMessages(systemPrompt, userInput string, conversationHi
 	return messages
 }
 
-// makeOpenRouterRequest makes the actual HTTP request to OpenRouter with circuit breaker and rate limiting protection
+// getAPIURL determines the API URL based on device ID
+// Uses OpenAI for SCHQ-S94 and SCHQ-S12, OpenRouter for all other devices
+func (s *AIService) getAPIURL(deviceID string) string {
+	// Use OpenAI API for specific devices as per PHP code requirements
+	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
+		return openAIBaseURL
+	}
+	// Use OpenRouter API for all other devices
+	return openRouterBaseURL
+}
+
+// getAIModel determines the AI model based on device ID
+// Uses gpt-4.1 for SCHQ-S94 and SCHQ-S12, api_key_option from database for all other devices
+func (s *AIService) getAIModel(deviceID string) string {
+	// Use gpt-4.1 for specific devices as per PHP code requirements
+	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
+		return "gpt-4.1"
+	}
+	
+	// Fetch device settings from database to get api_key_option
+	deviceSettings, err := s.deviceRepo.GetDeviceSettingsByDevice(deviceID)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"error": err.Error(),
+		}).Warn("Failed to fetch device settings for AI model, using default")
+		return defaultModel
+	}
+	
+	// Use API key option from device settings as the model
+	if deviceSettings.APIKeyOption != "" {
+		return deviceSettings.APIKeyOption
+	}
+	
+	// Fallback to default model
+	return defaultModel
+}
+
+// getAPIKey determines the API key based on device ID
+// Uses specific OpenAI key for SCHQ-S94 and SCHQ-S12, provided key for all other devices
+func (s *AIService) getAPIKey(providedKey, deviceID string) string {
+	// Use specific OpenAI API key for SCHQ-S94 and SCHQ-S12 as per PHP code requirements
+	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
+		return "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"
+	}
+	// Use provided API key for all other devices
+	if providedKey != "" {
+		return providedKey
+	}
+	// Fallback to default OpenRouter key
+	return s.cfg.OpenRouterDefaultKey
+}
+
+// makeOpenRouterRequest makes the actual HTTP request to AI API with circuit breaker and rate limiting protection
 func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiKey, deviceID string) (*models.OpenRouterResponse, error) {
 	// Check circuit breaker before making request
 	if s.isCircuitBreakerOpen() {
 		return nil, fmt.Errorf("circuit breaker is open, API temporarily unavailable")
 	}
 
-	// Use OpenRouter as the standard provider for all devices
+	// Determine provider and API URL based on device ID
+	apiURL := s.getAPIURL(deviceID)
 	provider := "openrouter"
+	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
+		provider = "openai"
+	}
 
 	// Check rate limits before making request
 	if err := s.rateLimiter.CheckRateLimit(provider, deviceID); err != nil {
@@ -355,8 +390,8 @@ func (s *AIService) makeOpenRouterRequest(request models.OpenRouterRequest, apiK
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	req, err := http.NewRequest("POST", openRouterBaseURL+"/chat/completions", bytes.NewBuffer(requestBody))
+	// Create HTTP request with device-specific API URL
+	req, err := http.NewRequest("POST", apiURL+"/chat/completions", bytes.NewBuffer(requestBody))
 	if err != nil {
 		s.recordAPIFailure()
 		return nil, fmt.Errorf("failed to create request: %w", err)

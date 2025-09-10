@@ -81,16 +81,16 @@ func main() {
 		logrus.Warn("Redis not available, services will run without caching")
 	}
 	
-	flowService := services.NewFlowService(db, concreteRedisClient)
-	aiService := services.NewAIService(cfg)
-	queueMonitor := services.NewQueueMonitor()
-	queueService := services.NewQueueService(redisClient, queueMonitor)
-	deviceSettingsService := services.NewDeviceSettingsService(db)
-	
-	// Initialize repositories
+	// Initialize repositories first (before services)
 	aiWhatsappRepo := repository.NewAIWhatsappRepository(db)
 	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
 	logrus.Info("Repositories initialized successfully")
+	
+	flowService := services.NewFlowService(db, concreteRedisClient)
+	aiService := services.NewAIService(cfg, deviceSettingsRepo)
+	queueMonitor := services.NewQueueMonitor()
+	queueService := services.NewQueueService(redisClient, queueMonitor)
+	deviceSettingsService := services.NewDeviceSettingsService(db)
 	
 
 	

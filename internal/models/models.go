@@ -131,11 +131,15 @@ type ConversationMessage struct {
 
 
 // OpenRouterRequest represents a request to OpenRouter API
+// Updated to match PHP payload structure with temperature, top_p, and repetition_penalty
 type OpenRouterRequest struct {
-	Model    string                   `json:"model"`
-	Messages []OpenRouterMessage     `json:"messages"`
-	Stream   bool                     `json:"stream"`
-	Other    map[string]interface{}   `json:"-"`
+	Model             string                   `json:"model"`
+	Messages          []OpenRouterMessage     `json:"messages"`
+	Stream            bool                     `json:"stream"`
+	Temperature       float64                  `json:"temperature"`        // Recommended setting: 0.67
+	TopP              float64                  `json:"top_p"`              // Keep responses within natural probability range: 1
+	RepetitionPenalty float64                  `json:"repetition_penalty"` // Avoid repetitive responses: 1
+	Other             map[string]interface{}   `json:"-"`
 }
 
 // OpenRouterMessage represents a message in OpenRouter format

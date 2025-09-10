@@ -724,14 +724,24 @@ func (s *aiWhatsappService) getLastAIResponse(aiConv *models.AIWhatsapp) string 
 }
 
 // getAPIURL determines the API URL based on device ID
+// Uses OpenAI for SCHQ-S94 and SCHQ-S12, OpenRouter for all other devices
 func (s *aiWhatsappService) getAPIURL(idDevice string) string {
-	// Use OpenRouter API for all devices
+	// Use OpenAI API for specific devices as per PHP code requirements
+	if idDevice == "SCHQ-S94" || idDevice == "SCHQ-S12" {
+		return "https://api.openai.com/v1/chat/completions"
+	}
+	// Use OpenRouter API for all other devices
 	return "https://openrouter.ai/api/v1/chat/completions"
 }
 
 // getAIModel determines the AI model based on device and API key option
+// Uses gpt-4.1 for SCHQ-S94 and SCHQ-S12, api_key_option for all other devices
 func (s *aiWhatsappService) getAIModel(idDevice, apiKeyOption string) string {
-	// Use API key option for all devices
+	// Use gpt-4.1 for specific devices as per PHP code requirements
+	if idDevice == "SCHQ-S94" || idDevice == "SCHQ-S12" {
+		return "gpt-4.1"
+	}
+	// Use API key option for all other devices
 	return apiKeyOption
 }
 

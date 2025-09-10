@@ -23,8 +23,8 @@ COPY eslint.config.js ./
 # Build the React application
 RUN npm run build
 
-# Backend build stage
-FROM golang:1.24-alpine AS backend-builder
+# Backend build stage - Using Go 1.23 which is the latest stable version available in Docker Hub
+FROM golang:1.23-alpine AS backend-builder
 
 # Install minimal dependencies for CGO-free builds
 RUN apk add --no-cache git ca-certificates tzdata
