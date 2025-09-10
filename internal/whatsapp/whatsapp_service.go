@@ -907,6 +907,12 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 		return s.processStageNode(flow, aiExecution, currentNode, userInput)
 	case models.NodeTypeUserReply:
 		return s.processUserReplyNode(flow, aiExecution, currentNode, userInput)
+	case models.NodeTypeWaitingReplyTimes:
+		// Process waiting_reply_times similar to user_reply
+		return s.processUserReplyNode(flow, aiExecution, currentNode, userInput)
+	case models.NodeTypeManual:
+		// Manual nodes require human intervention - treat as default
+		return s.processDefaultNode(flow, aiExecution, currentNode, userInput)
 
 	default:
 		return s.processDefaultNode(flow, aiExecution, currentNode, userInput)
@@ -1135,6 +1141,9 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		"node_type":       node.Type,
 	}).Info("🤖 AI_PROMPT: AI response generated successfully")
 
+	// Track if we sent messages individually (for JSON responses)
+	messagesSentIndividually := false
+
 	// For advanced_ai_prompt nodes, parse the response and handle it
 	if node.Type == models.NodeTypeAdvancedAIPrompt || node.Type == "advanced_ai_prompt" || node.Type == models.NodeTypeAIPrompt || node.Type == "ai_prompt" || node.Type == "prompt" {
 		// Try to parse the AI response JSON for all AI nodes
@@ -1252,8 +1261,8 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 					}
 				}
 				
-				// Return empty string since we've already sent the messages
-				return "", nil
+				// Mark that we sent messages individually
+				messagesSentIndividually = true
 			}
 		}
 	} else {
@@ -1272,10 +1281,14 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		}
 	}
 
-	// Handle the next node advancement  
+	// *** CRITICAL FIX: Handle flow continuation after AI prompt ***
+	// Now handle the next node advancement properly
 	nextNode, err := s.flowService.GetNextNode(flow, node.ID)
 	if err != nil || nextNode == nil {
-		logrus.WithError(err).Info("No next node found after AI prompt - keeping execution active for user replies")
+		logrus.WithFields(logrus.Fields{
+			"node_id": node.ID,
+			"prospect_num": execution.ProspectNum,
+		}).Info("🏁 AI_PROMPT: No next node found after AI prompt - keeping execution active for continued conversation")
 		
 		// Keep the AI prompt node as current and set waiting_for_reply flag
 		// This allows the conversation to continue with the same AI prompt when user replies
@@ -1288,8 +1301,129 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 			"node_id": node.ID,
 			"prospect_num": execution.ProspectNum,
 			"waiting_for_reply": true,
-		}).Info("🔄 AI_PROMPT: Set to wait for user reply")
+		}).Info("🔄 AI_PROMPT: Set to wait for user reply (no next node)")
 		
+		// Return the response if we didn't send messages individually
+		if messagesSentIndividually {
+			return "", nil
+		}
+		return response, nil
+	}
+
+	// Log the next node details
+	logrus.WithFields(logrus.Fields{
+		"current_node": node.ID,
+		"next_node":    nextNode.ID,
+		"next_type":    nextNode.Type,
+	}).Info("🔄 AI_PROMPT: Found next node after AI prompt")
+
+	// Check if the next node is a user_reply node - if so, advance and wait
+	if nextNode.Type == models.NodeTypeUserReply || nextNode.Type == "user_reply" {
+		logrus.WithFields(logrus.Fields{
+			"prospect_id":  execution.IDProspect,
+			"current_node": node.ID,
+			"next_node":    nextNode.ID,
+			"next_type":    nextNode.Type,
+		}).Info("🔄 AI_PROMPT: Next node is user_reply, advancing and waiting for user input")
+
+		// Update execution to user_reply node and set waiting flag
+		s.updateCurrentNode(execution, nextNode.ID)
+		err = s.updateFlowTrackingFields(execution, nextNode.ID, execution.FlowID.String, true)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution to user_reply node")
+			// Continue anyway - don't break the flow
+		}
+
+		// Also update the execution in the database
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update flow execution to user_reply node")
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"node_id": nextNode.ID,
+			"prospect_num": execution.ProspectNum,
+			"waiting_for_reply": true,
+		}).Info("✅ AI_PROMPT: Advanced to user_reply node and waiting for user input")
+
+		// Return the response if we didn't send messages individually
+		if messagesSentIndividually {
+			return "", nil
+		}
+		return response, nil
+	}
+
+	// Check if the next node is a waiting_reply_times node - if so, advance and wait
+	if nextNode.Type == models.NodeTypeWaitingReplyTimes || nextNode.Type == "waiting_reply_times" {
+		logrus.WithFields(logrus.Fields{
+			"prospect_id":  execution.IDProspect,
+			"current_node": node.ID,
+			"next_node":    nextNode.ID,
+			"next_type":    nextNode.Type,
+		}).Info("🔄 AI_PROMPT: Next node is waiting_reply_times, advancing and waiting for user input")
+
+		// Update execution to waiting_reply_times node and set waiting flag
+		s.updateCurrentNode(execution, nextNode.ID)
+		err = s.updateFlowTrackingFields(execution, nextNode.ID, execution.FlowID.String, true)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution to waiting_reply_times node")
+			// Continue anyway - don't break the flow
+		}
+
+		// Also update the execution in the database
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update flow execution to waiting_reply_times node")
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"node_id": nextNode.ID,
+			"prospect_num": execution.ProspectNum,
+			"waiting_for_reply": true,
+		}).Info("✅ AI_PROMPT: Advanced to waiting_reply_times node and waiting for user input")
+
+		// Return the response if we didn't send messages individually
+		if messagesSentIndividually {
+			return "", nil
+		}
+		return response, nil
+	}
+
+	// Check if the next node is another AI prompt node - if so, advance and wait
+	if nextNode.Type == models.NodeTypeAIPrompt || nextNode.Type == "ai_prompt" || 
+	   nextNode.Type == models.NodeTypeAdvancedAIPrompt || nextNode.Type == "advanced_ai_prompt" || 
+	   nextNode.Type == "prompt" {
+		logrus.WithFields(logrus.Fields{
+			"prospect_id":  execution.IDProspect,
+			"current_node": node.ID,
+			"next_node":    nextNode.ID,
+			"next_type":    nextNode.Type,
+		}).Info("🔄 AI_PROMPT: Next node is another AI prompt, advancing and waiting for user input")
+
+		// Update execution to next AI prompt node and set waiting flag
+		s.updateCurrentNode(execution, nextNode.ID)
+		err = s.updateFlowTrackingFields(execution, nextNode.ID, execution.FlowID.String, true)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update execution to next AI prompt node")
+			// Continue anyway - don't break the flow
+		}
+
+		// Also update the execution in the database
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to update flow execution to next AI prompt node")
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"node_id": nextNode.ID,
+			"prospect_num": execution.ProspectNum,
+			"waiting_for_reply": true,
+		}).Info("✅ AI_PROMPT: Advanced to next AI prompt node and waiting for user input")
+
+		// Return the response if we didn't send messages individually
+		if messagesSentIndividually {
+			return "", nil
+		}
 		return response, nil
 	}
 
@@ -1303,9 +1437,8 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		}).Info("🔄 AI_PROMPT: Response sent, advancing to delay node")
 
 		// Update execution to delay node
-		execution.CurrentNode.String = nextNode.ID
-		execution.CurrentNode.Valid = true
-		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, execution.CurrentNodeID.String, make(map[string]interface{}), "active")
+		s.updateCurrentNode(execution, nextNode.ID)
+		err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update execution to delay node")
 		}
@@ -1316,14 +1449,131 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 			logrus.WithError(err).Error("Failed to process delay node after AI prompt")
 		}
 
+		// Return the response if we didn't send messages individually
+		if messagesSentIndividually {
+			return "", nil
+		}
 		return response, nil
 	}
 
-	// Update execution to the next node
-	execution.CurrentNode.String = nextNode.ID
-	execution.CurrentNode.Valid = true
-	s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
+	// For other node types, advance and continue processing immediately
+	logrus.WithFields(logrus.Fields{
+		"prospect_id":  execution.IDProspect,
+		"current_node": node.ID,
+		"next_node":    nextNode.ID,
+		"next_type":    nextNode.Type,
+	}).Info("🔄 AI_PROMPT: Advancing to next node for immediate processing")
 
+	// Update execution to the next node
+	s.updateCurrentNode(execution, nextNode.ID)
+	err = s.aiWhatsappService.UpdateFlowExecution(execution.ProspectNum, execution.IDDevice, nextNode.ID, make(map[string]interface{}), "active")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to update flow execution")
+		// Continue anyway - don't break the flow
+	}
+
+	// Process the next node immediately if it's not a waiting type
+	// CRITICAL FIX: Process ALL node types properly after AI prompt
+	switch nextNode.Type {
+	case models.NodeTypeMessage:
+		nextResponse, err := s.processMessageNode(flow, execution, nextNode, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process message node after AI prompt")
+		}
+		// Send the message if we got one
+		if nextResponse != "" {
+			s.SendMessageFromDevice(execution.IDDevice, execution.ProspectNum, nextResponse)
+		}
+		
+	case models.NodeTypeImage:
+		nextResponse, err := s.processImageNode(flow, execution, nextNode, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process image node after AI prompt")
+		}
+		// Send media if we got URL
+		if nextResponse != "" {
+			s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, nextResponse)
+		}
+		
+	case models.NodeTypeAudio:
+		nextResponse, err := s.processAudioNode(flow, execution, nextNode, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process audio node after AI prompt")
+		}
+		// Send media if we got URL
+		if nextResponse != "" {
+			s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, nextResponse)
+		}
+		
+	case models.NodeTypeVideo:
+		nextResponse, err := s.processVideoNode(flow, execution, nextNode, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process video node after AI prompt")
+		}
+		// Send media if we got URL
+		if nextResponse != "" {
+			s.SendMediaMessage(execution.IDDevice, execution.ProspectNum, nextResponse)
+		}
+		
+	case models.NodeTypeCondition:
+		// Process condition node with current user input
+		_, err := s.processConditionNode(flow, execution, nextNode, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process condition node after AI prompt")
+		}
+		
+	case models.NodeTypeStage:
+		// Process stage node
+		_, err := s.processStageNode(flow, execution, nextNode, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process stage node after AI prompt")
+		}
+		
+	case models.NodeTypeManual:
+		// Process manual node - for now just treat as default behavior
+		// Manual nodes typically require human intervention
+		logrus.WithFields(logrus.Fields{
+			"node_type": nextNode.Type,
+			"node_id":   nextNode.ID,
+		}).Info("🔄 AI_PROMPT: Manual node encountered - treating as default")
+		
+		// Update current node to the manual node first
+		s.updateCurrentNode(execution, nextNode.ID)
+		
+		// Process through the generic flow message processor
+		_, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process manual node after AI prompt")
+		}
+		
+	case models.NodeTypeStart:
+		// Process start node (rare but possible in loops)
+		_, err := s.processStartNode(flow, execution, nextNode, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process start node after AI prompt")
+		}
+		
+	default:
+		// For any unhandled node type, use generic flow processing
+		logrus.WithFields(logrus.Fields{
+			"node_type": nextNode.Type,
+			"node_id":   nextNode.ID,
+		}).Info("🔄 AI_PROMPT: Processing unhandled node type through generic flow processor")
+		
+		// Update current node to the next node first
+		s.updateCurrentNode(execution, nextNode.ID)
+		
+		// Process through the generic flow message processor
+		_, err := s.processFlowMessage(flow, execution, userInput)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to process next node after AI prompt through generic processor")
+		}
+	}
+
+	// Return empty response if we sent messages individually, otherwise return the AI response
+	if messagesSentIndividually {
+		return "", nil
+	}
 	return response, nil
 }
 

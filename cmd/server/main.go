@@ -8,15 +8,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/template/html/v2"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
 	"nodepath-chat/internal/config"
@@ -29,7 +29,7 @@ import (
 
 func main() {
 	logrus.Info("Starting NodePath Chat Server...")
-	
+
 	// Load environment variables from .env file if it exists
 	if err := godotenv.Load(); err != nil {
 		logrus.Println("No .env file found, using environment variables")
@@ -53,7 +53,7 @@ func main() {
 			db = nil
 		} else {
 			logrus.Info("Database initialized successfully")
-			
+
 			// Run migrations
 			if err := database.RunMigrations(db); err != nil {
 				logrus.WithError(err).Warn("Failed to run migrations, continuing anyway")
@@ -80,24 +80,22 @@ func main() {
 	} else {
 		logrus.Warn("Redis not available, services will run without caching")
 	}
-	
-	// Initialize repositories first (before services)
-	aiWhatsappRepo := repository.NewAIWhatsappRepository(db)
-	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
-	logrus.Info("Repositories initialized successfully")
-	
+
 	flowService := services.NewFlowService(db, concreteRedisClient)
-	aiService := services.NewAIService(cfg, deviceSettingsRepo)
+	aiService := services.NewAIService(cfg)
 	queueMonitor := services.NewQueueMonitor()
 	queueService := services.NewQueueService(redisClient, queueMonitor)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
-	
 
-	
+	// Initialize repositories
+	aiWhatsappRepo := repository.NewAIWhatsappRepository(db)
+	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
+	logrus.Info("Repositories initialized successfully")
+
 	// Initialize WebSocket service for real-time communication
 	websocketService := services.NewWebSocketService(cfg.MaxConcurrentUsers)
 	logrus.Info("WebSocket service initialized for real-time messaging")
-	
+
 	// Initialize media service with CDN support
 	mediaService := services.NewMediaService(cfg.CDNEnabled, cfg.CDNBaseURL, "./media")
 	logrus.Info("Media service initialized with CDN support")
@@ -148,7 +146,7 @@ func main() {
 	// Initialize HTML template engine
 	engine := html.New("./templates", ".html")
 	engine.Reload(cfg.AppEnv == "development")
-	
+
 	// Add template functions
 	engine.AddFunc("now", func() time.Time {
 		return time.Now()
@@ -158,16 +156,16 @@ func main() {
 	app := fiber.New(fiber.Config{
 		Views:        engine,
 		ErrorHandler: customErrorHandler,
-		BodyLimit:    50 * 1024 * 1024, // 50MB for media files
-		ReadTimeout:  30 * time.Second,  // Increased for large uploads
-		WriteTimeout: 30 * time.Second,  // Increased for large downloads
-		IdleTimeout:  120 * time.Second, // Keep connections alive longer
+		BodyLimit:    50 * 1024 * 1024,           // 50MB for media files
+		ReadTimeout:  30 * time.Second,           // Increased for large uploads
+		WriteTimeout: 30 * time.Second,           // Increased for large downloads
+		IdleTimeout:  120 * time.Second,          // Keep connections alive longer
 		Concurrency:  cfg.MaxConcurrentUsers * 2, // Handle high concurrency
 	})
 
 	// Performance and security middleware
 	app.Use(recover.New())
-	
+
 	// Rate limiting for API protection
 	app.Use(limiter.New(limiter.Config{
 		Max:        100, // 100 requests per minute per IP
@@ -181,11 +179,11 @@ func main() {
 			})
 		},
 	}))
-	
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,Authorization,X-Device-ID",
+		AllowOrigins:     "*",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization,X-Device-ID",
 		AllowCredentials: false, // Set to false when using wildcard origins
 	}))
 
@@ -270,17 +268,17 @@ func main() {
 				"error": "No file uploaded",
 			})
 		}
-		
+
 		result, err := mediaService.UploadFile(file)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
-		
+
 		return c.JSON(result)
 	})
-	
+
 	media.Get("/:filename", func(c *fiber.Ctx) error {
 		filename := c.Params("filename")
 		data, mimeType, err := mediaService.ServeFile(filename)
@@ -289,12 +287,12 @@ func main() {
 				"error": "File not found",
 			})
 		}
-		
+
 		c.Set("Content-Type", mimeType)
 		c.Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
 		return c.Send(data)
 	})
-	
+
 	media.Get("/thumbnails/:filename", func(c *fiber.Ctx) error {
 		filename := c.Params("filename")
 		data, mimeType, err := mediaService.ServeFile("thumbnails/" + filename)
@@ -303,7 +301,7 @@ func main() {
 				"error": "Thumbnail not found",
 			})
 		}
-		
+
 		c.Set("Content-Type", mimeType)
 		c.Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
 		return c.Send(data)
