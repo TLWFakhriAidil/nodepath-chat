@@ -1087,7 +1087,7 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 func (r *aiWhatsappRepository) UpdateFlowTrackingFields(prospectNum, idDevice string, flowID, currentNodeID, lastNodeID string, waitingForReply int, executionStatus, executionID string) error {
 	query := `
 		UPDATE ai_whatsapp_nodepath SET 
-			flow_id = ?, current_node_id = ?, last_node_id = ?, waiting_for_reply = ?,
+			flow_id = ?, flow_reference = ?, current_node_id = ?, last_node_id = ?, waiting_for_reply = ?,
 			execution_status = ?, execution_id = ?, updated_at = ?
 		WHERE prospect_num = ? AND id_device = ?
 	`
@@ -1141,7 +1141,7 @@ func (r *aiWhatsappRepository) UpdateFlowTrackingFields(prospectNum, idDevice st
 	}).Info("DEBUG: About to update flow tracking fields")
 
 	result, err := r.db.Exec(query,
-		flowIDValue, currentNodeIDValue, lastNodeIDValue, waitingForReplyValue,
+		flowIDValue, flowIDValue, currentNodeIDValue, lastNodeIDValue, waitingForReplyValue,
 		executionStatusValue, executionIDValue, time.Now(),
 		prospectNum, idDevice,
 	)

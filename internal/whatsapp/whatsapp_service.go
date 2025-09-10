@@ -325,15 +325,28 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 				// FIX: Don't call processNewFlowExecution for existing executions
 				// This prevents saving user message twice
 				
-				// Get the flow data
-				flow, err := s.flowService.GetFlow(aiExecution.FlowReference.String)
+				// Get the flow data - use FlowID if FlowReference is empty
+				flowID := aiExecution.FlowReference.String
+				if flowID == "" && aiExecution.FlowID.Valid {
+					flowID = aiExecution.FlowID.String
+				}
+				
+				if flowID == "" {
+					logrus.WithFields(logrus.Fields{
+						"flow_reference": aiExecution.FlowReference.String,
+						"flow_id": aiExecution.FlowID.String,
+					}).Error("❌ FLOW: No flow ID found for existing execution")
+					return fmt.Errorf("no flow ID found")
+				}
+				
+				flow, err := s.flowService.GetFlow(flowID)
 				if err != nil {
-					logrus.WithError(err).Error("❌ FLOW: Failed to get flow for existing execution")
+					logrus.WithError(err).WithField("flow_id", flowID).Error("❌ FLOW: Failed to get flow for existing execution")
 					return err
 				}
 				
 				if flow == nil {
-					logrus.WithField("flow_reference", aiExecution.FlowReference.String).Error("❌ FLOW: Flow not found for existing execution")
+					logrus.WithField("flow_id", flowID).Error("❌ FLOW: Flow not found for existing execution")
 					return fmt.Errorf("flow not found")
 				}
 				
