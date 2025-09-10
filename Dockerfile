@@ -50,12 +50,6 @@ COPY . .
 # Build the application with static linking
 RUN go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /app/bin/server ./cmd/server
 
-# Build migration utility with static linking
-RUN go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /app/bin/migrate ./debug/fix_production_schema.go
-
-# Build the Railway migration runner with static linking
-RUN go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /app/bin/railway_migration_runner ./debug/railway_migration_runner.go
-
 # Final stage
 FROM alpine:latest
 
@@ -67,15 +61,6 @@ RUN mkdir -p /app
 
 # Copy binary from backend builder
 COPY --from=backend-builder /app/bin/server /app/server
-
-# Copy migration utility, Railway migration runner, and SQL script
-COPY --from=backend-builder /app/bin/migrate /app/migrate
-COPY --from=backend-builder /app/bin/railway_migration_runner /app/railway_migration_runner
-COPY --from=backend-builder /src/production_fix_jam_column.sql /app/production_fix_jam_column.sql
-
-# Copy startup script
-COPY --from=backend-builder /src/start-with-migration.sh /app/start-with-migration.sh
-RUN chmod +x /app/start-with-migration.sh
 
 # Copy built React application from frontend builder
 COPY --from=frontend-builder /app/dist /app/dist
@@ -98,5 +83,5 @@ ENV APP_ENV=production
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/healthz || exit 1
 
-# Run the application with migration
-CMD ["/app/start-with-migration.sh"]
+# Run the application directly
+CMD ["/app/server"]
