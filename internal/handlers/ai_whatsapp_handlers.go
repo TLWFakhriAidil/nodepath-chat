@@ -1222,13 +1222,129 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 		})
 	}
 
+	// Transform data to handle sql.NullString fields properly
+	transformedData := make([]map[string]interface{}, len(data))
+	for i, item := range data {
+		transformed := map[string]interface{}{
+			"id_prospect":   item.IDProspect,
+			"id_device":     item.IDDevice,
+			"prospect_num":  item.ProspectNum,
+			"human":         item.Human,
+			"niche":         item.Niche,
+			"jam":           item.Jam,
+			"intro":         item.Intro,
+			"catatan_staff": item.CatatanStaff,
+			"balas":         item.Balas,
+			"data_image":    item.DataImage,
+			"keywordiklan":  item.KeywordIklan,
+			"marketer":      item.Marketer,
+			"created_at":    item.CreatedAt,
+			"updated_at":    item.UpdatedAt,
+		}
+		
+		// Handle nullable fields
+		if item.Stage.Valid {
+			transformed["stage"] = item.Stage.String
+		} else {
+			transformed["stage"] = nil
+		}
+		
+		if item.DateOrder != nil {
+			transformed["date_order"] = item.DateOrder
+		} else {
+			transformed["date_order"] = nil
+		}
+		
+		if item.ConvCurrent.Valid {
+			transformed["conv_current"] = item.ConvCurrent.String
+		} else {
+			transformed["conv_current"] = nil
+		}
+		
+		if item.ConvStage.Valid {
+			transformed["conv_stage"] = item.ConvStage.String
+		} else {
+			transformed["conv_stage"] = nil
+		}
+		
+		if item.BotBalas != nil {
+			transformed["bot_balas"] = item.BotBalas
+		} else {
+			transformed["bot_balas"] = nil
+		}
+		
+		if item.UpdateToday != nil {
+			transformed["update_today"] = item.UpdateToday
+		} else {
+			transformed["update_today"] = nil
+		}
+		
+		// Handle JSON fields
+		if len(item.ConvLast) > 0 && string(item.ConvLast) != "null" {
+			transformed["conv_last"] = string(item.ConvLast)
+		} else {
+			transformed["conv_last"] = nil
+		}
+		
+		// Flow execution fields
+		if item.FlowReference.Valid {
+			transformed["flow_reference"] = item.FlowReference.String
+		} else {
+			transformed["flow_reference"] = nil
+		}
+		
+		if item.CurrentNode.Valid {
+			transformed["current_node"] = item.CurrentNode.String
+		} else {
+			transformed["current_node"] = nil
+		}
+		
+		if item.ExecutionStatus.Valid {
+			transformed["execution_status"] = item.ExecutionStatus.String
+		} else {
+			transformed["execution_status"] = nil
+		}
+		
+		if item.ExecutionID.Valid {
+			transformed["execution_id"] = item.ExecutionID.String
+		} else {
+			transformed["execution_id"] = nil
+		}
+		
+		if item.CurrentNodeID.Valid {
+			transformed["current_node_id"] = item.CurrentNodeID.String
+		} else {
+			transformed["current_node_id"] = nil
+		}
+		
+		if item.WaitingForReply.Valid {
+			transformed["waiting_for_reply"] = item.WaitingForReply.Int32
+		} else {
+			transformed["waiting_for_reply"] = nil
+		}
+		
+		if item.FlowID.Valid {
+			transformed["flow_id"] = item.FlowID.String
+		} else {
+			transformed["flow_id"] = nil
+		}
+		
+		if item.LastNodeID.Valid {
+			transformed["last_node_id"] = item.LastNodeID.String
+		} else {
+			transformed["last_node_id"] = nil
+		}
+		
+		transformedData[i] = transformed
+	}
+
 	// Calculate pagination info
 	totalPages := (total + limit - 1) / limit
 
-	// Return paginated response
+	// Return paginated response with transformed data
 	return c.JSON(fiber.Map{
 		"success": true,
-		"data": data,
+		"data": transformedData,
 		"pagination": fiber.Map{
 			"current_page": page,
 			"total_pages":  totalPages,
