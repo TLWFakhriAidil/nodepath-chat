@@ -495,22 +495,23 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		}
 	}
 
-	// Log conversation using existing methods for compatibility
-	var staffID string
-	if aiConv != nil {
-		staffID = aiConv.IDDevice
-	}
-	err = s.LogConversation(prospectNum, staffID, currentText, "user", stage)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to log user message")
-	}
+	// REMOVED - no longer logging to conversation_log_nodepath table
+	// All conversation history is saved via SaveConversationHistory to ai_whatsapp_nodepath.conv_last
+	// var staffID string
+	// if aiConv != nil {
+	// 	staffID = aiConv.IDDevice
+	// }
+	// err = s.LogConversation(prospectNum, staffID, currentText, "user", stage)
+	// if err != nil {
+	// 	logrus.WithError(err).Error("Failed to log user message")
+	// }
 
-	// Log AI response
-	aiResponseText := s.formatResponseForLogging(parsedResponse.Response)
-	err = s.LogConversation(prospectNum, staffID, aiResponseText, "bot", parsedResponse.Stage)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to log AI response")
-	}
+	// Log AI response - REMOVED
+	// aiResponseText := s.formatResponseForLogging(parsedResponse.Response)
+	// err = s.LogConversation(prospectNum, staffID, aiResponseText, "bot", parsedResponse.Stage)
+	// if err != nil {
+	// 	logrus.WithError(err).Error("Failed to log AI response")
+	// }
 
 	return parsedResponse, nil
 }
@@ -545,16 +546,16 @@ func (s *aiWhatsappService) UpdateConversationStage(prospectNum, stage string) e
 }
 
 // LogConversation logs a conversation message
+// LogConversation - REMOVED: No longer using conversation_log_nodepath table
 func (s *aiWhatsappService) LogConversation(prospectNum string, idDevice string, message, sender, stage string) error {
-	convLog := &models.ConversationLog{
-		ProspectNum: prospectNum,
-		IDDevice:    idDevice,
-		Message:     message,
-		Sender:      sender,
-		Stage:       sql.NullString{String: stage, Valid: stage != ""},
-	}
-
-	return s.aiRepo.CreateConversationLog(convLog)
+	// REMOVED - no longer saving to conversation_log_nodepath
+	// Use SaveConversationHistory instead which saves to ai_whatsapp_nodepath.conv_last
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"device_id": idDevice,
+		"sender": sender,
+	}).Debug("LogConversation called but skipped - using SaveConversationHistory instead")
+	return nil
 }
 
 // IsHumanTakeoverActive checks if human takeover is active

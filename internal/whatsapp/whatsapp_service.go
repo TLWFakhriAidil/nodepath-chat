@@ -922,12 +922,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	// Get AI configuration from node data
 	var systemPrompt, instance, apiProvider string
 
-	// DEBUG: Log the entire node data
+	// Log the entire node data
 	logrus.WithFields(logrus.Fields{
 		"node_data": node.Data,
 		"node_id": node.ID,
 		"node_type": node.Type,
-	}).Debug("🔍 DEBUG: AI Node Data Extraction")
+	}).Info("🔍 AI Node Data Extraction")
 
 	// Check node data for configuration - handle both camelCase and snake_case
 	if sp, ok := node.Data["system_prompt"].(string); ok {
@@ -946,12 +946,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		apiProvider = ap
 	}
 	
-	// DEBUG: Log extracted values
+	// Log extracted values
 	logrus.WithFields(logrus.Fields{
 		"system_prompt_extracted": systemPrompt,
 		"instance_extracted": instance,
 		"api_provider_extracted": apiProvider,
-	}).Debug("🔍 DEBUG: Extracted AI Configuration")
+	}).Info("🔍 Extracted AI Configuration")
 
 	// Get device settings for fallback values
 	deviceSettings, err := s.deviceSettingsService.GetByIDDevice(execution.IDDevice)
@@ -1066,11 +1066,11 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	var conversationHistory []models.ConversationMessage
 	var convLastStr string
 	
-	// DEBUG: Log raw conv_last data
+	// Log raw conv_last data
 	logrus.WithFields(logrus.Fields{
 		"conv_last_raw": string(execution.ConvLast),
 		"conv_last_len": len(execution.ConvLast),
-	}).Debug("🔍 DEBUG: Raw ConvLast Data")
+	}).Info("🔍 Raw ConvLast Data")
 	
 	if len(execution.ConvLast) > 0 {
 		if err := json.Unmarshal(execution.ConvLast, &convLastStr); err == nil {
@@ -1082,11 +1082,11 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		// Remove quotes if present
 		convLastStr = strings.Trim(convLastStr, "\"")
 		
-		// DEBUG: Log processed conversation
+		// Log processed conversation
 		logrus.WithFields(logrus.Fields{
 			"conv_last_processed": convLastStr,
 			"conv_last_valid": convLastStr != "" && convLastStr != "null",
-		}).Debug("🔍 DEBUG: Processed ConvLast")
+		}).Info("🔍 Processed ConvLast")
 		
 		if convLastStr != "" && convLastStr != "null" {
 			conversationHistory = append(conversationHistory, models.ConversationMessage{
@@ -1096,14 +1096,14 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		}
 	}
 	
-	// DEBUG: Log final prompt and conversation being sent to AI
+	// Log final prompt and conversation being sent to AI
 	logrus.WithFields(logrus.Fields{
 		"system_prompt": systemPrompt,
 		"user_input": userInput,
 		"conversation_history": conversationHistory,
 		"device_id": execution.IDDevice,
 		"api_key_present": actualAPIKey != "",
-	}).Debug("🔍 DEBUG: AI Request Payload")
+	}).Info("🔍 AI Request Payload")
 
 	// Call AI service with configuration
 	response, err := s.aiService.GenerateResponse(
@@ -1118,12 +1118,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 		return "I'm sorry, I couldn't process your request. Please try again later.", nil
 	}
 
-	// DEBUG: Log raw AI response
+	// Log raw AI response
 	logrus.WithFields(logrus.Fields{
 		"ai_response_raw": response,
 		"response_length": len(response),
 		"node_type":       node.Type,
-	}).Debug("🔍 DEBUG: Raw AI Response")
+	}).Info("🔍 Raw AI Response")
 	
 	logrus.WithFields(logrus.Fields{
 		"response_length": len(response),
@@ -1148,12 +1148,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 				"node_id":        node.ID,
 			}).Info("Successfully parsed JSON response with multiple items")
 			
-			// DEBUG: Log parsed AI response
+			// Log parsed AI response
 			logrus.WithFields(logrus.Fields{
 				"parsed_stage": parsedResponse.Stage,
 				"parsed_response": parsedResponse.Response,
 				"response_items_count": len(parsedResponse.Response),
-			}).Debug("🔍 DEBUG: Parsed AI Response Structure")
+			}).Info("🔍 Parsed AI Response Structure")
 
 			// Update stage if provided
 			if parsedResponse.Stage != "" {

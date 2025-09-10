@@ -17,7 +17,7 @@ import (
 type AIWhatsappRepository interface {
 	// Create operations
 	CreateAIWhatsapp(ai *models.AIWhatsapp) error
-	CreateConversationLog(log *models.ConversationLog) error
+	// CreateConversationLog removed - no longer using conversation_log_nodepath table
 
 	// Read operations
 	GetAIWhatsappByProspectNum(prospectNum string) (*models.AIWhatsapp, error)
@@ -184,27 +184,12 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	return nil
 }
 
-// CreateConversationLog creates a new conversation log entry
-func (r *aiWhatsappRepository) CreateConversationLog(log *models.ConversationLog) error {
-	log.CreatedAt = time.Now()
-
-	query := `
-		INSERT INTO conversation_log_nodepath (
-			prospect_num, message, sender, stage, created_at
-		) VALUES (?, ?, ?, ?, ?)
-	`
-
-	_, err := r.db.Exec(query,
-		log.ProspectNum, log.Message, log.Sender, log.Stage, log.CreatedAt,
-	)
-
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create conversation log")
-		return fmt.Errorf("failed to create conversation log: %w", err)
-	}
-
-	return nil
-}
+// CreateConversationLog - REMOVED: No longer using conversation_log_nodepath table
+// All conversation history is now stored in ai_whatsapp_nodepath.conv_last field
+// func (r *aiWhatsappRepository) CreateConversationLog(log *models.ConversationLog) error {
+// 	// REMOVED - no longer needed
+// 	return nil
+// }
 
 // GetAIWhatsappByProspectNum retrieves AI WhatsApp conversation by prospect number
 func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*models.AIWhatsapp, error) {
