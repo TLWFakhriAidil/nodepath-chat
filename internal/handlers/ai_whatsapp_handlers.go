@@ -1231,11 +1231,8 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 			"prospect_num":  item.ProspectNum,
 			"human":         item.Human,
 			"niche":         item.Niche,
-			"jam":           item.Jam,
 			"intro":         item.Intro,
-			"catatan_staff": item.CatatanStaff,
 			"balas":         item.Balas,
-			"data_image":    item.DataImage,
 			"keywordiklan":  item.KeywordIklan,
 			"marketer":      item.Marketer,
 			"created_at":    item.CreatedAt,
@@ -1261,18 +1258,6 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 			transformed["conv_current"] = nil
 		}
 		
-		if item.ConvStage.Valid {
-			transformed["conv_stage"] = item.ConvStage.String
-		} else {
-			transformed["conv_stage"] = nil
-		}
-		
-		if item.BotBalas != nil {
-			transformed["bot_balas"] = item.BotBalas
-		} else {
-			transformed["bot_balas"] = nil
-		}
-		
 		if item.UpdateToday != nil {
 			transformed["update_today"] = item.UpdateToday
 		} else {
@@ -1293,11 +1278,7 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 			transformed["flow_reference"] = nil
 		}
 		
-		if item.CurrentNode.Valid {
-			transformed["current_node"] = item.CurrentNode.String
-		} else {
-			transformed["current_node"] = nil
-		}
+		// No current_node field anymore - removed from schema
 		
 		if item.ExecutionStatus.Valid {
 			transformed["execution_status"] = item.ExecutionStatus.String

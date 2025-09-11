@@ -101,13 +101,12 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	query := `
 		INSERT INTO ai_whatsapp_nodepath (
 			id_device, prospect_num, stage, date_order, conv_last, 
-			conv_current, human, niche, jam, intro, 
-			catatan_staff, balas, data_image, conv_stage, 
-			bot_balas, keywordiklan, marketer, update_today, 
+			conv_current, human, niche, intro, 
+			balas, keywordiklan, marketer, update_today, 
 			current_node_id, waiting_for_reply, flow_id, last_node_id,
 			flow_reference, execution_id, execution_status,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	// Handle ConvCurrent as sql.NullString
@@ -167,9 +166,8 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 
 	_, err := r.db.Exec(query,
 		ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, convLastValue,
-		convCurrentValue, ai.Human, ai.Niche, ai.Jam, ai.Intro,
-		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
-		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
+		convCurrentValue, ai.Human, ai.Niche, ai.Intro,
+		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		flowReferenceValue, executionIDValue, executionStatusValue,
 		ai.CreatedAt, ai.UpdatedAt,
@@ -200,12 +198,11 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 
 	query := `
 		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
-		       conv_current, human, niche, jam, intro, 
-		       catatan_staff, balas, data_image, conv_stage, 
-		       bot_balas, keywordiklan, marketer, update_today, 
+		       conv_current, human, niche, intro, 
+		       balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at,
 		       current_node_id, waiting_for_reply, flow_id, last_node_id, 
-		       execution_status, execution_id
+		       flow_reference, execution_status, execution_id
 		FROM ai_whatsapp_nodepath 
 		WHERE prospect_num = ?
 	`
@@ -218,12 +215,11 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 	var convCurrentSQL sql.NullString
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
-		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
+		&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 		&ai.CurrentNodeID, &ai.WaitingForReply, &ai.FlowID, &ai.LastNodeID,
-		&ai.ExecutionStatus, &ai.ExecutionID,
+		&ai.FlowReference, &ai.ExecutionStatus, &ai.ExecutionID,
 	)
 
 	ai.ConvCurrent = convCurrentSQL
@@ -286,9 +282,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 	var convCurrentSQL sql.NullString
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
-		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
+		&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 	)
 
@@ -360,9 +355,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 		var convCurrentSQL sql.NullString
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
-			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
+			&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
 
@@ -486,9 +480,8 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
-			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
+			&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
 
@@ -811,9 +804,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByNiche(niche string) ([]models.AIWh
 		var convCurrentSQL sql.NullString
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
-			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
+			&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
 
@@ -880,9 +872,8 @@ func (r *aiWhatsappRepository) GetActiveAIConversations() ([]models.AIWhatsapp, 
 
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
-			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
+			&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
 
@@ -1020,9 +1011,8 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 	query := `
 		UPDATE ai_whatsapp_nodepath SET 
 			id_device = ?, stage = ?, date_order = ?, conv_last = ?, conv_current = ?, 
-			human = ?, niche = ?, jam = ?, intro = ?, 
-			catatan_staff = ?, balas = ?, data_image = ?, conv_stage = ?, 
-			bot_balas = ?, keywordiklan = ?, marketer = ?, update_today = ?, 
+			human = ?, niche = ?, intro = ?, 
+			balas = ?, keywordiklan = ?, marketer = ?, update_today = ?, 
 			current_node_id = ?, waiting_for_reply = ?, flow_id = ?, last_node_id = ?,
 			updated_at = ?
 		WHERE id_prospect = ?
@@ -1066,9 +1056,8 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 
 	_, err := r.db.Exec(query,
 		ai.IDDevice, ai.Stage, ai.DateOrder, convLastValue, convCurrentValue,
-		ai.Human, ai.Niche, ai.Jam, ai.Intro,
-		ai.CatatanStaff, ai.Balas, ai.DataImage, ai.ConvStage,
-		ai.BotBalas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
+		ai.Human, ai.Niche, ai.Intro,
+		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		ai.UpdatedAt, ai.IDProspect,
 	)
@@ -1315,12 +1304,11 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 
 	query := `
 		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
-		       conv_current, human, niche, jam, intro, 
-		       catatan_staff, balas, data_image, conv_stage, 
-		       bot_balas, keywordiklan, marketer, update_today, 
+		       conv_current, human, niche, intro, 
+		       balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at,
 		       current_node_id, waiting_for_reply, flow_id, last_node_id, 
-		       execution_status, execution_id
+		       flow_reference, execution_status, execution_id
 		FROM ai_whatsapp_nodepath 
 		WHERE prospect_num = ? AND id_device = ?
 	`
@@ -1333,12 +1321,11 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 
 	err := row.Scan(
 		&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-		&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
-		&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+		&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
+		&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 		&ai.CreatedAt, &ai.UpdatedAt,
 		&ai.CurrentNodeID, &ai.WaitingForReply, &ai.FlowID, &ai.LastNodeID,
-		&ai.ExecutionStatus, &ai.ExecutionID,
+		&ai.FlowReference, &ai.ExecutionStatus, &ai.ExecutionID,
 	)
 
 	ai.ConvCurrent = convCurrentSQL
@@ -1608,9 +1595,8 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 
 		err := rows.Scan(
 			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
-			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Jam, &ai.Intro,
-			&ai.CatatanStaff, &ai.Balas, &ai.DataImage, &ai.ConvStage,
-			&ai.BotBalas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
+			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
+			&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
 		)
 

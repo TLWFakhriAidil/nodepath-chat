@@ -306,7 +306,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"flow_reference": aiExecution.FlowReference.String,
 			"phone_number":   phoneNumber,
 			"device_id":      deviceID,
-			"current_node":   aiExecution.CurrentNode.String,
+			"current_node":   aiExecution.CurrentNodeID.String,
 		}).Info("🔄 FLOW: Found existing active execution in ai_whatsapp_nodepath")
 
 		// Check if the execution is waiting for user reply OR has a current node to process
@@ -466,7 +466,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 	logrus.WithFields(logrus.Fields{
 		"execution_id": aiExecution.IDProspect,
 		"flow_id":      flow.ID,
-		"current_node": aiExecution.CurrentNode.String,
+		"current_node": aiExecution.CurrentNodeID.String,
 		"user_input":   content,
 	}).Info("⚙️ FLOW: Processing message through flow engine")
 
@@ -937,11 +937,6 @@ func (s *Service) processFlowMessage(flow *models.ChatbotFlow, aiExecution *mode
 	var currentNodeID string
 	if aiExecution.CurrentNodeID.Valid && aiExecution.CurrentNodeID.String != "" {
 		currentNodeID = aiExecution.CurrentNodeID.String
-	} else {
-		// Fallback to legacy field for backward compatibility
-		if aiExecution.CurrentNode.Valid && aiExecution.CurrentNode.String != "" {
-			currentNodeID = aiExecution.CurrentNode.String
-		}
 	}
 
 	currentNode, err := s.flowService.FindNodeByID(flow, currentNodeID)
@@ -2498,11 +2493,9 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 func (s *Service) updateCurrentNode(execution *models.AIWhatsapp, nodeID string) {
 	// Update new flow tracking field
 	execution.CurrentNodeID.String = nodeID
+	// Update new flow tracking field
+	execution.CurrentNodeID.String = nodeID
 	execution.CurrentNodeID.Valid = true
-
-	// Update legacy field for backward compatibility
-	execution.CurrentNode.String = nodeID
-	execution.CurrentNode.Valid = true
 }
 
 // updateFlowTrackingFields updates the flow tracking fields for user reply handling
@@ -2841,7 +2834,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 	// Update execution to the target node (advance from delay node to next node)
 	logrus.WithFields(logrus.Fields{
 		"execution_id":  executionID,
-		"previous_node": execution.CurrentNode.String,
+		"previous_node": execution.CurrentNodeID.String,
 		"target_node":   nodeID,
 	}).Info("🔄 FLOW: Advancing execution to target node after delay")
 

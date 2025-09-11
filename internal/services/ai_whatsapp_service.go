@@ -1137,11 +1137,10 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		query := `
 			INSERT INTO ai_whatsapp_nodepath (
 				id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
-				conv_current, human, niche, jam, intro, 
-				catatan_staff, balas, data_image, conv_stage, 
-				bot_balas, keywordiklan, marketer, update_today, 
+				conv_current, human, niche, intro, 
+				balas, keywordiklan, marketer, update_today, 
 				created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		
 		// Handle ConvCurrent as sql.NullString
@@ -1154,9 +1153,8 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		
 		_, err := tx.Exec(query,
 			newAIConv.IDProspect, newAIConv.IDDevice, newAIConv.ProspectNum, newAIConv.Stage, newAIConv.DateOrder, nil,
-			convCurrentValue, newAIConv.Human, newAIConv.Niche, newAIConv.Jam, newAIConv.Intro,
-			newAIConv.CatatanStaff, newAIConv.Balas, newAIConv.DataImage, newAIConv.ConvStage,
-			newAIConv.BotBalas, newAIConv.KeywordIklan, newAIConv.Marketer, newAIConv.UpdateToday,
+			convCurrentValue, newAIConv.Human, newAIConv.Niche, newAIConv.Intro,
+			newAIConv.Balas, newAIConv.KeywordIklan, newAIConv.Marketer, newAIConv.UpdateToday,
 			newAIConv.CreatedAt, newAIConv.UpdatedAt,
 		)
 		if err != nil {
@@ -1213,12 +1211,9 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 	// Generate unique execution ID
 	executionID := fmt.Sprintf("%s_%s_%d", prospectNum, idDevice, time.Now().Unix())
 
-	// Convert variables to JSON
-	variablesJSON, err := json.Marshal(variables)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to marshal flow variables")
-		return nil, fmt.Errorf("failed to marshal flow variables: %w", err)
-	}
+	// Variables are no longer stored in database
+	// Keep for compatibility but don't use
+	_ = variables
 
 	// Get flow data to populate intro and niche fields
 	var flowIntro, flowNiche string
@@ -1272,9 +1267,6 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 			Intro:           flowIntro,  // Set intro from flow data
 			Niche:           flowNiche,  // Set niche from flow data
 			FlowReference:   sql.NullString{String: flowReference, Valid: true},
-			// Legacy fields for backward compatibility
-			CurrentNode:     sql.NullString{String: startNode.ID, Valid: true},
-			Variables:       json.RawMessage(variablesJSON),
 			// New flow tracking fields
 			FlowID:          sql.NullString{String: flowReference, Valid: true},
 			CurrentNodeID:   sql.NullString{String: startNode.ID, Valid: true}, // Set to actual start node ID
@@ -1328,8 +1320,7 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 		
 		// Update legacy fields for backward compatibility
 		aiConv.FlowReference = sql.NullString{String: flowReference, Valid: true}
-		aiConv.CurrentNode = sql.NullString{String: startNode.ID, Valid: true}
-		aiConv.Variables = json.RawMessage(variablesJSON)
+		// Variables removed from schema - handle separately if needed
 		aiConv.ExecutionStatus = sql.NullString{String: "active", Valid: true}
 		aiConv.ExecutionID = sql.NullString{String: executionID, Valid: true}
 		// Update flow tracking fields in memory for return value
@@ -1495,17 +1486,8 @@ func (s *aiWhatsappService) GetFlowExecutionVariables(prospectNum, idDevice stri
 		return nil, fmt.Errorf("AI WhatsApp record not found")
 	}
 
-	if len(aiConv.Variables) == 0 {
-		return make(map[string]interface{}), nil // Return empty map if no variables
-	}
-
-	var variables map[string]interface{}
-	err = json.Unmarshal(aiConv.Variables, &variables)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal variables: %w", err)
-	}
-
-	return variables, nil
+	// Variables removed from database - return empty map
+	return make(map[string]interface{}), nil
 }
 
 // isCircuitBreakerOpen checks if the circuit breaker is open for WhatsApp AI service
