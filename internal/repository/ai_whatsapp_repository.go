@@ -89,13 +89,13 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 
 	query := `
 		INSERT INTO ai_whatsapp_nodepath (
-			id_device, prospect_num, stage, date_order, conv_last, 
+			id_device, prospect_num, prospect_name, stage, date_order, conv_last, 
 			conv_current, human, niche, intro, 
 			balas, keywordiklan, marketer, update_today, 
 			current_node_id, waiting_for_reply, flow_id, last_node_id,
 			flow_reference, execution_id, execution_status,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	// Handle ConvCurrent as sql.NullString
@@ -153,8 +153,16 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		executionStatusValue = nil
 	}
 
+	// Handle ProspectName as sql.NullString
+	var prospectNameValue interface{}
+	if ai.ProspectName.Valid {
+		prospectNameValue = ai.ProspectName.String
+	} else {
+		prospectNameValue = nil
+	}
+
 	_, err := r.db.Exec(query,
-		ai.IDDevice, ai.ProspectNum, ai.Stage, ai.DateOrder, convLastValue,
+		ai.IDDevice, ai.ProspectNum, prospectNameValue, ai.Stage, ai.DateOrder, convLastValue,
 		convCurrentValue, ai.Human, ai.Niche, ai.Intro,
 		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,

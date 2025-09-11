@@ -38,7 +38,7 @@ const (
 // AIWhatsappService interface defines methods for AI WhatsApp conversation management
 type AIWhatsappService interface {
 	// Process AI conversation
-	ProcessAIConversation(prospectNum, idDevice, currentText, stage string) (*AIWhatsappResponse, error)
+	ProcessAIConversation(prospectNum, idDevice, currentText, stage, senderName string) (*AIWhatsappResponse, error)
 	
 	// Get AI settings
 	GetAISettings(idDevice string) (*models.AISettings, error)
@@ -196,7 +196,7 @@ func NewAIWhatsappService(aiRepo repository.AIWhatsappRepository, deviceRepo rep
 }
 
 // ProcessAIConversation processes AI conversation and returns response
-func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, currentText, stage string) (*AIWhatsappResponse, error) {
+func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, currentText, stage, senderName string) (*AIWhatsappResponse, error) {
 	// Check for device commands first
 	if strings.HasPrefix(currentText, "%") || strings.HasPrefix(currentText, "#") || strings.ToLower(currentText) == "cmd" {
 		err := s.ProcessDeviceCommand(prospectNum, currentText, idDevice)
@@ -277,12 +277,13 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		// Create new AI WhatsApp conversation record
 		now := time.Now()
 		newAIConv := &models.AIWhatsapp{
-			IDDevice:    idDevice, // Use idDevice for device identification
-			ProspectNum: prospectNum,
-			Stage:       sql.NullString{String: initialStage, Valid: initialStage != ""},
-			Human:       0,         // AI is active by default
-			Niche:       niche,
-			DateOrder:   &now,
+			IDDevice:     idDevice, // Use idDevice for device identification
+			ProspectNum:  prospectNum,
+			ProspectName: sql.NullString{String: senderName, Valid: senderName != ""},
+			Stage:        sql.NullString{String: initialStage, Valid: initialStage != ""},
+			Human:        0,         // AI is active by default
+			Niche:        niche,
+			DateOrder:    &now,
 		}
 		
 		err = s.aiRepo.CreateAIWhatsapp(newAIConv)

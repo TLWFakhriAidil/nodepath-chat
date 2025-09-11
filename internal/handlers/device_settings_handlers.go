@@ -1573,7 +1573,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration with monitoring")
 
 	// Extract message data based on provider
-	var from, message, messageType string
+	var from, message, messageType, senderName string
 	var isGroup bool
 
 	// Debug log to check provider value
@@ -1598,6 +1598,13 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
 			isGroup = isGroupVal
 		}
+		
+		// Extract sender name for Whacenter
+		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
+			senderName = senderNameVal
+		} else {
+			senderName = "User" // Default fallback for Whacenter
+		}
 
 	case "wablas":
 		// Extract data for Wablas provider
@@ -1612,6 +1619,13 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		}
 		// Wablas doesn't have is_group field, default to false
 		isGroup = false
+		
+		// Extract sender name for Wablas
+		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
+			senderName = senderNameVal
+		} else {
+			senderName = "User" // Default fallback for Wablas
+		}
 
 	case "waha":
 		// Extract data for WAHA provider using standardized format
@@ -1629,12 +1643,50 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			isGroup = isGroupVal
 		}
 		
+		// Extract sender name - prioritize direct sender_name field, then fallback to payload structure
+		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
+			senderName = senderNameVal
+		} else {
+			// Fallback to WAHA payload structure
+			// Following the pattern: $data['payload']['media']['Info']['PushName'] ?? 'Sis'
+			if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
+				if media, ok := payload["media"].(map[string]interface{}); ok {
+					if info, ok := media["Info"].(map[string]interface{}); ok {
+						if pushName, ok := info["PushName"].(string); ok && pushName != "" {
+							senderName = pushName
+						} else {
+							senderName = "Sis" // Default fallback
+						}
+					} else {
+						senderName = "Sis" // Default fallback
+					}
+				} else {
+					senderName = "Sis" // Default fallback
+				}
+			} else {
+				senderName = "Sis" // Default fallback
+			}
+		}
+		
+		// Check for check_percent parameter from WAHA isFromMe % command processing
+		var checkPercent int
+		if checkPercentVal, ok := webhookData["check_percent"].(int); ok {
+			checkPercent = checkPercentVal
+			logrus.WithFields(logrus.Fields{
+				"id_device": idDevice,
+				"from": from,
+				"check_percent": checkPercent,
+			}).Info("🔧 WAHA: Processing message with check_percent parameter from % command")
+		}
+		
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
 			"provider": provider,
 			"from": from,
 			"message": truncateString(message, 100),
 			"is_group": isGroup,
+			"sender_name": senderName,
+			"check_percent": checkPercent,
 		}).Info("📨 WEBHOOK: Processing WAHA message through standardized flow routing")
 
 	default:
@@ -1652,6 +1704,13 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		}
 		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
 			isGroup = isGroupVal
+		}
+		
+		// Extract sender name for generic provider
+		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
+			senderName = senderNameVal
+		} else {
+			senderName = "User" // Default fallback for generic provider
 		}
 	}
 
@@ -1775,7 +1834,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 					"error": err.Error(),
 				}).Error("❌ WEBHOOK: Failed to process message through flow engine")
 				// Fallback to AI conversation if flow processing fails
-				h.processAIConversation(from, message, idDevice, provider, startTime)
+				h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
 				return fmt.Errorf("flow processing failed, fallback to AI: %w", err)
 			}
 			
@@ -1789,7 +1848,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 				"id_device": idDevice,
 				"flow_processing_duration": time.Since(flowProcessingStart),
 			}).Error("❌ WEBHOOK: WhatsApp service not available, falling back to AI conversation")
-			h.processAIConversation(from, message, idDevice, provider, startTime)
+			h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
 			return fmt.Errorf("WhatsApp service not available, using AI fallback")
 		}
 		return nil // Successfully processed through flow engine
@@ -1804,12 +1863,12 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		"flow_check_duration": flowCheckDuration,
 	}).Info("🤖 WEBHOOK: No flows configured, processing message through AI conversation")
 
-	h.processAIConversation(from, message, idDevice, provider, startTime)
+	h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
 	return nil // Successfully processed through AI conversation
 }
 
 // processAIConversation handles message processing through the AI conversation system with performance monitoring
-func (h *Handlers) processAIConversation(from, message, idDevice, provider string, requestStartTime time.Time) {
+func (h *Handlers) processAIConversation(from, message, idDevice, provider, senderName string, requestStartTime time.Time) {
 	aiProcessingStart := time.Now()
 	
 	// Get current conversation stage from AI WhatsApp repository
@@ -1842,7 +1901,7 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider strin
 	// Process AI conversation through AI WhatsApp service
 	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIWhatsappService != nil {
 		aiCallStart := time.Now()
-		response, err := h.aiWhatsappHandlers.AIWhatsappService.ProcessAIConversation(from, idDevice, message, stage)
+		response, err := h.aiWhatsappHandlers.AIWhatsappService.ProcessAIConversation(from, idDevice, message, stage, senderName)
 		aiCallDuration := time.Since(aiCallStart)
 		
 		if err != nil {

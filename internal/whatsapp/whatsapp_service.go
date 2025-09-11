@@ -666,7 +666,7 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 	stage = "" // Default stage, AI service will determine appropriate stage
 
 	// Process AI conversation through AI WhatsApp service
-	response, err := s.aiWhatsappService.ProcessAIConversation(phoneNumber, deviceID, content, stage)
+	response, err := s.aiWhatsappService.ProcessAIConversation(phoneNumber, deviceID, content, stage, "User")
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process AI conversation")
 		// Send fallback message
