@@ -300,6 +300,8 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for new execution")
 		}
+		// Also update the in-memory execution object
+		aiExecution.ProspectName = sql.NullString{String: senderName, Valid: senderName != ""}
 
 		logrus.WithFields(logrus.Fields{
 			"execution_id": aiExecution.ExecutionID.String,
@@ -325,6 +327,8 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for existing execution")
 		}
+		// Also update the in-memory execution object
+		aiExecution.ProspectName = sql.NullString{String: senderName, Valid: senderName != ""}
 
 		// Check if the execution is waiting for user reply OR has a current node to process
 		if (aiExecution.WaitingForReply.Valid && aiExecution.WaitingForReply.Int32 == 1) || 
@@ -426,7 +430,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 			}).Info("ℹ️ FLOW: Existing execution not waiting for reply, falling back to AI conversation")
 
 			// Fall back to AI conversation for completed flows
-			return s.processAIConversation(phoneNumber, content, deviceID, "User")
+			return s.processAIConversation(phoneNumber, content, deviceID, senderName)
 		}
 	}
 

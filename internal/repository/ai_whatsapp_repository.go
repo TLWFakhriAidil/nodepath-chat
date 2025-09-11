@@ -1339,6 +1339,15 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 
 		now := time.Now()
 		if existingID != nil {
+			// Log the prospect_name being saved
+			logrus.WithFields(logrus.Fields{
+				"prospect_num": prospectNum,
+				"id_device": idDevice,
+				"prospect_name": prospectName,
+				"prospect_name_len": len(prospectName),
+				"is_empty": prospectName == "",
+			}).Info("📝 Updating existing record with prospect_name")
+			
 			// Update existing record within transaction
 			updateQuery := `
 				UPDATE ai_whatsapp_nodepath 
@@ -1354,6 +1363,15 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 				"id_device": idDevice,
 			}).Info("Conversation history updated successfully")
 		} else {
+			// Log the prospect_name being saved for new record
+			logrus.WithFields(logrus.Fields{
+				"prospect_num": prospectNum,
+				"id_device": idDevice,
+				"prospect_name": prospectName,
+				"prospect_name_len": len(prospectName),
+				"is_empty": prospectName == "",
+			}).Info("📝 Creating new record with prospect_name")
+			
 			// Create new record within transaction
 			insertQuery := `
 				INSERT INTO ai_whatsapp_nodepath (
