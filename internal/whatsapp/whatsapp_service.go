@@ -1268,25 +1268,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 
 			// Send individual messages from parsed response
 			if len(parsedResponse.Response) > 0 {
-				// Save the user input first (only once at the beginning)
-				if userInput != "" {
-					logrus.WithFields(logrus.Fields{
-						"user_input": userInput,
-						"stage": parsedResponse.Stage,
-					}).Info("🔍 Saving user message to conversation")
-					
-					err = s.aiWhatsappService.SaveConversationHistory(
-					execution.ProspectNum,
-					execution.IDDevice,
-					userInput,
-					"", // Empty bot response for user message only
-					parsedResponse.Stage,
-					execution.ProspectName.String,
-				)
-					if err != nil {
-						logrus.WithError(err).Error("Failed to save user message to conversation history")
-					}
-				}
+				// Skip saving user input here - it's already saved in processIncomingMessage
+				// This prevents duplicate USER entries in conv_last
+				logrus.WithFields(logrus.Fields{
+					"user_input": userInput,
+					"stage": parsedResponse.Stage,
+				}).Info("🔍 User message already saved, skipping duplicate save")
 				
 				// Now send and save each bot message
 				for i, item := range parsedResponse.Response {
