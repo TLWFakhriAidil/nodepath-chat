@@ -1824,7 +1824,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 
 		// Process message through WhatsApp service flow engine
 		if h.whatsappService != nil {
-			err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider)
+			err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider, senderName)
 			flowProcessingDuration := time.Since(flowProcessingStart)
 			
 			if err != nil {

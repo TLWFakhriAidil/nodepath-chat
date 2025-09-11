@@ -33,10 +33,11 @@ type AIWhatsappRepository interface {
 	UpdateAIWhatsapp(ai *models.AIWhatsapp) error
 	UpdateFlowTrackingFields(prospectNum, idDevice string, flowID, currentNodeID, lastNodeID string, waitingForReply int, executionStatus, executionID string) error
 	UpdateConversationStage(prospectNum string, stage string) error
+	UpdateProspectName(prospectNum, idDevice, prospectName string) error
 	UpdateHumanTakeover(prospectNum string, human int) error
 	UpdateConvCurrent(prospectNum string, convCurrent string) error
 	UpdateConvLast(prospectNum string, convLast interface{}) error
-	SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error
+	SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error
 
 	// Delete operations
 	DeleteAIWhatsapp(id int) error
@@ -331,6 +332,38 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 	}
 
 	return conversations, nil
+}
+
+// UpdateProspectName updates the prospect_name field in ai_whatsapp_nodepath
+func (r *aiWhatsappRepository) UpdateProspectName(prospectNum, idDevice, prospectName string) error {
+	// Check if database connection is available
+	if r.db == nil {
+		return fmt.Errorf("database connection is not available")
+	}
+
+	query := `UPDATE ai_whatsapp_nodepath SET prospect_name = ?, updated_at = ? WHERE prospect_num = ? AND id_device = ?`
+	now := time.Now()
+	
+	result, err := r.db.Exec(query, prospectName, now, prospectNum, idDevice)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"id_device": idDevice,
+			"prospect_name": prospectName,
+		}).Error("Failed to update prospect_name")
+		return fmt.Errorf("failed to update prospect_name: %w", err)
+	}
+	
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		logrus.WithFields(logrus.Fields{
+			"prospect_num": prospectNum,
+			"id_device": idDevice,
+			"prospect_name": prospectName,
+		}).Info("Prospect name updated successfully")
+	}
+	
+	return nil
 }
 
 // GetAllAIWhatsappData retrieves all AI WhatsApp conversation records with pagination and filtering
@@ -1048,6 +1081,8 @@ func (r *aiWhatsappRepository) UpdateConversationStage(prospectNum string, stage
 	return nil
 }
 
+
+
 // UpdateHumanTakeover updates the human takeover status
 func (r *aiWhatsappRepository) UpdateHumanTakeover(prospectNum string, human int) error {
 	query := `
@@ -1229,7 +1264,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 // If record exists, it updates the conv_last field; otherwise, it creates a new record
 // Saves NULL instead of empty string when there's no conversation data
 // Uses database transactions to ensure data consistency
-func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage string) error {
+// Now includes prospect_name parameter to ensure names are always updated
+func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error {
 	return utils.WithTransaction(r.db, func(tx *sql.Tx) error {
 		// Check if record exists within transaction
 		var existingID *int
@@ -1306,10 +1342,10 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 			// Update existing record within transaction
 			updateQuery := `
 				UPDATE ai_whatsapp_nodepath 
-				SET conv_last = ?, stage = ?, updated_at = ?
+				SET conv_last = ?, stage = ?, prospect_name = ?, updated_at = ?
 				WHERE prospect_num = ? AND id_device = ?
 			`
-			_, err = tx.Exec(updateQuery, convLastValue, stage, now, prospectNum, idDevice)
+			_, err = tx.Exec(updateQuery, convLastValue, stage, prospectName, now, prospectNum, idDevice)
 			if err != nil {
 				return fmt.Errorf("failed to update conversation history: %w", err)
 			}
@@ -1321,11 +1357,11 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 			// Create new record within transaction
 			insertQuery := `
 				INSERT INTO ai_whatsapp_nodepath (
-					id_device, prospect_num, stage, conv_last, human, 
+					id_device, prospect_num, stage, conv_last, prospect_name, human, 
 					created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?)
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			`
-			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stage, convLastValue, 0, now, now)
+			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stage, convLastValue, prospectName, 0, now, now)
 			if err != nil {
 				return fmt.Errorf("failed to create new conversation record: %w", err)
 			}

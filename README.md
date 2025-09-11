@@ -714,14 +714,14 @@ After setup, verify Redis connection:
 flows, err := h.flowService.GetFlowsByDevice(deviceID)
 if err == nil && len(flows) > 0 {
     // 2. Process through flow engine (priority)
-    err = h.whatsappService.ProcessIncomingMessageFromWebhook(phoneNumber, content, deviceID)
+    err = h.whatsappService.ProcessIncomingMessageFromWebhook(phoneNumber, content, deviceID, provider, senderName)
     if err == nil {
         return // Success - flow processed
     }
     // Log error and fallback to AI
 }
 // 3. Fallback to AI conversation system
-h.processAIConversation(phoneNumber, content, deviceID)
+h.processAIConversation(phoneNumber, content, deviceID, provider, senderName)
 ```
 
 **Enhanced Flow Processing Features**:

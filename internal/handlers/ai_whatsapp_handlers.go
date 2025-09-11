@@ -223,7 +223,7 @@ func (h *AIWhatsappHandlers) HandleWhatsappWebhook(c *fiber.Ctx) error {
 	}).Info("Received WhatsApp webhook")
 
 	// Process the message asynchronously
-	go h.processIncomingMessage(req.From, req.Message, deviceID, "whatsapp")
+	go h.processIncomingMessage(req.From, req.Message, deviceID, "whatsapp", req.From)
 
 	return h.successResponse(c, map[string]string{"status": "received"})
 }
@@ -248,7 +248,7 @@ func (h *AIWhatsappHandlers) HandleWablasWebhook(c *fiber.Ctx) error {
 	}).Info("Received Wablas webhook")
 
 	// Process the message asynchronously
-	go h.processIncomingMessage(req.Phone, req.Message, deviceID, "wablas")
+	go h.processIncomingMessage(req.Phone, req.Message, deviceID, "wablas", req.Phone)
 
 	return h.successResponse(c, map[string]string{"status": "received"})
 }
@@ -273,7 +273,7 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 	}).Info("Received Whacenter webhook")
 
 	// Process the message asynchronously
-	go h.processIncomingMessage(req.Number, req.Text, deviceID, "whacenter")
+	go h.processIncomingMessage(req.Number, req.Text, deviceID, "whacenter", req.Number)
 
 	return h.successResponse(c, map[string]string{"status": "received"})
 }
@@ -405,7 +405,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 						}).Info("✅ WAHA: Successfully processed % command")
 					}
 				} else {
-					h.processIncomingMessage(extractedData.SenderPhone, extractedData.Message, deviceID, "waha")
+					h.processIncomingMessage(extractedData.SenderPhone, extractedData.Message, deviceID, "waha", extractedData.SenderName)
 				}
 			}()
 			
@@ -511,7 +511,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 		} else {
 			logrus.Error("❌ WAHA: Main handlers not available, falling back to direct AI processing")
 			// Fallback to direct processing if main handlers not available
-			h.processIncomingMessage(extractedData.SenderPhone, extractedData.Message, deviceID, "waha")
+			h.processIncomingMessage(extractedData.SenderPhone, extractedData.Message, deviceID, "waha", extractedData.SenderName)
 		}
 	}()
 
@@ -576,21 +576,42 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		logrus.Info("🔍 WAHA: Using direct payload structure as fallback")
 	}
 	
+	// Check for _data nested structure (common in WAHA webhooks)
+	var dataPayload map[string]interface{}
+	if dataObj, ok := payload["_data"].(map[string]interface{}); ok {
+		dataPayload = dataObj
+		logrus.Info("🔍 WAHA: Found _data nested structure")
+	} else {
+		dataPayload = payload
+		logrus.Info("🔍 WAHA: Using direct payload structure")
+	}
+	
 	// Extract data using user-specified format:
-	// $wa_text = $payload['body']
-	if bodyVal, ok := payload["body"].(string); ok {
+	// $wa_text = $payload['body'] or $payload['_data']['body']
+	if bodyVal, ok := dataPayload["body"].(string); ok {
+		result.Message = bodyVal
+		logrus.WithField("extraction_method", "data_body").Info("🔍 WAHA: Message extracted from data.body")
+	} else if bodyVal, ok := payload["body"].(string); ok {
 		result.Message = bodyVal
 		logrus.WithField("extraction_method", "payload_body").Info("🔍 WAHA: Message extracted from payload.body")
 	}
 	
-	// $wa_no_raw = $payload['from'] ?? null
-	if fromVal, ok := payload["from"].(string); ok {
+	// $wa_no_raw = $payload['from'] or $payload['_data']['from'] ?? null
+	if fromVal, ok := dataPayload["from"].(string); ok {
+		result.SenderPhone = fromVal
+		logrus.WithField("extraction_method", "data_from").Info("🔍 WAHA: Sender phone extracted from data.from")
+	} else if fromVal, ok := payload["from"].(string); ok {
 		result.SenderPhone = fromVal
 		logrus.WithField("extraction_method", "payload_from").Info("🔍 WAHA: Sender phone extracted from payload.from")
 	}
 	
-	// $wa_nama = $data['payload']['media']['Info']['PushName'] ?? 'Sis'
-	if mediaObj, ok := payload["media"].(map[string]interface{}); ok {
+	// $wa_nama = $data['payload']['_data']['info']['pushName'] ?? 'Sis'
+	if infoObj, ok := dataPayload["info"].(map[string]interface{}); ok {
+		if pushNameVal, ok := infoObj["pushName"].(string); ok {
+			result.SenderName = pushNameVal
+			logrus.WithField("extraction_method", "data_info_pushname").Info("🔍 WAHA: Sender name extracted from data.info.pushName")
+		}
+	} else if mediaObj, ok := payload["media"].(map[string]interface{}); ok {
 		if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
 			if pushNameVal, ok := infoObj["PushName"].(string); ok {
 				result.SenderName = pushNameVal
@@ -606,13 +627,22 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 	}
 	
 	// Extract isFromMe for special handling
-	if isFromMeVal, ok := payload["isFromMe"].(bool); ok {
+	if infoObj, ok := dataPayload["info"].(map[string]interface{}); ok {
+		if isFromMeVal, ok := infoObj["fromMe"].(bool); ok {
+			result.IsFromMe = isFromMeVal
+			logrus.WithField("is_from_me", isFromMeVal).Info("🔍 WAHA: IsFromMe extracted from data.info.fromMe")
+		}
+	} else if isFromMeVal, ok := payload["isFromMe"].(bool); ok {
 		result.IsFromMe = isFromMeVal
 		logrus.WithField("is_from_me", isFromMeVal).Info("🔍 WAHA: IsFromMe extracted from payload.isFromMe")
 	}
 	
 	// Extract additional fields for completeness
-	if mediaObj, ok := payload["media"].(map[string]interface{}); ok {
+	if infoObj, ok := dataPayload["info"].(map[string]interface{}); ok {
+		if isGroupVal, ok := infoObj["isGroup"].(bool); ok {
+			result.IsGroup = isGroupVal
+		}
+	} else if mediaObj, ok := payload["media"].(map[string]interface{}); ok {
 		if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
 			if isGroupVal, ok := infoObj["IsGroup"].(bool); ok {
 				result.IsGroup = isGroupVal
@@ -905,12 +935,14 @@ func (h *AIWhatsappHandlers) ProcessDeviceCommand(c *fiber.Ctx) error {
 }
 
 // processIncomingMessage processes incoming WhatsApp messages asynchronously
-func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, deviceID, provider string) {
+// Updated to accept senderName parameter to properly save prospect_name
+func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, deviceID, provider, senderName string) {
 	logrus.WithFields(logrus.Fields{
 		"prospect_num": prospectNum,
 		"device_id":    deviceID,
 		"provider":     provider,
 		"message":      message,
+		"sender_name":  senderName,
 	}).Info("Processing incoming message")
 
 	// Check if this is a device command
@@ -934,8 +966,8 @@ func (h *AIWhatsappHandlers) processIncomingMessage(prospectNum, message, device
 		stage = aiConv.Stage.String
 	}
 
-	// Process AI conversation
-	response, err := h.AIWhatsappService.ProcessAIConversation(prospectNum, deviceID, message, stage, "User")
+	// Process AI conversation with actual sender name
+	response, err := h.AIWhatsappService.ProcessAIConversation(prospectNum, deviceID, message, stage, senderName)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process AI conversation")
 		return

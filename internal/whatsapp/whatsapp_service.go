@@ -51,6 +51,7 @@ type WebhookMessage struct {
 	Content     string
 	DeviceID    string
 	Provider    string
+	SenderName  string
 	Timestamp   time.Time
 	Retries     int
 }
@@ -106,7 +107,7 @@ func (s *Service) messageProcessor() {
 
 // processWebhookMessageInternal processes a single webhook message
 func (s *Service) processWebhookMessageInternal(msg *WebhookMessage) error {
-	return s.processIncomingMessage(msg.PhoneNumber, msg.Content, msg.DeviceID)
+	return s.processIncomingMessage(msg.PhoneNumber, msg.Content, msg.DeviceID, msg.SenderName)
 }
 
 // SetServices updates service dependencies
@@ -117,12 +118,13 @@ func (s *Service) SetServices(flowService *services.FlowService, aiService *serv
 
 // ProcessIncomingMessageFromWebhook processes incoming messages from webhook providers
 // This is the main entry point for webhook-based message processing
-func (s *Service) ProcessIncomingMessageFromWebhook(phoneNumber, content, deviceID, provider string) error {
+func (s *Service) ProcessIncomingMessageFromWebhook(phoneNumber, content, deviceID, provider, senderName string) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"provider":     provider,
 		"content":      content,
+		"sender_name":  senderName,
 	}).Info("📨 WEBHOOK: Processing incoming message")
 
 	// Add to processing queue for high performance
@@ -131,6 +133,7 @@ func (s *Service) ProcessIncomingMessageFromWebhook(phoneNumber, content, device
 		Content:     content,
 		DeviceID:    deviceID,
 		Provider:    provider,
+		SenderName:  senderName,
 		Timestamp:   time.Now(),
 		Retries:     0,
 	}
@@ -230,11 +233,12 @@ func (s *Service) SendMediaMessage(deviceID, phoneNumber, mediaURL string) error
 }
 
 // processIncomingMessage processes incoming messages and handles flow/AI logic using ai_whatsapp_nodepath
-func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID string) error {
+func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderName string) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
 		"content":      content,
+		"sender_name":  senderName,
 	}).Info("🔍 FLOW: Checking for active execution in ai_whatsapp_nodepath")
 
 	// Check for personal commands (%, #, cmd)
@@ -243,7 +247,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"device_id": deviceID,
 			"command":   content,
 		}).Info("🔧 COMMAND: Personal command detected")
-		return s.handlePersonalCommand(phoneNumber, content, deviceID)
+		return s.handlePersonalCommand(phoneNumber, content, deviceID, senderName)
 	}
 
 	// Get or create active execution from ai_whatsapp_nodepath
@@ -273,7 +277,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			}).Info("⚠️ FLOW: No default flow found for device, falling back to AI conversation")
 
 			// Fallback to AI conversation when no flow is configured
-			return s.processAIConversation(phoneNumber, content, deviceID)
+			return s.processAIConversation(phoneNumber, content, deviceID, senderName)
 		}
 
 		logrus.WithFields(logrus.Fields{
@@ -291,15 +295,22 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			return err
 		}
 
+		// Update ProspectName with senderName for new execution
+		err = s.aiWhatsappService.UpdateProspectName(phoneNumber, deviceID, senderName)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for new execution")
+		}
+
 		logrus.WithFields(logrus.Fields{
 			"execution_id": aiExecution.ExecutionID.String,
 			"flow_id":      defaultFlow.ID,
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
+			"sender_name":  senderName,
 		}).Info("✅ FLOW: New execution started successfully in ai_whatsapp_nodepath")
 
 		// Process the new execution through the flow
-		return s.processNewFlowExecution(aiExecution, content, phoneNumber, deviceID)
+		return s.processNewFlowExecution(aiExecution, content, phoneNumber, deviceID, senderName)
 	} else {
 		logrus.WithFields(logrus.Fields{
 			"execution_id":   aiExecution.ExecutionID.String,
@@ -308,6 +319,12 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			"device_id":      deviceID,
 			"current_node":   aiExecution.CurrentNodeID.String,
 		}).Info("🔄 FLOW: Found existing active execution in ai_whatsapp_nodepath")
+
+		// Update ProspectName with senderName for existing execution
+		err = s.aiWhatsappService.UpdateProspectName(phoneNumber, deviceID, senderName)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for existing execution")
+		}
 
 		// Check if the execution is waiting for user reply OR has a current node to process
 		if (aiExecution.WaitingForReply.Valid && aiExecution.WaitingForReply.Int32 == 1) || 
@@ -357,7 +374,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 				}).Info("💬 FLOW: Processing existing execution WITHOUT re-saving user message")
 				
 				// Save user message only once for existing execution
-				err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "")
+				err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "", senderName)
 				if err != nil {
 					logrus.WithError(err).Error("Failed to save user message for existing execution")
 				}
@@ -388,7 +405,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 					}
 					
 					// Save bot response
-					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
+					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "", senderName)
 					if err != nil {
 						logrus.WithError(err).Error("Failed to save bot response for existing execution")
 					}
@@ -409,7 +426,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 			}).Info("ℹ️ FLOW: Existing execution not waiting for reply, falling back to AI conversation")
 
 			// Fall back to AI conversation for completed flows
-			return s.processAIConversation(phoneNumber, content, deviceID)
+			return s.processAIConversation(phoneNumber, content, deviceID, "User")
 		}
 	}
 
@@ -419,7 +436,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content string, deviceID s
 // processNewFlowExecution handles flow processing for new executions only
 // This function contains the logic that was previously running for both new and existing executions
 // Fixed: Consolidated conversation saving to prevent duplicate entries
-func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, content, phoneNumber, deviceID string) error {
+func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, content, phoneNumber, deviceID, senderName string) error {
 	// Note: Human mode checking would be implemented through a separate table or field
 	// For now, we'll process all messages through the flow
 
@@ -454,7 +471,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 		"content":      content,
 	}).Info("💬 FLOW: Adding user message to ai_whatsapp_nodepath")
 
-	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "")
+	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "", senderName)
 	if err != nil {
 		logrus.WithError(err).Error("❌ FLOW: Failed to add user message to ai_whatsapp_nodepath")
 		return err
@@ -504,7 +521,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 				return err
 			}
 			// Save the fallback response
-			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
+			err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "", senderName)
 			if err != nil {
 				logrus.WithError(err).Error("❌ FLOW: Failed to save fallback response to conversation")
 			}
@@ -566,18 +583,18 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 						saveContent = msg.Content
 					}
 					
-					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", saveContent, stage)
-					if err != nil {
-						logrus.WithError(err).WithFields(logrus.Fields{
-							"type": msg.Type,
-							"content": saveContent,
-						}).Error("❌ FLOW: Failed to save message to conversation")
-					} else {
-						logrus.WithFields(logrus.Fields{
-							"type": msg.Type,
-							"saved": saveContent,
-						}).Debug("✅ FLOW: Saved message to conversation")
-					}
+					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", saveContent, stage, senderName)
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"type": msg.Type,
+						"content": saveContent,
+					}).Error("❌ FLOW: Failed to save message to conversation")
+				} else {
+					logrus.WithFields(logrus.Fields{
+						"type": msg.Type,
+						"saved": saveContent,
+					}).Debug("✅ FLOW: Saved message to conversation")
+				}
 				}
 
 				// Add delay between messages
@@ -637,7 +654,7 @@ func (s *Service) processNewFlowExecution(aiExecution *models.AIWhatsapp, conten
 }
 
 // handlePersonalCommand handles personal device commands (%, #, cmd)
-func (s *Service) handlePersonalCommand(phoneNumber, command, deviceID string) error {
+func (s *Service) handlePersonalCommand(phoneNumber, command, deviceID, senderName string) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id": deviceID,
 		"command":   command,
@@ -650,14 +667,15 @@ func (s *Service) handlePersonalCommand(phoneNumber, command, deviceID string) e
 	}
 
 	// Handle % and # commands for triggering AI based on current stage
-	return s.processAIConversation(phoneNumber, command, deviceID)
+	return s.processAIConversation(phoneNumber, command, deviceID, senderName)
 }
 
 // processAIConversation processes AI conversation when flow is not available
-func (s *Service) processAIConversation(phoneNumber, content, deviceID string) error {
+func (s *Service) processAIConversation(phoneNumber, content, deviceID, senderName string) error {
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
+		"sender_name":  senderName,
 	}).Info("🤖 AI: Processing AI conversation")
 
 	// Get current conversation stage from AI WhatsApp service
@@ -666,7 +684,7 @@ func (s *Service) processAIConversation(phoneNumber, content, deviceID string) e
 	stage = "" // Default stage, AI service will determine appropriate stage
 
 	// Process AI conversation through AI WhatsApp service
-	response, err := s.aiWhatsappService.ProcessAIConversation(phoneNumber, deviceID, content, stage, "User")
+	response, err := s.aiWhatsappService.ProcessAIConversation(phoneNumber, deviceID, content, stage, senderName)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to process AI conversation")
 		// Send fallback message
@@ -1209,12 +1227,13 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 			// Save plain text response to conversation
 			if response != "" {
 				err = s.aiWhatsappService.SaveConversationHistory(
-					execution.ProspectNum,
-					execution.IDDevice,
-					userInput,
-					response,
-					execution.Stage.String,
-				)
+				execution.ProspectNum,
+				execution.IDDevice,
+				userInput,
+				response,
+				execution.Stage.String,
+				execution.ProspectName.String,
+			)
 				if err != nil {
 					logrus.WithError(err).Error("Failed to save plain text conversation history")
 				}
@@ -1253,12 +1272,13 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 					}).Info("🔍 Saving user message to conversation")
 					
 					err = s.aiWhatsappService.SaveConversationHistory(
-						execution.ProspectNum,
-						execution.IDDevice,
-						userInput,
-						"", // Empty bot response for user message only
-						parsedResponse.Stage,
-					)
+					execution.ProspectNum,
+					execution.IDDevice,
+					userInput,
+					"", // Empty bot response for user message only
+					parsedResponse.Stage,
+					execution.ProspectName.String,
+				)
 					if err != nil {
 						logrus.WithError(err).Error("Failed to save user message to conversation history")
 					}
@@ -1292,6 +1312,7 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 							"", // Empty user message for bot-only messages
 							item.Content,
 							parsedResponse.Stage,
+							execution.ProspectName.String,
 						)
 						if err != nil {
 							logrus.WithError(err).Error("Failed to save bot message to conversation history")
@@ -1325,6 +1346,7 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 				userInput,
 				response,
 				execution.Stage.String,
+				execution.ProspectName.String,
 			)
 			if err != nil {
 				logrus.WithError(err).Error("Failed to save non-AI conversation history")
@@ -2317,7 +2339,7 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 	}
 
 	// Save user message to conversation history
-	err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, userInput, "", "")
+	err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, userInput, "", "", execution.ProspectName.String)
 	if err != nil {
 		logrus.WithError(err).Error("❌ USER_REPLY: Failed to save user message to conversation")
 		return err
@@ -2387,7 +2409,7 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 				return err
 			}
 			// Save fallback response to conversation
-			err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", response, "")
+			err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", response, "", execution.ProspectName.String)
 			if err != nil {
 				logrus.WithError(err).Error("❌ USER_REPLY: Failed to save bot response to conversation")
 			}
@@ -2448,18 +2470,18 @@ func (s *Service) handleUserReplyResume(execution *models.AIWhatsapp, userInput 
 						saveContent = msg.Content
 					}
 					
-					err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", saveContent, stage)
-					if err != nil {
-						logrus.WithError(err).WithFields(logrus.Fields{
-							"type": msg.Type,
-							"content": saveContent,
-						}).Error("❌ USER_REPLY: Failed to save message to conversation")
-					} else {
-						logrus.WithFields(logrus.Fields{
-							"type": msg.Type,
-							"saved": saveContent,
-						}).Debug("✅ USER_REPLY: Saved message to conversation")
-					}
+					err = s.aiWhatsappService.SaveConversationHistory(execution.ProspectNum, execution.IDDevice, "", saveContent, stage, execution.ProspectName.String)
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"type": msg.Type,
+						"content": saveContent,
+					}).Error("❌ USER_REPLY: Failed to save message to conversation")
+				} else {
+					logrus.WithFields(logrus.Fields{
+						"type": msg.Type,
+						"saved": saveContent,
+					}).Debug("✅ USER_REPLY: Saved message to conversation")
+				}
 				}
 
 				// Add delay between messages
@@ -2884,7 +2906,7 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 		}
 
 		// Add bot response to ai_whatsapp_nodepath conversation
-		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "")
+		err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "", execution.ProspectName.String)
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to add bot message to ai_whatsapp_nodepath")
 		}
