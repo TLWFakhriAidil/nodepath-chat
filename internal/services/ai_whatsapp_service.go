@@ -1173,11 +1173,14 @@ func (s *aiWhatsappService) formatResponseForLogging(responses []AIWhatsappRespo
 		if resp.Type == "text" {
 			parts = append(parts, resp.Content)
 		} else if resp.Type == "image" {
-			parts = append(parts, "[Image: "+resp.Content+"]")
+			// Just return the URL without brackets for conv_last
+			parts = append(parts, resp.Content)
 		} else if resp.Type == "audio" {
-			parts = append(parts, "[Audio: "+resp.Content+"]")
+			// Just return the URL without brackets for conv_last
+			parts = append(parts, resp.Content)
 		} else if resp.Type == "video" {
-			parts = append(parts, "[Video: "+resp.Content+"]")
+			// Just return the URL without brackets for conv_last
+			parts = append(parts, resp.Content)
 		}
 	}
 	return strings.Join(parts, " ")

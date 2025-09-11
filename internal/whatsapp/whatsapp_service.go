@@ -1319,13 +1319,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 							}).Error("Failed to send media message")
 						}
 						
-						// Save media URL to conversation history
-						mediaContent := fmt.Sprintf("[%s: %s]", strings.ToUpper(item.Type), item.Content)
+						// Save media URL to conversation history (just the URL, no brackets)
 						err = s.aiWhatsappService.SaveConversationHistory(
 							execution.ProspectNum,
 							execution.IDDevice,
 							"", // Empty user message for bot-only messages
-							mediaContent,
+							item.Content, // Just save the URL directly
 							parsedResponse.Stage,
 							execution.ProspectName.String,
 						)

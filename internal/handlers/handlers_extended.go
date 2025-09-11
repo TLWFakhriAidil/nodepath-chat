@@ -311,7 +311,8 @@ func (h *Handlers) buildResponseFromParts(parts []models.AIResponsePart) string 
 			if i > 0 {
 				response.WriteString("\n")
 			}
-			response.WriteString("[Image: " + part.URL + "]")
+			// Just return the URL without brackets for conv_last
+			response.WriteString(part.URL)
 		}
 	}
 	
