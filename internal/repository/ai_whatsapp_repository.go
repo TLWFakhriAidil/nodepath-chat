@@ -156,16 +156,44 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 
 	// Handle ProspectName as sql.NullString
 	var prospectNameValue interface{}
-	if ai.ProspectName.Valid {
+	if ai.ProspectName.Valid && ai.ProspectName.String != "" {
 		prospectNameValue = ai.ProspectName.String
 	} else {
 		prospectNameValue = nil
 	}
+	
+	// Handle nullable string fields - save NULL instead of empty string
+	var stageValue, balasValue, keywordIklanValue, marketerValue interface{}
+	
+	if ai.Stage.Valid && ai.Stage.String != "" {
+		stageValue = ai.Stage.String
+	} else {
+		stageValue = nil
+	}
+	
+	// Balas, KeywordIklan, and Marketer are regular strings in the model
+	if ai.Balas != "" {
+		balasValue = ai.Balas
+	} else {
+		balasValue = nil
+	}
+	
+	if ai.KeywordIklan != "" {
+		keywordIklanValue = ai.KeywordIklan
+	} else {
+		keywordIklanValue = nil
+	}
+	
+	if ai.Marketer != "" {
+		marketerValue = ai.Marketer
+	} else {
+		marketerValue = nil
+	}
 
 	_, err := r.db.Exec(query,
-		ai.IDDevice, ai.ProspectNum, prospectNameValue, ai.Stage, ai.DateOrder, convLastValue,
+		ai.IDDevice, ai.ProspectNum, prospectNameValue, stageValue, ai.DateOrder, convLastValue,
 		convCurrentValue, ai.Human, ai.Niche, ai.Intro,
-		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
+		balasValue, keywordIklanValue, marketerValue, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		flowReferenceValue, executionIDValue, executionStatusValue,
 		ai.CreatedAt, ai.UpdatedAt,
@@ -962,10 +990,38 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		waitingForReplyValue = nil
 	}
 
+	// Handle nullable string fields - save NULL instead of empty string
+	var stageValue, balasValue, keywordIklanValue, marketerValue interface{}
+	
+	if ai.Stage.Valid && ai.Stage.String != "" {
+		stageValue = ai.Stage.String
+	} else {
+		stageValue = nil
+	}
+	
+	// Balas, KeywordIklan, and Marketer are regular strings in the model
+	if ai.Balas != "" {
+		balasValue = ai.Balas
+	} else {
+		balasValue = nil
+	}
+	
+	if ai.KeywordIklan != "" {
+		keywordIklanValue = ai.KeywordIklan
+	} else {
+		keywordIklanValue = nil
+	}
+	
+	if ai.Marketer != "" {
+		marketerValue = ai.Marketer
+	} else {
+		marketerValue = nil
+	}
+
 	_, err := r.db.Exec(query,
-		ai.IDDevice, ai.Stage, ai.DateOrder, convLastValue, convCurrentValue,
+		ai.IDDevice, stageValue, ai.DateOrder, convLastValue, convCurrentValue,
 		ai.Human, ai.Niche, ai.Intro,
-		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
+		balasValue, keywordIklanValue, marketerValue, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		ai.UpdatedAt, ai.IDProspect,
 	)
@@ -1336,6 +1392,22 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 		} else {
 			convLastValue = convHistory
 		}
+		
+		// Handle stage - save NULL instead of empty string
+		var stageValue interface{}
+		if stage != "" {
+			stageValue = stage
+		} else {
+			stageValue = nil
+		}
+		
+		// Handle prospect_name - save NULL instead of empty string
+		var prospectNameValue interface{}
+		if prospectName != "" {
+			prospectNameValue = prospectName
+		} else {
+			prospectNameValue = nil
+		}
 
 		now := time.Now()
 		if existingID != nil {
@@ -1354,7 +1426,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 				SET conv_last = ?, stage = ?, prospect_name = ?, updated_at = ?
 				WHERE prospect_num = ? AND id_device = ?
 			`
-			_, err = tx.Exec(updateQuery, convLastValue, stage, prospectName, now, prospectNum, idDevice)
+			_, err = tx.Exec(updateQuery, convLastValue, stageValue, prospectNameValue, now, prospectNum, idDevice)
 			if err != nil {
 				return fmt.Errorf("failed to update conversation history: %w", err)
 			}
@@ -1379,7 +1451,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 					created_at, updated_at
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			`
-			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stage, convLastValue, prospectName, 0, now, now)
+			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stageValue, convLastValue, prospectNameValue, 0, now, now)
 			if err != nil {
 				return fmt.Errorf("failed to create new conversation record: %w", err)
 			}
