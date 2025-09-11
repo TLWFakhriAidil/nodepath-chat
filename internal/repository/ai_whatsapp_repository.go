@@ -171,21 +171,21 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		stageValue = nil
 	}
 	
-	// Balas, KeywordIklan, and Marketer are regular strings in the model
-	if ai.Balas != "" {
-		balasValue = ai.Balas
+	// Balas, KeywordIklan, and Marketer are now sql.NullString in the model
+	if ai.Balas.Valid && ai.Balas.String != "" {
+		balasValue = ai.Balas.String
 	} else {
 		balasValue = nil
 	}
 	
-	if ai.KeywordIklan != "" {
-		keywordIklanValue = ai.KeywordIklan
+	if ai.KeywordIklan.Valid && ai.KeywordIklan.String != "" {
+		keywordIklanValue = ai.KeywordIklan.String
 	} else {
 		keywordIklanValue = nil
 	}
 	
-	if ai.Marketer != "" {
-		marketerValue = ai.Marketer
+	if ai.Marketer.Valid && ai.Marketer.String != "" {
+		marketerValue = ai.Marketer.String
 	} else {
 		marketerValue = nil
 	}
@@ -999,21 +999,21 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		stageValue = nil
 	}
 	
-	// Balas, KeywordIklan, and Marketer are regular strings in the model
-	if ai.Balas != "" {
-		balasValue = ai.Balas
+	// Balas, KeywordIklan, and Marketer are now sql.NullString in the model
+	if ai.Balas.Valid && ai.Balas.String != "" {
+		balasValue = ai.Balas.String
 	} else {
 		balasValue = nil
 	}
 	
-	if ai.KeywordIklan != "" {
-		keywordIklanValue = ai.KeywordIklan
+	if ai.KeywordIklan.Valid && ai.KeywordIklan.String != "" {
+		keywordIklanValue = ai.KeywordIklan.String
 	} else {
 		keywordIklanValue = nil
 	}
 	
-	if ai.Marketer != "" {
-		marketerValue = ai.Marketer
+	if ai.Marketer.Valid && ai.Marketer.String != "" {
+		marketerValue = ai.Marketer.String
 	} else {
 		marketerValue = nil
 	}

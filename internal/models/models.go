@@ -215,10 +215,10 @@ type AIWhatsapp struct {
 	CurrentNodeID   sql.NullString  `json:"current_node_id" db:"current_node_id"`   // Current node ID in the chatbot flow
 	LastNodeID      sql.NullString  `json:"last_node_id" db:"last_node_id"`       // Previous node ID for flow tracking
 	WaitingForReply sql.NullInt32   `json:"waiting_for_reply" db:"waiting_for_reply"` // 1 = waiting for user reply, 0 = not waiting
-	Balas           string          `json:"balas" db:"balas"`
+	Balas           sql.NullString  `json:"balas" db:"balas"`
 	Human           int             `json:"human" db:"human"` // 0 = AI active, 1 = human takeover
-	KeywordIklan    string          `json:"keywordiklan" db:"keywordiklan"`
-	Marketer        string          `json:"marketer" db:"marketer"`
+	KeywordIklan    sql.NullString  `json:"keywordiklan" db:"keywordiklan"`
+	Marketer        sql.NullString  `json:"marketer" db:"marketer"`
 	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`
 	UpdateToday     *time.Time      `json:"update_today" db:"update_today"`
