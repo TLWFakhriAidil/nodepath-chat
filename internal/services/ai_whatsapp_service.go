@@ -78,7 +78,7 @@ type AIWhatsappService interface {
 	
 	// Flow execution methods
 	// Start a new flow execution
-	StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error)
+	StartFlowExecution(prospectNum, idDevice, flowReference, senderName string, variables map[string]interface{}) (*models.AIWhatsapp, error)
 	
 	// Get active flow execution
 	GetActiveFlowExecution(prospectNum, idDevice string) (*models.AIWhatsapp, error)
@@ -1278,11 +1278,12 @@ func (s *aiWhatsappService) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 // Flow execution methods
 
 // StartFlowExecution starts a new flow execution in ai_whatsapp_nodepath
-func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error) {
+func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowReference, senderName string, variables map[string]interface{}) (*models.AIWhatsapp, error) {
 	logrus.WithFields(logrus.Fields{
 		"prospect_num":   prospectNum,
 		"id_device":      idDevice,
 		"flow_reference": flowReference,
+		"sender_name":    senderName,
 	}).Info("Starting flow execution")
 
 	// Generate unique execution ID
@@ -1338,6 +1339,7 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 		aiConv = &models.AIWhatsapp{
 			IDDevice:        idDevice,
 			ProspectNum:     prospectNum,
+			ProspectName:    sql.NullString{String: senderName, Valid: senderName != ""}, // Add prospect_name
 			Stage:           sql.NullString{String: "flow_start", Valid: true},
 			Human:           0,
 			DateOrder:       &now,

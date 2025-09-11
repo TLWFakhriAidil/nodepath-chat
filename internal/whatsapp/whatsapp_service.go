@@ -289,7 +289,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 
 		// Start new execution with default flow in ai_whatsapp_nodepath
 		variables := make(map[string]interface{})
-		aiExecution, err = s.aiWhatsappService.StartFlowExecution(phoneNumber, deviceID, defaultFlow.ID, variables)
+		aiExecution, err = s.aiWhatsappService.StartFlowExecution(phoneNumber, deviceID, defaultFlow.ID, senderName, variables)
 		if err != nil {
 			logrus.WithError(err).Error("❌ FLOW: Failed to start new execution in ai_whatsapp_nodepath")
 			return err
@@ -1317,6 +1317,20 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 								"media_type": item.Type,
 								"media_url":  item.Content,
 							}).Error("Failed to send media message")
+						}
+						
+						// Save media URL to conversation history
+						mediaContent := fmt.Sprintf("[%s: %s]", strings.ToUpper(item.Type), item.Content)
+						err = s.aiWhatsappService.SaveConversationHistory(
+							execution.ProspectNum,
+							execution.IDDevice,
+							"", // Empty user message for bot-only messages
+							mediaContent,
+							parsedResponse.Stage,
+							execution.ProspectName.String,
+						)
+						if err != nil {
+							logrus.WithError(err).Error("Failed to save media URL to conversation history")
 						}
 						// Don't include media URLs in conversation history
 					default:
