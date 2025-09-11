@@ -1265,8 +1265,8 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 		}
 		
 		// Handle JSON fields
-		if len(item.ConvLast) > 0 && string(item.ConvLast) != "null" {
-			transformed["conv_last"] = string(item.ConvLast)
+		if item.ConvLast.Valid && len(item.ConvLast.String) > 0 && item.ConvLast.String != "null" {
+			transformed["conv_last"] = item.ConvLast.String
 		} else {
 			transformed["conv_last"] = nil
 		}

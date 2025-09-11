@@ -478,15 +478,15 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 	if aiConv != nil {
 		// Append to existing conv_last
 		existingConv := ""
-		if aiConv.ConvLast != nil {
-			existingConv = string(aiConv.ConvLast)
+		if aiConv.ConvLast.Valid {
+			existingConv = aiConv.ConvLast.String
 			if existingConv != "" && existingConv != "null" {
 				existingConv += "\n"
 			}
 		}
 		
 		newConvLast := existingConv + strings.Join(convLogEntries, "\n")
-		aiConv.ConvLast = json.RawMessage(strconv.Quote(newConvLast))
+		aiConv.ConvLast = sql.NullString{String: newConvLast, Valid: true}
 		aiConv.ConvCurrent = sql.NullString{} // Clear conv_current
 		
 		err = s.aiRepo.UpdateAIWhatsapp(aiConv)
@@ -711,12 +711,12 @@ func (s *aiWhatsappService) buildAIPromptContent(aiSettings *models.AISettings, 
 // getLastAIResponse retrieves the raw conv_last data from the AIWhatsapp record
 // Returns the complete conversation history stored in conv_last column
 func (s *aiWhatsappService) getLastAIResponse(aiConv *models.AIWhatsapp) string {
-	if aiConv == nil || aiConv.ConvLast == nil {
+	if aiConv == nil || !aiConv.ConvLast.Valid {
 		return ""
 	}
 
 	// Return raw conv_last data without processing
-	convLastStr := string(aiConv.ConvLast)
+	convLastStr := aiConv.ConvLast.String
 	if convLastStr == "" || convLastStr == "null" {
 		return ""
 	}
@@ -1442,19 +1442,9 @@ func (s *aiWhatsappService) UpdateFlowExecution(prospectNum, idDevice, currentNo
 		return fmt.Errorf("failed to update flow tracking fields: %w", err)
 	}
 
-	// Update variables if provided (requires separate update to preserve other data)
-	if variables != nil {
-		variablesJSON, err := json.Marshal(variables)
-		if err != nil {
-			return fmt.Errorf("failed to marshal variables: %w", err)
-		}
-		// Update variables field separately to preserve other data
-		query := `UPDATE ai_whatsapp_nodepath SET variables = ?, updated_at = ? WHERE prospect_num = ? AND id_device = ?`
-		_, err = s.aiRepo.GetDB().Exec(query, string(variablesJSON), time.Now(), prospectNum, idDevice)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to update variables field")
-		}
-	}
+	// Variables are no longer stored in database - deprecated column removed
+	// Variables handling moved to separate service if needed
+	_ = variables // Suppress unused parameter warning
 
 	logrus.WithFields(logrus.Fields{
 		"prospect_num":     prospectNum,

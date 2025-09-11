@@ -195,6 +195,8 @@ type WebSocketMessage struct {
 // Test chat message struct removed
 
 // AIWhatsapp represents an AI WhatsApp conversation record with flow execution capabilities
+// Updated to match the new ai_whatsapp_nodepath schema - removed deprecated columns:
+// jam, conv_stage, variables, catatan_staff, data_image, current_node, bot_balas
 type AIWhatsapp struct {
 	IDProspect      int             `json:"id_prospect" db:"id_prospect"`
 	FlowReference   sql.NullString  `json:"flow_reference" db:"flow_reference"`   // Reference to chatbot flow being executed
@@ -206,7 +208,7 @@ type AIWhatsapp struct {
 	ProspectNum     string          `json:"prospect_num" db:"prospect_num"`
 	Intro           string          `json:"intro" db:"intro"`
 	Stage           sql.NullString  `json:"stage" db:"stage"`
-	ConvLast        json.RawMessage `json:"conv_last" db:"conv_last"`
+	ConvLast        sql.NullString  `json:"conv_last" db:"conv_last"`             // Changed from json.RawMessage to sql.NullString for TEXT field
 	ConvCurrent     sql.NullString  `json:"conv_current" db:"conv_current"`
 	ExecutionStatus sql.NullString  `json:"execution_status" db:"execution_status"` // Flow execution status (active, completed, failed)
 	FlowID          sql.NullString  `json:"flow_id" db:"flow_id"`                 // ID of the current chatbot flow being executed

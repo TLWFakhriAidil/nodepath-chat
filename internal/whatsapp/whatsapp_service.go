@@ -889,24 +889,16 @@ func (s *Service) logConversationMessage(phoneNumber, deviceID, messageType, con
 	if existingConv != nil {
 		// Update conv_last by appending new log entry (similar to PHP: $whats->conv_last .= "\n" . $newBotEntry)
 		var updatedConvLast string
-		if existingConv.ConvLast != nil {
+		if existingConv.ConvLast.Valid {
 			// Get existing conv_last as string
-			existingConvLastStr := string(existingConv.ConvLast)
-			// Remove JSON quotes if present
-			if len(existingConvLastStr) >= 2 && existingConvLastStr[0] == '"' && existingConvLastStr[len(existingConvLastStr)-1] == '"' {
-				existingConvLastStr = existingConvLastStr[1 : len(existingConvLastStr)-1]
-				// Unescape JSON escape sequences
-				existingConvLastStr = strings.ReplaceAll(existingConvLastStr, "\\n", "\n")
-				existingConvLastStr = strings.ReplaceAll(existingConvLastStr, "\\\\", "\\")
-				existingConvLastStr = strings.ReplaceAll(existingConvLastStr, "\\\"", "\"")
-			}
+			existingConvLastStr := existingConv.ConvLast.String
 			updatedConvLast = existingConvLastStr + "\n" + logEntry
 		} else {
 			updatedConvLast = logEntry
 		}
 
 		// Update the conversation record with new conv_last and clear conv_current
-		existingConv.ConvLast = json.RawMessage(fmt.Sprintf("\"%s\"", strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(updatedConvLast, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n")))
+		existingConv.ConvLast = sql.NullString{String: updatedConvLast, Valid: true}
 		existingConv.ConvCurrent = sql.NullString{Valid: false} // Clear conv_current (similar to PHP: $whats->conv_current = null)
 
 		// Save the updated conversation
@@ -1145,19 +1137,12 @@ func (s *Service) processAIPromptNode(flow *models.ChatbotFlow, execution *model
 	
 	// Log raw conv_last data
 	logrus.WithFields(logrus.Fields{
-		"conv_last_raw": string(execution.ConvLast),
-		"conv_last_len": len(execution.ConvLast),
+		"conv_last_raw": execution.ConvLast.String,
+		"conv_last_valid": execution.ConvLast.Valid,
 	}).Info("🔍 Raw ConvLast Data")
 	
-	if len(execution.ConvLast) > 0 {
-		if err := json.Unmarshal(execution.ConvLast, &convLastStr); err == nil {
-			// Successfully unmarshaled
-		} else {
-			// If unmarshal fails, use it as string
-			convLastStr = string(execution.ConvLast)
-		}
-		// Remove quotes if present
-		convLastStr = strings.Trim(convLastStr, "\"")
+	if execution.ConvLast.Valid && execution.ConvLast.String != "" {
+		convLastStr = execution.ConvLast.String
 		
 		// Log processed conversation
 		logrus.WithFields(logrus.Fields{

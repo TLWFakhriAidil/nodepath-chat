@@ -1,11 +1,8 @@
--- Rollback migration - Re-add dropped columns if needed
--- Note: This will restore the columns but not the data
+-- Rollback migration - DEPRECATED COLUMNS REMOVED
+-- Note: The deprecated columns (jam, catatan_staff, data_image, conv_stage, variables, bot_balas, current_node) 
+-- are permanently removed and will not be restored in rollback to maintain schema consistency.
 
-ALTER TABLE ai_whatsapp_nodepath 
-ADD COLUMN IF NOT EXISTS jam VARCHAR(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-ADD COLUMN IF NOT EXISTS catatan_staff VARCHAR(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-ADD COLUMN IF NOT EXISTS data_image VARCHAR(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-ADD COLUMN IF NOT EXISTS conv_stage TEXT COLLATE utf8mb4_unicode_ci,
-ADD COLUMN IF NOT EXISTS variables TEXT COLLATE utf8mb4_unicode_ci COMMENT 'Flow execution variables',
-ADD COLUMN IF NOT EXISTS bot_balas TIMESTAMP NULL DEFAULT NULL COMMENT 'Bot reply timestamp',
-ADD COLUMN IF NOT EXISTS current_node VARCHAR(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Current node in the flow execution';
+-- This rollback migration intentionally does nothing to prevent reinstalling deprecated columns
+-- that have been removed from the new ai_whatsapp_nodepath schema.
+
+SELECT 'Rollback migration completed - deprecated columns remain removed' AS status;

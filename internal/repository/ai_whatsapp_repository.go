@@ -79,23 +79,12 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	ai.CreatedAt = time.Now()
 	ai.UpdatedAt = time.Now()
 
-	// Determine conv_last value - use NULL if empty, otherwise marshal to JSON
+	// Handle ConvLast as sql.NullString
 	var convLastValue interface{}
-	if ai.ConvLast == nil {
-		convLastValue = nil // This will be stored as NULL in the database
+	if ai.ConvLast.Valid {
+		convLastValue = ai.ConvLast.String
 	} else {
-		// Check if it's empty JSON
-		convLastJSON, err := json.Marshal(ai.ConvLast)
-		if err != nil {
-			return fmt.Errorf("failed to marshal conv_last: %w", err)
-		}
-		// Check if the marshaled result is empty JSON
-		jsonStr := string(convLastJSON)
-		if jsonStr == "null" || jsonStr == "{}" || jsonStr == "[]" || jsonStr == "\"\"" {
-			convLastValue = nil
-		} else {
-			convLastValue = jsonStr
-		}
+		convLastValue = nil
 	}
 
 	query := `
@@ -232,27 +221,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectNum(prospectNum string) (*
 		return nil, fmt.Errorf("failed to get AI WhatsApp conversation: %w", err)
 	}
 
-	// Handle conv_last data (both JSON and plain text formats)
-	if convLastJSON.Valid && convLastJSON.String != "" {
-		// Try to parse as JSON first (for backward compatibility)
-		var testJSON interface{}
-		if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
-			// It's valid JSON, store as is
-			ai.ConvLast = json.RawMessage(convLastJSON.String)
-		} else {
-			// It's plain text, convert to proper JSON string
-			jsonBytes, err := json.Marshal(convLastJSON.String)
-			if err != nil {
-				logrus.WithError(err).WithField("conv_last", convLastJSON.String).Warn("Failed to marshal conv_last as JSON, setting to null")
-				ai.ConvLast = json.RawMessage("null")
-			} else {
-				ai.ConvLast = json.RawMessage(jsonBytes)
-			}
-		}
-	} else {
-		// Set to null JSON if empty or invalid
-		ai.ConvLast = json.RawMessage("null")
-	}
+	// Handle conv_last data - store as sql.NullString
+	ai.ConvLast = convLastJSON
 
 	return ai, nil
 }
@@ -266,9 +236,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 
 	query := `
 		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
-		       conv_current, human, niche, jam, intro, 
-		       catatan_staff, balas, data_image, conv_stage, 
-		       bot_balas, keywordiklan, marketer, update_today, 
+		       conv_current, human, niche, intro, 
+		       balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE id_prospect = ?
@@ -297,27 +266,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByID(id int) (*models.AIWhatsapp, er
 		return nil, fmt.Errorf("failed to get AI WhatsApp conversation: %w", err)
 	}
 
-	// Handle conv_last data (both JSON and plain text formats)
-	if convLastJSON.Valid && convLastJSON.String != "" {
-		// Try to parse as JSON first (for backward compatibility)
-		var testJSON interface{}
-		if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
-			// It's valid JSON, store as is
-			ai.ConvLast = json.RawMessage(convLastJSON.String)
-		} else {
-			// It's plain text, convert to proper JSON string
-			jsonBytes, err := json.Marshal(convLastJSON.String)
-			if err != nil {
-				logrus.WithError(err).WithField("conv_last", convLastJSON.String).Warn("Failed to marshal conv_last as JSON, setting to null")
-				ai.ConvLast = json.RawMessage("null")
-			} else {
-				ai.ConvLast = json.RawMessage(jsonBytes)
-			}
-		}
-	} else {
-		// Set to null JSON if empty or invalid
-		ai.ConvLast = json.RawMessage("null")
-	}
+	// Handle conv_last data - store as sql.NullString
+	ai.ConvLast = convLastJSON
 
 	return ai, nil
 }
@@ -331,9 +281,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 
 	query := `
 		SELECT id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
-		       conv_current, human, niche, jam, intro, 
-		       catatan_staff, balas, data_image, conv_stage, 
-		       bot_balas, keywordiklan, marketer, update_today, 
+		       conv_current, human, niche, intro, 
+		       balas, keywordiklan, marketer, update_today, 
 		       created_at, updated_at
 		FROM ai_whatsapp_nodepath 
 		WHERE id_device = ?
@@ -367,27 +316,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByDevice(idDevice string) ([]models.
 			continue
 		}
 
-		// Handle conv_last data (both JSON and plain text formats)
-		if convLastJSON.Valid && convLastJSON.String != "" {
-			// Try to parse as JSON first (for backward compatibility)
-			var testJSON interface{}
-			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
-				// It's valid JSON, store as is
-				ai.ConvLast = json.RawMessage(convLastJSON.String)
-			} else {
-				// It's plain text, convert to proper JSON string
-				jsonBytes, err := json.Marshal(convLastJSON.String)
-				if err != nil {
-					logrus.WithError(err).WithField("conv_last", convLastJSON.String).Warn("Failed to marshal conv_last as JSON, setting to null")
-					ai.ConvLast = json.RawMessage("null")
-				} else {
-					ai.ConvLast = json.RawMessage(jsonBytes)
-				}
-			}
-		} else {
-			// Set to null JSON if empty or invalid
-			ai.ConvLast = json.RawMessage("null")
-		}
+		// Handle conv_last data - store as sql.NullString
+		ai.ConvLast = convLastJSON
 
 		conversations = append(conversations, ai)
 	}
@@ -400,9 +330,8 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 	// Build base query with JOIN to filter by user
 	baseQuery := `
 		SELECT a.id_prospect, a.id_device, a.prospect_num, a.stage, a.date_order, a.conv_last, 
-		       a.conv_current, a.human, a.niche, a.jam, a.intro, 
-		       a.catatan_staff, a.balas, a.data_image, a.conv_stage, 
-		       a.bot_balas, a.keywordiklan, a.marketer, a.update_today, 
+		       a.conv_current, a.human, a.niche, a.intro, 
+		       a.balas, a.keywordiklan, a.marketer, a.update_today, 
 		       a.created_at, a.updated_at
 		FROM ai_whatsapp_nodepath a
 		JOIN device_setting_nodepath d ON a.id_device = d.id_device
@@ -492,27 +421,8 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 			continue
 		}
 
-		// Handle conv_last data (both JSON and plain text formats)
-		if convLastJSON.Valid && convLastJSON.String != "" {
-			// Try to parse as JSON first (for backward compatibility)
-			var testJSON interface{}
-			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
-				// It's valid JSON, store as is
-				ai.ConvLast = json.RawMessage(convLastJSON.String)
-			} else {
-				// It's plain text, convert to proper JSON string
-				jsonBytes, err := json.Marshal(convLastJSON.String)
-				if err != nil {
-					logrus.WithError(err).WithField("conv_last", convLastJSON.String).Warn("Failed to marshal conv_last as JSON, setting to null")
-					ai.ConvLast = json.RawMessage("null")
-				} else {
-					ai.ConvLast = json.RawMessage(jsonBytes)
-				}
-			}
-		} else {
-			// Set to null JSON if empty or invalid
-			ai.ConvLast = json.RawMessage("null")
-		}
+		// Handle conv_last data - store as sql.NullString
+		ai.ConvLast = convLastJSON
 
 		conversations = append(conversations, ai)
 	}
@@ -816,27 +726,8 @@ func (r *aiWhatsappRepository) GetAIWhatsappByNiche(niche string) ([]models.AIWh
 			continue
 		}
 
-		// Handle conv_last data (both JSON and plain text formats)
-		if convLastJSON.Valid && convLastJSON.String != "" {
-			// Try to parse as JSON first (for backward compatibility)
-			var testJSON interface{}
-			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
-				// It's valid JSON, store as is
-				ai.ConvLast = json.RawMessage(convLastJSON.String)
-			} else {
-				// It's plain text, convert to proper JSON string
-				jsonBytes, err := json.Marshal(convLastJSON.String)
-				if err != nil {
-					logrus.WithError(err).WithField("conv_last", convLastJSON.String).Warn("Failed to marshal conv_last as JSON, setting to null")
-					ai.ConvLast = json.RawMessage("null")
-				} else {
-					ai.ConvLast = json.RawMessage(jsonBytes)
-				}
-			}
-		} else {
-			// Set to null JSON if empty or invalid
-			ai.ConvLast = json.RawMessage("null")
-		}
+		// Handle conv_last data - store as sql.NullString
+		ai.ConvLast = convLastJSON
 
 		conversations = append(conversations, ai)
 	}
@@ -886,24 +777,11 @@ func (r *aiWhatsappRepository) GetActiveAIConversations() ([]models.AIWhatsapp, 
 
 		// Handle conv_last data (both JSON and plain text formats)
 		if convLastJSON.Valid && convLastJSON.String != "" {
-			// Try to parse as JSON first (for backward compatibility)
-			var testJSON interface{}
-			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
-				// It's valid JSON, store as is
-				ai.ConvLast = json.RawMessage(convLastJSON.String)
-			} else {
-				// It's plain text, convert to proper JSON string
-				jsonBytes, err := json.Marshal(convLastJSON.String)
-				if err != nil {
-					logrus.WithError(err).WithField("conv_last", convLastJSON.String).Warn("Failed to marshal conv_last as JSON, setting to null")
-					ai.ConvLast = json.RawMessage("null")
-				} else {
-					ai.ConvLast = json.RawMessage(jsonBytes)
-				}
-			}
+			// Store conv_last as sql.NullString
+			ai.ConvLast = convLastJSON
 		} else {
-			// Set to null JSON if empty or invalid
-			ai.ConvLast = json.RawMessage("null")
+			// Set to empty sql.NullString if invalid
+			ai.ConvLast = sql.NullString{Valid: false}
 		}
 
 		conversations = append(conversations, ai)
@@ -989,23 +867,12 @@ func (r *aiWhatsappRepository) GetConversationLogsByStage(stage string) ([]model
 func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 	ai.UpdatedAt = time.Now()
 
-	// Determine conv_last value - use NULL if empty, otherwise marshal to JSON
+	// Handle conv_last as sql.NullString
 	var convLastValue interface{}
-	if ai.ConvLast == nil {
-		convLastValue = nil // This will be stored as NULL in the database
+	if ai.ConvLast.Valid {
+		convLastValue = ai.ConvLast.String
 	} else {
-		// Check if it's empty JSON
-		convLastJSON, err := json.Marshal(ai.ConvLast)
-		if err != nil {
-			return fmt.Errorf("failed to marshal conv_last: %w", err)
-		}
-		// Check if the marshaled result is empty JSON
-		jsonStr := string(convLastJSON)
-		if jsonStr == "null" || jsonStr == "{}" || jsonStr == "[]" || jsonStr == "\"\"" {
-			convLastValue = nil
-		} else {
-			convLastValue = jsonStr
-		}
+		convLastValue = nil
 	}
 
 	query := `
@@ -1340,24 +1207,11 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 
 	// Handle conv_last data (both JSON and plain text formats)
 	if convLastJSON.Valid && convLastJSON.String != "" {
-		// Try to parse as JSON first (for backward compatibility)
-		var testJSON interface{}
-		if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
-			// It's valid JSON, store as is
-			ai.ConvLast = json.RawMessage(convLastJSON.String)
-		} else {
-			// It's plain text, convert to proper JSON string
-			jsonBytes, err := json.Marshal(convLastJSON.String)
-			if err != nil {
-				logrus.WithError(err).WithField("conv_last", convLastJSON.String).Warn("Failed to marshal conv_last as JSON, setting to null")
-				ai.ConvLast = json.RawMessage("null")
-			} else {
-				ai.ConvLast = json.RawMessage(jsonBytes)
-			}
-		}
+		// Store conv_last as sql.NullString
+		ai.ConvLast = convLastJSON
 	} else {
-		// Set to null JSON if empty or invalid
-		ai.ConvLast = json.RawMessage("null")
+		// Set to empty sql.NullString if invalid
+		ai.ConvLast = sql.NullString{Valid: false}
 	}
 
 	return ai, nil
@@ -1607,27 +1461,8 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 			continue
 		}
 
-		// Handle conv_last data (both JSON and plain text formats)
-		if convLastJSON.Valid && convLastJSON.String != "" {
-			// Try to parse as JSON first (for backward compatibility)
-			var testJSON interface{}
-			if err := json.Unmarshal([]byte(convLastJSON.String), &testJSON); err == nil {
-				// It's valid JSON, store as is
-				ai.ConvLast = json.RawMessage(convLastJSON.String)
-			} else {
-				// It's plain text, convert to proper JSON string
-				jsonBytes, err := json.Marshal(convLastJSON.String)
-				if err != nil {
-					logrus.WithError(err).WithField("conv_last", convLastJSON.String).Warn("Failed to marshal conv_last as JSON, setting to null")
-					ai.ConvLast = json.RawMessage("null")
-				} else {
-					ai.ConvLast = json.RawMessage(jsonBytes)
-				}
-			}
-		} else {
-			// Set to null JSON if empty or invalid
-			ai.ConvLast = json.RawMessage("null")
-		}
+		// Store conv_last as sql.NullString
+		ai.ConvLast = convLastJSON
 
 		conversations = append(conversations, ai)
 	}
