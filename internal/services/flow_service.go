@@ -97,6 +97,38 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 	return &flow, nil
 }
 
+// DetermineTableByFlowName determines which table to use based on flow name
+func (s *FlowService) DetermineTableByFlowName(flowName string) string {
+	// Check if flow name is "WasapBot Exama"
+	if flowName == "WasapBot Exama" {
+		return "wasapBot_nodepath"
+	}
+	// Default to ai_whatsapp_nodepath for "Chatbot AI" or any other name
+	return "ai_whatsapp_nodepath"
+}
+
+// GetFlowAndDetermineTable retrieves a flow and determines which table to use for processing
+func (s *FlowService) GetFlowAndDetermineTable(flowID string) (*models.ChatbotFlow, string, error) {
+	flow, err := s.GetFlow(flowID)
+	if err != nil {
+		return nil, "", err
+	}
+	if flow == nil {
+		return nil, "", fmt.Errorf("flow not found")
+	}
+	
+	// Determine which table to use based on flow name
+	tableName := s.DetermineTableByFlowName(flow.Name)
+	
+	logrus.WithFields(logrus.Fields{
+		"flow_id": flowID,
+		"flow_name": flow.Name,
+		"table_name": tableName,
+	}).Info("Determined table for flow processing")
+	
+	return flow, tableName, nil
+}
+
 // GetAllFlows retrieves all flows
 func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 	if s.db == nil {

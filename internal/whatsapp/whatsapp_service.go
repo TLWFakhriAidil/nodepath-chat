@@ -38,6 +38,7 @@ type Service struct {
 	deviceSettingsService *services.DeviceSettingsService
 	providerService       *services.ProviderService
 	mediaDetectionService *services.MediaDetectionService
+	unifiedFlowService    *services.UnifiedFlowService
 	urlValidator          *utils.URLValidator
 
 	// Message processing queue for performance
@@ -57,7 +58,7 @@ type WebhookMessage struct {
 }
 
 // NewService creates a new simplified WhatsApp service for webhook-based system
-func NewService(cfg *config.Config, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService services.AIWhatsappService, websocketService *services.WebSocketService, deviceSettingsService *services.DeviceSettingsService, providerService *services.ProviderService, mediaDetectionService *services.MediaDetectionService) (*Service, error) {
+func NewService(cfg *config.Config, queueService *services.QueueService, flowService *services.FlowService, aiService *services.AIService, aiWhatsappService services.AIWhatsappService, websocketService *services.WebSocketService, deviceSettingsService *services.DeviceSettingsService, providerService *services.ProviderService, mediaDetectionService *services.MediaDetectionService, unifiedFlowService *services.UnifiedFlowService) (*Service, error) {
 	service := &Service{
 		cfg:                   cfg,
 		queueService:          queueService,
@@ -68,6 +69,7 @@ func NewService(cfg *config.Config, queueService *services.QueueService, flowSer
 		deviceSettingsService: deviceSettingsService,
 		providerService:       providerService,
 		mediaDetectionService: mediaDetectionService,
+		unifiedFlowService:    unifiedFlowService,
 		urlValidator:          utils.NewURLValidator(),
 		messageQueue:          make(chan *WebhookMessage, 1000), // Buffered queue for performance
 	}

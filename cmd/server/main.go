@@ -84,6 +84,7 @@ func main() {
 	// Initialize repositories first (before services)
 	aiWhatsappRepo := repository.NewAIWhatsappRepository(db)
 	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
+	wasapBotRepo := repository.NewWasapBotRepository(db)
 	logrus.Info("Repositories initialized successfully")
 	
 	flowService := services.NewFlowService(db, concreteRedisClient)
@@ -91,6 +92,10 @@ func main() {
 	queueMonitor := services.NewQueueMonitor()
 	queueService := services.NewQueueService(redisClient, queueMonitor)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
+	
+	// Initialize unified flow service for table routing
+	unifiedFlowService := services.NewUnifiedFlowService(flowService, aiWhatsappRepo, wasapBotRepo)
+	logrus.Info("Unified flow service initialized for table routing")
 
 	// Initialize WebSocket service for real-time communication
 	websocketService := services.NewWebSocketService(cfg.MaxConcurrentUsers)
@@ -119,7 +124,7 @@ func main() {
 	// Initialize WhatsApp service with multi-device support
 	logrus.Info("🔧 MAIN: About to initialize WhatsApp service...")
 	logrus.Info("🔧 MAIN: Initializing WhatsApp service...")
-	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService, mediaDetectionService)
+	whatsappService, err := whatsapp.NewService(cfg, queueService, flowService, aiService, aiWhatsappService, websocketService, deviceSettingsService, providerService, mediaDetectionService, unifiedFlowService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize WhatsApp service")
 	}
