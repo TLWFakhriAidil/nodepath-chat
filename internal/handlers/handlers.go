@@ -99,6 +99,7 @@ type Handlers struct {
 	healthService         *services.HealthService
 	aiWhatsappHandlers    *AIWhatsappHandlers
 	authHandlers          *AuthHandlers
+	wasapBotHandlers      *WasapBotHandlers
 }
 
 // NewHandlers creates a new handlers instance
@@ -117,6 +118,7 @@ func NewHandlers(
 	// Initialize repositories
 	aiRepo := repository.NewAIWhatsappRepository(db)
 	deviceRepo := repository.NewDeviceSettingsRepository(db)
+	wasapBotRepo := repository.NewWasapBotRepository(db)
 	
 	// Initialize media detection service
 	mediaDetectionService := services.NewMediaDetectionService()
@@ -126,6 +128,9 @@ func NewHandlers(
 	
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
+	
+	// Initialize WasapBot handlers
+	wasapBotHandlers := NewWasapBotHandlers(wasapBotRepo)
 	
 	// Initialize authentication handlers
 	authHandlers := NewAuthHandlers(db)
@@ -143,6 +148,7 @@ func NewHandlers(
 		healthService:         healthService,
 		aiWhatsappHandlers:    aiWhatsappHandlers,
 		authHandlers:          authHandlers,
+		wasapBotHandlers:      wasapBotHandlers,
 	}
 	
 	// Set the reference to main handlers in AI WhatsApp handlers for flow routing
@@ -230,6 +236,13 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// AI WhatsApp routes - delegate to AIWhatsappHandlers (must be registered before generic webhook routes)
 	aiWhatsapp := api.Group("/ai-whatsapp")
 	h.aiWhatsappHandlers.SetupAIWhatsappRoutes(aiWhatsapp)
+
+	// WasapBot routes
+	wasapBot := api.Group("/wasapbot")
+	wasapBot.Use(h.authHandlers.AuthMiddleware())
+	wasapBot.Use(h.authHandlers.DeviceRequiredMiddleware())
+	wasapBot.Get("/data", h.wasapBotHandlers.GetWasapBotData)
+	wasapBot.Get("/stats", h.wasapBotHandlers.GetWasapBotStats)
 
 	// Authentication routes
 	h.authHandlers.SetupAuthRoutes(api)

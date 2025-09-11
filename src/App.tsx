@@ -24,6 +24,7 @@ import FlowBuilder from './pages/FlowBuilder';
 import FlowManager from './pages/FlowManager';
 import Analytics from './pages/Analytics';
 import DeviceSettings from './pages/DeviceSettings';
+import WhatsAppBot from './pages/WhatsAppBot';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider } from './contexts/AuthContext';
@@ -44,10 +45,11 @@ function AppContent() {
   // Navigation items with device restrictions
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home, current: true, requiresDevice: false },
+    { name: 'Device Settings', href: '/device-settings', icon: Smartphone, current: false, requiresDevice: false },
     { name: 'Flow Builder', href: '/flow-builder', icon: Workflow, current: false, requiresDevice: true },
     { name: 'Flow Manager', href: '/flow-manager', icon: Workflow, current: false, requiresDevice: true },
-    { name: 'Analytics', href: '/analytics', icon: BarChart3, current: false, requiresDevice: true },
-    { name: 'Device Settings', href: '/device-settings', icon: Smartphone, current: false, requiresDevice: false },
+    { name: 'Chatbot AI', href: '/chatbot-ai', icon: Bot, current: false, requiresDevice: true },
+    { name: 'WhatsApp Bot', href: '/whatsapp-bot', icon: MessageSquare, current: false, requiresDevice: true },
   ];
 
   // Filter navigation based on device ownership
@@ -134,10 +136,11 @@ function AppContent() {
                       <main className="p-6">
                         <Routes>
                           <Route path="/" element={<Dashboard />} />
+                          <Route path="/device-settings" element={<DeviceSettings />} />
                           <Route path="/flow-builder" element={<FlowBuilder />} />
                           <Route path="/flow-manager" element={<FlowManager />} />
-                          <Route path="/analytics" element={<Analytics />} />
-                          <Route path="/device-settings" element={<DeviceSettings />} />
+                          <Route path="/chatbot-ai" element={<Analytics />} />
+                          <Route path="/whatsapp-bot" element={<WhatsAppBot />} />
                         </Routes>
                       </main>
                     </div>
