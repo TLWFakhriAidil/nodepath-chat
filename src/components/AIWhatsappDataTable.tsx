@@ -39,6 +39,7 @@ interface AIWhatsappConversation {
   id_prospect: string;
   id_device: string;
   prospect_num: string;
+  prospect_name: string;
   stage: string;
   date_order: string;
   conv_last: any;
@@ -379,15 +380,16 @@ const AIWhatsappDataTable = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">No</TableHead>
                     <TableHead>Phone Number</TableHead>
+                    <TableHead>Prospect Name</TableHead>
                     <TableHead>Device</TableHead>
                     <TableHead>Stage</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Niche</TableHead>
-                    <TableHead>Marketer</TableHead>
                     <TableHead>Keyword Iklan</TableHead>
-                    <TableHead>Balas</TableHead>
                     <TableHead className="min-w-[300px]">Conversation History</TableHead>
+                    <TableHead>Marketer</TableHead>
                     <TableHead>Updated</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -395,7 +397,7 @@ const AIWhatsappDataTable = () => {
                 <TableBody>
                   {conversations.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-8">
+                      <TableCell colSpan={12} className="text-center py-8">
                         <div className="flex flex-col items-center gap-2">
                           <MessageSquare className="w-8 h-8 text-gray-400" />
                           <p className="text-gray-500">No conversations found</p>
@@ -406,10 +408,16 @@ const AIWhatsappDataTable = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    conversations.map((conversation) => (
+                    conversations.map((conversation, index) => (
                       <TableRow key={conversation.id_prospect}>
                         <TableCell className="font-medium">
+                          {((currentPage - 1) * pageSize) + index + 1}
+                        </TableCell>
+                        <TableCell className="font-medium">
                           {conversation.prospect_num || 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {conversation.prospect_name || 'N/A'}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">
@@ -430,20 +438,17 @@ const AIWhatsappDataTable = () => {
                           {conversation.niche || 'N/A'}
                         </TableCell>
                         <TableCell>
-                          {conversation.marketer || 'N/A'}
-                        </TableCell>
-                        <TableCell>
                           {conversation.keywordiklan || 'N/A'}
                         </TableCell>
-                        <TableCell>
-                          {conversation.balas || 'N/A'}
-                        </TableCell>
                         <TableCell className="min-w-[300px] max-w-[400px]">
-                          <div className="max-h-24 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                            <pre className="text-xs whitespace-pre-wrap font-mono">
+                          <div className="max-h-32 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
+                            <pre className="text-xs whitespace-pre-wrap font-mono text-gray-700 dark:text-gray-300">
                               {formatConvLast(conversation.conv_last)}
                             </pre>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {conversation.marketer || 'N/A'}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1 text-sm text-gray-500">

@@ -1198,6 +1198,12 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 		}
 		
 		// Handle nullable string fields
+		if item.ProspectName.Valid {
+			transformed["prospect_name"] = item.ProspectName.String
+		} else {
+			transformed["prospect_name"] = nil
+		}
+		
 		if item.Stage.Valid {
 			transformed["stage"] = item.Stage.String
 		} else {
