@@ -183,13 +183,25 @@ func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userM
 		"table_name": tableName,
 		"phone_number": phoneNumber,
 		"device_id": deviceID,
-	}).Info("Saving conversation in determined table")
+		"flow_id": flowID,
+		"flow_name": flow.Name,
+	}).Info("🗄️ SAVING CONVERSATION: Determined table for saving conversation")
 	
 	// Route to appropriate table
 	if tableName == "wasapBot_nodepath" {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id": deviceID,
+			"flow_id": flowID,
+		}).Info("💾 DATABASE: Saving to wasapBot_nodepath table")
 		return s.wasapBotRepo.SaveConversationHistory(phoneNumber, deviceID, userMessage, botResponse, stage, prospectName)
 	}
 	
 	// Default to ai_whatsapp_nodepath
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"device_id": deviceID,
+		"flow_id": flowID,
+	}).Info("💾 DATABASE: Saving to ai_whatsapp_nodepath table")
 	return s.aiWhatsappRepo.SaveConversationHistory(phoneNumber, deviceID, userMessage, botResponse, stage, prospectName)
 }

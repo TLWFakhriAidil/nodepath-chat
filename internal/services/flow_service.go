@@ -101,9 +101,11 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 func (s *FlowService) DetermineTableByFlowName(flowName string) string {
 	// Check if flow name is "WasapBot Exama"
 	if flowName == "WasapBot Exama" {
+		logrus.WithField("flow_name", flowName).Info("📊 TABLE SELECTION: Using wasapBot_nodepath for WasapBot Exama flow")
 		return "wasapBot_nodepath"
 	}
 	// Default to ai_whatsapp_nodepath for "Chatbot AI" or any other name
+	logrus.WithField("flow_name", flowName).Info("📊 TABLE SELECTION: Using ai_whatsapp_nodepath for Chatbot AI flow")
 	return "ai_whatsapp_nodepath"
 }
 

@@ -1193,18 +1193,33 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 			"human":         item.Human,
 			"niche":         item.Niche,
 			"intro":         item.Intro,
-			"balas":         item.Balas,
-			"keywordiklan":  item.KeywordIklan,
-			"marketer":      item.Marketer,
 			"created_at":    item.CreatedAt,
 			"updated_at":    item.UpdatedAt,
 		}
 		
-		// Handle nullable fields
+		// Handle nullable string fields
 		if item.Stage.Valid {
 			transformed["stage"] = item.Stage.String
 		} else {
 			transformed["stage"] = nil
+		}
+		
+		if item.Balas.Valid {
+			transformed["balas"] = item.Balas.String
+		} else {
+			transformed["balas"] = nil
+		}
+		
+		if item.KeywordIklan.Valid {
+			transformed["keywordiklan"] = item.KeywordIklan.String
+		} else {
+			transformed["keywordiklan"] = nil
+		}
+		
+		if item.Marketer.Valid {
+			transformed["marketer"] = item.Marketer.String
+		} else {
+			transformed["marketer"] = nil
 		}
 		
 		if item.DateOrder != nil {
