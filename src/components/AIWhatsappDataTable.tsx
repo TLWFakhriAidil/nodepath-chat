@@ -229,28 +229,6 @@ const AIWhatsappDataTable = () => {
   };
 
   // Format conversation data for display
-  const formatConvLast = (convLast: any) => {
-    if (!convLast) return 'No data';
-    
-    try {
-      if (typeof convLast === 'string') {
-        // Try to parse as JSON
-        const parsed = JSON.parse(convLast);
-        if (parsed.Response && Array.isArray(parsed.Response)) {
-          return parsed.Response
-            .filter((item: any) => item.type === 'text')
-            .map((item: any) => item.content)
-            .join(' ')
-            .substring(0, 100) + '...';
-        }
-        return convLast.substring(0, 100) + '...';
-      }
-      return JSON.stringify(convLast).substring(0, 100) + '...';
-    } catch {
-      return String(convLast).substring(0, 100) + '...';
-    }
-  };
-
   // Get status badge color
   const getStatusBadgeColor = (human: number) => {
     return human === 1 ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800';
@@ -440,10 +418,10 @@ const AIWhatsappDataTable = () => {
                         <TableCell>
                           {conversation.keywordiklan || 'N/A'}
                         </TableCell>
-                        <TableCell className="min-w-[300px] max-w-[400px]">
-                          <div className="max-h-32 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
-                            <pre className="text-xs whitespace-pre-wrap font-mono text-gray-700 dark:text-gray-300">
-                              {formatConvLast(conversation.conv_last)}
+                        <TableCell className="min-w-[300px] max-w-[500px]">
+                          <div className="max-h-40 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
+                            <pre className="text-xs whitespace-pre-wrap break-words font-mono text-gray-700 dark:text-gray-300">
+                              {conversation.conv_last || 'No conversation history'}
                             </pre>
                           </div>
                         </TableCell>

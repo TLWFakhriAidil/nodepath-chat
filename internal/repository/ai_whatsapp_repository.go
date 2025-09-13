@@ -398,10 +398,12 @@ func (r *aiWhatsappRepository) UpdateProspectName(prospectNum, idDevice, prospec
 func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error) {
 	// Build base query with JOIN to filter by user
 	baseQuery := `
-		SELECT a.id_prospect, a.id_device, a.prospect_num, a.stage, a.date_order, a.conv_last, 
+		SELECT a.id_prospect, a.id_device, a.prospect_num, a.prospect_name, a.stage, a.date_order, a.conv_last, 
 		       a.conv_current, a.human, a.niche, a.intro, 
 		       a.balas, a.keywordiklan, a.marketer, a.update_today, 
-		       a.created_at, a.updated_at
+		       a.created_at, a.updated_at,
+		       a.flow_reference, a.execution_id, a.execution_status,
+		       a.flow_id, a.current_node_id, a.last_node_id, a.waiting_for_reply
 		FROM ai_whatsapp_nodepath a
 		JOIN device_setting_nodepath d ON a.id_device = d.id_device
 		WHERE d.user_id = ?
@@ -477,10 +479,12 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 		var convCurrentSQL sql.NullString
 
 		err := rows.Scan(
-			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
+			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.ProspectName, &ai.Stage, &ai.DateOrder, &convLastJSON,
 			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
 			&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
+			&ai.FlowReference, &ai.ExecutionID, &ai.ExecutionStatus,
+			&ai.FlowID, &ai.CurrentNodeID, &ai.LastNodeID, &ai.WaitingForReply,
 		)
 
 		ai.ConvCurrent = convCurrentSQL
