@@ -317,7 +317,7 @@ const Analytics = () => {
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                     Total Conversations
                   </p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                  <p className="text-2xl font-bold text-white">
                     {stats.totalConversations.toLocaleString()}
                   </p>
                   <div className="flex items-center mt-2">
@@ -325,7 +325,7 @@ const Analytics = () => {
                     <span className={`text-sm font-medium ml-1 ${getChangeColor(stats.conversationsChange)}`}>
                       {Math.abs(stats.conversationsChange)}%
                     </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">vs last period</span>
+                    <span className="text-xs text-slate-400 ml-1">vs last period</span>
                   </div>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
@@ -342,7 +342,7 @@ const Analytics = () => {
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                     AI Active Conversations
                   </p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                  <p className="text-2xl font-bold text-white">
                     {stats.aiActiveConversations.toLocaleString()}
                   </p>
                   <div className="flex items-center mt-2">
@@ -350,7 +350,7 @@ const Analytics = () => {
                     <span className={`text-sm font-medium ml-1 ${getChangeColor(stats.aiActiveChange)}`}>
                       {Math.abs(stats.aiActiveChange)}%
                     </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">vs last period</span>
+                    <span className="text-xs text-slate-400 ml-1">vs last period</span>
                   </div>
                 </div>
                 <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
@@ -367,7 +367,7 @@ const Analytics = () => {
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                     Human Takeovers
                   </p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                  <p className="text-2xl font-bold text-white">
                     {stats.humanTakeovers.toLocaleString()}
                   </p>
                   <div className="flex items-center mt-2">
@@ -375,7 +375,7 @@ const Analytics = () => {
                     <span className={`text-sm font-medium ml-1 ${getChangeColor(stats.humanTakeoverChange)}`}>
                       {Math.abs(stats.humanTakeoverChange)}%
                     </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">vs last period</span>
+                    <span className="text-xs text-slate-400 ml-1">vs last period</span>
                   </div>
                 </div>
                 <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center">
@@ -392,7 +392,7 @@ const Analytics = () => {
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                     Unique Devices
                   </p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                  <p className="text-2xl font-bold text-white">
                     {stats.uniqueDevices.toLocaleString()}
                   </p>
                   <div className="flex items-center mt-2">
@@ -400,7 +400,7 @@ const Analytics = () => {
                     <span className={`text-sm font-medium ml-1 ${getChangeColor(stats.devicesChange)}`}>
                       {Math.abs(stats.devicesChange)}%
                     </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">vs last period</span>
+                    <span className="text-xs text-slate-400 ml-1">vs last period</span>
                   </div>
                 </div>
                 <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
@@ -542,10 +542,10 @@ const Analytics = () => {
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                     Conversations with Stages
                   </p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-white">
+                  <p className="text-lg font-bold text-white">
                     {analyticsData.conversationsWithStages.toLocaleString()}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     {analyticsData.totalConversations > 0 
                       ? `${((analyticsData.conversationsWithStages / analyticsData.totalConversations) * 100).toFixed(1)}% of total`
                       : 'No data available'
@@ -566,10 +566,10 @@ const Analytics = () => {
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                     Unique Niches
                   </p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-white">
+                  <p className="text-lg font-bold text-white">
                     {analyticsData.uniqueNiches.toLocaleString()}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Different conversation topics</p>
+                  <p className="text-xs text-slate-400 mt-1">Different conversation topics</p>
                 </div>
                 <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/20 rounded-lg flex items-center justify-center">
                   <Zap className="w-5 h-5 text-indigo-600" />
@@ -585,13 +585,13 @@ const Analytics = () => {
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                     AI Success Rate
                   </p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-white">
+                  <p className="text-lg font-bold text-white">
                     {analyticsData.totalConversations > 0 
                       ? `${(((analyticsData.totalConversations - analyticsData.humanTakeovers) / analyticsData.totalConversations) * 100).toFixed(1)}%`
                       : '0%'
                     }
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     {analyticsData.humanTakeovers} human takeovers
                   </p>
                 </div>
