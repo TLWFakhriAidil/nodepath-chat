@@ -274,6 +274,17 @@ func (s *Service) SendMediaMessage(deviceID, phoneNumber, mediaURL string) error
 
 // processIncomingMessage processes incoming messages and handles flow/AI logic using ai_whatsapp_nodepath
 func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderName string) error {
+	// Simple panic recovery to prevent crashes
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.WithFields(logrus.Fields{
+				"panic": r,
+				"device_id": deviceID,
+				"phone": phoneNumber,
+			}).Error("Recovered from panic in processIncomingMessage")
+		}
+	}()
+	
 	logrus.WithFields(logrus.Fields{
 		"device_id":    deviceID,
 		"phone_number": phoneNumber,
