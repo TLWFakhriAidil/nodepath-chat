@@ -623,24 +623,22 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 		return h.errorResponse(c, 401, "Invalid instance")
 	}
 	
-	// Parse the webhook payload based on provider
+	// Parse the webhook payload  
 	var webhookData map[string]interface{}
 	if err := json.Unmarshal(body, &webhookData); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"error": err.Error(),
-			"payload": string(body),
-		}).Error("❌ WEBHOOK: Failed to parse JSON payload")
-		return h.errorResponse(c, 400, "Invalid JSON payload")
+		// Try URL-encoded form data
+		webhookData = make(map[string]interface{})
+		webhookData["from"] = c.FormValue("from")
+		webhookData["message"] = c.FormValue("message")
+		webhookData["text"] = c.FormValue("text")
+		webhookData["body"] = c.FormValue("body")
 	}
 	
-	// Enhanced debug logging for parsed webhook data
+	// Always log webhook data for debugging
 	logrus.WithFields(logrus.Fields{
-		"id_device":     idDevice,
-		"provider":      deviceSettings.Provider,
-		"webhook_keys":  getMapKeys(webhookData),
-		"webhook_data":  webhookData,
-	}).Info("🚨 WEBHOOK DEBUG: Parsed webhook data structure")
+		"webhook_data": webhookData,
+		"id_device": idDevice,
+	}).Info("📨 WEBHOOK DATA RECEIVED")
 	
 	// Validate and sanitize webhook payload to prevent injection attacks
 	if err := h.validateWebhookPayload(webhookData); err != nil {
@@ -3241,21 +3239,3 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-
-// getMapKeys returns the keys of a map as a slice of strings
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-
-// truncateString truncates a string to specified length for logging
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
