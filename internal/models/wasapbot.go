@@ -14,7 +14,7 @@ type WasapBot struct {
 	CurrentNodeID    sql.NullString `json:"current_node_id"`
 	LastNodeID       sql.NullString `json:"last_node_id"`
 	WaitingForReply  int            `json:"waiting_for_reply"`
-	MarketerID       sql.NullString `json:"marketer_id"`
+	IDDevice         sql.NullString `json:"id_device"`
 	ProspectNum      sql.NullString `json:"prospect_num"`
 	Niche            sql.NullString `json:"niche"`
 	Instance         sql.NullString `json:"instance"`

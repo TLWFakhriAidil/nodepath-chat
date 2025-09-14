@@ -164,6 +164,8 @@ func (s *UnifiedFlowService) UpdateExecutionNodeByFlow(executionID, nodeID, flow
 func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userMessage, botResponse, stage, prospectName, flowID string) error {
 	// Get flow to determine which table to use
 	flow, tableName, err := s.flowService.GetFlowAndDetermineTable(flowID)
+	var flowName string
+	
 	if err != nil {
 		// If flow not found, try to determine by checking existing records
 		logrus.WithError(err).Warn("Flow not found, checking existing records")
@@ -172,11 +174,20 @@ func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userM
 		wasapBot, _ := s.wasapBotRepo.GetByProspectAndDevice(phoneNumber, deviceID)
 		if wasapBot != nil {
 			tableName = "wasapBot_nodepath"
+			flowName = "WasapBot Exama (inferred)"
 		} else {
 			tableName = "ai_whatsapp_nodepath"
+			flowName = "Chatbot AI (inferred)"
 		}
 	} else {
-		tableName = s.flowService.DetermineTableByFlowName(flow.Name)
+		if flow != nil {
+			flowName = flow.Name
+			tableName = s.flowService.DetermineTableByFlowName(flow.Name)
+		} else {
+			// Fallback if flow is nil
+			tableName = "ai_whatsapp_nodepath"
+			flowName = "Unknown"
+		}
 	}
 	
 	logrus.WithFields(logrus.Fields{
@@ -184,7 +195,7 @@ func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userM
 		"phone_number": phoneNumber,
 		"device_id": deviceID,
 		"flow_id": flowID,
-		"flow_name": flow.Name,
+		"flow_name": flowName,
 	}).Info("🗄️ SAVING CONVERSATION: Determined table for saving conversation")
 	
 	// Route to appropriate table
@@ -193,6 +204,7 @@ func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userM
 			"phone_number": phoneNumber,
 			"device_id": deviceID,
 			"flow_id": flowID,
+			"flow_name": flowName,
 		}).Info("💾 DATABASE: Saving to wasapBot_nodepath table")
 		return s.wasapBotRepo.SaveConversationHistory(phoneNumber, deviceID, userMessage, botResponse, stage, prospectName)
 	}
@@ -202,6 +214,7 @@ func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userM
 		"phone_number": phoneNumber,
 		"device_id": deviceID,
 		"flow_id": flowID,
+		"flow_name": flowName,
 	}).Info("💾 DATABASE: Saving to ai_whatsapp_nodepath table")
 	return s.aiWhatsappRepo.SaveConversationHistory(phoneNumber, deviceID, userMessage, botResponse, stage, prospectName)
 }
