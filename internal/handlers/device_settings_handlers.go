@@ -572,24 +572,36 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 	idDevice := c.Params("id_device")
 	instance := c.Params("instance")
 	
+	// Enhanced logging to debug incoming webhooks
+	logrus.WithFields(logrus.Fields{
+		"method":       c.Method(),
+		"full_path":    c.OriginalURL(),
+		"id_device":    idDevice,
+		"instance":     instance,
+		"content_type": c.Get("Content-Type"),
+		"user_agent":   c.Get("User-Agent"),
+		"body_length":  len(c.Body()),
+	}).Info("🚨 WEBHOOK DEBUG: Incoming webhook request")
+	
 	if idDevice == "" {
+		logrus.Error("🚨 WEBHOOK DEBUG: ID Device is empty")
 		return h.errorResponse(c, 400, "ID Device is required")
 	}
 	if instance == "" {
+		logrus.Error("🚨 WEBHOOK DEBUG: Instance is empty")
 		return h.errorResponse(c, 400, "Instance is required")
 	}
 	
 	// Get the raw webhook payload
 	body := c.Body()
 	
+	// Log the raw body for debugging
 	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"instance": instance,
-		"content_type": c.Get("Content-Type"),
-		"user_agent": c.Get("User-Agent"),
+		"id_device":    idDevice,
+		"instance":     instance,
+		"raw_body":     string(body),
 		"payload_size": len(body),
-		"request_start_time": startTime,
-	}).Info("📨 WEBHOOK: Received webhook request with monitoring")
+	}).Info("🚨 WEBHOOK DEBUG: Raw webhook payload")
 	
 	// Verify the device exists in our database
 	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
@@ -621,6 +633,14 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 		}).Error("❌ WEBHOOK: Failed to parse JSON payload")
 		return h.errorResponse(c, 400, "Invalid JSON payload")
 	}
+	
+	// Enhanced debug logging for parsed webhook data
+	logrus.WithFields(logrus.Fields{
+		"id_device":     idDevice,
+		"provider":      deviceSettings.Provider,
+		"webhook_keys":  getMapKeys(webhookData),
+		"webhook_data":  webhookData,
+	}).Info("🚨 WEBHOOK DEBUG: Parsed webhook data structure")
 	
 	// Validate and sanitize webhook payload to prevent injection attacks
 	if err := h.validateWebhookPayload(webhookData); err != nil {
@@ -1581,19 +1601,24 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		"id_device": idDevice,
 		"provider": provider,
 		"provider_type": fmt.Sprintf("%T", provider),
-	}).Info("🔍 WEBHOOK: Provider debug info")
+		"webhook_data_keys": getMapKeys(webhookData),
+	}).Info("🔍 WEBHOOK: Provider debug info - checking field extraction")
 
 	switch provider {
 	case "whacenter":
 		// Extract data for Whacenter provider
+		logrus.Info("🔍 WEBHOOK: Processing as Whacenter provider")
 		if fromVal, ok := webhookData["from"].(string); ok {
 			from = fromVal
+			logrus.WithField("from", from).Info("✅ Found 'from' field")
 		}
 		if msgVal, ok := webhookData["message"].(string); ok {
 			message = msgVal
+			logrus.WithField("message", truncateString(message, 50)).Info("✅ Found 'message' field")
 		}
 		if msgTypeVal, ok := webhookData["message_type"].(string); ok {
 			messageType = msgTypeVal
+			logrus.WithField("message_type", messageType).Info("✅ Found 'message_type' field")
 		}
 		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
 			isGroup = isGroupVal
@@ -3214,4 +3239,23 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 	}).Info("📤 WAHA: Returning device status response")
 
 	return c.JSON(response)
+}
+
+
+// getMapKeys returns the keys of a map as a slice of strings
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+
+// truncateString truncates a string to specified length for logging
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
