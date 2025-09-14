@@ -85,14 +85,20 @@ func NewService(cfg *config.Config, queueService *services.QueueService, flowSer
 
 // convertWasapBotToAIWhatsapp converts WasapBot model to AIWhatsapp for compatibility
 func (s *Service) convertWasapBotToAIWhatsapp(wasapBot *models.WasapBot) *models.AIWhatsapp {
-	return &models.AIWhatsapp{
+	// Check for nil input
+	if wasapBot == nil {
+		return nil
+	}
+	
+	// Safe conversion with proper sql.NullString handling
+	aiWhatsapp := &models.AIWhatsapp{
 		IDProspect:      wasapBot.IDProspect,
-		ProspectNum:     wasapBot.ProspectNum.String,
-		IDDevice:        wasapBot.Instance.String,
-		ProspectName:    wasapBot.Nama,
-		Niche:           wasapBot.Niche.String,
+		ProspectNum:     "", // Will be set below if valid
+		IDDevice:        "", // Will be set below if valid
+		ProspectName:    wasapBot.Nama, // Direct assignment - both are sql.NullString
+		Niche:           "", // Will be set below if valid
 		Stage:           wasapBot.Stage,
-		Human:           0, // Default value
+		Human:           0,
 		FlowReference:   wasapBot.FlowReference,
 		ExecutionID:     wasapBot.ExecutionID,
 		ExecutionStatus: wasapBot.ExecutionStatus,
@@ -100,6 +106,19 @@ func (s *Service) convertWasapBotToAIWhatsapp(wasapBot *models.WasapBot) *models
 		CurrentNodeID:   wasapBot.CurrentNodeID,
 		WaitingForReply: sql.NullInt32{Int32: int32(wasapBot.WaitingForReply), Valid: true},
 	}
+	
+	// Safe null string conversions for string fields
+	if wasapBot.ProspectNum.Valid {
+		aiWhatsapp.ProspectNum = wasapBot.ProspectNum.String
+	}
+	if wasapBot.Instance.Valid {
+		aiWhatsapp.IDDevice = wasapBot.Instance.String
+	}
+	if wasapBot.Niche.Valid {
+		aiWhatsapp.Niche = wasapBot.Niche.String
+	}
+	
+	return aiWhatsapp
 }
 
 // messageProcessor processes incoming webhook messages from the queue
@@ -344,12 +363,14 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 	}
 
 	// Type assert based on table name
-	if tableName == "wasapBot_nodepath" {
-		wasapBotExecution = executionInterface.(*models.WasapBot)
-		// Convert WasapBot to AIWhatsapp for compatibility with existing flow processing
-		aiExecution = s.convertWasapBotToAIWhatsapp(wasapBotExecution)
-	} else {
-		aiExecution = executionInterface.(*models.AIWhatsapp)
+	if executionInterface != nil {
+		if tableName == "wasapBot_nodepath" {
+			wasapBotExecution = executionInterface.(*models.WasapBot)
+			// Convert WasapBot to AIWhatsapp for compatibility with existing flow processing
+			aiExecution = s.convertWasapBotToAIWhatsapp(wasapBotExecution)
+		} else {
+			aiExecution = executionInterface.(*models.AIWhatsapp)
+		}
 	}
 
 	// Continue processing existing execution if found
