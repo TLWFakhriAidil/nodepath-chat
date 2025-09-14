@@ -304,8 +304,15 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 	// Get default flow for device first to determine table routing
 	defaultFlow, err := s.flowService.GetDefaultFlowForDevice(deviceID)
 	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to get default flow for device")
-		return err
+		logrus.WithError(err).Error("Failed to get default flow for device")
+		// Fall back to regular AI processing if no flow is set
+		return s.processAIConversation(phoneNumber, content, deviceID, senderName)
+	}
+	
+	// Special handling for WasapBot Exama flow
+	if defaultFlow != nil && defaultFlow.Name == "WasapBot Exama" {
+		logrus.Info("🎯 WASAPBOT: Processing WasapBot Exama flow")
+		return s.processWasapBotExamaFlow(phoneNumber, content, deviceID, senderName, defaultFlow)
 	}
 
 	if defaultFlow == nil {
@@ -3025,3 +3032,47 @@ func (s *Service) ProcessFlowContinuation(executionID, flowID, nodeID, phoneNumb
 
 	return nil
 }
+
+
+// processWasapBotExamaFlow handles the WasapBot Exama flow separately without AI nodes
+func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, senderName string, flow *models.ChatbotFlow) error {
+	logrus.WithFields(logrus.Fields{
+		"phone": phoneNumber,
+		"device": deviceID,
+		"flow": flow.Name,
+		"message": content,
+	}).Info("🎯 WASAPBOT: Starting WasapBot Exama flow processing")
+	
+	// Simple approach - just save the conversation and send a response
+	// The data will be saved through the AI WhatsApp service for now
+	
+	// Save user message
+	err := s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "", senderName)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to save user message")
+	}
+	
+	// Generate a simple response
+	response := "Terima kasih telah menghubungi kami. Pesan Anda telah kami terima dan akan segera diproses."
+	
+	// Send response
+	err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to send response")
+		return err
+	}
+	
+	// Save bot response
+	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "", senderName)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to save bot response")
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"phone": phoneNumber,
+		"response": response,
+	}).Info("🎯 WASAPBOT: Flow processing completed")
+	
+	return nil
+}
+
