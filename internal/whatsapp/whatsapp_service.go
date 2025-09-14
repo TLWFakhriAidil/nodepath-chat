@@ -374,7 +374,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 	}
 
 	// Continue processing existing execution if found
-	if executionInterface != nil {
+	if executionInterface != nil && aiExecution != nil {
 		logrus.WithFields(logrus.Fields{
 			"execution_id":   aiExecution.ExecutionID.String,
 			"flow_reference": aiExecution.FlowReference.String,
@@ -397,121 +397,130 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 			}
 		} else {
 			// Update AIWhatsapp prospect name
-			err = s.aiWhatsappService.UpdateProspectName(phoneNumber, deviceID, senderName)
-			if err != nil {
-				logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for existing execution")
+			if aiExecution != nil {
+				err = s.aiWhatsappService.UpdateProspectName(phoneNumber, deviceID, senderName)
+				if err != nil {
+					logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for existing execution")
+				}
+				logrus.WithFields(logrus.Fields{
+					"table": "ai_whatsapp_nodepath",
+					"name":  senderName,
+				}).Info("📊 TABLE: Updating AIWhatsapp prospect name")
 			}
-			logrus.WithFields(logrus.Fields{
-				"table": "ai_whatsapp_nodepath",
-				"name":  senderName,
-			}).Info("📊 TABLE: Updating AIWhatsapp prospect name")
 		}
 		
-		// Also update the in-memory execution object
-		aiExecution.ProspectName = sql.NullString{String: senderName, Valid: senderName != ""}
+		// Only proceed if we have a valid aiExecution
+		if aiExecution == nil {
+			logrus.Warn("⚠️ FLOW: No valid AI execution found after conversion")
+			// Fall through to create new execution
+		} else {
+			// Also update the in-memory execution object
+			aiExecution.ProspectName = sql.NullString{String: senderName, Valid: senderName != ""}
 
-		// Check if the execution is waiting for user reply OR has a current node to process
-		if (aiExecution.WaitingForReply.Valid && aiExecution.WaitingForReply.Int32 == 1) || 
-		   (aiExecution.CurrentNodeID.Valid && aiExecution.CurrentNodeID.String != "") {
-			logrus.WithFields(logrus.Fields{
-				"execution_id":    aiExecution.ExecutionID.String,
-				"current_node_id": aiExecution.CurrentNodeID.String,
-				"flow_id":         aiExecution.FlowID.String,
-				"user_input":      content,
-				"waiting_for_reply": aiExecution.WaitingForReply.Int32,
-			}).Info("💬 FLOW: Processing user input through flow execution")
-
-			// If we have a current node, process through the flow
-			if aiExecution.CurrentNodeID.Valid && aiExecution.CurrentNodeID.String != "" {
-				// FIX: Don't call processNewFlowExecution for existing executions
-				// This prevents saving user message twice
-				
-				// Get the flow data - use FlowID if FlowReference is empty
-				flowID := aiExecution.FlowReference.String
-				if flowID == "" && aiExecution.FlowID.Valid {
-					flowID = aiExecution.FlowID.String
-				}
-				
-				if flowID == "" {
-					logrus.WithFields(logrus.Fields{
-						"flow_reference": aiExecution.FlowReference.String,
-						"flow_id": aiExecution.FlowID.String,
-					}).Error("❌ FLOW: No flow ID found for existing execution")
-					return fmt.Errorf("no flow ID found")
-				}
-				
-				flow, err := s.flowService.GetFlow(flowID)
-				if err != nil {
-					logrus.WithError(err).WithField("flow_id", flowID).Error("❌ FLOW: Failed to get flow for existing execution")
-					return err
-				}
-				
-				if flow == nil {
-					logrus.WithField("flow_id", flowID).Error("❌ FLOW: Flow not found for existing execution")
-					return fmt.Errorf("flow not found")
-				}
-				
+			// Check if the execution is waiting for user reply OR has a current node to process
+			if (aiExecution.WaitingForReply.Valid && aiExecution.WaitingForReply.Int32 == 1) || 
+			   (aiExecution.CurrentNodeID.Valid && aiExecution.CurrentNodeID.String != "") {
 				logrus.WithFields(logrus.Fields{
-					"execution_id": aiExecution.ExecutionID.String,
-					"current_node": aiExecution.CurrentNodeID.String,
-					"user_input":   content,
-				}).Info("💬 FLOW: Processing existing execution WITHOUT re-saving user message")
-				
-				// Save user message only once for existing execution
-				err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "", senderName)
-				if err != nil {
-					logrus.WithError(err).Error("Failed to save user message for existing execution")
-				}
-				
-				// Process the message through flow WITHOUT processNewFlowExecution
-				response, err := s.processFlowMessage(flow, aiExecution, content)
-				if err != nil {
-					logrus.WithError(err).Error("❌ FLOW: Failed to process flow message for existing execution")
-					return err
-				}
-				
-				// Send response if not empty
-				if response != "" && strings.TrimSpace(response) != "" {
-					// Check for media
-					if s.mediaDetectionService.HasMedia(response) {
-						mediaInfo := s.mediaDetectionService.ExtractFirstMedia(response)
-						if mediaInfo != nil {
-							err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
+					"execution_id":    aiExecution.ExecutionID.String,
+					"current_node_id": aiExecution.CurrentNodeID.String,
+					"flow_id":         aiExecution.FlowID.String,
+					"user_input":      content,
+					"waiting_for_reply": aiExecution.WaitingForReply.Int32,
+				}).Info("💬 FLOW: Processing user input through flow execution")
+
+				// If we have a current node, process through the flow
+				if aiExecution.CurrentNodeID.Valid && aiExecution.CurrentNodeID.String != "" {
+					// FIX: Don't call processNewFlowExecution for existing executions
+					// This prevents saving user message twice
+					
+					// Get the flow data - use FlowID if FlowReference is empty
+					flowID := aiExecution.FlowReference.String
+					if flowID == "" && aiExecution.FlowID.Valid {
+						flowID = aiExecution.FlowID.String
+					}
+					
+					if flowID == "" {
+						logrus.WithFields(logrus.Fields{
+							"flow_reference": aiExecution.FlowReference.String,
+							"flow_id": aiExecution.FlowID.String,
+						}).Error("❌ FLOW: No flow ID found for existing execution")
+						return fmt.Errorf("no flow ID found")
+					}
+					
+					flow, err := s.flowService.GetFlow(flowID)
+					if err != nil {
+						logrus.WithError(err).WithField("flow_id", flowID).Error("❌ FLOW: Failed to get flow for existing execution")
+						return err
+					}
+					
+					if flow == nil {
+						logrus.WithField("flow_id", flowID).Error("❌ FLOW: Flow not found for existing execution")
+						return fmt.Errorf("flow not found")
+					}
+					
+					logrus.WithFields(logrus.Fields{
+						"execution_id": aiExecution.ExecutionID.String,
+						"current_node": aiExecution.CurrentNodeID.String,
+						"user_input":   content,
+					}).Info("💬 FLOW: Processing existing execution WITHOUT re-saving user message")
+					
+					// Save user message only once for existing execution
+					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "", senderName)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to save user message for existing execution")
+					}
+					
+					// Process the message through flow WITHOUT processNewFlowExecution
+					response, err := s.processFlowMessage(flow, aiExecution, content)
+					if err != nil {
+						logrus.WithError(err).Error("❌ FLOW: Failed to process flow message for existing execution")
+						return err
+					}
+					
+					// Send response if not empty
+					if response != "" && strings.TrimSpace(response) != "" {
+						// Check for media
+						if s.mediaDetectionService.HasMedia(response) {
+							mediaInfo := s.mediaDetectionService.ExtractFirstMedia(response)
+							if mediaInfo != nil {
+								err = s.SendMediaMessage(deviceID, phoneNumber, mediaInfo.MediaURL)
+							} else {
+								err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+							}
 						} else {
 							err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
 						}
-					} else {
-						err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+						
+						if err != nil {
+							logrus.WithError(err).Error("Failed to send response for existing execution")
+						}
+						
+						// Save bot response
+						err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "", senderName)
+						if err != nil {
+							logrus.WithError(err).Error("Failed to save bot response for existing execution")
+						}
 					}
 					
-					if err != nil {
-						logrus.WithError(err).Error("Failed to send response for existing execution")
-					}
-					
-					// Save bot response
-					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "", senderName)
-					if err != nil {
-						logrus.WithError(err).Error("Failed to save bot response for existing execution")
-					}
+					return nil
+				} else {
+					// Handle the user reply and resume flow from the correct node
+					logrus.Info("💬 FLOW: Execution waiting for reply but no current node - processing reply")
+					return s.handleUserReplyResume(aiExecution, content)
 				}
-				
-				return nil
 			} else {
-				// Handle the user reply and resume flow from the correct node
-				return s.handleUserReplyResume(aiExecution, content)
-			}
-		} else {
-			// Execution exists but not explicitly waiting - check if we should still process through flow
-			logrus.WithFields(logrus.Fields{
-				"execution_id":      aiExecution.ExecutionID.String,
-				"current_node_id":   aiExecution.CurrentNodeID.String,
-				"waiting_for_reply": aiExecution.WaitingForReply.Int32,
-				"user_input":        content,
-			}).Info("ℹ️ FLOW: Existing execution not waiting for reply, falling back to AI conversation")
+				// Execution exists but not explicitly waiting - check if we should still process through flow
+				logrus.WithFields(logrus.Fields{
+					"execution_id":      aiExecution.ExecutionID.String,
+					"current_node_id":   aiExecution.CurrentNodeID.String,
+					"waiting_for_reply": aiExecution.WaitingForReply.Int32,
+					"user_input":        content,
+				}).Info("ℹ️ FLOW: Existing execution not waiting for reply, falling back to AI conversation")
 
-			// Fall back to AI conversation for completed flows
-			return s.processAIConversation(phoneNumber, content, deviceID, senderName)
-		}
+				// Fall back to AI conversation for completed flows
+				return s.processAIConversation(phoneNumber, content, deviceID, senderName)
+			}
+		} // End of aiExecution != nil block
 	}
 
 	return nil
