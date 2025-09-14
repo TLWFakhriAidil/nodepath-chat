@@ -83,6 +83,25 @@ func NewService(cfg *config.Config, queueService *services.QueueService, flowSer
 	return service, nil
 }
 
+// convertWasapBotToAIWhatsapp converts WasapBot model to AIWhatsapp for compatibility
+func (s *Service) convertWasapBotToAIWhatsapp(wasapBot *models.WasapBot) *models.AIWhatsapp {
+	return &models.AIWhatsapp{
+		IDProspect:      wasapBot.IDProspect,
+		ProspectNum:     wasapBot.ProspectNum.String,
+		IDDevice:        wasapBot.Instance.String,
+		ProspectName:    wasapBot.Nama,
+		Niche:           wasapBot.Niche.String,
+		Stage:           wasapBot.Stage,
+		Human:           0, // Default value
+		FlowReference:   wasapBot.FlowReference,
+		ExecutionID:     wasapBot.ExecutionID,
+		ExecutionStatus: wasapBot.ExecutionStatus,
+		FlowID:          wasapBot.FlowID,
+		CurrentNodeID:   wasapBot.CurrentNodeID,
+		WaitingForReply: sql.NullInt32{Int32: int32(wasapBot.WaitingForReply), Valid: true},
+	}
+}
+
 // messageProcessor processes incoming webhook messages from the queue
 func (s *Service) messageProcessor() {
 	for msg := range s.messageQueue {
@@ -252,83 +271,121 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 		return s.handlePersonalCommand(phoneNumber, content, deviceID, senderName)
 	}
 
-	// Get or create active execution from ai_whatsapp_nodepath
-	aiExecution, err := s.aiWhatsappService.GetActiveFlowExecution(phoneNumber, deviceID)
+	// Get default flow for device first to determine table routing
+	defaultFlow, err := s.flowService.GetDefaultFlowForDevice(deviceID)
 	if err != nil {
-		logrus.WithError(err).Error("❌ FLOW: Failed to get active execution from ai_whatsapp_nodepath")
+		logrus.WithError(err).Error("❌ FLOW: Failed to get default flow for device")
 		return err
 	}
 
-	if aiExecution == nil {
+	if defaultFlow == nil {
 		logrus.WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
-		}).Info("🆕 FLOW: No active execution found, checking for default flow")
+		}).Info("⚠️ FLOW: No default flow found for device, falling back to AI conversation")
 
-		// Get default flow for device
-		defaultFlow, err := s.flowService.GetDefaultFlowForDevice(deviceID)
-		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to get default flow for device")
-			return err
-		}
+		// Fallback to AI conversation when no flow is configured
+		return s.processAIConversation(phoneNumber, content, deviceID, senderName)
+	}
 
-		if defaultFlow == nil {
-			logrus.WithFields(logrus.Fields{
-				"phone_number": phoneNumber,
-				"device_id":    deviceID,
-			}).Info("⚠️ FLOW: No default flow found for device, falling back to AI conversation")
+	// Use UnifiedFlowService to get active execution from the correct table based on flow name
+	executionInterface, tableName, err := s.unifiedFlowService.GetActiveExecutionByFlow(phoneNumber, deviceID, defaultFlow.ID)
+	if err != nil {
+		logrus.WithError(err).Error("❌ FLOW: Failed to get active execution from unified flow service")
+		return err
+	}
 
-			// Fallback to AI conversation when no flow is configured
-			return s.processAIConversation(phoneNumber, content, deviceID, senderName)
-		}
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"device_id":    deviceID,
+		"flow_name":    defaultFlow.Name,
+		"table_name":   tableName,
+	}).Info("📊 TABLE ROUTING: Determined table for flow execution")
 
+	// Handle execution based on table type
+	var aiExecution *models.AIWhatsapp
+	var wasapBotExecution *models.WasapBot
+
+	if executionInterface == nil {
 		logrus.WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
 			"flow_id":      defaultFlow.ID,
 			"flow_name":    defaultFlow.Name,
-		}).Info("🚀 FLOW: Starting new execution with default flow in ai_whatsapp_nodepath")
+			"table_name":   tableName,
+		}).Info("🆕 FLOW: No active execution found, starting new execution")
 
-		// Start new execution with default flow in ai_whatsapp_nodepath
-		variables := make(map[string]interface{})
-		aiExecution, err = s.aiWhatsappService.StartFlowExecution(phoneNumber, deviceID, defaultFlow.ID, senderName, variables)
+		// Get start node
+		startNode, err := s.flowService.GetStartNode(defaultFlow)
 		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to start new execution in ai_whatsapp_nodepath")
+			logrus.WithError(err).Error("❌ FLOW: Failed to get start node")
 			return err
 		}
 
-		// Update ProspectName with senderName for new execution
-		err = s.aiWhatsappService.UpdateProspectName(phoneNumber, deviceID, senderName)
+		// Use UnifiedFlowService to create execution in the correct table
+		executionID, tableName, err := s.unifiedFlowService.CreateExecutionByFlow(phoneNumber, deviceID, defaultFlow.ID, startNode.ID, senderName)
 		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for new execution")
+			logrus.WithError(err).Error("❌ FLOW: Failed to create new execution")
+			return err
 		}
-		// Also update the in-memory execution object
-		aiExecution.ProspectName = sql.NullString{String: senderName, Valid: senderName != ""}
 
 		logrus.WithFields(logrus.Fields{
-			"execution_id": aiExecution.ExecutionID.String,
-			"flow_id":      defaultFlow.ID,
-			"phone_number": phoneNumber,
-			"device_id":    deviceID,
-			"sender_name":  senderName,
-		}).Info("✅ FLOW: New execution started successfully in ai_whatsapp_nodepath")
+			"execution_id": executionID,
+			"table_name":   tableName,
+			"flow_name":    defaultFlow.Name,
+		}).Info("✅ FLOW: New execution created successfully")
 
-		// Process the new execution through the flow
-		return s.processNewFlowExecution(aiExecution, content, phoneNumber, deviceID, senderName)
+		// Get the newly created execution
+		executionInterface, tableName, err = s.unifiedFlowService.GetActiveExecutionByFlow(phoneNumber, deviceID, defaultFlow.ID)
+		if err != nil {
+			logrus.WithError(err).Error("❌ FLOW: Failed to get newly created execution")
+			return err
+		}
+	}
+
+	// Type assert based on table name
+	if tableName == "wasapBot_nodepath" {
+		wasapBotExecution = executionInterface.(*models.WasapBot)
+		// Convert WasapBot to AIWhatsapp for compatibility with existing flow processing
+		aiExecution = s.convertWasapBotToAIWhatsapp(wasapBotExecution)
 	} else {
+		aiExecution = executionInterface.(*models.AIWhatsapp)
+	}
+
+	// Continue processing existing execution if found
+	if executionInterface != nil {
 		logrus.WithFields(logrus.Fields{
 			"execution_id":   aiExecution.ExecutionID.String,
 			"flow_reference": aiExecution.FlowReference.String,
 			"phone_number":   phoneNumber,
 			"device_id":      deviceID,
 			"current_node":   aiExecution.CurrentNodeID.String,
-		}).Info("🔄 FLOW: Found existing active execution in ai_whatsapp_nodepath")
+			"table_name":     tableName,
+		}).Info("🔄 FLOW: Found existing active execution")
 
-		// Update ProspectName with senderName for existing execution
-		err = s.aiWhatsappService.UpdateProspectName(phoneNumber, deviceID, senderName)
-		if err != nil {
-			logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for existing execution")
+		// Update ProspectName based on table type
+		if tableName == "wasapBot_nodepath" {
+			// Update WasapBot prospect name
+			if wasapBotExecution != nil {
+				wasapBotExecution.Nama = sql.NullString{String: senderName, Valid: senderName != ""}
+				// Update in database would be through wasapBotRepo
+				logrus.WithFields(logrus.Fields{
+					"table": "wasapBot_nodepath",
+					"name":  senderName,
+				}).Info("📊 TABLE: Updating WasapBot prospect name")
+			}
+		} else {
+			// Update AIWhatsapp prospect name
+			err = s.aiWhatsappService.UpdateProspectName(phoneNumber, deviceID, senderName)
+			if err != nil {
+				logrus.WithError(err).Error("❌ FLOW: Failed to update prospect name for existing execution")
+			}
+			logrus.WithFields(logrus.Fields{
+				"table": "ai_whatsapp_nodepath",
+				"name":  senderName,
+			}).Info("📊 TABLE: Updating AIWhatsapp prospect name")
 		}
+		
 		// Also update the in-memory execution object
 		aiExecution.ProspectName = sql.NullString{String: senderName, Valid: senderName != ""}
 

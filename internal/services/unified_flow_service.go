@@ -218,3 +218,26 @@ func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userM
 	}).Info("💾 DATABASE: Saving to ai_whatsapp_nodepath table")
 	return s.aiWhatsappRepo.SaveConversationHistory(phoneNumber, deviceID, userMessage, botResponse, stage, prospectName)
 }
+
+// UpdateWaitingStatusByFlow updates waiting status in appropriate table
+func (s *UnifiedFlowService) UpdateWaitingStatusByFlow(executionID string, waitingValue int32, flowID string) error {
+	// Get flow to determine which table to use
+	_, tableName, err := s.flowService.GetFlowAndDetermineTable(flowID)
+	if err != nil {
+		return err
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"table_name":    tableName,
+		"execution_id":  executionID,
+		"waiting_value": waitingValue,
+	}).Info("Updating waiting status in determined table")
+	
+	// Route to appropriate table
+	if tableName == "wasapBot_nodepath" {
+		return s.wasapBotRepo.UpdateWaitingStatus(executionID, int(waitingValue))
+	}
+	
+	// Default to ai_whatsapp_nodepath
+	return s.aiWhatsappRepo.UpdateWaitingStatus(executionID, waitingValue)
+}

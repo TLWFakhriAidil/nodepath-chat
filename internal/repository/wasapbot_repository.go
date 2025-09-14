@@ -20,6 +20,7 @@ type WasapBotRepository interface {
 	Update(wasapBot *models.WasapBot) error
 	UpdateExecutionStatus(executionID, status string) error
 	UpdateCurrentNode(executionID, nodeID string) error
+	UpdateWaitingStatus(executionID string, waitingValue int) error
 	SaveConversationHistory(prospectNum, instance, userMessage, botResponse, stage, nama string) error
 }
 
@@ -319,4 +320,25 @@ func (r *wasapBotRepository) SaveConversationHistory(prospectNum, instance, user
 
 		return nil
 	})
+}
+
+
+// UpdateWaitingStatus updates the waiting status for an execution
+func (r *wasapBotRepository) UpdateWaitingStatus(executionID string, waitingValue int) error {
+	query := `
+		UPDATE wasapBot_nodepath 
+		SET waiting_for_reply = ?, date_last = NOW()
+		WHERE execution_id = ?
+	`
+	
+	_, err := r.db.Exec(query, waitingValue, executionID)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"execution_id":   executionID,
+			"waiting_value": waitingValue,
+		}).Error("Failed to update waiting status in wasapBot")
+		return fmt.Errorf("failed to update waiting status: %w", err)
+	}
+	
+	return nil
 }

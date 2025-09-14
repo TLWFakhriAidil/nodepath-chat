@@ -38,6 +38,8 @@ type AIWhatsappRepository interface {
 	UpdateConvCurrent(prospectNum string, convCurrent string) error
 	UpdateConvLast(prospectNum string, convLast interface{}) error
 	SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error
+	UpdateExecutionNode(executionID, nodeID string) error
+	UpdateWaitingStatus(executionID string, waitingValue int32) error
 
 	// Delete operations
 	DeleteAIWhatsapp(id int) error
@@ -1606,4 +1608,44 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 	}
 
 	return conversations, nil
+}
+
+// UpdateExecutionNode updates the current node for an execution
+func (r *aiWhatsappRepository) UpdateExecutionNode(executionID, nodeID string) error {
+	query := `
+		UPDATE ai_whatsapp_nodepath 
+		SET current_node_id = ?, updated_at = NOW()
+		WHERE execution_id = ?
+	`
+	
+	_, err := r.db.Exec(query, nodeID, executionID)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"node_id":      nodeID,
+		}).Error("Failed to update execution node")
+		return fmt.Errorf("failed to update execution node: %w", err)
+	}
+	
+	return nil
+}
+
+// UpdateWaitingStatus updates the waiting status for an execution
+func (r *aiWhatsappRepository) UpdateWaitingStatus(executionID string, waitingValue int32) error {
+	query := `
+		UPDATE ai_whatsapp_nodepath 
+		SET waiting_for_reply = ?, updated_at = NOW()
+		WHERE execution_id = ?
+	`
+	
+	_, err := r.db.Exec(query, waitingValue, executionID)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"execution_id":   executionID,
+			"waiting_value": waitingValue,
+		}).Error("Failed to update waiting status")
+		return fmt.Errorf("failed to update waiting status: %w", err)
+	}
+	
+	return nil
 }
