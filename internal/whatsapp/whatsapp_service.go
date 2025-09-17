@@ -3053,35 +3053,19 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 	// Clean message for processing
 	waText := strings.ToUpper(strings.TrimSpace(content))
 	
-	// Parse flow nodes and edges
-	var nodes []map[string]interface{}
-	var edges []map[string]interface{}
-	
-	if flow.Nodes != nil {
-		if err := json.Unmarshal(*flow.Nodes, &nodes); err != nil {
-			logrus.WithError(err).Error("Failed to parse flow nodes")
-			return err
-		}
-	}
-	
-	if flow.Edges != nil {
-		json.Unmarshal(*flow.Edges, &edges)
-	}
-	
-	// Check for existing execution
+	// Check for existing record
 	var execution models.WasapBot
 	var exists bool
-	var currentNodeID string
+	var currentStage string
 	
 	err := db.QueryRow(`
-		SELECT id_prospect, current_node_id, stage, pakej, alamat, nama, no_fon, 
-		       cara_bayaran, tarikh_gaji, peringkat_sekolah, waiting_for_reply
+		SELECT id_prospect, stage, pakej, alamat, nama, no_fon, 
+		       cara_bayaran, tarikh_gaji, peringkat_sekolah
 		FROM wasapBot_nodepath 
 		WHERE prospect_num = ? AND instance = ? 
 		ORDER BY id_prospect DESC LIMIT 1
 	`, phoneNumber, deviceID).Scan(
 		&execution.IDProspect,
-		&execution.CurrentNodeID,
 		&execution.Stage,
 		&execution.Pakej,
 		&execution.Alamat,
@@ -3090,277 +3074,212 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		&execution.CaraBayaran,
 		&execution.TarikhGaji,
 		&execution.PeringkatSekolah,
-		&execution.WaitingForReply,
 	)
 	
 	if err == nil {
 		exists = true
-		if execution.CurrentNodeID.Valid {
-			currentNodeID = execution.CurrentNodeID.String
+		if execution.Stage.Valid {
+			currentStage = execution.Stage.String
 		}
 	}
 	
 	var response string
 	var updates map[string]interface{} = make(map[string]interface{})
 	
+	// QUIT command
+	if waText == "QUITEXAMA" && exists {
+		_, err = db.Exec(`UPDATE wasapBot_nodepath SET stage = NULL WHERE id_prospect = ?`, execution.IDProspect)
+		response = "Terima kasih. Sesi tamat."
+		s.SendMessageFromDevice(deviceID, phoneNumber, response)
+		return nil
+	}
+	
 	if !exists {
-		// Create new record and find start node
-		for _, node := range nodes {
-			if nodeType, ok := node["type"].(string); ok && nodeType == "start" {
-				if id, ok := node["id"].(string); ok {
-					currentNodeID = id
-				}
-				break
-			}
-		}
-		
-		// Find first text/input node after start
-		var firstNodeID string
-		for _, edge := range edges {
-			if source, ok := edge["source"].(string); ok && source == currentNodeID {
-				if target, ok := edge["target"].(string); ok {
-					firstNodeID = target
-					break
-				}
-			}
-		}
-		
-		// Create new record
+		// NEW PROSPECT - Create record and start at stage 2
 		_, err = db.Exec(`
 			INSERT INTO wasapBot_nodepath 
-			(prospect_num, instance, nama, current_node_id, conv_start, conv_last, 
-			 date_start, date_last, niche, stage, flow_reference, flow_id, waiting_for_reply)
-			VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), 'EXAM-A', '2', ?, ?, 1)
-		`, phoneNumber, deviceID, senderName, firstNodeID, content, content, flow.ID, flow.ID)
+			(prospect_num, instance, nama, stage, conv_start, conv_last, 
+			 date_start, date_last, niche, status, flow_reference, flow_id)
+			VALUES (?, ?, ?, '2', ?, ?, NOW(), NOW(), 'EXAM-A', '1', ?, ?)
+		`, phoneNumber, deviceID, senderName, content, content, flow.ID, flow.ID)
 		
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create WasapBot record")
 			return err
 		}
 		
-		currentNodeID = firstNodeID
+		// Send initial greeting with image
+		greeting := "Assalamualaikum cik ☺️\n\nSaya *" + senderName + "* wakil dari page EXAM-A yg berkenaan dgn *Suppliment Minda EXAM-A utk anak lancar baca dan rajin belajar* 😊"
+		imageURL := "https://growrvsb.com/public/images/exama/test/bnew1.jpeg"
 		
-		// Process first node to get initial message
-		for _, node := range nodes {
-			if id, ok := node["id"].(string); ok && id == firstNodeID {
-				if data, ok := node["data"].(map[string]interface{}); ok {
-					if msg, ok := data["message"].(string); ok {
-						response = msg
-					} else if prompt, ok := data["prompt"].(string); ok {
-						response = prompt
-					}
-				}
-				break
-			}
-		}
+		s.SendMessageFromDevice(deviceID, phoneNumber, greeting)
+		time.Sleep(1 * time.Second)
+		s.SendMediaMessage(deviceID, phoneNumber, imageURL)
+		time.Sleep(2 * time.Second)
+		
+		response = "Cik tanya ni utk anak umur berapa tahun ya? ☺️"
 		
 	} else {
-		// Process based on current node
-		var currentNode map[string]interface{}
+		// EXISTING PROSPECT - Process based on stage (matching PHP logic exactly)
 		
-		// Find current node
-		for _, node := range nodes {
-			if id, ok := node["id"].(string); ok && id == currentNodeID {
-				currentNode = node
-				break
-			}
-		}
-		
-		if currentNode != nil {
-			nodeType, _ := currentNode["type"].(string)
-			nodeData, _ := currentNode["data"].(map[string]interface{})
+		switch currentStage {
+		case "1":
+			// Save school level and move to stage 2
+			updates["peringkat_sekolah"] = waText
+			updates["stage"] = "2"
+			response = "Cik tanya ni utk anak umur berapa tahun ya? ☺️"
 			
-			// Get the data field name from node data (indicates what to save)
-			dataField, _ := nodeData["dataField"].(string)
-			stage, _ := nodeData["stage"].(string)
+		case "2":
+			// Age received - move to stage 3
+			updates["conv_last"] = "3-18 Tahun"
+			updates["stage"] = "3"
+			response = "Baik cik, anak cik umur 3-18 tahun sesuai ambil EXAM-A ni 😊\n\nAdakah cik nak tahu harga?"
 			
-			logrus.WithFields(logrus.Fields{
-				"node_id": currentNodeID,
-				"node_type": nodeType,
-				"data_field": dataField,
-				"stage": stage,
-			}).Info("🎯 WASAPBOT: Processing node")
+		case "3":
+			// Want to know price - move to stage 4
+			updates["conv_last"] = "Nak Tahu Harga"
+			updates["stage"] = "4"
+			response = "Promosi hari ni cik:\n\n1️⃣ 1 Botol RM79\n2️⃣ 2 Botol RM140 + Gift\n3️⃣ 3 Botol RM190 + Gift\n\nPilih pakej mana cik? (Taip 1, 2 atau 3)"
 			
-			// Handle special quit command
-			if waText == "QUITEXAMA" {
-				_, err = db.Exec(`UPDATE wasapBot_nodepath SET stage = NULL, current_node_id = 'end' WHERE id_prospect = ?`, execution.IDProspect)
-				response = "Terima kasih. Sesi tamat."
-				
+		case "4":
+			// Package selection
+			if strings.Contains(waText, "1") {
+				updates["pakej"] = "1 Botol RM79"
+				updates["conv_last"] = "1 Botol RM79"
+				updates["stage"] = "5"
+				response = "Baik cik, 1 Botol RM79 ✅\n\nTaip SETUJU untuk teruskan atau SEMULA untuk pilih pakej lain"
+			} else if strings.Contains(waText, "2") {
+				updates["pakej"] = "2 Botol RM140 + Gift"
+				updates["conv_last"] = "2 Botol RM140 + Gift"
+				updates["stage"] = "5"
+				response = "Baik cik, 2 Botol RM140 + Gift ✅\n\nTaip SETUJU untuk teruskan atau SEMULA untuk pilih pakej lain"
+			} else if strings.Contains(waText, "3") {
+				updates["pakej"] = "3 Botol RM190 + Gift"
+				updates["conv_last"] = "3 Botol RM190 + Gift"
+				updates["stage"] = "5"
+				response = "Baik cik, 3 Botol RM190 + Gift ✅\n\nTaip SETUJU untuk teruskan atau SEMULA untuk pilih pakej lain"
+			} else if strings.Contains(waText, "4") {
+				// Stage 4 with option 4 - do nothing special as per PHP
+				response = "Pakej 4 tidak tersedia. Sila pilih 1, 2 atau 3"
 			} else {
-				// Process based on node type and save data based on dataField
-				switch nodeType {
-				case "input":
-					// Save user input to the specified field
-					if dataField != "" {
-						switch dataField {
-						case "peringkat_sekolah":
-							updates["peringkat_sekolah"] = content
-						case "umur":
-							updates["umur"] = content
-						case "pakej":
-							// Process package selection
-							if strings.Contains(waText, "1") {
-								updates["pakej"] = "1 Botol RM79"
-							} else if strings.Contains(waText, "2") {
-								updates["pakej"] = "2 Botol RM140 + Gift"
-							} else if strings.Contains(waText, "3") {
-								updates["pakej"] = "3 Botol RM190 + Gift"
-							} else {
-								updates["pakej"] = content
-							}
-						case "alamat":
-							updates["alamat"] = content
-						case "nama":
-							updates["nama"] = content
-						case "no_fon":
-							updates["no_fon"] = content
-						case "cara_bayaran":
-							if strings.Contains(waText, "CASH") {
-								updates["cara_bayaran"] = "Online Transfer"
-							} else if strings.Contains(waText, "COD") {
-								updates["cara_bayaran"] = "COD"
-							} else if strings.Contains(waText, "GAJI") {
-								updates["cara_bayaran"] = "COD Time Gaji"
-							} else {
-								updates["cara_bayaran"] = content
-							}
-						case "tarikh_gaji":
-							updates["tarikh_gaji"] = content
-						case "kerja":
-							updates["kerja"] = content
-						case "sijil":
-							updates["sijil"] = content
-						default:
-							updates["user_input"] = content
-						}
-					}
-					
-					// Update stage if specified
-					if stage != "" {
-						updates["stage"] = stage
-					}
-					
-					// Find next node
-					var nextNodeID string
-					for _, edge := range edges {
-						if source, ok := edge["source"].(string); ok && source == currentNodeID {
-							if target, ok := edge["target"].(string); ok {
-								nextNodeID = target
-								break
-							}
-						}
-					}
-					
-					// Update current node
-					if nextNodeID != "" {
-						updates["current_node_id"] = nextNodeID
-						updates["waiting_for_reply"] = 0
-						
-						// Process next node immediately to get response
-						for _, node := range nodes {
-							if id, ok := node["id"].(string); ok && id == nextNodeID {
-								if nodeData, ok := node["data"].(map[string]interface{}); ok {
-									if msg, ok := nodeData["message"].(string); ok {
-										response = msg
-									} else if prompt, ok := nodeData["prompt"].(string); ok {
-										response = prompt
-										updates["waiting_for_reply"] = 1
-									}
-									
-									// Check if next node also has stage
-									if nextStage, ok := nodeData["stage"].(string); ok {
-										updates["stage"] = nextStage
-									}
-								}
-								break
-							}
-						}
-					}
-					
-				case "text":
-					// Text node - just send message and move to next
-					if msg, ok := nodeData["message"].(string); ok {
-						response = msg
-					}
-					
-					// Find next node
-					var nextNodeID string
-					for _, edge := range edges {
-						if source, ok := edge["source"].(string); ok && source == currentNodeID {
-							if target, ok := edge["target"].(string); ok {
-								nextNodeID = target
-								break
-							}
-						}
-					}
-					
-					if nextNodeID != "" {
-						updates["current_node_id"] = nextNodeID
-						
-						// Check if next is input node
-						for _, node := range nodes {
-							if id, ok := node["id"].(string); ok && id == nextNodeID {
-								if nodeType, ok := node["type"].(string); ok && nodeType == "input" {
-									updates["waiting_for_reply"] = 1
-								}
-								break
-							}
-						}
-					}
-					
-				case "condition":
-					// Process condition based on user input
-					var nextNodeID string
-					
-					// Check edges for conditions
-					for _, edge := range edges {
-						if source, ok := edge["source"].(string); ok && source == currentNodeID {
-							// Check edge data for condition
-							if edgeData, ok := edge["data"].(map[string]interface{}); ok {
-								if condition, ok := edgeData["condition"].(string); ok {
-									// Simple condition matching
-									if strings.Contains(waText, strings.ToUpper(condition)) {
-										if target, ok := edge["target"].(string); ok {
-											nextNodeID = target
-											break
-										}
-									}
-								}
-							} else {
-								// No condition, take first edge
-								if target, ok := edge["target"].(string); ok {
-									nextNodeID = target
-									break
-								}
-							}
-						}
-					}
-					
-					if nextNodeID != "" {
-						updates["current_node_id"] = nextNodeID
-						
-						// Process next node for response
-						for _, node := range nodes {
-							if id, ok := node["id"].(string); ok && id == nextNodeID {
-								if data, ok := node["data"].(map[string]interface{}); ok {
-									if msg, ok := data["message"].(string); ok {
-										response = msg
-									} else if prompt, ok := data["prompt"].(string); ok {
-										response = prompt
-										updates["waiting_for_reply"] = 1
-									}
-								}
-								break
-							}
-						}
-					}
-					
-				case "end":
-					updates["stage"] = "HABIS"
-					updates["status"] = "Customer"
-					response = "Terima kasih! Order anda telah diterima. ✅"
-				}
+				response = "Sila pilih pakej 1, 2 atau 3"
 			}
+			
+		case "5":
+			// Agreement
+			if strings.Contains(waText, "SETUJU") || strings.Contains(waText, "SEMULA") {
+				updates["stage"] = "alamat"
+				updates["conv_last"] = waText
+				response = "Sila berikan alamat penuh untuk penghantaran:"
+			} else {
+				response = "Taip SETUJU untuk teruskan atau SEMULA untuk pilih pakej lain"
+			}
+			
+		case "alamat":
+			// Save address and move to nama
+			updates["alamat"] = content // Save raw content, not uppercase
+			updates["conv_last"] = content
+			updates["stage"] = "nama"
+			response = "Nama penuh penerima:"
+			
+		case "nama":
+			// Save name and move to no_fon
+			updates["nama"] = content
+			updates["conv_last"] = content
+			updates["stage"] = "no_fon"
+			response = "No telefon untuk dihubungi:"
+			
+		case "no_fon":
+			// Save phone and move to done
+			updates["no_fon"] = content
+			updates["conv_last"] = content
+			updates["stage"] = "done"
+			
+			// Show confirmation
+			alamatVal := ""
+			namaVal := ""
+			if execution.Alamat.Valid {
+				alamatVal = execution.Alamat.String
+			}
+			if execution.Nama.Valid {
+				namaVal = execution.Nama.String
+			}
+			
+			response = fmt.Sprintf("Maklumat anda:\n\nNama: %s\nAlamat: %s\nNo Tel: %s\n\nTaip BETUL jika betul, SEMULA untuk kemaskini", 
+				namaVal, alamatVal, content)
+			
+		case "done":
+			if strings.Contains(waText, "SEMULA") {
+				updates["stage"] = "alamat"
+				updates["conv_last"] = waText
+				response = "Sila berikan alamat penuh untuk penghantaran:"
+			} else if strings.Contains(waText, "BETUL") {
+				updates["conv_last"] = "Ya Dah Betul"
+				updates["stage"] = "6"
+				response = "Pilih cara pembayaran:\n\n1. CASH (Online Transfer)\n2. COD\n3. COD GAJI (Bayar masa gaji)"
+			} else {
+				response = "Taip BETUL jika maklumat betul, SEMULA untuk kemaskini"
+			}
+			
+		case "6":
+			// Payment method selection
+			if strings.Contains(waText, "CASH") {
+				updates["cara_bayaran"] = "Online Transfer"
+				updates["stage"] = "Online Transfer"
+				updates["conv_last"] = "Online Transfer"
+				response = "Sila buat pembayaran ke akaun berikut:\n\nMaybank: 1234567890\nNama: EXAM-A SDN BHD\n\nSelepas buat pembayaran, sila reply SIAP"
+			} else if strings.Contains(waText, "COD") && !strings.Contains(waText, "GAJI") {
+				updates["cara_bayaran"] = "COD"
+				updates["conv_last"] = "COD"
+				updates["stage"] = "HABIS"
+				updates["status"] = "Customer"
+				response = "Baik, COD. Rider akan hubungi cik untuk penghantaran. Terima kasih! ✅"
+			} else if strings.Contains(waText, "GAJI") {
+				updates["cara_bayaran"] = "COD Time Gaji"
+				updates["stage"] = "Tarikh COD"
+				updates["conv_last"] = "COD Time Gaji"
+				response = "Bila tarikh gaji cik?"
+			} else {
+				response = "Sila pilih: CASH, COD atau GAJI"
+			}
+			
+		case "Online Transfer":
+			// Waiting for payment confirmation
+			updates["stage"] = "Online Transfer (Done)"
+			updates["conv_last"] = "Siap Online Transfer"
+			response = "Terima kasih! Pengesahan pembayaran dalam proses. Taip BETUL untuk sahkan atau COD untuk tukar ke COD"
+			
+		case "Online Transfer (Done)":
+			if strings.Contains(waText, "BETUL") {
+				updates["conv_last"] = "Ya Betul"
+				updates["stage"] = "HABIS"
+				updates["status"] = "Customer"
+				response = "Terima kasih! Order anda telah disahkan. Penghantaran akan dibuat segera. ✅"
+			} else if strings.Contains(waText, "COD") {
+				updates["cara_bayaran"] = "COD"
+				updates["conv_last"] = "Nak COD la"
+				updates["stage"] = "HABIS"
+				updates["status"] = "Customer"
+				response = "Baik, tukar ke COD. Rider akan hubungi untuk penghantaran. ✅"
+			} else {
+				response = "Taip BETUL untuk sahkan pembayaran atau COD untuk tukar ke COD"
+			}
+			
+		case "Tarikh COD":
+			// Save salary date
+			updates["tarikh_gaji"] = content
+			updates["conv_last"] = content
+			updates["stage"] = "HABIS"
+			updates["status"] = "Customer"
+			response = fmt.Sprintf("Baik cik, kami akan hubungi pada %s untuk COD. Terima kasih! ✅", content)
+			
+		case "HABIS":
+			response = "Terima kasih cik. Order anda sedang diproses. 😊"
+			
+		default:
+			// Unknown stage - ask for age to restart
+			updates["stage"] = "2"
+			response = "Cik tanya ni utk anak umur berapa tahun ya? ☺️"
 		}
 	}
 	
@@ -3374,9 +3293,8 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			args = append(args, value)
 		}
 		
-		// Add conv_last and date_last
-		setClauses = append(setClauses, "conv_last = ?", "date_last = NOW()")
-		args = append(args, content)
+		// Always update date_last
+		setClauses = append(setClauses, "date_last = NOW()")
 		
 		// Add WHERE clause
 		args = append(args, execution.IDProspect)
@@ -3386,6 +3304,8 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update WasapBot record")
+		} else {
+			logrus.WithField("updates", updates).Info("🎯 WASAPBOT: Updated database")
 		}
 	}
 	
@@ -3399,13 +3319,13 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 	
 	logrus.WithFields(logrus.Fields{
 		"id": execution.IDProspect,
-		"current_node": currentNodeID,
+		"stage": currentStage,
 		"response": response,
-		"updates": updates,
 	}).Info("🎯 WASAPBOT: Flow processing completed")
 	
 	return nil
 }
+
 
 
 
