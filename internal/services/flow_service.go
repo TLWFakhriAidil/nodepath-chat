@@ -20,6 +20,11 @@ type FlowService struct {
 	redis *redis.Client
 }
 
+// GetDB returns the database connection
+func (s *FlowService) GetDB() *sql.DB {
+	return s.db
+}
+
 // NewFlowService creates a new flow service
 func NewFlowService(db *sql.DB, redis *redis.Client) *FlowService {
 	return &FlowService{

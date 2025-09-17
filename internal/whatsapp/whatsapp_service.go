@@ -3043,33 +3043,274 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		"message": content,
 	}).Info("🎯 WASAPBOT: Starting WasapBot Exama flow processing")
 	
-	// Simple approach - just save the conversation and send a response
-	// The data will be saved through the AI WhatsApp service for now
-	
-	// Save user message
-	err := s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "", senderName)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to save user message")
+	// Direct database access for WasapBot
+	db := s.flowService.GetDB()
+	if db == nil {
+		logrus.Error("Database not available")
+		return fmt.Errorf("database not available")
 	}
 	
-	// Generate a simple response
-	response := "Terima kasih telah menghubungi kami. Pesan Anda telah kami terima dan akan segera diproses."
+	// Check for existing execution
+	var execution models.WasapBot
+	err := db.QueryRow(`
+		SELECT id_prospect, flow_reference, execution_id, execution_status, flow_id, 
+		       current_node_id, waiting_for_reply, conv_last, stage
+		FROM wasapBot_nodepath 
+		WHERE prospect_num = ? AND instance = ? 
+		AND execution_status = 'active'
+		ORDER BY id_prospect DESC LIMIT 1
+	`, phoneNumber, deviceID).Scan(
+		&execution.IDProspect,
+		&execution.FlowReference,
+		&execution.ExecutionID,
+		&execution.ExecutionStatus,
+		&execution.FlowID,
+		&execution.CurrentNodeID,
+		&execution.WaitingForReply,
+		&execution.ConvLast,
+		&execution.Stage,
+	)
 	
-	// Send response
-	err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to send response")
+	var isNewExecution bool
+	if err == sql.ErrNoRows {
+		// Create new execution
+		isNewExecution = true
+		executionID := fmt.Sprintf("exec_%s_%d", phoneNumber, time.Now().Unix())
+		
+		// Get start node
+		startNodeID := "start"
+		if flow.Nodes != nil {
+			var nodes []map[string]interface{}
+			if err := json.Unmarshal(*flow.Nodes, &nodes); err == nil {
+				for _, node := range nodes {
+					if nodeType, ok := node["type"].(string); ok && nodeType == "start" {
+						if id, ok := node["id"].(string); ok {
+							startNodeID = id
+						}
+						break
+					}
+				}
+			}
+		}
+		
+		result, err := db.Exec(`
+			INSERT INTO wasapBot_nodepath 
+			(prospect_num, instance, nama, flow_reference, execution_id, current_node_id, 
+			 flow_id, execution_status, stage, waiting_for_reply, user_input, niche)
+			VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'started', 1, ?, ?)
+		`, phoneNumber, deviceID, senderName, flow.ID, executionID, startNodeID, 
+		   flow.ID, content, flow.Name)
+		
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create WasapBot execution")
+			return err
+		}
+		
+		lastID, _ := result.LastInsertId()
+		execution.IDProspect = int(lastID)
+		execution.CurrentNodeID = sql.NullString{String: startNodeID, Valid: true}
+		execution.FlowID = sql.NullString{String: flow.ID, Valid: true}
+		execution.ExecutionID = sql.NullString{String: executionID, Valid: true}
+		
+		logrus.WithField("id", execution.IDProspect).Info("🎯 WASAPBOT: Created new execution")
+	}
+	
+	// Process flow nodes
+	if flow.Nodes == nil {
+		logrus.Error("Flow has no nodes")
+		return fmt.Errorf("flow has no nodes")
+	}
+	
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(*flow.Nodes, &nodes); err != nil {
+		logrus.WithError(err).Error("Failed to unmarshal flow nodes")
 		return err
 	}
 	
-	// Save bot response
-	err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "", senderName)
+	var edges []map[string]interface{}
+	if flow.Edges != nil {
+		json.Unmarshal(*flow.Edges, &edges)
+	}
+	
+	// Find current node
+	currentNodeID := execution.CurrentNodeID.String
+	if currentNodeID == "" {
+		currentNodeID = "start"
+	}
+	
+	var currentNode map[string]interface{}
+	var nextNodeID string
+	
+	// Find current node in flow
+	for _, node := range nodes {
+		if id, ok := node["id"].(string); ok && id == currentNodeID {
+			currentNode = node
+			break
+		}
+	}
+	
+	// If current node not found, find start node
+	if currentNode == nil {
+		for _, node := range nodes {
+			if nodeType, ok := node["type"].(string); ok && nodeType == "start" {
+				currentNode = node
+				if id, ok := node["id"].(string); ok {
+					currentNodeID = id
+				}
+				break
+			}
+		}
+	}
+	
+	// Process based on node type
+	var response string
+	if currentNode != nil {
+		nodeType, _ := currentNode["type"].(string)
+		nodeData, _ := currentNode["data"].(map[string]interface{})
+		
+		logrus.WithFields(logrus.Fields{
+			"node_id": currentNodeID,
+			"node_type": nodeType,
+		}).Info("🎯 WASAPBOT: Processing node")
+		
+		switch nodeType {
+		case "start":
+			// Find next node from edges
+			for _, edge := range edges {
+				if source, ok := edge["source"].(string); ok && source == currentNodeID {
+					if target, ok := edge["target"].(string); ok {
+						nextNodeID = target
+						break
+					}
+				}
+			}
+			
+		case "text":
+			// Get message from text node
+			if msg, ok := nodeData["message"].(string); ok {
+				response = msg
+			}
+			// Find next node
+			for _, edge := range edges {
+				if source, ok := edge["source"].(string); ok && source == currentNodeID {
+					if target, ok := edge["target"].(string); ok {
+						nextNodeID = target
+						break
+					}
+				}
+			}
+			
+		case "input":
+			// Wait for user input
+			if !isNewExecution && execution.WaitingForReply == 1 {
+				// Process user input and move to next node
+				for _, edge := range edges {
+					if source, ok := edge["source"].(string); ok && source == currentNodeID {
+						if target, ok := edge["target"].(string); ok {
+							nextNodeID = target
+							break
+						}
+					}
+				}
+			} else {
+				// Send input prompt
+				if prompt, ok := nodeData["prompt"].(string); ok {
+					response = prompt
+				}
+				// Set waiting for reply
+				_, err = db.Exec(`UPDATE wasapBot_nodepath SET waiting_for_reply = 1 WHERE id_prospect = ?`, execution.IDProspect)
+			}
+			
+		case "condition":
+			// Simple condition processing
+			for _, edge := range edges {
+				if source, ok := edge["source"].(string); ok && source == currentNodeID {
+					// Just take first edge for now
+					if target, ok := edge["target"].(string); ok {
+						nextNodeID = target
+						break
+					}
+				}
+			}
+			
+		case "end":
+			// Mark execution as completed
+			_, err = db.Exec(`UPDATE wasapBot_nodepath SET execution_status = 'completed' WHERE id_prospect = ?`, execution.IDProspect)
+			response = "Thank you for using our service."
+		}
+	}
+	
+	// If we have a next node, process it immediately
+	if nextNodeID != "" && nextNodeID != currentNodeID {
+		// Update current node
+		_, err = db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ?, waiting_for_reply = 0 WHERE id_prospect = ?`, 
+			nextNodeID, execution.IDProspect)
+		
+		// Find and process next node
+		for _, node := range nodes {
+			if id, ok := node["id"].(string); ok && id == nextNodeID {
+				nodeType, _ := node["type"].(string)
+				nodeData, _ := node["data"].(map[string]interface{})
+				
+				if nodeType == "text" {
+					if msg, ok := nodeData["message"].(string); ok {
+						if response != "" {
+							response += "\n"
+						}
+						response += msg
+					}
+				}
+				break
+			}
+		}
+	}
+	
+	// Update conversation history
+	var convLast []map[string]string
+	if execution.ConvLast.Valid {
+		json.Unmarshal([]byte(execution.ConvLast.String), &convLast)
+	}
+	
+	// Add user message
+	convLast = append(convLast, map[string]string{
+		"role": "USER",
+		"content": content,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+	
+	// Add bot response if any
+	if response != "" {
+		convLast = append(convLast, map[string]string{
+			"role": "BOT",
+			"content": response,
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	}
+	
+	// Update database
+	convLastJSON, _ := json.Marshal(convLast)
+	_, err = db.Exec(`
+		UPDATE wasapBot_nodepath 
+		SET conv_last = ?, user_input = ?, date_last = NOW()
+		WHERE id_prospect = ?
+	`, string(convLastJSON), content, execution.IDProspect)
+	
 	if err != nil {
-		logrus.WithError(err).Error("Failed to save bot response")
+		logrus.WithError(err).Error("Failed to update WasapBot conversation")
+	}
+	
+	// Send response if we have one
+	if response != "" {
+		err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to send WasapBot response")
+		}
 	}
 	
 	logrus.WithFields(logrus.Fields{
-		"phone": phoneNumber,
+		"id": execution.IDProspect,
+		"current_node": currentNodeID,
+		"next_node": nextNodeID,
 		"response": response,
 	}).Info("🎯 WASAPBOT: Flow processing completed")
 	
