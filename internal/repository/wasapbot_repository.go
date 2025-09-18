@@ -460,13 +460,17 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		
 		rowCount++
 		
-		// Convert to plain map for JSON - only required fields
+		// Convert to plain map for JSON - match frontend expectations
 		record := map[string]interface{}{
 			"id": idProspect,
 			"device": deviceID,
 			"name": "",
 			"phone": prospectNum,
+			"school": "",  // Keep for compatibility
+			"package": "", // Keep for compatibility  
+			"status": "",  // Keep for compatibility
 			"stage": "",
+			"payment": "", // Keep for compatibility
 			"lastUpdated": "",
 		}
 		

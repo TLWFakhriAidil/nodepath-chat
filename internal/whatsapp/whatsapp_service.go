@@ -3125,10 +3125,17 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			return err
 		}
 		
+		// Also get the idProspect from the last insert
+		err = db.QueryRow(`SELECT LAST_INSERT_ID()`).Scan(&idProspect)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to get last insert ID")
+		}
+		
 		currentNodeID = sql.NullString{String: firstNodeID, Valid: true}
 		stage = sql.NullString{String: "1", Valid: true}
 		
-		// Get response from first node
+		// Get response from first node and check if it needs user input
+		var needsInput bool
 		for _, node := range nodes {
 			if id, ok := node["id"].(string); ok && id == firstNodeID {
 				if data, ok := node["data"].(map[string]interface{}); ok {
@@ -3136,7 +3143,49 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 						response = msg
 					}
 				}
+				// Check if node type requires user input
+				if nodeType, ok := node["type"].(string); ok {
+					needsInput = (nodeType == "input" || nodeType == "user-input" || nodeType == "question")
+				}
 				break
+			}
+		}
+		
+		// If node doesn't need input, continue to next node
+		if !needsInput && response != "" {
+			// Find next node and process it
+			var nextNodeID string
+			for _, edge := range edges {
+				if source, ok := edge["source"].(string); ok && source == firstNodeID {
+					if target, ok := edge["target"].(string); ok {
+						nextNodeID = target
+						break
+					}
+				}
+			}
+			
+			if nextNodeID != "" && nextNodeID != "end" {
+				currentNodeID = sql.NullString{String: nextNodeID, Valid: true}
+				// Update in database
+				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ? WHERE id_prospect = ?`, nextNodeID, idProspect)
+				
+				// Get response from next node
+				for _, node := range nodes {
+					if id, ok := node["id"].(string); ok && id == nextNodeID {
+						if data, ok := node["data"].(map[string]interface{}); ok {
+							if msg, ok := data["message"].(string); ok {
+								response = response + "\n\n" + msg
+							}
+						}
+						// Check if this node needs input
+						if nodeType, ok := node["type"].(string); ok {
+							if nodeType == "input" || nodeType == "user-input" || nodeType == "question" {
+								updates["waiting_for_reply"] = 1
+							}
+						}
+						break
+					}
+				}
 			}
 		}
 		
@@ -3247,6 +3296,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		
 		// Find next node from edges
 		var nextNodeID string
+		var needsInput bool
 		if currentNodeID.Valid {
 			for _, edge := range edges {
 				if source, ok := edge["source"].(string); ok && source == currentNodeID.String {
@@ -3258,11 +3308,10 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			}
 		}
 		
-		if nextNodeID != "" {
+		if nextNodeID != "" && nextNodeID != "end" {
 			updates["current_node_id"] = nextNodeID
-			updates["waiting_for_reply"] = 0
 			
-			// Get response from next node
+			// Get response from next node and check if it needs input
 			for _, node := range nodes {
 				if id, ok := node["id"].(string); ok && id == nextNodeID {
 					if data, ok := node["data"].(map[string]interface{}); ok {
@@ -3270,11 +3319,65 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 							response = msg
 						}
 					}
-					// Check if next node is input type
-					if nodeType, ok := node["type"].(string); ok && nodeType == "input" {
-						updates["waiting_for_reply"] = 1
+					// Check if next node requires user input
+					if nodeType, ok := node["type"].(string); ok {
+						needsInput = (nodeType == "input" || nodeType == "user-input" || nodeType == "question")
+						if needsInput {
+							updates["waiting_for_reply"] = 1
+						} else {
+							updates["waiting_for_reply"] = 0
+						}
 					}
 					break
+				}
+			}
+			
+			// If current node doesn't need input, continue to process next nodes
+			if !needsInput && response != "" {
+				currentNode := nextNodeID
+				for i := 0; i < 10; i++ { // Max 10 iterations to prevent infinite loop
+					var tempNextID string
+					for _, edge := range edges {
+						if source, ok := edge["source"].(string); ok && source == currentNode {
+							if target, ok := edge["target"].(string); ok {
+								tempNextID = target
+								break
+							}
+						}
+					}
+					
+					if tempNextID == "" || tempNextID == "end" {
+						break
+					}
+					
+					// Check if this node needs input
+					var nodeNeedsInput bool
+					var nodeMessage string
+					for _, node := range nodes {
+						if id, ok := node["id"].(string); ok && id == tempNextID {
+							if data, ok := node["data"].(map[string]interface{}); ok {
+								if msg, ok := data["message"].(string); ok {
+									nodeMessage = msg
+								}
+							}
+							if nodeType, ok := node["type"].(string); ok {
+								nodeNeedsInput = (nodeType == "input" || nodeType == "user-input" || nodeType == "question")
+							}
+							break
+						}
+					}
+					
+					if nodeMessage != "" {
+						response = response + "\n\n" + nodeMessage
+					}
+					
+					currentNode = tempNextID
+					updates["current_node_id"] = tempNextID
+					
+					if nodeNeedsInput {
+						updates["waiting_for_reply"] = 1
+						break
+					}
 				}
 			}
 		} else {
