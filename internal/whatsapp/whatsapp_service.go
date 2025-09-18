@@ -3086,11 +3086,48 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		json.Unmarshal(*flow.Edges, &edges)
 	}
 	
+	// Helper function to get next node after current
+	getNextNode := func(currentID string) string {
+		for _, edge := range edges {
+			if source, ok := edge["source"].(string); ok && source == currentID {
+				if target, ok := edge["target"].(string); ok {
+					return target
+				}
+			}
+		}
+		return ""
+	}
+	
+	// Helper function to process a node and get its message
+	processNode := func(nodeID string) (message string, nodeType string, stageValue string) {
+		for _, node := range nodes {
+			if id, ok := node["id"].(string); ok && id == nodeID {
+				// Get node type
+				if nt, ok := node["type"].(string); ok {
+					nodeType = nt
+				}
+				
+				// Get message from node data
+				if data, ok := node["data"].(map[string]interface{}); ok {
+					if msg, ok := data["message"].(string); ok {
+						message = msg
+					}
+					// Check for stage value in data
+					if stg, ok := data["stage"].(string); ok {
+						stageValue = stg
+					}
+				}
+				break
+			}
+		}
+		return
+	}
+	
 	var response string
 	var updates map[string]interface{} = make(map[string]interface{})
 	
 	if !exists {
-		// NEW PROSPECT - Find start node and first message
+		// NEW PROSPECT - Find start node and process flow
 		var startNodeID string
 		for _, node := range nodes {
 			if nodeType, ok := node["type"].(string); ok && nodeType == "start" {
@@ -3102,22 +3139,18 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		}
 		
 		// Find first node after start
-		var firstNodeID string
-		for _, edge := range edges {
-			if source, ok := edge["source"].(string); ok && source == startNodeID {
-				if target, ok := edge["target"].(string); ok {
-					firstNodeID = target
-					break
-				}
-			}
+		firstNodeID := getNextNode(startNodeID)
+		if firstNodeID == "" {
+			logrus.Error("No node after start")
+			return fmt.Errorf("no node after start")
 		}
 		
-		// Create WasapBot record with id_device only
+		// Create WasapBot record - don't set stage yet
 		_, err = db.Exec(`
 			INSERT INTO wasapBot_nodepath 
-			(prospect_num, id_device, nama, stage, current_node_id, conv_start, conv_last, 
+			(prospect_num, id_device, nama, current_node_id, conv_start, conv_last, 
 			 date_start, date_last, niche, status, flow_reference, flow_id, waiting_for_reply)
-			VALUES (?, ?, ?, '1', ?, ?, ?, NOW(), NOW(), 'EXAM-A', 'Prospek', ?, ?, 0)
+			VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), 'EXAM-A', 'Prospek', ?, ?, 0)
 		`, phoneNumber, deviceID, senderName, firstNodeID, content, content, flow.ID, flow.ID)
 		
 		if err != nil {
@@ -3125,72 +3158,63 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			return err
 		}
 		
-		// Also get the idProspect from the last insert
+		// Get the inserted ID
 		err = db.QueryRow(`SELECT LAST_INSERT_ID()`).Scan(&idProspect)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to get last insert ID")
 		}
 		
-		currentNodeID = sql.NullString{String: firstNodeID, Valid: true}
-		stage = sql.NullString{String: "1", Valid: true}
-		
-		// Get response from first node and check if it needs user input
-		var needsInput bool
-		for _, node := range nodes {
-			if id, ok := node["id"].(string); ok && id == firstNodeID {
-				if data, ok := node["data"].(map[string]interface{}); ok {
-					if msg, ok := data["message"].(string); ok {
-						response = msg
-					}
-				}
-				// Check if node type requires user input
-				if nodeType, ok := node["type"].(string); ok {
-					needsInput = (nodeType == "input" || nodeType == "user-input" || nodeType == "question")
-				}
-				break
-			}
-		}
-		
-		// If node doesn't need input, continue to next node
-		if !needsInput && response != "" {
-			// Find next node and process it
-			var nextNodeID string
-			for _, edge := range edges {
-				if source, ok := edge["source"].(string); ok && source == firstNodeID {
-					if target, ok := edge["target"].(string); ok {
-						nextNodeID = target
-						break
-					}
-				}
+		// Process nodes until we hit an input node or delay
+		currentNode := firstNodeID
+		for i := 0; i < 20; i++ { // Max iterations
+			msg, nodeType, stageVal := processNode(currentNode)
+			
+			// If this is a stage node, update stage
+			if nodeType == "stage" && stageVal != "" {
+				db.Exec(`UPDATE wasapBot_nodepath SET stage = ? WHERE id_prospect = ?`, stageVal, idProspect)
+				logrus.WithField("stage", stageVal).Info("🎯 WASAPBOT: Stage updated")
 			}
 			
-			if nextNodeID != "" && nextNodeID != "end" {
-				currentNodeID = sql.NullString{String: nextNodeID, Valid: true}
-				// Update in database
-				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ? WHERE id_prospect = ?`, nextNodeID, idProspect)
-				
-				// Get response from next node
-				for _, node := range nodes {
-					if id, ok := node["id"].(string); ok && id == nextNodeID {
-						if data, ok := node["data"].(map[string]interface{}); ok {
-							if msg, ok := data["message"].(string); ok {
-								response = response + "\n\n" + msg
-							}
-						}
-						// Check if this node needs input
-						if nodeType, ok := node["type"].(string); ok {
-							if nodeType == "input" || nodeType == "user-input" || nodeType == "question" {
-								updates["waiting_for_reply"] = 1
-							}
-						}
-						break
-					}
+			// Add message if exists
+			if msg != "" {
+				if response != "" {
+					response += "\n\n"
 				}
+				response += msg
 			}
+			
+			// Check if this node needs to stop processing
+			if nodeType == "input" || nodeType == "user-input" || nodeType == "question" {
+				// Update waiting status and current node
+				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ?, waiting_for_reply = 1 WHERE id_prospect = ?`, 
+					currentNode, idProspect)
+				break
+			} else if nodeType == "delay" {
+				// Schedule delay processing
+				nextNode := getNextNode(currentNode)
+				if nextNode != "" {
+					// For now, just continue to next node (in production, would schedule)
+					currentNode = nextNode
+					continue
+				}
+				break
+			} else if nodeType == "end" || currentNode == "end" {
+				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = 'end' WHERE id_prospect = ?`, idProspect)
+				break
+			}
+			
+			// Get next node
+			nextNode := getNextNode(currentNode)
+			if nextNode == "" || nextNode == "end" {
+				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ? WHERE id_prospect = ?`, nextNode, idProspect)
+				break
+			}
+			
+			currentNode = nextNode
 		}
 		
 	} else {
-		// EXISTING PROSPECT - Process based on current node
+		// EXISTING PROSPECT - Process user input based on current state
 		if !currentNodeID.Valid || currentNodeID.String == "end" {
 			logrus.Info("🎯 WASAPBOT: Flow already ended, no response")
 			return nil
@@ -3200,16 +3224,14 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		if stage.Valid {
 			switch stage.String {
 			case "1":
-				updates["peringkat_sekolah"] = waText
-				updates["stage"] = "2"
+				updates["peringkat_sekolah"] = content
+				updates["conv_last"] = content
 				
 			case "2":
-				updates["conv_last"] = "3-18 Tahun"
-				updates["stage"] = "3"
+				updates["conv_last"] = content
 				
 			case "3":
-				updates["conv_last"] = "Nak Tahu Harga"
-				updates["stage"] = "4"
+				updates["conv_last"] = content
 				
 			case "4":
 				if strings.Contains(waText, "1") {
@@ -3222,172 +3244,123 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					updates["pakej"] = "3 Botol RM190 + Gift"
 					updates["conv_last"] = "3 Botol RM190 + Gift"
 				}
-				updates["stage"] = "5"
 				
 			case "5":
 				if strings.Contains(waText, "SETUJU") || strings.Contains(waText, "SEMULA") {
-					updates["stage"] = "alamat"
 					updates["conv_last"] = waText
 				}
 				
 			case "alamat":
 				updates["alamat"] = content
 				updates["conv_last"] = content
-				updates["stage"] = "nama"
 				
 			case "nama":
 				updates["nama"] = content
 				updates["conv_last"] = content
-				updates["stage"] = "no_fon"
 				
 			case "no_fon":
 				updates["no_fon"] = content
 				updates["conv_last"] = content
-				updates["stage"] = "done"
 				
 			case "done":
 				if strings.Contains(waText, "SEMULA") {
-					updates["stage"] = "alamat"
 					updates["conv_last"] = waText
 				} else if strings.Contains(waText, "BETUL") {
 					updates["conv_last"] = "Ya Dah Betul"
-					updates["stage"] = "6"
 				}
 				
 			case "6":
 				if strings.Contains(waText, "CASH") {
 					updates["cara_bayaran"] = "Online Transfer"
-					updates["stage"] = "Online Transfer"
 					updates["conv_last"] = "Online Transfer"
 				} else if strings.Contains(waText, "COD") && !strings.Contains(waText, "GAJI") {
 					updates["cara_bayaran"] = "COD"
 					updates["conv_last"] = "COD"
-					updates["stage"] = "HABIS"
 					updates["status"] = "Customer"
 				} else if strings.Contains(waText, "GAJI") {
 					updates["cara_bayaran"] = "COD Time Gaji"
-					updates["stage"] = "Tarikh COD"
 					updates["conv_last"] = "COD Time Gaji"
 				}
 				
 			case "Online Transfer":
-				updates["stage"] = "Online Transfer (Done)"
 				updates["conv_last"] = "Siap Online Transfer"
 				
 			case "Online Transfer (Done)":
 				if strings.Contains(waText, "BETUL") {
 					updates["conv_last"] = "Ya Betul"
-					updates["stage"] = "HABIS"
 					updates["status"] = "Customer"
 				} else if strings.Contains(waText, "COD") {
 					updates["cara_bayaran"] = "COD"
 					updates["conv_last"] = "Nak COD la"
-					updates["stage"] = "HABIS"
 					updates["status"] = "Customer"
 				}
 				
 			case "Tarikh COD":
 				updates["tarikh_gaji"] = content
 				updates["conv_last"] = content
-				updates["stage"] = "HABIS"
 				updates["status"] = "Customer"
 			}
 		}
 		
-		// Find next node from edges
-		var nextNodeID string
-		var needsInput bool
-		if currentNodeID.Valid {
-			for _, edge := range edges {
-				if source, ok := edge["source"].(string); ok && source == currentNodeID.String {
-					if target, ok := edge["target"].(string); ok {
-						nextNodeID = target
-						break
-					}
-				}
-			}
-		}
+		// Process flow from current node
+		currentNode := currentNodeID.String
 		
-		if nextNodeID != "" && nextNodeID != "end" {
-			updates["current_node_id"] = nextNodeID
-			
-			// Get response from next node and check if it needs input
-			for _, node := range nodes {
-				if id, ok := node["id"].(string); ok && id == nextNodeID {
-					if data, ok := node["data"].(map[string]interface{}); ok {
-						if msg, ok := data["message"].(string); ok {
-							response = msg
-						}
+		// Get next node based on user input
+		nextNode := getNextNode(currentNode)
+		if nextNode == "" || nextNode == "end" {
+			updates["current_node_id"] = "end"
+			logrus.Info("🎯 WASAPBOT: Flow ended")
+		} else {
+			// Process nodes until we hit an input or delay
+			currentNode = nextNode
+			for i := 0; i < 20; i++ {
+				msg, nodeType, stageVal := processNode(currentNode)
+				
+				// Update stage if this is a stage node
+				if nodeType == "stage" && stageVal != "" {
+					updates["stage"] = stageVal
+					logrus.WithField("stage", stageVal).Info("🎯 WASAPBOT: Stage updated from node")
+				}
+				
+				// Add message
+				if msg != "" {
+					if response != "" {
+						response += "\n\n"
 					}
-					// Check if next node requires user input
-					if nodeType, ok := node["type"].(string); ok {
-						needsInput = (nodeType == "input" || nodeType == "user-input" || nodeType == "question")
-						if needsInput {
-							updates["waiting_for_reply"] = 1
-						} else {
-							updates["waiting_for_reply"] = 0
-						}
+					response += msg
+				}
+				
+				// Check if we should stop
+				if nodeType == "input" || nodeType == "user-input" || nodeType == "question" {
+					updates["current_node_id"] = currentNode
+					updates["waiting_for_reply"] = 1
+					break
+				} else if nodeType == "delay" {
+					// For delay nodes, schedule next processing
+					nextDelayNode := getNextNode(currentNode)
+					if nextDelayNode != "" {
+						currentNode = nextDelayNode
+						continue // For now, skip delay
 					}
 					break
+				} else if nodeType == "end" || currentNode == "end" {
+					updates["current_node_id"] = "end"
+					break
 				}
-			}
-			
-			// If current node doesn't need input, continue to process next nodes
-			if !needsInput && response != "" {
-				currentNode := nextNodeID
-				for i := 0; i < 10; i++ { // Max 10 iterations to prevent infinite loop
-					var tempNextID string
-					for _, edge := range edges {
-						if source, ok := edge["source"].(string); ok && source == currentNode {
-							if target, ok := edge["target"].(string); ok {
-								tempNextID = target
-								break
-							}
-						}
-					}
-					
-					if tempNextID == "" || tempNextID == "end" {
-						break
-					}
-					
-					// Check if this node needs input
-					var nodeNeedsInput bool
-					var nodeMessage string
-					for _, node := range nodes {
-						if id, ok := node["id"].(string); ok && id == tempNextID {
-							if data, ok := node["data"].(map[string]interface{}); ok {
-								if msg, ok := data["message"].(string); ok {
-									nodeMessage = msg
-								}
-							}
-							if nodeType, ok := node["type"].(string); ok {
-								nodeNeedsInput = (nodeType == "input" || nodeType == "user-input" || nodeType == "question")
-							}
-							break
-						}
-					}
-					
-					if nodeMessage != "" {
-						response = response + "\n\n" + nodeMessage
-					}
-					
-					currentNode = tempNextID
-					updates["current_node_id"] = tempNextID
-					
-					if nodeNeedsInput {
-						updates["waiting_for_reply"] = 1
-						break
-					}
+				
+				// Get next node
+				next := getNextNode(currentNode)
+				if next == "" || next == "end" {
+					updates["current_node_id"] = next
+					break
 				}
+				
+				currentNode = next
 			}
-		} else {
-			// No more nodes - end the flow
-			updates["current_node_id"] = "end"
-			logrus.Info("🎯 WASAPBOT: No more nodes in flow, ending")
 		}
 	}
 	
-	// Update WasapBot database only
+	// Update WasapBot database
 	if len(updates) > 0 && exists {
 		var setClauses []string
 		var args []interface{}
@@ -3420,12 +3393,12 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 	
 	logrus.WithFields(logrus.Fields{
 		"stage": stage,
-		"current_node": currentNodeID,
 		"response_sent": response != "",
 	}).Info("🎯 WASAPBOT: Flow processing completed")
 	
 	return nil
 }
+
 
 
 
