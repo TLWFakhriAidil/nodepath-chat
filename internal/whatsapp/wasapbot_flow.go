@@ -132,10 +132,17 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 	processConditionNode := func(nodeID string, userInput string) string {
 		node := getNodeByID(nodeID)
 		if node == nil {
+			logrus.WithField("nodeID", nodeID).Error("Condition node not found")
 			return ""
 		}
 		
-		upperInput := strings.ToUpper(userInput)
+		upperInput := strings.ToUpper(strings.TrimSpace(userInput))
+		
+		logrus.WithFields(logrus.Fields{
+			"condition_node": nodeID,
+			"user_input": userInput,
+			"upper_input": upperInput,
+		}).Debug("Processing condition node")
 		
 		if data, ok := node["data"].(map[string]interface{}); ok {
 			if conditions, ok := data["conditions"].([]interface{}); ok {
@@ -144,19 +151,33 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					if condMap, ok := cond.(map[string]interface{}); ok {
 						condType, _ := condMap["type"].(string)
 						condValue, _ := condMap["value"].(string)
+						condLabel, _ := condMap["label"].(string)
+						
+						logrus.WithFields(logrus.Fields{
+							"cond_type": condType,
+							"cond_value": condValue,
+							"cond_label": condLabel,
+						}).Debug("Checking condition")
 						
 						if condType == "contains" && condValue != "" {
 							// Check if user input contains any of the comma-separated values
 							values := strings.Split(condValue, ",")
 							for _, v := range values {
-								v = strings.TrimSpace(v)
-								if strings.Contains(upperInput, v) {
+								v = strings.TrimSpace(strings.ToUpper(v))
+								// Check both the input and the value
+								if strings.Contains(upperInput, v) || upperInput == v {
+									logrus.WithFields(logrus.Fields{
+										"matched_value": v,
+										"condition_id": condMap["id"],
+									}).Info("🎯 WASAPBOT: Condition matched")
+									
 									// Find the edge for this condition
 									condID, _ := condMap["id"].(string)
 									for _, edge := range edges {
 										if source, ok := edge["source"].(string); ok && source == nodeID {
 											if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
 												if target, ok := edge["target"].(string); ok {
+													logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node for condition")
 													return target
 												}
 											}
@@ -169,6 +190,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				}
 				
 				// If no condition matched, look for default
+				logrus.Info("🎯 WASAPBOT: No condition matched, looking for default")
 				for _, cond := range conditions {
 					if condMap, ok := cond.(map[string]interface{}); ok {
 						if condType, _ := condMap["type"].(string); condType == "default" {
@@ -177,6 +199,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 								if source, ok := edge["source"].(string); ok && source == nodeID {
 									if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
 										if target, ok := edge["target"].(string); ok {
+											logrus.WithField("default_target", target).Info("🎯 WASAPBOT: Using default condition path")
 											return target
 										}
 									}
@@ -188,7 +211,8 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			}
 		}
 		
-		// If no conditions matched, just get the first edge
+		// If no conditions matched and no default, just get the first edge
+		logrus.Warn("🎯 WASAPBOT: No condition matched and no default found, using first edge")
 		nextNodes := getNextNodes(nodeID)
 		if len(nextNodes) > 0 {
 			return nextNodes[0]
@@ -415,28 +439,33 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		// Determine next node based on current node type
 		var nextNodeID string
 		
-		// Special handling for user_reply nodes - just get the next node
-		if currentNodeType == "user_reply" || currentNodeType == "user-reply" || 
-		   currentNodeType == "input" || currentNodeType == "user-input" {
-			// User has replied, move to next node
-			nextNodes := getNextNodes(currentNodeID.String)
-			if len(nextNodes) > 0 {
-				nextNodeID = nextNodes[0]
-			}
-		} else if currentNodeType == "condition" {
-			// Process condition based on user input
+		// Special handling for different waiting node types
+		if currentNodeType == "condition" {
+			// We're at a condition node - evaluate user input to determine next path
 			nextNodeID = processConditionNode(currentNodeID.String, content)
 			logrus.WithFields(logrus.Fields{
 				"condition_node": currentNodeID.String,
 				"user_input": content,
 				"next_node": nextNodeID,
-			}).Info("🎯 WASAPBOT: Processed condition node")
-		} else {
-			// For other nodes, just get next node normally
+			}).Info("🎯 WASAPBOT: Evaluated condition with user input")
+			
+		} else if currentNodeType == "user_reply" || currentNodeType == "user-reply" || 
+		          currentNodeType == "input" || currentNodeType == "user-input" || 
+		          currentNodeType == "question" {
+			// User has replied to an input node, move to next node
 			nextNodes := getNextNodes(currentNodeID.String)
 			if len(nextNodes) > 0 {
 				nextNodeID = nextNodes[0]
 			}
+			logrus.WithField("next_node", nextNodeID).Info("🎯 WASAPBOT: Moving from user_reply to next node")
+			
+		} else {
+			// For other nodes (shouldn't happen if waiting_for_reply is set correctly)
+			nextNodes := getNextNodes(currentNodeID.String)
+			if len(nextNodes) > 0 {
+				nextNodeID = nextNodes[0]
+			}
+			logrus.WithField("unexpected_node_type", currentNodeType).Warn("Unexpected node type while waiting for reply")
 		}
 		
 		if nextNodeID == "" || nextNodeID == "end" {
