@@ -359,10 +359,10 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		"userID": userID,
 	}).Info("GetAllWasapBotData called")
 	
-	// Build query with filters
+	// Build query with filters - including id_device field
 	query := `
 		SELECT id_prospect, prospect_num, nama, no_fon, peringkat_sekolah, 
-		       pakej, stage, status, date_last, instance
+		       pakej, stage, status, date_last, COALESCE(id_device, instance) as device_id
 		FROM wasapBot_nodepath
 		WHERE 1=1
 	`
@@ -373,11 +373,12 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 	
 	// Apply filters
 	if deviceFilter != "" && deviceFilter != "all" {
-		query += " AND instance = ?"
-		countQuery += " AND instance = ?"
-		args = append(args, deviceFilter)
-		countArgs = append(countArgs, deviceFilter)
-		logrus.WithField("device_filter_applied", deviceFilter).Info("Applying device filter")
+		// Try to match either instance or id_device field
+		query += " AND (instance = ? OR id_device = ?)"
+		countQuery += " AND (instance = ? OR id_device = ?)"
+		args = append(args, deviceFilter, deviceFilter)
+		countArgs = append(countArgs, deviceFilter, deviceFilter)
+		logrus.WithField("device_filter_applied", deviceFilter).Info("Applying device filter for both instance and id_device")
 	}
 	
 	if stageFilter != "" && stageFilter != "all" {
@@ -449,7 +450,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			stage sql.NullString
 			status sql.NullString
 			dateLast sql.NullTime
-			instance string
+			deviceID string
 		)
 		
 		err := rows.Scan(
@@ -462,7 +463,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			&stage,
 			&status,
 			&dateLast,
-			&instance,
+			&deviceID,
 		)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan wasapBot row")
@@ -482,7 +483,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			"status": "",
 			"payment": "",
 			"lastUpdated": "",
-			"instance": instance,
+			"device": deviceID,
 		}
 		
 		// Handle null values properly
@@ -514,7 +515,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		
 		logrus.WithFields(logrus.Fields{
 			"row_id": idProspect,
-			"instance": instance,
+			"device": deviceID,
 			"prospect_num": prospectNum,
 		}).Debug("Added record to results")
 	}
