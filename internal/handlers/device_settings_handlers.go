@@ -568,158 +568,47 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 // HandleWebhook processes incoming webhook requests from WhatsApp providers with comprehensive monitoring
 func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
-	startTime := time.Now()
 	idDevice := c.Params("id_device")
 	instance := c.Params("instance")
 	
-	// Enhanced logging to debug incoming webhooks
-	logrus.WithFields(logrus.Fields{
-		"method":       c.Method(),
-		"full_path":    c.OriginalURL(),
-		"id_device":    idDevice,
-		"instance":     instance,
-		"content_type": c.Get("Content-Type"),
-		"user_agent":   c.Get("User-Agent"),
-		"body_length":  len(c.Body()),
-	}).Info("🚨 WEBHOOK DEBUG: Incoming webhook request")
-	
-	if idDevice == "" {
-		logrus.Error("🚨 WEBHOOK DEBUG: ID Device is empty")
-		return h.errorResponse(c, 400, "ID Device is required")
-	}
-	if instance == "" {
-		logrus.Error("🚨 WEBHOOK DEBUG: Instance is empty")
-		return h.errorResponse(c, 400, "Instance is required")
-	}
-	
-	// Get the raw webhook payload
+	// Get body
 	body := c.Body()
 	
-	// Log the raw body for debugging
-	logrus.WithFields(logrus.Fields{
-		"id_device":    idDevice,
-		"instance":     instance,
-		"raw_body":     string(body),
-		"payload_size": len(body),
-	}).Info("🚨 WEBHOOK DEBUG: Raw webhook payload")
-	
-	// Verify the device exists in our database
-	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"error": err.Error(),
-		}).Warn("⚠️ WEBHOOK: Device not found in database")
-		return h.errorResponse(c, 404, "Device not found")
-	}
-	
-	// Verify the instance matches
-	if !deviceSettings.Instance.Valid || deviceSettings.Instance.String != instance {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"expected_instance": deviceSettings.Instance.String,
-			"received_instance": instance,
-		}).Warn("⚠️ WEBHOOK: Instance mismatch")
-		return h.errorResponse(c, 401, "Invalid instance")
-	}
-	
-	// Parse the webhook payload  
-	var webhookData map[string]interface{}
-	if err := json.Unmarshal(body, &webhookData); err != nil {
-		// Try URL-encoded form data
-		webhookData = make(map[string]interface{})
-		webhookData["from"] = c.FormValue("from")
-		webhookData["message"] = c.FormValue("message")
-		webhookData["text"] = c.FormValue("text")
-		webhookData["body"] = c.FormValue("body")
-	}
-	
-	// Always log webhook data for debugging
-	logrus.WithFields(logrus.Fields{
-		"webhook_data": webhookData,
-		"id_device": idDevice,
-	}).Info("📨 WEBHOOK DATA RECEIVED")
-	
-	// Validate and sanitize webhook payload to prevent injection attacks
-	if err := h.validateWebhookPayload(webhookData); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"error": err.Error(),
-		}).Warn("⚠️ WEBHOOK: Invalid webhook payload")
-		return h.errorResponse(c, 400, "Invalid webhook payload")
-	}
-	
-	// Sanitize webhook data to prevent injection attacks
-	webhookData = h.sanitizeWebhookData(webhookData)
-	
-	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"provider": deviceSettings.Provider,
-		"instance": instance,
-		"webhook_data": webhookData,
-	}).Info("✅ WEBHOOK: Successfully processed webhook")
-	
-	// Record webhook processing metrics
-	webhookProcessingTime := time.Since(startTime)
-	
-	// Process the webhook data based on provider type and integrate with AI WhatsApp
-	// Use goroutine with error handling, retry logic, and performance monitoring
-	go func() {
-		processingStartTime := time.Now()
-		var finalError error
-		
-		for retries := 0; retries < 3; retries++ {
-			retryStartTime := time.Now()
-			err := h.processWebhookMessageWithRetry(webhookData, idDevice, deviceSettings.Provider)
-			retryDuration := time.Since(retryStartTime)
-			
-			if err == nil {
-				// Success - log performance metrics
-				totalProcessingTime := time.Since(processingStartTime)
-				logrus.WithFields(logrus.Fields{
-					"id_device": idDevice,
-					"provider": deviceSettings.Provider,
-					"webhook_parse_time": webhookProcessingTime,
-					"message_processing_time": totalProcessingTime,
-					"retry_attempt": retries + 1,
-					"retry_duration": retryDuration,
-					"success": true,
-				}).Info("✅ WEBHOOK: Successfully processed webhook message")
-				break // Success, exit retry loop
-			}
-			
-			finalError = err
-			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"retry_attempt": retries + 1,
-				"retry_duration": retryDuration,
-				"error": err.Error(),
-			}).Warn("⚠️ WEBHOOK: Retrying webhook message processing")
-			
-			// Exponential backoff: 1s, 2s, 4s
-			time.Sleep(time.Duration(1<<retries) * time.Second)
-		}
-		
-		// Log final failure if all retries exhausted
-		if finalError != nil {
-			totalFailedTime := time.Since(processingStartTime)
-			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"provider": deviceSettings.Provider,
-				"total_failed_time": totalFailedTime,
-				"final_error": finalError.Error(),
-				"retries_exhausted": true,
-			}).Error("❌ WEBHOOK: Failed to process webhook after all retries")
-		}
-	}()
-
-	return h.successResponse(c, map[string]interface{}{
+	// Return success immediately to prevent timeout
+	c.JSON(fiber.Map{
 		"success": true,
-		"message": "Webhook received and queued for processing",
+		"message": "Webhook received",
 		"id_device": idDevice,
-		"provider": deviceSettings.Provider,
-		"webhook_processing_time_ms": webhookProcessingTime.Milliseconds(),
 	})
+	
+	// Process asynchronously
+	go func() {
+		// Log webhook
+		logrus.WithFields(logrus.Fields{
+			"id_device": idDevice,
+			"instance": instance,
+			"body_size": len(body),
+		}).Info("📨 WEBHOOK: Processing async")
+		
+		// Verify device
+		deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
+		if err != nil {
+			logrus.WithError(err).Error("Device not found")
+			return
+		}
+		
+		// Parse webhook data
+		var webhookData map[string]interface{}
+		if err := json.Unmarshal(body, &webhookData); err != nil {
+			// Try form values
+			webhookData = make(map[string]interface{})
+		}
+		
+		// Process message
+		h.processWebhookMessageWithRetry(webhookData, idDevice, deviceSettings.Provider)
+	}()
+	
+	return nil
 }
 
 // GenerateWablasDevice generates a device using Wablas API
