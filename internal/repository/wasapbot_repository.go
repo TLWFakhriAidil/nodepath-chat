@@ -22,6 +22,8 @@ type WasapBotRepository interface {
 	UpdateCurrentNode(executionID, nodeID string) error
 	UpdateWaitingStatus(executionID string, waitingValue int) error
 	SaveConversationHistory(prospectNum, instance, userMessage, botResponse, stage, nama string) error
+	GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]models.WasapBot, int, error)
+	GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error)
 }
 
 type wasapBotRepository struct {
@@ -341,4 +343,158 @@ func (r *wasapBotRepository) UpdateWaitingStatus(executionID string, waitingValu
 	}
 	
 	return nil
+}
+
+
+// GetAllWasapBotData retrieves all WasapBot data with filters
+func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]models.WasapBot, int, error) {
+	// Build query with filters
+	query := `
+		SELECT id_prospect, flow_reference, execution_id, execution_status, flow_id,
+		       current_node_id, last_node_id, waiting_for_reply, id_device,
+		       prospect_num, niche, instance, peringkat_sekolah, alamat, nama,
+		       pakej, no_fon, cara_bayaran, tarikh_gaji, stage, temp_stage,
+		       conv_start, conv_last, date_start, date_last, status, staff_cls,
+		       umur, kerja, sijil, user_input, alasan, nota
+		FROM wasapBot_nodepath
+		WHERE 1=1
+	`
+	
+	countQuery := `SELECT COUNT(*) FROM wasapBot_nodepath WHERE 1=1`
+	args := []interface{}{}
+	countArgs := []interface{}{}
+	
+	// Apply filters
+	if deviceFilter != "" && deviceFilter != "all" {
+		query += " AND instance = ?"
+		countQuery += " AND instance = ?"
+		args = append(args, deviceFilter)
+		countArgs = append(countArgs, deviceFilter)
+	}
+	
+	if stageFilter != "" && stageFilter != "all" {
+		query += " AND stage = ?"
+		countQuery += " AND stage = ?"
+		args = append(args, stageFilter)
+		countArgs = append(countArgs, stageFilter)
+	}
+	
+	if statusFilter != "" && statusFilter != "all" {
+		query += " AND status = ?"
+		countQuery += " AND status = ?"
+		args = append(args, statusFilter)
+		countArgs = append(countArgs, statusFilter)
+	}
+	
+	if search != "" {
+		query += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR alamat LIKE ?)"
+		countQuery += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR alamat LIKE ?)"
+		searchParam := "%" + search + "%"
+		args = append(args, searchParam, searchParam, searchParam, searchParam)
+		countArgs = append(countArgs, searchParam, searchParam, searchParam, searchParam)
+	}
+	
+	// Get total count
+	var total int
+	err := r.db.QueryRow(countQuery, countArgs...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get count: %w", err)
+	}
+	
+	// Add ORDER BY and pagination
+	query += " ORDER BY date_last DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	
+	// Execute query
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query wasapBot data: %w", err)
+	}
+	defer rows.Close()
+	
+	var results []models.WasapBot
+	for rows.Next() {
+		var wb models.WasapBot
+		err := rows.Scan(
+			&wb.IDProspect, &wb.FlowReference, &wb.ExecutionID, &wb.ExecutionStatus,
+			&wb.FlowID, &wb.CurrentNodeID, &wb.LastNodeID, &wb.WaitingForReply,
+			&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.Instance,
+			&wb.PeringkatSekolah, &wb.Alamat, &wb.Nama, &wb.Pakej,
+			&wb.NoFon, &wb.CaraBayaran, &wb.TarikhGaji, &wb.Stage,
+			&wb.TempStage, &wb.ConvStart, &wb.ConvLast, &wb.DateStart,
+			&wb.DateLast, &wb.Status, &wb.StaffCls, &wb.Umur,
+			&wb.Kerja, &wb.Sijil, &wb.UserInput, &wb.Alasan, &wb.Nota,
+		)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to scan wasapBot row")
+			continue
+		}
+		results = append(results, wb)
+	}
+	
+	return results, total, nil
+}
+
+// GetWasapBotStats retrieves WasapBot statistics
+func (r *wasapBotRepository) GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error) {
+	stats := map[string]interface{}{
+		"totalProspects": 0,
+		"activeExecutions": 0,
+		"completedExecutions": 0,
+		"uniqueSchools": 0,
+		"uniquePackages": 0,
+		"totalWithPhone": 0,
+	}
+	
+	baseWhere := "1=1"
+	args := []interface{}{}
+	
+	if deviceFilter != "" && deviceFilter != "all" {
+		baseWhere += " AND instance = ?"
+		args = append(args, deviceFilter)
+	}
+	
+	// Total prospects
+	var totalProspects int
+	err := r.db.QueryRow("SELECT COUNT(DISTINCT prospect_num) FROM wasapBot_nodepath WHERE "+baseWhere, args...).Scan(&totalProspects)
+	if err == nil {
+		stats["totalProspects"] = totalProspects
+	}
+	
+	// Active executions
+	var activeExecutions int
+	err = r.db.QueryRow("SELECT COUNT(*) FROM wasapBot_nodepath WHERE "+baseWhere+" AND execution_status = 'active'", args...).Scan(&activeExecutions)
+	if err == nil {
+		stats["activeExecutions"] = activeExecutions
+	}
+	
+	// Completed executions
+	var completedExecutions int
+	err = r.db.QueryRow("SELECT COUNT(*) FROM wasapBot_nodepath WHERE "+baseWhere+" AND status = 'Customer'", args...).Scan(&completedExecutions)
+	if err == nil {
+		stats["completedExecutions"] = completedExecutions
+	}
+	
+	// Unique schools
+	var uniqueSchools int
+	err = r.db.QueryRow("SELECT COUNT(DISTINCT peringkat_sekolah) FROM wasapBot_nodepath WHERE "+baseWhere+" AND peringkat_sekolah IS NOT NULL AND peringkat_sekolah != ''", args...).Scan(&uniqueSchools)
+	if err == nil {
+		stats["uniqueSchools"] = uniqueSchools
+	}
+	
+	// Unique packages
+	var uniquePackages int
+	err = r.db.QueryRow("SELECT COUNT(DISTINCT pakej) FROM wasapBot_nodepath WHERE "+baseWhere+" AND pakej IS NOT NULL AND pakej != ''", args...).Scan(&uniquePackages)
+	if err == nil {
+		stats["uniquePackages"] = uniquePackages
+	}
+	
+	// Total with phone
+	var totalWithPhone int
+	err = r.db.QueryRow("SELECT COUNT(*) FROM wasapBot_nodepath WHERE "+baseWhere+" AND no_fon IS NOT NULL AND no_fon != ''", args...).Scan(&totalWithPhone)
+	if err == nil {
+		stats["totalWithPhone"] = totalWithPhone
+	}
+	
+	return stats, nil
 }

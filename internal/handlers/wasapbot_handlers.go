@@ -49,14 +49,22 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 		"offset": offset,
 	}).Info("Getting WasapBot data")
 	
-	// TODO: Implement proper filtering logic
-	// For now, return mock data structure
-	mockData := fiber.Map{
-		"records": []fiber.Map{},
-		"total": 0,
+	// Get data from repository
+	data, total, err := h.wasapBotRepo.GetAllWasapBotData(limit, offset, deviceIDs, stage, status, search, userID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get WasapBot data")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve data",
+		})
 	}
 	
-	return c.JSON(mockData)
+	// Format response
+	response := fiber.Map{
+		"records": data,
+		"total": total,
+	}
+	
+	return c.JSON(response)
 }
 
 // GetWasapBotStats retrieves WasapBot statistics
@@ -79,14 +87,19 @@ func (h *WasapBotHandlers) GetWasapBotStats(c *fiber.Ctx) error {
 		"device_ids": deviceIDs,
 	}).Info("Getting WasapBot statistics")
 	
-	// TODO: Implement statistics logic
-	stats := fiber.Map{
-		"totalProspects": 0,
-		"activeExecutions": 0,
-		"completedExecutions": 0,
-		"uniqueSchools": 0,
-		"uniquePackages": 0,
-		"totalWithPhone": 0,
+	// Get stats from repository
+	stats, err := h.wasapBotRepo.GetWasapBotStats(deviceIDs, userID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get WasapBot stats")
+		// Return default stats on error
+		stats = map[string]interface{}{
+			"totalProspects": 0,
+			"activeExecutions": 0,
+			"completedExecutions": 0,
+			"uniqueSchools": 0,
+			"uniquePackages": 0,
+			"totalWithPhone": 0,
+		}
 	}
 	
 	return c.JSON(stats)
