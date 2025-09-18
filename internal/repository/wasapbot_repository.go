@@ -22,7 +22,7 @@ type WasapBotRepository interface {
 	UpdateCurrentNode(executionID, nodeID string) error
 	UpdateWaitingStatus(executionID string, waitingValue int) error
 	SaveConversationHistory(prospectNum, instance, userMessage, botResponse, stage, nama string) error
-	GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]models.WasapBot, int, error)
+	GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error)
 	GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error)
 }
 
@@ -347,15 +347,11 @@ func (r *wasapBotRepository) UpdateWaitingStatus(executionID string, waitingValu
 
 
 // GetAllWasapBotData retrieves all WasapBot data with filters
-func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]models.WasapBot, int, error) {
+func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error) {
 	// Build query with filters
 	query := `
-		SELECT id_prospect, flow_reference, execution_id, execution_status, flow_id,
-		       current_node_id, last_node_id, waiting_for_reply, id_device,
-		       prospect_num, niche, instance, peringkat_sekolah, alamat, nama,
-		       pakej, no_fon, cara_bayaran, tarikh_gaji, stage, temp_stage,
-		       conv_start, conv_last, date_start, date_last, status, staff_cls,
-		       umur, kerja, sijil, user_input, alasan, nota
+		SELECT id_prospect, prospect_num, nama, no_fon, peringkat_sekolah, 
+		       pakej, stage, status, date_last, instance
 		FROM wasapBot_nodepath
 		WHERE 1=1
 	`
@@ -387,8 +383,8 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 	}
 	
 	if search != "" {
-		query += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR alamat LIKE ?)"
-		countQuery += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR alamat LIKE ?)"
+		query += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR peringkat_sekolah LIKE ?)"
+		countQuery += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR peringkat_sekolah LIKE ?)"
 		searchParam := "%" + search + "%"
 		args = append(args, searchParam, searchParam, searchParam, searchParam)
 		countArgs = append(countArgs, searchParam, searchParam, searchParam, searchParam)
@@ -412,24 +408,78 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 	}
 	defer rows.Close()
 	
-	var results []models.WasapBot
+	var results []map[string]interface{}
 	for rows.Next() {
-		var wb models.WasapBot
+		var (
+			idProspect int
+			prospectNum string
+			nama sql.NullString
+			noFon sql.NullString
+			school sql.NullString
+			pakej sql.NullString
+			stage sql.NullString
+			status sql.NullString
+			dateLast sql.NullTime
+			instance string
+		)
+		
 		err := rows.Scan(
-			&wb.IDProspect, &wb.FlowReference, &wb.ExecutionID, &wb.ExecutionStatus,
-			&wb.FlowID, &wb.CurrentNodeID, &wb.LastNodeID, &wb.WaitingForReply,
-			&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.Instance,
-			&wb.PeringkatSekolah, &wb.Alamat, &wb.Nama, &wb.Pakej,
-			&wb.NoFon, &wb.CaraBayaran, &wb.TarikhGaji, &wb.Stage,
-			&wb.TempStage, &wb.ConvStart, &wb.ConvLast, &wb.DateStart,
-			&wb.DateLast, &wb.Status, &wb.StaffCls, &wb.Umur,
-			&wb.Kerja, &wb.Sijil, &wb.UserInput, &wb.Alasan, &wb.Nota,
+			&idProspect,
+			&prospectNum,
+			&nama,
+			&noFon,
+			&school,
+			&pakej,
+			&stage,
+			&status,
+			&dateLast,
+			&instance,
 		)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan wasapBot row")
 			continue
 		}
-		results = append(results, wb)
+		
+		// Convert to plain map for JSON
+		record := map[string]interface{}{
+			"id": idProspect,
+			"name": "",
+			"phone": prospectNum,
+			"school": "",
+			"package": "",
+			"stage": "",
+			"status": "",
+			"payment": "",
+			"lastUpdated": "",
+			"instance": instance,
+		}
+		
+		// Handle null values properly
+		if nama.Valid {
+			record["name"] = nama.String
+		}
+		if noFon.Valid {
+			record["phone"] = noFon.String
+		} else {
+			record["phone"] = prospectNum // Use prospect_num if no_fon is null
+		}
+		if school.Valid {
+			record["school"] = school.String
+		}
+		if pakej.Valid {
+			record["package"] = pakej.String
+		}
+		if stage.Valid {
+			record["stage"] = stage.String
+		}
+		if status.Valid {
+			record["status"] = status.String
+		}
+		if dateLast.Valid {
+			record["lastUpdated"] = dateLast.Time.Format("2006-01-02 15:04:05")
+		}
+		
+		results = append(results, record)
 	}
 	
 	return results, total, nil
