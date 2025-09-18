@@ -568,47 +568,67 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 // HandleWebhook processes incoming webhook requests from WhatsApp providers with comprehensive monitoring
 func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
+	// Extract all data before returning
 	idDevice := c.Params("id_device")
 	instance := c.Params("instance")
 	
-	// Get body
+	// Copy body immediately
 	body := c.Body()
+	bodyCopy := make([]byte, len(body))
+	copy(bodyCopy, body)
 	
-	// Return success immediately to prevent timeout
-	c.JSON(fiber.Map{
-		"success": true,
-		"message": "Webhook received",
-		"id_device": idDevice,
+	// Launch async processing BEFORE returning
+	go h.processWebhookAsync(idDevice, instance, bodyCopy)
+	
+	// Return 200 OK immediately
+	return c.Status(200).JSON(fiber.Map{
+		"status": "success",
+		"message": "received",
 	})
+}
+
+// processWebhookAsync handles the actual webhook processing
+func (h *Handlers) processWebhookAsync(idDevice, instance string, body []byte) {
+	// Log
+	logrus.WithFields(logrus.Fields{
+		"id_device": idDevice,
+		"instance": instance,
+		"body_size": len(body),
+	}).Info("📨 WEBHOOK: Async processing started")
 	
-	// Process asynchronously
-	go func() {
-		// Log webhook
-		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"instance": instance,
-			"body_size": len(body),
-		}).Info("📨 WEBHOOK: Processing async")
-		
-		// Verify device
-		deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
-		if err != nil {
-			logrus.WithError(err).Error("Device not found")
-			return
-		}
-		
-		// Parse webhook data
-		var webhookData map[string]interface{}
-		if err := json.Unmarshal(body, &webhookData); err != nil {
-			// Try form values
-			webhookData = make(map[string]interface{})
-		}
-		
-		// Process message
-		h.processWebhookMessageWithRetry(webhookData, idDevice, deviceSettings.Provider)
-	}()
+	// Validate
+	if idDevice == "" || instance == "" {
+		logrus.Warn("Missing device ID or instance")
+		return
+	}
 	
-	return nil
+	// Get device
+	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
+	if err != nil {
+		logrus.WithError(err).Warn("Device not found")
+		return
+	}
+	
+	// Parse webhook data
+	var webhookData map[string]interface{}
+	if err := json.Unmarshal(body, &webhookData); err != nil {
+		logrus.WithError(err).Warn("Failed to parse webhook data")
+		webhookData = make(map[string]interface{})
+	}
+	
+	// Log parsed data
+	logrus.WithFields(logrus.Fields{
+		"webhook_data": webhookData,
+		"id_device": idDevice,
+	}).Info("📨 WEBHOOK DATA RECEIVED")
+	
+	// Process the message
+	err = h.processWebhookMessageWithRetry(webhookData, idDevice, deviceSettings.Provider)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to process webhook message")
+	} else {
+		logrus.Info("✅ WEBHOOK: Processing completed")
+	}
 }
 
 // GenerateWablasDevice generates a device using Wablas API
