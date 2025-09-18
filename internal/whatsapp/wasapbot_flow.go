@@ -248,7 +248,6 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		return updates
 	}
 	
-	var response string
 	var updates map[string]interface{} = make(map[string]interface{})
 	
 	if !exists {
@@ -302,7 +301,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				"stage": stageVal,
 				"has_message": msg != "",
 				"has_image": imageURL != "",
-			}).Debug("Processing node")
+			}).Debug("Processing initial node")
 			
 			// Handle different node types
 			switch nodeType {
@@ -314,19 +313,23 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				}
 				
 			case "message":
-				// Add message to response
+				// Send message immediately
 				if msg != "" {
-					if response != "" {
-						response += "\n\n"
+					err := s.SendMessageFromDevice(deviceID, phoneNumber, msg)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to send message")
 					}
-					response += msg
+					time.Sleep(500 * time.Millisecond) // Small delay between messages
 				}
 				
 			case "image":
 				// Send image immediately
 				if imageURL != "" {
-					s.SendMediaMessage(deviceID, phoneNumber, imageURL)
-					time.Sleep(1 * time.Second) // Small delay between messages
+					err := s.SendMediaMessage(deviceID, phoneNumber, imageURL)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to send image")
+					}
+					time.Sleep(1 * time.Second) // Small delay after image
 				}
 				
 			case "user_reply", "user-reply", "input", "user-input", "question":
@@ -337,12 +340,24 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				break
 				
 			case "delay":
-				// For now, just continue (in production would schedule)
-				logrus.Debug("Skipping delay node")
+				// Apply actual delay
+				if data, ok := getNodeByID(currentNode)["data"].(map[string]interface{}); ok {
+					if delaySeconds, ok := data["delaySeconds"].(float64); ok {
+						logrus.WithField("delay", delaySeconds).Info("🎯 WASAPBOT: Applying delay")
+						time.Sleep(time.Duration(delaySeconds) * time.Second)
+					} else if delay, ok := data["delay"].(float64); ok {
+						logrus.WithField("delay", delay).Info("🎯 WASAPBOT: Applying delay")
+						time.Sleep(time.Duration(delay) * time.Second)
+					}
+				}
 				
 			case "condition":
-				// Condition nodes should not appear in initial flow
-				logrus.Warn("Unexpected condition node in initial flow")
+				// For initial flow, conditions should not appear
+				// But if they do, wait for user input
+				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ?, waiting_for_reply = 1 WHERE id_prospect = ?`, 
+					currentNode, idProspect)
+				logrus.Warn("Condition node in initial flow - waiting for input")
+				break
 				
 			case "end":
 				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = 'end' WHERE id_prospect = ?`, idProspect)
@@ -350,8 +365,9 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				break
 			}
 			
-			// If we hit an input node, stop
-			if nodeType == "user_reply" || nodeType == "user-reply" || nodeType == "input" || nodeType == "user-input" || nodeType == "question" {
+			// If we hit an input node or condition, stop
+			if nodeType == "user_reply" || nodeType == "user-reply" || nodeType == "input" || 
+			   nodeType == "user-input" || nodeType == "question" || nodeType == "condition" {
 				break
 			}
 			
@@ -389,14 +405,27 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			}
 		}
 		
-		// Determine next node
+		// Determine next node based on current node type
 		var nextNodeID string
 		
-		if currentNodeType == "condition" {
+		// Special handling for user_reply nodes - just get the next node
+		if currentNodeType == "user_reply" || currentNodeType == "user-reply" || 
+		   currentNodeType == "input" || currentNodeType == "user-input" {
+			// User has replied, move to next node
+			nextNodes := getNextNodes(currentNodeID.String)
+			if len(nextNodes) > 0 {
+				nextNodeID = nextNodes[0]
+			}
+		} else if currentNodeType == "condition" {
 			// Process condition based on user input
 			nextNodeID = processConditionNode(currentNodeID.String, content)
+			logrus.WithFields(logrus.Fields{
+				"condition_node": currentNodeID.String,
+				"user_input": content,
+				"next_node": nextNodeID,
+			}).Info("🎯 WASAPBOT: Processed condition node")
 		} else {
-			// Get next node normally
+			// For other nodes, just get next node normally
 			nextNodes := getNextNodes(currentNodeID.String)
 			if len(nextNodes) > 0 {
 				nextNodeID = nextNodes[0]
@@ -418,7 +447,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					"stage": stageVal,
 					"has_message": msg != "",
 					"has_image": imageURL != "",
-				}).Debug("Processing node")
+				}).Debug("Processing node after user input")
 				
 				// Handle different node types
 				switch nodeType {
@@ -430,19 +459,23 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					}
 					
 				case "message":
-					// Add message
+					// Send message immediately
 					if msg != "" {
-						if response != "" {
-							response += "\n\n"
+						err := s.SendMessageFromDevice(deviceID, phoneNumber, msg)
+						if err != nil {
+							logrus.WithError(err).Error("Failed to send message")
 						}
-						response += msg
+						time.Sleep(500 * time.Millisecond) // Small delay between messages
 					}
 					
 				case "image":
-					// Send image
+					// Send image immediately
 					if imageURL != "" {
-						s.SendMediaMessage(deviceID, phoneNumber, imageURL)
-						time.Sleep(1 * time.Second)
+						err := s.SendMediaMessage(deviceID, phoneNumber, imageURL)
+						if err != nil {
+							logrus.WithError(err).Error("Failed to send image")
+						}
+						time.Sleep(1 * time.Second) // Delay after image
 					}
 					
 				case "user_reply", "user-reply", "input", "user-input", "question":
@@ -453,15 +486,29 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					break
 					
 				case "condition":
-					// Should not hit condition without user input
-					logrus.Warn("Unexpected condition node")
+					// Condition without user input - use default path
+					nextNodes := getNextNodes(currentNode)
+					if len(nextNodes) > 0 {
+						currentNode = nextNodes[0]
+						continue
+					}
+					// If no default, wait for input
 					updates["current_node_id"] = currentNode
 					updates["waiting_for_reply"] = 1
+					logrus.Info("🎯 WASAPBOT: Waiting at condition node")
 					break
 					
 				case "delay":
-					// Skip delay for now
-					logrus.Debug("Skipping delay node")
+					// Apply actual delay
+					if data, ok := getNodeByID(currentNode)["data"].(map[string]interface{}); ok {
+						if delaySeconds, ok := data["delaySeconds"].(float64); ok {
+							logrus.WithField("delay", delaySeconds).Info("🎯 WASAPBOT: Applying delay")
+							time.Sleep(time.Duration(delaySeconds) * time.Second)
+						} else if delay, ok := data["delay"].(float64); ok {
+							logrus.WithField("delay", delay).Info("🎯 WASAPBOT: Applying delay")
+							time.Sleep(time.Duration(delay) * time.Second)
+						}
+					}
 					
 				case "end":
 					updates["current_node_id"] = "end"
@@ -471,7 +518,8 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				
 				// If we need user input, stop
 				if nodeType == "user_reply" || nodeType == "user-reply" || nodeType == "input" || 
-				   nodeType == "user-input" || nodeType == "question" || nodeType == "condition" {
+				   nodeType == "user-input" || nodeType == "question" || 
+				   (nodeType == "condition" && updates["waiting_for_reply"] == 1) {
 					break
 				}
 				
@@ -510,17 +558,8 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		}
 	}
 	
-	// Send response message if we have one
-	if response != "" {
-		err = s.SendMessageFromDevice(deviceID, phoneNumber, response)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to send response")
-		}
-	}
-	
 	logrus.WithFields(logrus.Fields{
 		"stage": stage,
-		"response_sent": response != "",
 		"updates": updates,
 	}).Info("🎯 WASAPBOT: Flow processing completed")
 	
