@@ -13,15 +13,15 @@ import (
 
 // WasapBotRepository interface for wasapBot_nodepath operations
 type WasapBotRepository interface {
-	GetByProspectAndDevice(prospectNum, instance string) (*models.WasapBot, error)
-	GetActiveExecution(prospectNum, instance string) (*models.WasapBot, error)
+	GetByProspectAndDevice(prospectNum, deviceID string) (*models.WasapBot, error)
+	GetActiveExecution(prospectNum, deviceID string) (*models.WasapBot, error)
 	GetByExecutionID(executionID string) (*models.WasapBot, error)
 	Create(wasapBot *models.WasapBot) error
 	Update(wasapBot *models.WasapBot) error
 	UpdateExecutionStatus(executionID, status string) error
 	UpdateCurrentNode(executionID, nodeID string) error
 	UpdateWaitingStatus(executionID string, waitingValue int) error
-	SaveConversationHistory(prospectNum, instance, userMessage, botResponse, stage, nama string) error
+	SaveConversationHistory(prospectNum, deviceID, userMessage, botResponse, stage, nama string) error
 	GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error)
 	GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error)
 }
@@ -37,8 +37,8 @@ func NewWasapBotRepository(db *sql.DB) WasapBotRepository {
 	}
 }
 
-// GetByProspectAndDevice retrieves a wasapBot record by prospect number and instance
-func (r *wasapBotRepository) GetByProspectAndDevice(prospectNum, instance string) (*models.WasapBot, error) {
+// GetByProspectAndDevice retrieves a wasapBot record by prospect number and device ID
+func (r *wasapBotRepository) GetByProspectAndDevice(prospectNum, deviceID string) (*models.WasapBot, error) {
 	query := `
 		SELECT id_prospect, flow_reference, execution_id, execution_status, flow_id,
 		       current_node_id, last_node_id, waiting_for_reply, id_device,
@@ -47,12 +47,12 @@ func (r *wasapBotRepository) GetByProspectAndDevice(prospectNum, instance string
 		       conv_start, conv_last, date_start, date_last, status, staff_cls,
 		       umur, kerja, sijil, user_input, alasan, nota
 		FROM wasapBot_nodepath
-		WHERE prospect_num = ? AND instance = ?
+		WHERE prospect_num = ? AND id_device = ?
 		LIMIT 1
 	`
 
 	var wb models.WasapBot
-	err := r.db.QueryRow(query, prospectNum, instance).Scan(
+	err := r.db.QueryRow(query, prospectNum, deviceID).Scan(
 		&wb.IDProspect, &wb.FlowReference, &wb.ExecutionID, &wb.ExecutionStatus,
 		&wb.FlowID, &wb.CurrentNodeID, &wb.LastNodeID, &wb.WaitingForReply,
 		&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.Instance,
@@ -73,8 +73,8 @@ func (r *wasapBotRepository) GetByProspectAndDevice(prospectNum, instance string
 	return &wb, nil
 }
 
-// GetActiveExecution retrieves an active execution for a prospect and instance
-func (r *wasapBotRepository) GetActiveExecution(prospectNum, instance string) (*models.WasapBot, error) {
+// GetActiveExecution retrieves an active execution for a prospect and device ID
+func (r *wasapBotRepository) GetActiveExecution(prospectNum, deviceID string) (*models.WasapBot, error) {
 	query := `
 		SELECT id_prospect, flow_reference, execution_id, execution_status, flow_id,
 		       current_node_id, last_node_id, waiting_for_reply, id_device,
@@ -83,12 +83,12 @@ func (r *wasapBotRepository) GetActiveExecution(prospectNum, instance string) (*
 		       conv_start, conv_last, date_start, date_last, status, staff_cls,
 		       umur, kerja, sijil, user_input, alasan, nota
 		FROM wasapBot_nodepath
-		WHERE prospect_num = ? AND instance = ? AND execution_status = 'active'
+		WHERE prospect_num = ? AND id_device = ? AND execution_status = 'active'
 		LIMIT 1
 	`
 
 	var wb models.WasapBot
-	err := r.db.QueryRow(query, prospectNum, instance).Scan(
+	err := r.db.QueryRow(query, prospectNum, deviceID).Scan(
 		&wb.IDProspect, &wb.FlowReference, &wb.ExecutionID, &wb.ExecutionStatus,
 		&wb.FlowID, &wb.CurrentNodeID, &wb.LastNodeID, &wb.WaitingForReply,
 		&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.Instance,
@@ -240,7 +240,7 @@ func (r *wasapBotRepository) UpdateCurrentNode(executionID, nodeID string) error
 }
 
 // SaveConversationHistory saves conversation history to conv_last field
-func (r *wasapBotRepository) SaveConversationHistory(prospectNum, instance, userMessage, botResponse, stage, nama string) error {
+func (r *wasapBotRepository) SaveConversationHistory(prospectNum, deviceID, userMessage, botResponse, stage, nama string) error {
 	return utils.WithTransaction(r.db, func(tx *sql.Tx) error {
 		// Check if record exists
 		var existingID *int
@@ -248,10 +248,10 @@ func (r *wasapBotRepository) SaveConversationHistory(prospectNum, instance, user
 		checkQuery := `
 			SELECT id_prospect, conv_last 
 			FROM wasapBot_nodepath 
-			WHERE prospect_num = ? AND instance = ?
+			WHERE prospect_num = ? AND id_device = ?
 			FOR UPDATE
 		`
-		err := tx.QueryRow(checkQuery, prospectNum, instance).Scan(&existingID, &existingConvLast)
+		err := tx.QueryRow(checkQuery, prospectNum, deviceID).Scan(&existingID, &existingConvLast)
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("failed to check existing record: %w", err)
 		}
@@ -291,32 +291,31 @@ func (r *wasapBotRepository) SaveConversationHistory(prospectNum, instance, user
 			updateQuery := `
 				UPDATE wasapBot_nodepath 
 				SET conv_last = ?, stage = ?, nama = ?, date_last = ?
-				WHERE prospect_num = ? AND instance = ?
+				WHERE prospect_num = ? AND id_device = ?
 			`
-			_, err = tx.Exec(updateQuery, convLastValue, stage, nama, now, prospectNum, instance)
+			_, err = tx.Exec(updateQuery, convLastValue, stage, nama, now, prospectNum, deviceID)
 			if err != nil {
 				return fmt.Errorf("failed to update conversation history: %w", err)
 			}
 			logrus.WithFields(logrus.Fields{
 				"prospect_num": prospectNum,
-				"instance": instance,
 			}).Info("WasapBot conversation history updated successfully")
 		} else {
 			// Create new record
 			insertQuery := `
 				INSERT INTO wasapBot_nodepath (
-					prospect_num, instance, stage, conv_last, nama, 
+					prospect_num, id_device, stage, conv_last, nama, 
 					date_start, date_last, status, waiting_for_reply
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`
-			_, err = tx.Exec(insertQuery, prospectNum, instance, stage, convLastValue, nama, 
+			_, err = tx.Exec(insertQuery, prospectNum, deviceID, stage, convLastValue, nama, 
 				now, now, "Prospek", 0)
 			if err != nil {
 				return fmt.Errorf("failed to create new conversation record: %w", err)
 			}
 			logrus.WithFields(logrus.Fields{
 				"prospect_num": prospectNum,
-				"instance": instance,
+				"id_device": deviceID,
 			}).Info("New WasapBot conversation record created successfully")
 		}
 
@@ -359,10 +358,10 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		"userID": userID,
 	}).Info("GetAllWasapBotData called")
 	
-	// Build query with filters - including id_device field
+	// Build query with filters - use id_device field
 	query := `
 		SELECT id_prospect, prospect_num, nama, no_fon, peringkat_sekolah, 
-		       pakej, stage, status, date_last, COALESCE(id_device, instance) as device_id
+		       pakej, stage, status, date_last, id_device
 		FROM wasapBot_nodepath
 		WHERE 1=1
 	`
@@ -373,12 +372,12 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 	
 	// Apply filters
 	if deviceFilter != "" && deviceFilter != "all" {
-		// Try to match either instance or id_device field
-		query += " AND (instance = ? OR id_device = ?)"
-		countQuery += " AND (instance = ? OR id_device = ?)"
-		args = append(args, deviceFilter, deviceFilter)
-		countArgs = append(countArgs, deviceFilter, deviceFilter)
-		logrus.WithField("device_filter_applied", deviceFilter).Info("Applying device filter for both instance and id_device")
+		// Filter by id_device field
+		query += " AND id_device = ?"
+		countQuery += " AND id_device = ?"
+		args = append(args, deviceFilter)
+		countArgs = append(countArgs, deviceFilter)
+		logrus.WithField("device_filter_applied", deviceFilter).Info("Applying device filter for id_device")
 	}
 	
 	if stageFilter != "" && stageFilter != "all" {

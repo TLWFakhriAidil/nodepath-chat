@@ -3062,7 +3062,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 	err := db.QueryRow(`
 		SELECT id_prospect, stage, current_node_id, waiting_for_reply
 		FROM wasapBot_nodepath 
-		WHERE prospect_num = ? AND instance = ? 
+		WHERE prospect_num = ? AND id_device = ? 
 		ORDER BY id_prospect DESC LIMIT 1
 	`, phoneNumber, deviceID).Scan(&idProspect, &stage, &currentNodeID, &waitingForReply)
 	
@@ -3112,13 +3112,13 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			}
 		}
 		
-		// Create WasapBot record
+		// Create WasapBot record with id_device
 		_, err = db.Exec(`
 			INSERT INTO wasapBot_nodepath 
-			(prospect_num, instance, nama, stage, current_node_id, conv_start, conv_last, 
+			(prospect_num, instance, id_device, nama, stage, current_node_id, conv_start, conv_last, 
 			 date_start, date_last, niche, status, flow_reference, flow_id, waiting_for_reply)
-			VALUES (?, ?, ?, '1', ?, ?, ?, NOW(), NOW(), 'EXAM-A', 'Prospek', ?, ?, 0)
-		`, phoneNumber, deviceID, senderName, firstNodeID, content, content, flow.ID, flow.ID)
+			VALUES (?, ?, ?, ?, '1', ?, ?, ?, NOW(), NOW(), 'EXAM-A', 'Prospek', ?, ?, 0)
+		`, phoneNumber, deviceID, deviceID, senderName, firstNodeID, content, content, flow.ID, flow.ID)
 		
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create WasapBot record")
