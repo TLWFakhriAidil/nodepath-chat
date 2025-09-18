@@ -1713,18 +1713,18 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			"command": message,
 		}).Info("⚙️ WEBHOOK: Processing device command")
 
-		// Process device command through AI WhatsApp handlers
+		// Process device command through AI WhatsApp handlers asynchronously
 		if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIWhatsappService != nil {
-			err := h.aiWhatsappHandlers.AIWhatsappService.ProcessDeviceCommand(from, message, idDevice)
-			if err != nil {
-				logrus.WithError(err).Error("❌ WEBHOOK: Failed to process device command")
-				return fmt.Errorf("failed to process device command: %w", err)
-			}
+			go func() {
+				err := h.aiWhatsappHandlers.AIWhatsappService.ProcessDeviceCommand(from, message, idDevice)
+				if err != nil {
+					logrus.WithError(err).Error("❌ WEBHOOK: Failed to process device command")
+				}
+			}()
 		} else {
 			logrus.Error("❌ WEBHOOK: AI WhatsApp service not available")
-			return fmt.Errorf("AI WhatsApp service not available")
 		}
-		return nil // Successfully processed device command
+		return nil // Return immediately
 	}
 
 
@@ -1756,34 +1756,35 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 
 		// Process message through WhatsApp service flow engine
 		if h.whatsappService != nil {
-			err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider, senderName)
-			flowProcessingDuration := time.Since(flowProcessingStart)
-			
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"id_device": idDevice,
-					"flow_processing_duration": flowProcessingDuration,
-					"error": err.Error(),
-				}).Error("❌ WEBHOOK: Failed to process message through flow engine")
-				// Fallback to AI conversation if flow processing fails
-				h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
-				return fmt.Errorf("flow processing failed, fallback to AI: %w", err)
-			}
-			
-			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"flow_processing_duration": flowProcessingDuration,
-				"total_processing_time": time.Since(startTime),
-			}).Info("✅ WEBHOOK: Successfully processed through flow engine")
+			// Process asynchronously to avoid timeout
+			go func() {
+				err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider, senderName)
+				flowProcessingDuration := time.Since(flowProcessingStart)
+				
+				if err != nil {
+					logrus.WithFields(logrus.Fields{
+						"id_device": idDevice,
+						"flow_processing_duration": flowProcessingDuration,
+						"error": err.Error(),
+					}).Error("❌ WEBHOOK: Failed to process message through flow engine")
+					// Fallback to AI conversation if flow processing fails
+					h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
+				} else {
+					logrus.WithFields(logrus.Fields{
+						"id_device": idDevice,
+						"flow_processing_duration": flowProcessingDuration,
+						"total_processing_time": time.Since(startTime),
+					}).Info("✅ WEBHOOK: Successfully processed through flow engine")
+				}
+			}()
 		} else {
 			logrus.WithFields(logrus.Fields{
 				"id_device": idDevice,
 				"flow_processing_duration": time.Since(flowProcessingStart),
 			}).Error("❌ WEBHOOK: WhatsApp service not available, falling back to AI conversation")
-			h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
-			return fmt.Errorf("WhatsApp service not available, using AI fallback")
+			go h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
 		}
-		return nil // Successfully processed through flow engine
+		return nil // Return immediately, processing happens in background
 	}
 
 	// No flows configured, use AI conversation system
@@ -1795,8 +1796,9 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		"flow_check_duration": flowCheckDuration,
 	}).Info("🤖 WEBHOOK: No flows configured, processing message through AI conversation")
 
-	h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
-	return nil // Successfully processed through AI conversation
+	// Process AI conversation asynchronously
+	go h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
+	return nil // Return immediately
 }
 
 // processAIConversation handles message processing through the AI conversation system with performance monitoring
