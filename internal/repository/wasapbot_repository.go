@@ -348,6 +348,17 @@ func (r *wasapBotRepository) UpdateWaitingStatus(executionID string, waitingValu
 
 // GetAllWasapBotData retrieves all WasapBot data with filters
 func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error) {
+	// Log incoming parameters
+	logrus.WithFields(logrus.Fields{
+		"limit": limit,
+		"offset": offset,
+		"deviceFilter": deviceFilter,
+		"stageFilter": stageFilter,
+		"statusFilter": statusFilter,
+		"search": search,
+		"userID": userID,
+	}).Info("GetAllWasapBotData called")
+	
 	// Build query with filters
 	query := `
 		SELECT id_prospect, prospect_num, nama, no_fon, peringkat_sekolah, 
@@ -366,6 +377,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		countQuery += " AND instance = ?"
 		args = append(args, deviceFilter)
 		countArgs = append(countArgs, deviceFilter)
+		logrus.WithField("device_filter_applied", deviceFilter).Info("Applying device filter")
 	}
 	
 	if stageFilter != "" && stageFilter != "all" {
@@ -390,25 +402,42 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		countArgs = append(countArgs, searchParam, searchParam, searchParam, searchParam)
 	}
 	
+	// Log the final query
+	logrus.WithFields(logrus.Fields{
+		"count_query": countQuery,
+		"count_args": countArgs,
+	}).Debug("Executing count query")
+	
 	// Get total count
 	var total int
 	err := r.db.QueryRow(countQuery, countArgs...).Scan(&total)
 	if err != nil {
+		logrus.WithError(err).Error("Failed to get count")
 		return nil, 0, fmt.Errorf("failed to get count: %w", err)
 	}
+	
+	logrus.WithField("total_count", total).Info("Total records found")
 	
 	// Add ORDER BY and pagination
 	query += " ORDER BY date_last DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 	
+	// Log the data query
+	logrus.WithFields(logrus.Fields{
+		"data_query": query,
+		"data_args": args,
+	}).Debug("Executing data query")
+	
 	// Execute query
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
+		logrus.WithError(err).Error("Failed to query wasapBot data")
 		return nil, 0, fmt.Errorf("failed to query wasapBot data: %w", err)
 	}
 	defer rows.Close()
 	
 	var results []map[string]interface{}
+	rowCount := 0
 	for rows.Next() {
 		var (
 			idProspect int
@@ -439,6 +468,8 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			logrus.WithError(err).Error("Failed to scan wasapBot row")
 			continue
 		}
+		
+		rowCount++
 		
 		// Convert to plain map for JSON
 		record := map[string]interface{}{
@@ -480,7 +511,18 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		}
 		
 		results = append(results, record)
+		
+		logrus.WithFields(logrus.Fields{
+			"row_id": idProspect,
+			"instance": instance,
+			"prospect_num": prospectNum,
+		}).Debug("Added record to results")
 	}
+	
+	logrus.WithFields(logrus.Fields{
+		"rows_scanned": rowCount,
+		"results_count": len(results),
+	}).Info("Query completed")
 	
 	return results, total, nil
 }

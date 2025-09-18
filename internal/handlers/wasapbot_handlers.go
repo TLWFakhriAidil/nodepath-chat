@@ -58,11 +58,25 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 		})
 	}
 	
+	// Log the data being returned
+	logrus.WithFields(logrus.Fields{
+		"data_count": len(data),
+		"total": total,
+		"data": data,
+	}).Info("WasapBot data retrieved")
+	
+	// Ensure we return an empty array if no data
+	if data == nil {
+		data = []map[string]interface{}{}
+	}
+	
 	// Format response
 	response := fiber.Map{
 		"records": data,
 		"total": total,
 	}
+	
+	logrus.WithField("response", response).Info("Sending WasapBot response")
 	
 	return c.JSON(response)
 }
