@@ -445,7 +445,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			pakej sql.NullString
 			stage sql.NullString
 			status sql.NullString
-			dateLast sql.NullTime
+			dateLast sql.NullString  // Changed from sql.NullTime to sql.NullString
 			deviceID string
 		)
 		
@@ -458,7 +458,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			&pakej,
 			&stage,
 			&status,
-			&dateLast,
+			&dateLast,  // Now scanning as string
 			&deviceID,
 		)
 		if err != nil {
@@ -504,7 +504,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			record["status"] = status.String
 		}
 		if dateLast.Valid {
-			record["lastUpdated"] = dateLast.Time.Format("2006-01-02 15:04:05")
+			record["lastUpdated"] = dateLast.String  // Use string directly
 		}
 		
 		results = append(results, record)
