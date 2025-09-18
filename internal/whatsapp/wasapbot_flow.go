@@ -87,7 +87,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 	}
 	
 	// Helper function to process node and extract info
-	processNode := func(nodeID string) (message string, nodeType string, stageValue string, imageURL string) {
+	processNode := func(nodeID string) (message string, nodeType string, stageValue string, mediaURL string) {
 		node := getNodeByID(nodeID)
 		if node == nil {
 			return
@@ -110,10 +110,18 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					stageValue = stg
 				}
 			}
-			// Get image URL for image nodes
+			// Get media URL for image/video/audio nodes
 			if nodeType == "image" {
 				if img, ok := data["imageUrl"].(string); ok {
-					imageURL = img
+					mediaURL = img
+				}
+			} else if nodeType == "video" {
+				if vid, ok := data["videoUrl"].(string); ok {
+					mediaURL = vid
+				}
+			} else if nodeType == "audio" {
+				if aud, ok := data["audioUrl"].(string); ok {
+					mediaURL = aud
 				}
 			}
 		}
@@ -293,17 +301,20 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		// Process nodes until we hit an input node
 		currentNode := firstNodeID
 		for i := 0; i < 50; i++ { // Max iterations to prevent infinite loop
-			msg, nodeType, stageVal, imageURL := processNode(currentNode)
+			msg, nodeType, stageVal, mediaURL := processNode(currentNode)
 			
 			logrus.WithFields(logrus.Fields{
 				"node": currentNode,
 				"type": nodeType,
 				"stage": stageVal,
 				"has_message": msg != "",
-				"has_image": imageURL != "",
+				"has_media": mediaURL != "",
 			}).Debug("Processing initial node")
 			
-			// Handle different node types
+			// Update current node in database before processing
+			db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ? WHERE id_prospect = ?`, currentNode, idProspect)
+			
+			// Handle different node types dynamically
 			switch nodeType {
 			case "stage":
 				// Update stage in database
@@ -322,22 +333,21 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					time.Sleep(500 * time.Millisecond) // Small delay between messages
 				}
 				
-			case "image":
-				// Send image immediately
-				if imageURL != "" {
-					err := s.SendMediaMessage(deviceID, phoneNumber, imageURL)
+			case "image", "video", "audio":
+				// Send media immediately
+				if mediaURL != "" {
+					err := s.SendMediaMessage(deviceID, phoneNumber, mediaURL)
 					if err != nil {
-						logrus.WithError(err).Error("Failed to send image")
+						logrus.WithError(err).Error("Failed to send media")
 					}
-					time.Sleep(1 * time.Second) // Small delay after image
+					time.Sleep(1 * time.Second) // Small delay after media
 				}
 				
 			case "user_reply", "user-reply", "input", "user-input", "question":
 				// Stop processing - wait for user input
-				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ?, waiting_for_reply = 1 WHERE id_prospect = ?`, 
-					currentNode, idProspect)
+				db.Exec(`UPDATE wasapBot_nodepath SET waiting_for_reply = 1 WHERE id_prospect = ?`, idProspect)
 				logrus.Info("🎯 WASAPBOT: Waiting for user input")
-				break
+				return nil // Exit function, waiting for user
 				
 			case "delay":
 				// Apply actual delay
@@ -352,30 +362,27 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				}
 				
 			case "condition":
-				// For initial flow, conditions should not appear
-				// But if they do, wait for user input
-				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ?, waiting_for_reply = 1 WHERE id_prospect = ?`, 
-					currentNode, idProspect)
-				logrus.Warn("Condition node in initial flow - waiting for input")
-				break
+				// Condition at start - wait for user input to evaluate
+				db.Exec(`UPDATE wasapBot_nodepath SET waiting_for_reply = 1 WHERE id_prospect = ?`, idProspect)
+				logrus.Info("🎯 WASAPBOT: Condition node at start - waiting for user input")
+				return nil // Exit function, waiting for user
 				
 			case "end":
 				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = 'end' WHERE id_prospect = ?`, idProspect)
 				logrus.Info("🎯 WASAPBOT: Flow ended")
-				break
-			}
-			
-			// If we hit an input node or condition, stop
-			if nodeType == "user_reply" || nodeType == "user-reply" || nodeType == "input" || 
-			   nodeType == "user-input" || nodeType == "question" || nodeType == "condition" {
-				break
+				return nil
+				
+			default:
+				// Unknown node type - log and continue
+				logrus.WithField("node_type", nodeType).Warn("Unknown node type encountered")
 			}
 			
 			// Get next node
 			nextNodes := getNextNodes(currentNode)
 			if len(nextNodes) == 0 || nextNodes[0] == "end" {
-				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = ? WHERE id_prospect = ?`, "end", idProspect)
-				break
+				db.Exec(`UPDATE wasapBot_nodepath SET current_node_id = 'end' WHERE id_prospect = ?`, idProspect)
+				logrus.Info("🎯 WASAPBOT: No more nodes - flow ended")
+				return nil
 			}
 			
 			currentNode = nextNodes[0]
@@ -439,17 +446,20 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			// Process nodes from next node
 			currentNode := nextNodeID
 			for i := 0; i < 50; i++ {
-				msg, nodeType, stageVal, imageURL := processNode(currentNode)
+				msg, nodeType, stageVal, mediaURL := processNode(currentNode)
 				
 				logrus.WithFields(logrus.Fields{
 					"node": currentNode,
 					"type": nodeType,
 					"stage": stageVal,
 					"has_message": msg != "",
-					"has_image": imageURL != "",
+					"has_media": mediaURL != "",
 				}).Debug("Processing node after user input")
 				
-				// Handle different node types
+				// Update current node
+				updates["current_node_id"] = currentNode
+				
+				// Handle different node types dynamically
 				switch nodeType {
 				case "stage":
 					// Update stage
@@ -468,34 +478,27 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 						time.Sleep(500 * time.Millisecond) // Small delay between messages
 					}
 					
-				case "image":
-					// Send image immediately
-					if imageURL != "" {
-						err := s.SendMediaMessage(deviceID, phoneNumber, imageURL)
+				case "image", "video", "audio":
+					// Send media immediately
+					if mediaURL != "" {
+						err := s.SendMediaMessage(deviceID, phoneNumber, mediaURL)
 						if err != nil {
-							logrus.WithError(err).Error("Failed to send image")
+							logrus.WithError(err).Error("Failed to send media")
 						}
-						time.Sleep(1 * time.Second) // Delay after image
+						time.Sleep(1 * time.Second) // Delay after media
 					}
 					
 				case "user_reply", "user-reply", "input", "user-input", "question":
 					// Stop and wait for input
-					updates["current_node_id"] = currentNode
 					updates["waiting_for_reply"] = 1
 					logrus.Info("🎯 WASAPBOT: Waiting for user input")
 					break
 					
 				case "condition":
-					// Condition without user input - use default path
-					nextNodes := getNextNodes(currentNode)
-					if len(nextNodes) > 0 {
-						currentNode = nextNodes[0]
-						continue
-					}
-					// If no default, wait for input
-					updates["current_node_id"] = currentNode
+					// Condition without prior user input - should evaluate or wait
+					// For now, wait for user input
 					updates["waiting_for_reply"] = 1
-					logrus.Info("🎯 WASAPBOT: Waiting at condition node")
+					logrus.Info("🎯 WASAPBOT: Waiting at condition node for user input")
 					break
 					
 				case "delay":
@@ -514,12 +517,16 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					updates["current_node_id"] = "end"
 					logrus.Info("🎯 WASAPBOT: Flow ended")
 					break
+					
+				default:
+					// Unknown node type - log and continue
+					logrus.WithField("node_type", nodeType).Warn("Unknown node type encountered")
 				}
 				
-				// If we need user input, stop
+				// If we need user input, stop processing
 				if nodeType == "user_reply" || nodeType == "user-reply" || nodeType == "input" || 
-				   nodeType == "user-input" || nodeType == "question" || 
-				   (nodeType == "condition" && updates["waiting_for_reply"] == 1) {
+				   nodeType == "user-input" || nodeType == "question" || nodeType == "condition" || 
+				   nodeType == "end" {
 					break
 				}
 				
