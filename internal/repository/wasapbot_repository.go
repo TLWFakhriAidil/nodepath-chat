@@ -42,7 +42,7 @@ func (r *wasapBotRepository) GetByProspectAndDevice(prospectNum, deviceID string
 	query := `
 		SELECT id_prospect, flow_reference, execution_id, execution_status, flow_id,
 		       current_node_id, last_node_id, waiting_for_reply, id_device,
-		       prospect_num, niche, instance, peringkat_sekolah, alamat, nama,
+		       prospect_num, niche, peringkat_sekolah, alamat, nama,
 		       pakej, no_fon, cara_bayaran, tarikh_gaji, stage, temp_stage,
 		       conv_start, conv_last, date_start, date_last, status, staff_cls,
 		       umur, kerja, sijil, user_input, alasan, nota
@@ -55,11 +55,10 @@ func (r *wasapBotRepository) GetByProspectAndDevice(prospectNum, deviceID string
 	err := r.db.QueryRow(query, prospectNum, deviceID).Scan(
 		&wb.IDProspect, &wb.FlowReference, &wb.ExecutionID, &wb.ExecutionStatus,
 		&wb.FlowID, &wb.CurrentNodeID, &wb.LastNodeID, &wb.WaitingForReply,
-		&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.Instance,
-		&wb.PeringkatSekolah, &wb.Alamat, &wb.Nama, &wb.Pakej,
-		&wb.NoFon, &wb.CaraBayaran, &wb.TarikhGaji, &wb.Stage,
-		&wb.TempStage, &wb.ConvStart, &wb.ConvLast, &wb.DateStart,
-		&wb.DateLast, &wb.Status, &wb.StaffCls, &wb.Umur,
+		&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.PeringkatSekolah,
+		&wb.Alamat, &wb.Nama, &wb.Pakej, &wb.NoFon, &wb.CaraBayaran,
+		&wb.TarikhGaji, &wb.Stage, &wb.TempStage, &wb.ConvStart, &wb.ConvLast,
+		&wb.DateStart, &wb.DateLast, &wb.Status, &wb.StaffCls, &wb.Umur,
 		&wb.Kerja, &wb.Sijil, &wb.UserInput, &wb.Alasan, &wb.Nota,
 	)
 
@@ -78,7 +77,7 @@ func (r *wasapBotRepository) GetActiveExecution(prospectNum, deviceID string) (*
 	query := `
 		SELECT id_prospect, flow_reference, execution_id, execution_status, flow_id,
 		       current_node_id, last_node_id, waiting_for_reply, id_device,
-		       prospect_num, niche, instance, peringkat_sekolah, alamat, nama,
+		       prospect_num, niche, peringkat_sekolah, alamat, nama,
 		       pakej, no_fon, cara_bayaran, tarikh_gaji, stage, temp_stage,
 		       conv_start, conv_last, date_start, date_last, status, staff_cls,
 		       umur, kerja, sijil, user_input, alasan, nota
@@ -91,11 +90,10 @@ func (r *wasapBotRepository) GetActiveExecution(prospectNum, deviceID string) (*
 	err := r.db.QueryRow(query, prospectNum, deviceID).Scan(
 		&wb.IDProspect, &wb.FlowReference, &wb.ExecutionID, &wb.ExecutionStatus,
 		&wb.FlowID, &wb.CurrentNodeID, &wb.LastNodeID, &wb.WaitingForReply,
-		&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.Instance,
-		&wb.PeringkatSekolah, &wb.Alamat, &wb.Nama, &wb.Pakej,
-		&wb.NoFon, &wb.CaraBayaran, &wb.TarikhGaji, &wb.Stage,
-		&wb.TempStage, &wb.ConvStart, &wb.ConvLast, &wb.DateStart,
-		&wb.DateLast, &wb.Status, &wb.StaffCls, &wb.Umur,
+		&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.PeringkatSekolah,
+		&wb.Alamat, &wb.Nama, &wb.Pakej, &wb.NoFon, &wb.CaraBayaran,
+		&wb.TarikhGaji, &wb.Stage, &wb.TempStage, &wb.ConvStart, &wb.ConvLast,
+		&wb.DateStart, &wb.DateLast, &wb.Status, &wb.StaffCls, &wb.Umur,
 		&wb.Kerja, &wb.Sijil, &wb.UserInput, &wb.Alasan, &wb.Nota,
 	)
 
@@ -114,7 +112,7 @@ func (r *wasapBotRepository) GetByExecutionID(executionID string) (*models.Wasap
 	query := `
 		SELECT id_prospect, flow_reference, execution_id, execution_status, flow_id,
 		       current_node_id, last_node_id, waiting_for_reply, id_device,
-		       prospect_num, niche, instance, peringkat_sekolah, alamat, nama,
+		       prospect_num, niche, peringkat_sekolah, alamat, nama,
 		       pakej, no_fon, cara_bayaran, tarikh_gaji, stage, temp_stage,
 		       conv_start, conv_last, date_start, date_last, status, staff_cls,
 		       umur, kerja, sijil, user_input, alasan, nota
@@ -127,11 +125,10 @@ func (r *wasapBotRepository) GetByExecutionID(executionID string) (*models.Wasap
 	err := r.db.QueryRow(query, executionID).Scan(
 		&wb.IDProspect, &wb.FlowReference, &wb.ExecutionID, &wb.ExecutionStatus,
 		&wb.FlowID, &wb.CurrentNodeID, &wb.LastNodeID, &wb.WaitingForReply,
-		&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.Instance,
-		&wb.PeringkatSekolah, &wb.Alamat, &wb.Nama, &wb.Pakej,
-		&wb.NoFon, &wb.CaraBayaran, &wb.TarikhGaji, &wb.Stage,
-		&wb.TempStage, &wb.ConvStart, &wb.ConvLast, &wb.DateStart,
-		&wb.DateLast, &wb.Status, &wb.StaffCls, &wb.Umur,
+		&wb.IDDevice, &wb.ProspectNum, &wb.Niche, &wb.PeringkatSekolah,
+		&wb.Alamat, &wb.Nama, &wb.Pakej, &wb.NoFon, &wb.CaraBayaran,
+		&wb.TarikhGaji, &wb.Stage, &wb.TempStage, &wb.ConvStart, &wb.ConvLast,
+		&wb.DateStart, &wb.DateLast, &wb.Status, &wb.StaffCls, &wb.Umur,
 		&wb.Kerja, &wb.Sijil, &wb.UserInput, &wb.Alasan, &wb.Nota,
 	)
 
@@ -151,18 +148,18 @@ func (r *wasapBotRepository) Create(wasapBot *models.WasapBot) error {
 		INSERT INTO wasapBot_nodepath (
 			flow_reference, execution_id, execution_status, flow_id,
 			current_node_id, last_node_id, waiting_for_reply, id_device,
-			prospect_num, niche, instance, peringkat_sekolah, alamat, nama,
+			prospect_num, niche, peringkat_sekolah, alamat, nama,
 			pakej, no_fon, cara_bayaran, tarikh_gaji, stage, temp_stage,
 			conv_start, conv_last, date_start, date_last, status, staff_cls,
 			umur, kerja, sijil, user_input, alasan, nota
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := r.db.Exec(query,
 		wasapBot.FlowReference, wasapBot.ExecutionID, wasapBot.ExecutionStatus,
 		wasapBot.FlowID, wasapBot.CurrentNodeID, wasapBot.LastNodeID,
 		wasapBot.WaitingForReply, wasapBot.IDDevice, wasapBot.ProspectNum,
-		wasapBot.Niche, wasapBot.Instance, wasapBot.PeringkatSekolah,
+		wasapBot.Niche, wasapBot.PeringkatSekolah,
 		wasapBot.Alamat, wasapBot.Nama, wasapBot.Pakej, wasapBot.NoFon,
 		wasapBot.CaraBayaran, wasapBot.TarikhGaji, wasapBot.Stage,
 		wasapBot.TempStage, wasapBot.ConvStart, wasapBot.ConvLast,
@@ -190,7 +187,7 @@ func (r *wasapBotRepository) Update(wasapBot *models.WasapBot) error {
 		UPDATE wasapBot_nodepath SET
 			flow_reference = ?, execution_id = ?, execution_status = ?, flow_id = ?,
 			current_node_id = ?, last_node_id = ?, waiting_for_reply = ?, id_device = ?,
-			prospect_num = ?, niche = ?, instance = ?, peringkat_sekolah = ?, alamat = ?,
+			prospect_num = ?, niche = ?, peringkat_sekolah = ?, alamat = ?,
 			nama = ?, pakej = ?, no_fon = ?, cara_bayaran = ?, tarikh_gaji = ?,
 			stage = ?, temp_stage = ?, conv_start = ?, conv_last = ?, date_start = ?,
 			date_last = ?, status = ?, staff_cls = ?, umur = ?, kerja = ?, sijil = ?,
@@ -202,7 +199,7 @@ func (r *wasapBotRepository) Update(wasapBot *models.WasapBot) error {
 		wasapBot.FlowReference, wasapBot.ExecutionID, wasapBot.ExecutionStatus,
 		wasapBot.FlowID, wasapBot.CurrentNodeID, wasapBot.LastNodeID,
 		wasapBot.WaitingForReply, wasapBot.IDDevice, wasapBot.ProspectNum,
-		wasapBot.Niche, wasapBot.Instance, wasapBot.PeringkatSekolah,
+		wasapBot.Niche, wasapBot.PeringkatSekolah,
 		wasapBot.Alamat, wasapBot.Nama, wasapBot.Pakej, wasapBot.NoFon,
 		wasapBot.CaraBayaran, wasapBot.TarikhGaji, wasapBot.Stage,
 		wasapBot.TempStage, wasapBot.ConvStart, wasapBot.ConvLast,

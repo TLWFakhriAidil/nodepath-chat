@@ -17,7 +17,6 @@ type WasapBot struct {
 	IDDevice         sql.NullString `json:"id_device"`
 	ProspectNum      sql.NullString `json:"prospect_num"`
 	Niche            sql.NullString `json:"niche"`
-	Instance         sql.NullString `json:"instance"`
 	PeringkatSekolah sql.NullString `json:"peringkat_sekolah"`
 	Alamat           sql.NullString `json:"alamat"`
 	Nama             sql.NullString `json:"nama"`

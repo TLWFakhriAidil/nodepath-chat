@@ -111,8 +111,8 @@ func (s *Service) convertWasapBotToAIWhatsapp(wasapBot *models.WasapBot) *models
 	if wasapBot.ProspectNum.Valid {
 		aiWhatsapp.ProspectNum = wasapBot.ProspectNum.String
 	}
-	if wasapBot.Instance.Valid {
-		aiWhatsapp.IDDevice = wasapBot.Instance.String
+	if wasapBot.IDDevice.Valid {
+		aiWhatsapp.IDDevice = wasapBot.IDDevice.String
 	}
 	if wasapBot.Niche.Valid {
 		aiWhatsapp.Niche = wasapBot.Niche.String
@@ -3112,13 +3112,13 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			}
 		}
 		
-		// Create WasapBot record with id_device
+		// Create WasapBot record with id_device only
 		_, err = db.Exec(`
 			INSERT INTO wasapBot_nodepath 
-			(prospect_num, instance, id_device, nama, stage, current_node_id, conv_start, conv_last, 
+			(prospect_num, id_device, nama, stage, current_node_id, conv_start, conv_last, 
 			 date_start, date_last, niche, status, flow_reference, flow_id, waiting_for_reply)
-			VALUES (?, ?, ?, ?, '1', ?, ?, ?, NOW(), NOW(), 'EXAM-A', 'Prospek', ?, ?, 0)
-		`, phoneNumber, deviceID, deviceID, senderName, firstNodeID, content, content, flow.ID, flow.ID)
+			VALUES (?, ?, ?, '1', ?, ?, ?, NOW(), NOW(), 'EXAM-A', 'Prospek', ?, ?, 0)
+		`, phoneNumber, deviceID, senderName, firstNodeID, content, content, flow.ID, flow.ID)
 		
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create WasapBot record")
