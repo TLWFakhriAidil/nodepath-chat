@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"nodepath-chat/internal/repository"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
@@ -117,4 +118,41 @@ func (h *WasapBotHandlers) GetWasapBotStats(c *fiber.Ctx) error {
 	}
 	
 	return c.JSON(stats)
+}
+
+
+// DeleteWasapBotRecord deletes a WasapBot record
+func (h *WasapBotHandlers) DeleteWasapBotRecord(c *fiber.Ctx) error {
+	// Get user ID from context
+	userIDInterface := c.Locals("userID")
+	if userIDInterface == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User not authenticated",
+		})
+	}
+	
+	// Get record ID from params
+	idStr := c.Params("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid record ID",
+		})
+	}
+	
+	logrus.WithField("id", id).Info("Deleting WasapBot record")
+	
+	// Delete the record
+	err = h.wasapBotRepo.Delete(id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to delete WasapBot record")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to delete record",
+		})
+	}
+	
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": "Record deleted successfully",
+	})
 }

@@ -24,6 +24,7 @@ type WasapBotRepository interface {
 	SaveConversationHistory(prospectNum, deviceID, userMessage, botResponse, stage, nama string) error
 	GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error)
 	GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error)
+	Delete(idProspect int) error
 }
 
 type wasapBotRepository struct {
@@ -355,10 +356,9 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		"userID": userID,
 	}).Info("GetAllWasapBotData called")
 	
-	// Build query with filters - use id_device field
+	// Build query with filters - only select needed columns
 	query := `
-		SELECT id_prospect, prospect_num, nama, no_fon, peringkat_sekolah, 
-		       pakej, stage, status, date_last, id_device
+		SELECT id_prospect, prospect_num, nama, stage, date_last, id_device
 		FROM wasapBot_nodepath
 		WHERE 1=1
 	`
@@ -440,12 +440,8 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			idProspect int
 			prospectNum string
 			nama sql.NullString
-			noFon sql.NullString
-			school sql.NullString
-			pakej sql.NullString
 			stage sql.NullString
-			status sql.NullString
-			dateLast sql.NullString  // Changed from sql.NullTime to sql.NullString
+			dateLast sql.NullString
 			deviceID string
 		)
 		
@@ -453,12 +449,8 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			&idProspect,
 			&prospectNum,
 			&nama,
-			&noFon,
-			&school,
-			&pakej,
 			&stage,
-			&status,
-			&dateLast,  // Now scanning as string
+			&dateLast,
 			&deviceID,
 		)
 		if err != nil {
@@ -468,43 +460,25 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		
 		rowCount++
 		
-		// Convert to plain map for JSON
+		// Convert to plain map for JSON - only required fields
 		record := map[string]interface{}{
 			"id": idProspect,
+			"device": deviceID,
 			"name": "",
 			"phone": prospectNum,
-			"school": "",
-			"package": "",
 			"stage": "",
-			"status": "",
-			"payment": "",
 			"lastUpdated": "",
-			"device": deviceID,
 		}
 		
 		// Handle null values properly
 		if nama.Valid {
 			record["name"] = nama.String
 		}
-		if noFon.Valid {
-			record["phone"] = noFon.String
-		} else {
-			record["phone"] = prospectNum // Use prospect_num if no_fon is null
-		}
-		if school.Valid {
-			record["school"] = school.String
-		}
-		if pakej.Valid {
-			record["package"] = pakej.String
-		}
 		if stage.Valid {
 			record["stage"] = stage.String
 		}
-		if status.Valid {
-			record["status"] = status.String
-		}
 		if dateLast.Valid {
-			record["lastUpdated"] = dateLast.String  // Use string directly
+			record["lastUpdated"] = dateLast.String
 		}
 		
 		results = append(results, record)
@@ -586,4 +560,28 @@ func (r *wasapBotRepository) GetWasapBotStats(deviceFilter string, userID int) (
 	}
 	
 	return stats, nil
+}
+
+
+// Delete deletes a WasapBot record by ID
+func (r *wasapBotRepository) Delete(idProspect int) error {
+	query := `DELETE FROM wasapBot_nodepath WHERE id_prospect = ?`
+	
+	result, err := r.db.Exec(query, idProspect)
+	if err != nil {
+		logrus.WithError(err).WithField("id_prospect", idProspect).Error("Failed to delete WasapBot record")
+		return fmt.Errorf("failed to delete WasapBot record: %w", err)
+	}
+	
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	
+	if rowsAffected == 0 {
+		return fmt.Errorf("no record found with id_prospect: %d", idProspect)
+	}
+	
+	logrus.WithField("id_prospect", idProspect).Info("WasapBot record deleted successfully")
+	return nil
 }

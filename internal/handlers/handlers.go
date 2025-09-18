@@ -243,6 +243,7 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	wasapBot.Use(h.authHandlers.DeviceRequiredMiddleware())
 	wasapBot.Get("/data", h.wasapBotHandlers.GetWasapBotData)
 	wasapBot.Get("/stats", h.wasapBotHandlers.GetWasapBotStats)
+	wasapBot.Delete("/data/:id", h.wasapBotHandlers.DeleteWasapBotRecord)
 
 	// Authentication routes
 	h.authHandlers.SetupAuthRoutes(api)
