@@ -456,8 +456,19 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			nextNodes := getNextNodes(currentNodeID.String)
 			if len(nextNodes) > 0 {
 				nextNodeID = nextNodes[0]
+				
+				// Check if next node is a condition - if so, evaluate it immediately
+				nextNode := getNodeByID(nextNodeID)
+				if nextNode != nil {
+					if nt, ok := nextNode["type"].(string); ok && nt == "condition" {
+						// The next node is a condition, evaluate it with current user input
+						logrus.WithField("condition_node", nextNodeID).Info("🎯 WASAPBOT: Next node is condition, evaluating immediately")
+						nextNodeID = processConditionNode(nextNodeID, content)
+						logrus.WithField("result_node", nextNodeID).Info("🎯 WASAPBOT: Condition evaluated, continuing to result")
+					}
+				}
 			}
-			logrus.WithField("next_node", nextNodeID).Info("🎯 WASAPBOT: Moving from user_reply to next node")
+			logrus.WithField("next_node", nextNodeID).Info("🎯 WASAPBOT: Moving from user_reply")
 			
 		} else {
 			// For other nodes (shouldn't happen if waiting_for_reply is set correctly)
@@ -524,11 +535,29 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					break
 					
 				case "condition":
-					// Condition without prior user input - should evaluate or wait
-					// For now, wait for user input
-					updates["waiting_for_reply"] = 1
-					logrus.Info("🎯 WASAPBOT: Waiting at condition node for user input")
-					break
+					// We've moved to a condition node - evaluate it immediately with current user input
+					nextCondNode := processConditionNode(currentNode, content)
+					logrus.WithFields(logrus.Fields{
+						"condition_node": currentNode,
+						"user_input": content,
+						"next_after_condition": nextCondNode,
+					}).Info("🎯 WASAPBOT: Evaluating condition after user_reply")
+					
+					if nextCondNode != "" && nextCondNode != "end" {
+						// Continue processing from the result of the condition
+						currentNode = nextCondNode
+						continue // Continue the loop to process the next node
+					} else if nextCondNode == "end" {
+						updates["current_node_id"] = "end"
+						logrus.Info("🎯 WASAPBOT: Flow ended after condition")
+						break
+					} else {
+						// No valid path from condition - this shouldn't happen
+						logrus.Error("🎯 WASAPBOT: No valid path from condition node")
+						updates["current_node_id"] = currentNode
+						updates["waiting_for_reply"] = 1
+						break
+					}
 					
 				case "delay":
 					// Apply actual delay
