@@ -169,7 +169,111 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 									logrus.WithFields(logrus.Fields{
 										"matched_value": v,
 										"condition_id": condMap["id"],
-									}).Info("🎯 WASAPBOT: Condition matched")
+									}).Info("🎯 WASAPBOT: Condition matched (contains)")
+									
+									// Find the edge for this condition
+									condID, _ := condMap["id"].(string)
+									for _, edge := range edges {
+										if source, ok := edge["source"].(string); ok && source == nodeID {
+											if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
+												if target, ok := edge["target"].(string); ok {
+													logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node for condition")
+													return target
+												}
+											}
+										}
+									}
+								}
+							}
+						} else if condType == "equals" && condValue != "" {
+							// Check for exact match
+							values := strings.Split(condValue, ",")
+							for _, v := range values {
+								v = strings.TrimSpace(strings.ToUpper(v))
+								if upperInput == v {
+									logrus.WithFields(logrus.Fields{
+										"matched_value": v,
+										"condition_id": condMap["id"],
+									}).Info("🎯 WASAPBOT: Condition matched (equals)")
+									
+									// Find the edge for this condition
+									condID, _ := condMap["id"].(string)
+									for _, edge := range edges {
+										if source, ok := edge["source"].(string); ok && source == nodeID {
+											if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
+												if target, ok := edge["target"].(string); ok {
+													logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node for condition")
+													return target
+												}
+											}
+										}
+									}
+								}
+							}
+						} else if condType == "not_equals" && condValue != "" {
+							// Check for not equal
+							values := strings.Split(condValue, ",")
+							matched := false
+							for _, v := range values {
+								v = strings.TrimSpace(strings.ToUpper(v))
+								if upperInput == v {
+									matched = true
+									break
+								}
+							}
+							if !matched {
+								logrus.WithFields(logrus.Fields{
+									"condition_id": condMap["id"],
+								}).Info("🎯 WASAPBOT: Condition matched (not_equals)")
+								
+								// Find the edge for this condition
+								condID, _ := condMap["id"].(string)
+								for _, edge := range edges {
+									if source, ok := edge["source"].(string); ok && source == nodeID {
+										if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
+											if target, ok := edge["target"].(string); ok {
+												logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node for condition")
+												return target
+											}
+										}
+									}
+								}
+							}
+						} else if condType == "starts_with" && condValue != "" {
+							// Check if input starts with value
+							values := strings.Split(condValue, ",")
+							for _, v := range values {
+								v = strings.TrimSpace(strings.ToUpper(v))
+								if strings.HasPrefix(upperInput, v) {
+									logrus.WithFields(logrus.Fields{
+										"matched_value": v,
+										"condition_id": condMap["id"],
+									}).Info("🎯 WASAPBOT: Condition matched (starts_with)")
+									
+									// Find the edge for this condition
+									condID, _ := condMap["id"].(string)
+									for _, edge := range edges {
+										if source, ok := edge["source"].(string); ok && source == nodeID {
+											if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
+												if target, ok := edge["target"].(string); ok {
+													logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node for condition")
+													return target
+												}
+											}
+										}
+									}
+								}
+							}
+						} else if condType == "ends_with" && condValue != "" {
+							// Check if input ends with value
+							values := strings.Split(condValue, ",")
+							for _, v := range values {
+								v = strings.TrimSpace(strings.ToUpper(v))
+								if strings.HasSuffix(upperInput, v) {
+									logrus.WithFields(logrus.Fields{
+										"matched_value": v,
+										"condition_id": condMap["id"],
+									}).Info("🎯 WASAPBOT: Condition matched (ends_with)")
 									
 									// Find the edge for this condition
 									condID, _ := condMap["id"].(string)
