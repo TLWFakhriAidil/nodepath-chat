@@ -144,6 +144,17 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			"upper_input": upperInput,
 		}).Debug("Processing condition node")
 		
+		// Debug: Log all edges from this node
+		var availableEdges []string
+		for _, edge := range edges {
+			if source, ok := edge["source"].(string); ok && source == nodeID {
+				sourceHandle, _ := edge["sourceHandle"].(string)
+				target, _ := edge["target"].(string)
+				availableEdges = append(availableEdges, fmt.Sprintf("handle:%s->target:%s", sourceHandle, target))
+			}
+		}
+		logrus.WithField("available_edges", availableEdges).Debug("Available edges from condition node")
+		
 		if data, ok := node["data"].(map[string]interface{}); ok {
 			if conditions, ok := data["conditions"].([]interface{}); ok {
 				// Check each condition
@@ -175,14 +186,28 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 									condID, _ := condMap["id"].(string)
 									for _, edge := range edges {
 										if source, ok := edge["source"].(string); ok && source == nodeID {
+											// Check sourceHandle - it should match the condition ID
 											if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
 												if target, ok := edge["target"].(string); ok {
 													logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node for condition")
 													return target
 												}
 											}
+											// Also check if sourceHandle is just the condition label (fallback)
+											if sourceHandle, ok := edge["sourceHandle"].(string); ok {
+												if condLabel, ok := condMap["label"].(string); ok && sourceHandle == condLabel {
+													if target, ok := edge["target"].(string); ok {
+														logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node by label")
+														return target
+													}
+												}
+											}
 										}
 									}
+									logrus.WithFields(logrus.Fields{
+										"condition_id": condID,
+										"node_id": nodeID,
+									}).Error("🎯 WASAPBOT: Edge not found for matched condition")
 								}
 							}
 						} else if condType == "equals" && condValue != "" {
@@ -200,14 +225,28 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 									condID, _ := condMap["id"].(string)
 									for _, edge := range edges {
 										if source, ok := edge["source"].(string); ok && source == nodeID {
+											// Check sourceHandle - it should match the condition ID
 											if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
 												if target, ok := edge["target"].(string); ok {
 													logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node for condition")
 													return target
 												}
 											}
+											// Also check if sourceHandle is just the condition label (fallback)
+											if sourceHandle, ok := edge["sourceHandle"].(string); ok {
+												if condLabel, ok := condMap["label"].(string); ok && sourceHandle == condLabel {
+													if target, ok := edge["target"].(string); ok {
+														logrus.WithField("target_node", target).Info("🎯 WASAPBOT: Found target node by label")
+														return target
+													}
+												}
+											}
 										}
 									}
+									logrus.WithFields(logrus.Fields{
+										"condition_id": condID,
+										"node_id": nodeID,
+									}).Error("🎯 WASAPBOT: Edge not found for matched condition")
 								}
 							}
 						} else if condType == "not_equals" && condValue != "" {
