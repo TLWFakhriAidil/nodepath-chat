@@ -523,6 +523,31 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		updates := make(map[string]interface{})
 		upperInput := strings.ToUpper(strings.TrimSpace(userInput))
 		
+		// Check for payment method selection FIRST (CASH/COD/GAJI)
+		// This matches the PHP logic
+		if strings.Contains(upperInput, "CASH") {
+			updates["cara_bayaran"] = "Online Transfer"
+			updates["conv_last"] = "Online Transfer"
+			logrus.WithFields(logrus.Fields{
+				"user_input": userInput,
+				"cara_bayaran": "Online Transfer",
+			}).Info("💳 WASAPBOT: Payment method set to Online Transfer (CASH)")
+		} else if strings.Contains(upperInput, "COD") {
+			updates["cara_bayaran"] = "COD"
+			updates["conv_last"] = "COD"
+			logrus.WithFields(logrus.Fields{
+				"user_input": userInput,
+				"cara_bayaran": "COD",
+			}).Info("💳 WASAPBOT: Payment method set to COD")
+		} else if strings.Contains(upperInput, "GAJI") {
+			updates["cara_bayaran"] = "COD Time Gaji"
+			updates["conv_last"] = "COD Time Gaji"
+			logrus.WithFields(logrus.Fields{
+				"user_input": userInput,
+				"cara_bayaran": "COD Time Gaji",
+			}).Info("💳 WASAPBOT: Payment method set to COD Time Gaji")
+		}
+		
 		// Dynamic stage processing based on stage value
 		switch stageValue {
 		case "2", "3", "4", "5", "6":
@@ -558,14 +583,30 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			updates["conv_last"] = userInput
 			
 		case "Online Transfer", "Online Transfer (Done)":
-			updates["cara_bayaran"] = "Online Transfer"
+			// Only set if not already set by CASH/COD/GAJI check
+			if _, exists := updates["cara_bayaran"]; !exists {
+				updates["cara_bayaran"] = "Online Transfer"
+			}
 			updates["conv_last"] = "Online Transfer"
 			
 		case "Tarikh COD":
+			// Only update cara_bayaran if it's not already set
+			if _, exists := updates["cara_bayaran"]; !exists {
+				updates["cara_bayaran"] = "COD Time Gaji"
+			}
 			updates["tarikh_gaji"] = userInput
 			updates["conv_last"] = userInput
 			
 		case "HABIS":
+			// Only set cara_bayaran if not already set
+			if _, exists := updates["cara_bayaran"]; !exists {
+				// Check what payment method was selected based on user input
+				if strings.Contains(upperInput, "CASH") {
+					updates["cara_bayaran"] = "Online Transfer"
+				} else if strings.Contains(upperInput, "COD") {
+					updates["cara_bayaran"] = "COD"
+				}
+			}
 			updates["status"] = "Customer"
 			updates["conv_last"] = "Completed"
 			
