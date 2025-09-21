@@ -305,17 +305,34 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 							}).Info("🔍 WASAPBOT: Looking for matching edge for condition")
 							
 							// DYNAMIC MATCHING STRATEGY
-							// The flow builder typically uses one of these patterns for sourceHandle:
-							// 1. The condition label (e.g., "CASH", "COD", "GAJI")
-							// 2. The condition ID (e.g., "1", "1756967064850")
-							// 3. The condition value (what we're matching against)
-							// 4. A combination or index
+							// The flow builder uses sourceHandle patterns like "condition-0", "condition-1", "condition-2"
+							// We need to match the condition index with these handles
 							
-							// We need to try all possible matches dynamically
 							foundEdge := false
 							var targetNode string
 							
-							// Build a list of all possible sourceHandle values to try
+							// PRIORITY 1: Match sourceHandle pattern "condition-X" where X is the condition index
+							expectedHandle := fmt.Sprintf("condition-%d", condIndex)
+							for _, edge := range edges {
+								if source, ok := edge["source"].(string); ok && source == nodeID {
+									sourceHandle, _ := edge["sourceHandle"].(string)
+									target, _ := edge["target"].(string)
+									
+									if sourceHandle == expectedHandle {
+										targetNode = target
+										foundEdge = true
+										logrus.WithFields(logrus.Fields{
+											"matched_handle": expectedHandle,
+											"sourceHandle": sourceHandle,
+											"target_node": targetNode,
+											"strategy": "condition-index-pattern",
+										}).Info("✅ WASAPBOT: Found edge by condition-X pattern match")
+										return targetNode
+									}
+								}
+							}
+							
+							// PRIORITY 2: Build a list of all possible sourceHandle values to try
 							var possibleHandles []string
 							
 							// Add label if exists
@@ -343,6 +360,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 							// Log what we're trying
 							logrus.WithFields(logrus.Fields{
 								"possible_handles": possibleHandles,
+								"expected_pattern": expectedHandle,
 							}).Debug("🔍 WASAPBOT: Trying to match with possible handles")
 							
 							// Try each possible handle
