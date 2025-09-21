@@ -55,9 +55,6 @@ type AIWhatsappService interface {
 	// Save conversation history to conv_last field
 	SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error
 	
-	// Update prospect name
-	UpdateProspectName(prospectNum, idDevice, prospectName string) error
-	
 	// Check if human takeover is active
 	IsHumanTakeoverActive(prospectNum string) (bool, error)
 	
@@ -76,9 +73,12 @@ type AIWhatsappService interface {
 	// Update AI WhatsApp record
 	UpdateAIWhatsapp(ai *models.AIWhatsapp) error
 	
+	// Update prospect name
+	UpdateProspectName(prospectNum, idDevice, prospectName string) error
+	
 	// Flow execution methods
 	// Start a new flow execution
-	StartFlowExecution(prospectNum, idDevice, flowReference, senderName string, variables map[string]interface{}) (*models.AIWhatsapp, error)
+	StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error)
 	
 	// Get active flow execution
 	GetActiveFlowExecution(prospectNum, idDevice string) (*models.AIWhatsapp, error)
@@ -302,36 +302,6 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 			"stage": initialStage,
 			"niche": niche,
 		}).Info("New prospect record created successfully")
-	} else {
-		// IMPORTANT FIX: Update prospect_name for existing records if it's empty or different
-		needsUpdate := false
-		
-		// Check if prospect_name needs to be updated
-		if senderName != "" && (!aiConv.ProspectName.Valid || aiConv.ProspectName.String == "" || aiConv.ProspectName.String != senderName) {
-			aiConv.ProspectName = sql.NullString{String: senderName, Valid: true}
-			needsUpdate = true
-			
-			logrus.WithFields(logrus.Fields{
-				"prospect_num": prospectNum,
-				"id_device": idDevice,
-				"sender_name": senderName,
-				"old_name": aiConv.ProspectName.String,
-			}).Info("Updating prospect_name for existing record")
-		}
-		
-		// Update the record if needed
-		if needsUpdate {
-			err = s.aiRepo.UpdateAIWhatsapp(aiConv)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to update prospect_name")
-				// Don't fail the whole process, just log the error
-			} else {
-				logrus.WithFields(logrus.Fields{
-					"prospect_num": prospectNum,
-					"sender_name": senderName,
-				}).Info("Successfully updated prospect_name")
-			}
-		}
 	}
 
 	// STANDARDIZED: AI prompts MUST come from AI nodes only
@@ -523,6 +493,11 @@ func (s *aiWhatsappService) ProcessAIConversation(prospectNum, idDevice, current
 		aiConv.ConvLast = sql.NullString{String: newConvLast, Valid: true}
 		aiConv.ConvCurrent = sql.NullString{} // Clear conv_current
 		
+		// Update prospect_name to ensure it's always current
+		if senderName != "" {
+			aiConv.ProspectName = sql.NullString{String: senderName, Valid: true}
+		}
+		
 		err = s.aiRepo.UpdateAIWhatsapp(aiConv)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update conversation history")
@@ -579,48 +554,6 @@ func (s *aiWhatsappService) UpdateConversationStage(prospectNum, stage string) e
 	return s.aiRepo.UpdateAIWhatsapp(aiConv)
 }
 
-// UpdateProspectName updates the prospect name in the database
-func (s *aiWhatsappService) UpdateProspectName(prospectNum, idDevice, prospectName string) error {
-	// Get active execution
-	execution, err := s.GetActiveFlowExecution(prospectNum, idDevice)
-	if err != nil {
-		return fmt.Errorf("failed to get active execution: %w", err)
-	}
-	
-	if execution == nil {
-		// No active execution, try to update by phone number and device ID
-		query := `UPDATE ai_whatsapp_nodepath SET prospect_name = ? WHERE prospect_num = ? AND id_device = ?`
-		result, err := s.aiRepo.GetDB().Exec(query, prospectName, prospectNum, idDevice)
-		if err != nil {
-			return fmt.Errorf("failed to update prospect_name: %w", err)
-		}
-		
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected > 0 {
-			logrus.WithFields(logrus.Fields{
-				"prospect_num": prospectNum,
-				"device_id": idDevice,
-				"prospect_name": prospectName,
-			}).Info("Updated prospect_name for phone number")
-		}
-		return nil
-	}
-	
-	// Update prospect_name using execution_id
-	query := `UPDATE ai_whatsapp_nodepath SET prospect_name = ? WHERE execution_id = ?`
-	_, err = s.aiRepo.GetDB().Exec(query, prospectName, execution.ExecutionID.String)
-	if err != nil {
-		return fmt.Errorf("failed to update prospect_name: %w", err)
-	}
-	
-	logrus.WithFields(logrus.Fields{
-		"execution_id": execution.ExecutionID.String,
-		"prospect_name": prospectName,
-	}).Info("Updated prospect_name for execution")
-	
-	return nil
-}
-
 // LogConversation logs a conversation message
 // LogConversation - REMOVED: No longer using conversation_log_nodepath table
 func (s *aiWhatsappService) LogConversation(prospectNum string, idDevice string, message, sender, stage string) error {
@@ -672,11 +605,12 @@ func (s *aiWhatsappService) ToggleHumanTakeover(prospectNum string, human bool) 
 // SaveConversationHistory saves conversation history to conv_last field
 // Creates new record if phone number and id_device combination doesn't exist
 // Updates existing record if combination already exists
+// Now includes prospect_name parameter to ensure names are always updated
 func (s *aiWhatsappService) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error {
 	logrus.WithFields(logrus.Fields{
-		"prospect_num": prospectNum,
-		"device_id":    idDevice,
-		"stage":        stage,
+		"prospect_num":  prospectNum,
+		"device_id":     idDevice,
+		"stage":         stage,
 		"prospect_name": prospectName,
 	}).Info("Saving conversation history")
 
@@ -1173,14 +1107,11 @@ func (s *aiWhatsappService) formatResponseForLogging(responses []AIWhatsappRespo
 		if resp.Type == "text" {
 			parts = append(parts, resp.Content)
 		} else if resp.Type == "image" {
-			// Just return the URL without brackets for conv_last
-			parts = append(parts, resp.Content)
+			parts = append(parts, "[Image: "+resp.Content+"]")
 		} else if resp.Type == "audio" {
-			// Just return the URL without brackets for conv_last
-			parts = append(parts, resp.Content)
+			parts = append(parts, "[Audio: "+resp.Content+"]")
 		} else if resp.Type == "video" {
-			// Just return the URL without brackets for conv_last
-			parts = append(parts, resp.Content)
+			parts = append(parts, "[Video: "+resp.Content+"]")
 		}
 	}
 	return strings.Join(parts, " ")
@@ -1278,15 +1209,19 @@ func (s *aiWhatsappService) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 	return s.aiRepo.UpdateAIWhatsapp(ai)
 }
 
+// UpdateProspectName updates the prospect_name field for a prospect
+func (s *aiWhatsappService) UpdateProspectName(prospectNum, idDevice, prospectName string) error {
+	return s.aiRepo.UpdateProspectName(prospectNum, idDevice, prospectName)
+}
+
 // Flow execution methods
 
 // StartFlowExecution starts a new flow execution in ai_whatsapp_nodepath
-func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowReference, senderName string, variables map[string]interface{}) (*models.AIWhatsapp, error) {
+func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowReference string, variables map[string]interface{}) (*models.AIWhatsapp, error) {
 	logrus.WithFields(logrus.Fields{
 		"prospect_num":   prospectNum,
 		"id_device":      idDevice,
 		"flow_reference": flowReference,
-		"sender_name":    senderName,
 	}).Info("Starting flow execution")
 
 	// Generate unique execution ID
@@ -1342,7 +1277,6 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 		aiConv = &models.AIWhatsapp{
 			IDDevice:        idDevice,
 			ProspectNum:     prospectNum,
-			ProspectName:    sql.NullString{String: senderName, Valid: senderName != ""}, // Add prospect_name
 			Stage:           sql.NullString{String: "flow_start", Valid: true},
 			Human:           0,
 			DateOrder:       &now,

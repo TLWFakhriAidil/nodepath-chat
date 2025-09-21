@@ -37,9 +37,8 @@ type AIWhatsappRepository interface {
 	UpdateHumanTakeover(prospectNum string, human int) error
 	UpdateConvCurrent(prospectNum string, convCurrent string) error
 	UpdateConvLast(prospectNum string, convLast interface{}) error
-	SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error
-	UpdateExecutionNode(executionID, nodeID string) error
 	UpdateWaitingStatus(executionID string, waitingValue int32) error
+	SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error
 
 	// Delete operations
 	DeleteAIWhatsapp(id int) error
@@ -158,44 +157,16 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 
 	// Handle ProspectName as sql.NullString
 	var prospectNameValue interface{}
-	if ai.ProspectName.Valid && ai.ProspectName.String != "" {
+	if ai.ProspectName.Valid {
 		prospectNameValue = ai.ProspectName.String
 	} else {
 		prospectNameValue = nil
 	}
-	
-	// Handle nullable string fields - save NULL instead of empty string
-	var stageValue, balasValue, keywordIklanValue, marketerValue interface{}
-	
-	if ai.Stage.Valid && ai.Stage.String != "" {
-		stageValue = ai.Stage.String
-	} else {
-		stageValue = nil
-	}
-	
-	// Balas, KeywordIklan, and Marketer are now sql.NullString in the model
-	if ai.Balas.Valid && ai.Balas.String != "" {
-		balasValue = ai.Balas.String
-	} else {
-		balasValue = nil
-	}
-	
-	if ai.KeywordIklan.Valid && ai.KeywordIklan.String != "" {
-		keywordIklanValue = ai.KeywordIklan.String
-	} else {
-		keywordIklanValue = nil
-	}
-	
-	if ai.Marketer.Valid && ai.Marketer.String != "" {
-		marketerValue = ai.Marketer.String
-	} else {
-		marketerValue = nil
-	}
 
 	_, err := r.db.Exec(query,
-		ai.IDDevice, ai.ProspectNum, prospectNameValue, stageValue, ai.DateOrder, convLastValue,
+		ai.IDDevice, ai.ProspectNum, prospectNameValue, ai.Stage, ai.DateOrder, convLastValue,
 		convCurrentValue, ai.Human, ai.Niche, ai.Intro,
-		balasValue, keywordIklanValue, marketerValue, ai.UpdateToday,
+		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		flowReferenceValue, executionIDValue, executionStatusValue,
 		ai.CreatedAt, ai.UpdatedAt,
@@ -400,12 +371,10 @@ func (r *aiWhatsappRepository) UpdateProspectName(prospectNum, idDevice, prospec
 func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error) {
 	// Build base query with JOIN to filter by user
 	baseQuery := `
-		SELECT a.id_prospect, a.id_device, a.prospect_num, a.prospect_name, a.stage, a.date_order, a.conv_last, 
+		SELECT a.id_prospect, a.id_device, a.prospect_num, a.stage, a.date_order, a.conv_last, 
 		       a.conv_current, a.human, a.niche, a.intro, 
 		       a.balas, a.keywordiklan, a.marketer, a.update_today, 
-		       a.created_at, a.updated_at,
-		       a.flow_reference, a.execution_id, a.execution_status,
-		       a.flow_id, a.current_node_id, a.last_node_id, a.waiting_for_reply
+		       a.created_at, a.updated_at
 		FROM ai_whatsapp_nodepath a
 		JOIN device_setting_nodepath d ON a.id_device = d.id_device
 		WHERE d.user_id = ?
@@ -481,12 +450,10 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 		var convCurrentSQL sql.NullString
 
 		err := rows.Scan(
-			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.ProspectName, &ai.Stage, &ai.DateOrder, &convLastJSON,
+			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
 			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
 			&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
-			&ai.FlowReference, &ai.ExecutionID, &ai.ExecutionStatus,
-			&ai.FlowID, &ai.CurrentNodeID, &ai.LastNodeID, &ai.WaitingForReply,
 		)
 
 		ai.ConvCurrent = convCurrentSQL
@@ -996,38 +963,10 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 		waitingForReplyValue = nil
 	}
 
-	// Handle nullable string fields - save NULL instead of empty string
-	var stageValue, balasValue, keywordIklanValue, marketerValue interface{}
-	
-	if ai.Stage.Valid && ai.Stage.String != "" {
-		stageValue = ai.Stage.String
-	} else {
-		stageValue = nil
-	}
-	
-	// Balas, KeywordIklan, and Marketer are now sql.NullString in the model
-	if ai.Balas.Valid && ai.Balas.String != "" {
-		balasValue = ai.Balas.String
-	} else {
-		balasValue = nil
-	}
-	
-	if ai.KeywordIklan.Valid && ai.KeywordIklan.String != "" {
-		keywordIklanValue = ai.KeywordIklan.String
-	} else {
-		keywordIklanValue = nil
-	}
-	
-	if ai.Marketer.Valid && ai.Marketer.String != "" {
-		marketerValue = ai.Marketer.String
-	} else {
-		marketerValue = nil
-	}
-
 	_, err := r.db.Exec(query,
-		ai.IDDevice, stageValue, ai.DateOrder, convLastValue, convCurrentValue,
+		ai.IDDevice, ai.Stage, ai.DateOrder, convLastValue, convCurrentValue,
 		ai.Human, ai.Niche, ai.Intro,
-		balasValue, keywordIklanValue, marketerValue, ai.UpdateToday,
+		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		ai.UpdatedAt, ai.IDProspect,
 	)
@@ -1143,7 +1082,35 @@ func (r *aiWhatsappRepository) UpdateConversationStage(prospectNum string, stage
 	return nil
 }
 
+// UpdateWaitingStatus updates the waiting_for_reply status for an execution
+func (r *aiWhatsappRepository) UpdateWaitingStatus(executionID string, waitingValue int32) error {
+	// Check if database connection is available
+	if r.db == nil {
+		return fmt.Errorf("database connection is not available")
+	}
 
+	query := `UPDATE ai_whatsapp_nodepath SET waiting_for_reply = ?, updated_at = ? WHERE execution_id = ?`
+	now := time.Now()
+	
+	result, err := r.db.Exec(query, waitingValue, now, executionID)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"waiting_value": waitingValue,
+		}).Error("Failed to update waiting_for_reply status")
+		return fmt.Errorf("failed to update waiting_for_reply status: %w", err)
+	}
+	
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		logrus.WithFields(logrus.Fields{
+			"execution_id": executionID,
+			"waiting_value": waitingValue,
+		}).Info("Waiting status updated successfully")
+	}
+	
+	return nil
+}
 
 // UpdateHumanTakeover updates the human takeover status
 func (r *aiWhatsappRepository) UpdateHumanTakeover(prospectNum string, human int) error {
@@ -1398,41 +1365,16 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 		} else {
 			convLastValue = convHistory
 		}
-		
-		// Handle stage - save NULL instead of empty string
-		var stageValue interface{}
-		if stage != "" {
-			stageValue = stage
-		} else {
-			stageValue = nil
-		}
-		
-		// Handle prospect_name - save NULL instead of empty string
-		var prospectNameValue interface{}
-		if prospectName != "" {
-			prospectNameValue = prospectName
-		} else {
-			prospectNameValue = nil
-		}
 
 		now := time.Now()
 		if existingID != nil {
-			// Log the prospect_name being saved
-			logrus.WithFields(logrus.Fields{
-				"prospect_num": prospectNum,
-				"id_device": idDevice,
-				"prospect_name": prospectName,
-				"prospect_name_len": len(prospectName),
-				"is_empty": prospectName == "",
-			}).Info("📝 Updating existing record with prospect_name")
-			
 			// Update existing record within transaction
 			updateQuery := `
 				UPDATE ai_whatsapp_nodepath 
 				SET conv_last = ?, stage = ?, prospect_name = ?, updated_at = ?
 				WHERE prospect_num = ? AND id_device = ?
 			`
-			_, err = tx.Exec(updateQuery, convLastValue, stageValue, prospectNameValue, now, prospectNum, idDevice)
+			_, err = tx.Exec(updateQuery, convLastValue, stage, prospectName, now, prospectNum, idDevice)
 			if err != nil {
 				return fmt.Errorf("failed to update conversation history: %w", err)
 			}
@@ -1441,15 +1383,6 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 				"id_device": idDevice,
 			}).Info("Conversation history updated successfully")
 		} else {
-			// Log the prospect_name being saved for new record
-			logrus.WithFields(logrus.Fields{
-				"prospect_num": prospectNum,
-				"id_device": idDevice,
-				"prospect_name": prospectName,
-				"prospect_name_len": len(prospectName),
-				"is_empty": prospectName == "",
-			}).Info("📝 Creating new record with prospect_name")
-			
 			// Create new record within transaction
 			insertQuery := `
 				INSERT INTO ai_whatsapp_nodepath (
@@ -1457,7 +1390,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 					created_at, updated_at
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			`
-			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stageValue, convLastValue, prospectNameValue, 0, now, now)
+			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stage, convLastValue, prospectName, 0, now, now)
 			if err != nil {
 				return fmt.Errorf("failed to create new conversation record: %w", err)
 			}
@@ -1608,44 +1541,4 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 	}
 
 	return conversations, nil
-}
-
-// UpdateExecutionNode updates the current node for an execution
-func (r *aiWhatsappRepository) UpdateExecutionNode(executionID, nodeID string) error {
-	query := `
-		UPDATE ai_whatsapp_nodepath 
-		SET current_node_id = ?, updated_at = NOW()
-		WHERE execution_id = ?
-	`
-	
-	_, err := r.db.Exec(query, nodeID, executionID)
-	if err != nil {
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"execution_id": executionID,
-			"node_id":      nodeID,
-		}).Error("Failed to update execution node")
-		return fmt.Errorf("failed to update execution node: %w", err)
-	}
-	
-	return nil
-}
-
-// UpdateWaitingStatus updates the waiting status for an execution
-func (r *aiWhatsappRepository) UpdateWaitingStatus(executionID string, waitingValue int32) error {
-	query := `
-		UPDATE ai_whatsapp_nodepath 
-		SET waiting_for_reply = ?, updated_at = NOW()
-		WHERE execution_id = ?
-	`
-	
-	_, err := r.db.Exec(query, waitingValue, executionID)
-	if err != nil {
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"execution_id":   executionID,
-			"waiting_value": waitingValue,
-		}).Error("Failed to update waiting status")
-		return fmt.Errorf("failed to update waiting status: %w", err)
-	}
-	
-	return nil
 }
