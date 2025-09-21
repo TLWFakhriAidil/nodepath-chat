@@ -524,35 +524,38 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		upperInput := strings.ToUpper(strings.TrimSpace(userInput))
 		
 		// Check for payment method selection FIRST (CASH/COD/GAJI)
-		// This matches the PHP logic
+		// Only save cara_bayaran, NOT stage - stage comes from stage nodes
 		if strings.Contains(upperInput, "CASH") {
 			updates["cara_bayaran"] = "Online Transfer"
-			updates["conv_last"] = "Online Transfer"
+			// Don't set stage here - let stage node handle it
 			logrus.WithFields(logrus.Fields{
 				"user_input": userInput,
 				"cara_bayaran": "Online Transfer",
 			}).Info("💳 WASAPBOT: Payment method set to Online Transfer (CASH)")
 		} else if strings.Contains(upperInput, "COD") {
 			updates["cara_bayaran"] = "COD"
-			updates["conv_last"] = "COD"
+			// Don't set stage here - let stage node handle it
 			logrus.WithFields(logrus.Fields{
 				"user_input": userInput,
 				"cara_bayaran": "COD",
 			}).Info("💳 WASAPBOT: Payment method set to COD")
 		} else if strings.Contains(upperInput, "GAJI") {
 			updates["cara_bayaran"] = "COD Time Gaji"
-			updates["conv_last"] = "COD Time Gaji"
+			// Don't set stage here - let stage node handle it
 			logrus.WithFields(logrus.Fields{
 				"user_input": userInput,
 				"cara_bayaran": "COD Time Gaji",
 			}).Info("💳 WASAPBOT: Payment method set to COD Time Gaji")
 		}
 		
-		// Dynamic stage processing based on stage value
+		// Always save user input to conv_last regardless
+		updates["conv_last"] = userInput
+		
+		// Dynamic stage processing based on stage value FROM THE STAGE NODE
 		switch stageValue {
 		case "2", "3", "4", "5", "6":
 			// Numeric stages - save user input
-			updates["conv_last"] = userInput
+			// Conv_last is already set above
 			
 			// Special handling for package selection (stage 4 or 5)
 			if stageValue == "4" || stageValue == "5" {
@@ -569,50 +572,32 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			
 		case "alamat":
 			updates["alamat"] = userInput
-			updates["conv_last"] = userInput
 			
 		case "nama":
 			updates["nama"] = userInput
-			updates["conv_last"] = userInput
 			
 		case "no_fon":
 			updates["no_fon"] = userInput
-			updates["conv_last"] = userInput
 			
 		case "done":
-			updates["conv_last"] = userInput
+			// Just a marker stage, no special data to save
 			
 		case "Online Transfer", "Online Transfer (Done)":
-			// Only set if not already set by CASH/COD/GAJI check
+			// Only set payment method if not already set by CASH/COD/GAJI check
 			if _, exists := updates["cara_bayaran"]; !exists {
 				updates["cara_bayaran"] = "Online Transfer"
 			}
-			updates["conv_last"] = "Online Transfer"
 			
 		case "Tarikh COD":
-			// Only update cara_bayaran if it's not already set
-			if _, exists := updates["cara_bayaran"]; !exists {
-				updates["cara_bayaran"] = "COD Time Gaji"
-			}
+			// Save the date they'll pay
 			updates["tarikh_gaji"] = userInput
-			updates["conv_last"] = userInput
 			
 		case "HABIS":
-			// Only set cara_bayaran if not already set
-			if _, exists := updates["cara_bayaran"]; !exists {
-				// Check what payment method was selected based on user input
-				if strings.Contains(upperInput, "CASH") {
-					updates["cara_bayaran"] = "Online Transfer"
-				} else if strings.Contains(upperInput, "COD") {
-					updates["cara_bayaran"] = "COD"
-				}
-			}
+			// Mark as customer when flow completes
 			updates["status"] = "Customer"
-			updates["conv_last"] = "Completed"
 			
 		default:
-			// For any other stage, just save the input
-			updates["conv_last"] = userInput
+			// For any other stage, no special handling needed
 		}
 		
 		return updates
