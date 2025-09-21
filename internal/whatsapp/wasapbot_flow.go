@@ -192,7 +192,8 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 							"cond_value": condValue,
 							"cond_label": condLabel,
 							"cond_index": i,
-						}).Debug("Checking condition")
+							"user_input": userInput,
+						}).Debug("📋 WASAPBOT: Checking condition")
 						
 						// Variable to track if this condition matches
 						var conditionMatched bool = false
@@ -426,20 +427,77 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				}
 				
 				// If no condition matched, look for default
-				logrus.Info("🎯 WASAPBOT: No condition matched, looking for default")
-				for _, cond := range conditions {
+				logrus.Info("🔍 WASAPBOT: No condition matched, looking for default condition")
+				for i, cond := range conditions {
 					if condMap, ok := cond.(map[string]interface{}); ok {
 						if condType, _ := condMap["type"].(string); condType == "default" {
 							condID, _ := condMap["id"].(string)
+							condLabel, _ := condMap["label"].(string)
+							
+							logrus.WithFields(logrus.Fields{
+								"default_id": condID,
+								"default_label": condLabel,
+								"default_index": i,
+							}).Debug("🔍 WASAPBOT: Found default condition, looking for edge")
+							
+							// Try multiple ways to find the default edge
+							// 1. Try matching by label "default" or "Default" or "DEFAULT"
 							for _, edge := range edges {
 								if source, ok := edge["source"].(string); ok && source == nodeID {
-									if sourceHandle, ok := edge["sourceHandle"].(string); ok && sourceHandle == condID {
-										if target, ok := edge["target"].(string); ok {
-											logrus.WithField("default_target", target).Info("🎯 WASAPBOT: Using default condition path")
+									sourceHandle, _ := edge["sourceHandle"].(string)
+									if strings.EqualFold(sourceHandle, "default") {
+										target, _ := edge["target"].(string)
+										logrus.WithField("default_target", target).Info("✅ WASAPBOT: Using default condition path (by 'default' label)")
+										return target
+									}
+								}
+							}
+							
+							// 2. Try matching by condition ID
+							for _, edge := range edges {
+								if source, ok := edge["source"].(string); ok && source == nodeID {
+									sourceHandle, _ := edge["sourceHandle"].(string)
+									if sourceHandle == condID {
+										target, _ := edge["target"].(string)
+										logrus.WithField("default_target", target).Info("✅ WASAPBOT: Using default condition path (by ID)")
+										return target
+									}
+								}
+							}
+							
+							// 3. Try matching by condition label if exists
+							if condLabel != "" {
+								for _, edge := range edges {
+									if source, ok := edge["source"].(string); ok && source == nodeID {
+										sourceHandle, _ := edge["sourceHandle"].(string)
+										if strings.EqualFold(sourceHandle, condLabel) {
+											target, _ := edge["target"].(string)
+											logrus.WithField("default_target", target).Info("✅ WASAPBOT: Using default condition path (by label)")
 											return target
 										}
 									}
 								}
+							}
+							
+							// 4. Try position-based (default is often the last edge)
+							edgeCount := 0
+							var lastEdgeTarget string
+							for _, edge := range edges {
+								if source, ok := edge["source"].(string); ok && source == nodeID {
+									target, _ := edge["target"].(string)
+									lastEdgeTarget = target
+									if edgeCount == i {
+										logrus.WithField("default_target", target).Info("✅ WASAPBOT: Using default condition path (by position)")
+										return target
+									}
+									edgeCount++
+								}
+							}
+							
+							// 5. If nothing else worked, use the last edge as default
+							if lastEdgeTarget != "" {
+								logrus.WithField("default_target", lastEdgeTarget).Warn("⚠️ WASAPBOT: Using last edge as default fallback")
+								return lastEdgeTarget
 							}
 						}
 					}
