@@ -291,98 +291,136 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 							condID, _ := condMap["id"].(string)
 							condIndex := i // Current condition index
 							condLabel := strings.TrimSpace(condLabel) // Ensure label is trimmed
+							condValue := strings.TrimSpace(condValue) // Ensure value is trimmed
 							
 							// Debug: Log what we're looking for and all available edges
 							logrus.WithFields(logrus.Fields{
 								"condition_id": condID,
 								"condition_label": condLabel,
+								"condition_value": condValue,
 								"condition_index": condIndex,
 								"available_edges": availableEdges,
-								"looking_for": fmt.Sprintf("ID=%s OR Label=%s", condID, condLabel),
-							}).Debug("🔍 WASAPBOT: Looking for matching edge")
+								"looking_for": fmt.Sprintf("ID=%s OR Label=%s OR Value=%s", condID, condLabel, condValue),
+							}).Info("🔍 WASAPBOT: Looking for matching edge for condition")
 							
-							// IMPORTANT: For condition nodes, the sourceHandle typically matches the condition label
-							// Priority 1: Match by sourceHandle equals condition label (CASH, COD, GAJI)
+							// DYNAMIC MATCHING STRATEGY
+							// The flow builder typically uses one of these patterns for sourceHandle:
+							// 1. The condition label (e.g., "CASH", "COD", "GAJI")
+							// 2. The condition ID (e.g., "1", "1756967064850")
+							// 3. The condition value (what we're matching against)
+							// 4. A combination or index
+							
+							// We need to try all possible matches dynamically
+							foundEdge := false
+							var targetNode string
+							
+							// Build a list of all possible sourceHandle values to try
+							var possibleHandles []string
+							
+							// Add label if exists
 							if condLabel != "" {
-								labelUpper := strings.ToUpper(strings.TrimSpace(condLabel))
-								for _, edge := range edges {
-									if source, ok := edge["source"].(string); ok && source == nodeID {
-										sourceHandle, _ := edge["sourceHandle"].(string)
-										sourceHandleUpper := strings.ToUpper(strings.TrimSpace(sourceHandle))
-										target, _ := edge["target"].(string)
-										
-										// Match by label (case-insensitive)
-										if sourceHandleUpper == labelUpper {
-											logrus.WithFields(logrus.Fields{
-												"matched_by": "label",
-												"sourceHandle": sourceHandle,
-												"condition_label": condLabel,
-												"target_node": target,
-												"strategy": "label_match",
-											}).Info("✅ WASAPBOT: Found target node by label match")
-											return target
-										}
-									}
-								}
+								possibleHandles = append(possibleHandles, condLabel)
+								possibleHandles = append(possibleHandles, strings.ToUpper(condLabel))
+								possibleHandles = append(possibleHandles, strings.ToLower(condLabel))
 							}
 							
-							// Priority 2: Match by sourceHandle equals condition ID
+							// Add ID if exists
 							if condID != "" {
-								for _, edge := range edges {
-									if source, ok := edge["source"].(string); ok && source == nodeID {
-										sourceHandle, _ := edge["sourceHandle"].(string)
-										target, _ := edge["target"].(string)
-										
-										if sourceHandle == condID {
-											logrus.WithFields(logrus.Fields{
-												"matched_by": "condition_id",
-												"sourceHandle": sourceHandle,
-												"condition_id": condID,
-												"target_node": target,
-												"strategy": "id_match",
-											}).Info("✅ WASAPBOT: Found target node by condition ID")
-											return target
-										}
-									}
-								}
+								possibleHandles = append(possibleHandles, condID)
 							}
 							
-							// Priority 3: Try matching sourceHandle with the condition value
+							// Add value if exists
 							if condValue != "" {
-								condValueUpper := strings.ToUpper(strings.TrimSpace(condValue))
+								possibleHandles = append(possibleHandles, condValue)
+								possibleHandles = append(possibleHandles, strings.ToUpper(condValue))
+								possibleHandles = append(possibleHandles, strings.ToLower(condValue))
+							}
+							
+							// Also try the index as string (sometimes edges use "0", "1", "2" as handles)
+							possibleHandles = append(possibleHandles, strconv.Itoa(condIndex))
+							
+							// Log what we're trying
+							logrus.WithFields(logrus.Fields{
+								"possible_handles": possibleHandles,
+							}).Debug("🔍 WASAPBOT: Trying to match with possible handles")
+							
+							// Try each possible handle
+							for _, possibleHandle := range possibleHandles {
+								if foundEdge {
+									break
+								}
+								
 								for _, edge := range edges {
 									if source, ok := edge["source"].(string); ok && source == nodeID {
 										sourceHandle, _ := edge["sourceHandle"].(string)
-										sourceHandleUpper := strings.ToUpper(strings.TrimSpace(sourceHandle))
 										target, _ := edge["target"].(string)
 										
-										if sourceHandleUpper == condValueUpper {
+										// Try exact match first
+										if sourceHandle == possibleHandle {
+											targetNode = target
+											foundEdge = true
 											logrus.WithFields(logrus.Fields{
-												"matched_by": "value",
+												"matched_handle": possibleHandle,
 												"sourceHandle": sourceHandle,
-												"condition_value": condValue,
-												"target_node": target,
-												"strategy": "value_match",
-											}).Info("✅ WASAPBOT: Found target node by value match")
-											return target
+												"target_node": targetNode,
+												"strategy": "exact_match",
+											}).Info("✅ WASAPBOT: Found edge by exact handle match")
+											break
+										}
+										
+										// Try case-insensitive match
+										if strings.EqualFold(sourceHandle, possibleHandle) {
+											targetNode = target
+											foundEdge = true
+											logrus.WithFields(logrus.Fields{
+												"matched_handle": possibleHandle,
+												"sourceHandle": sourceHandle,
+												"target_node": targetNode,
+												"strategy": "case_insensitive_match",
+											}).Info("✅ WASAPBOT: Found edge by case-insensitive match")
+											break
 										}
 									}
 								}
 							}
 							
-							// WARNING: Index matching should be last resort and only if edges are in order
-							// Log error - we should have found an edge by now
+							// If we still haven't found an edge, try position-based matching as last resort
+							// This assumes edges are in the same order as conditions
+							if !foundEdge {
+								edgeCount := 0
+								for _, edge := range edges {
+									if source, ok := edge["source"].(string); ok && source == nodeID {
+										if edgeCount == condIndex {
+											target, _ := edge["target"].(string)
+											sourceHandle, _ := edge["sourceHandle"].(string)
+											targetNode = target
+											foundEdge = true
+											logrus.WithFields(logrus.Fields{
+												"condition_index": condIndex,
+												"edge_index": edgeCount,
+												"sourceHandle": sourceHandle,
+												"target_node": targetNode,
+												"strategy": "position_based_fallback",
+											}).Warn("⚠️ WASAPBOT: Using position-based matching as fallback")
+											break
+										}
+										edgeCount++
+									}
+								}
+							}
+							
+							if foundEdge {
+								return targetNode
+							}
+							
+							// Log error if no edge found
 							logrus.WithFields(logrus.Fields{
 								"condition_id": condID,
 								"condition_label": condLabel,
 								"condition_value": condValue,
 								"condition_index": condIndex,
-								"node_id": nodeID,
 								"available_edges": availableEdges,
-							}).Error("❌ WASAPBOT: No edge found for matched condition using label/ID/value matching")
-							
-							// Don't use index matching as it's unreliable
-							// Instead, return empty and let default handling take over
+							}).Error("❌ WASAPBOT: No edge found for matched condition despite trying all strategies")
 						}
 					}
 				}
