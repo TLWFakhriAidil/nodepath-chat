@@ -151,10 +151,11 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			if source, ok := edge["source"].(string); ok && source == nodeID {
 				sourceHandle, _ := edge["sourceHandle"].(string)
 				target, _ := edge["target"].(string)
-				availableEdges = append(availableEdges, fmt.Sprintf("handle:%s->target:%s", sourceHandle, target))
+				// More detailed edge info for debugging
+				availableEdges = append(availableEdges, fmt.Sprintf("sourceHandle:'%s'->target:%s", sourceHandle, target))
 			}
 		}
-		logrus.WithField("available_edges", availableEdges).Debug("Available edges from condition node")
+		logrus.WithField("available_edges", availableEdges).Info("📊 WASAPBOT: Available edges from condition node")
 		
 		if data, ok := node["data"].(map[string]interface{}); ok {
 			// First check if user input is a number that matches a condition label
@@ -203,6 +204,7 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 							logrus.WithFields(logrus.Fields{
 								"matched_label": condLabel,
 								"user_input": userInput,
+								"condition_index": i,
 							}).Info("✅ WASAPBOT: Exact label match")
 						} else if condType == "contains" && condValue != "" {
 							// Check if user input contains any of the comma-separated values
@@ -215,7 +217,9 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 									logrus.WithFields(logrus.Fields{
 										"matched_value": v,
 										"condition_id": condMap["id"],
-									}).Info("🎯 WASAPBOT: Condition matched (contains)")
+										"condition_label": condLabel,
+										"condition_index": i,
+									}).Info("✅ WASAPBOT: Condition matched (contains)")
 									break
 								}
 							}
@@ -229,7 +233,9 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 									logrus.WithFields(logrus.Fields{
 										"matched_value": v,
 										"condition_id": condMap["id"],
-									}).Info("🎯 WASAPBOT: Condition matched (equals)")
+										"condition_label": condLabel,
+										"condition_index": i,
+									}).Info("✅ WASAPBOT: Condition matched (equals)")
 									break
 								}
 							}
@@ -286,27 +292,31 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 							condIndex := i // Current condition index
 							condLabel := strings.TrimSpace(condLabel) // Ensure label is trimmed
 							
-							// Debug: Log what we're looking for
+							// Debug: Log what we're looking for and all available edges
 							logrus.WithFields(logrus.Fields{
 								"condition_id": condID,
 								"condition_label": condLabel,
 								"condition_index": condIndex,
-								"looking_for": fmt.Sprintf("ID=%s OR Label=%s OR Index=%d", condID, condLabel, condIndex),
-							}).Debug("🎯 WASAPBOT: Looking for matching edge")
+								"available_edges": availableEdges,
+								"looking_for": fmt.Sprintf("ID=%s OR Label=%s", condID, condLabel),
+							}).Debug("🔍 WASAPBOT: Looking for matching edge")
 							
-							// Try multiple matching strategies
-							// Strategy 1: Match by sourceHandle equals condition label (most common for numbered conditions)
+							// IMPORTANT: For condition nodes, the sourceHandle typically matches the condition label
+							// Priority 1: Match by sourceHandle equals condition label (CASH, COD, GAJI)
 							if condLabel != "" {
+								labelUpper := strings.ToUpper(strings.TrimSpace(condLabel))
 								for _, edge := range edges {
 									if source, ok := edge["source"].(string); ok && source == nodeID {
 										sourceHandle, _ := edge["sourceHandle"].(string)
+										sourceHandleUpper := strings.ToUpper(strings.TrimSpace(sourceHandle))
 										target, _ := edge["target"].(string)
 										
-										// Direct label match - this is the most common case for "1", "2", "3", "4" options
-										if sourceHandle == condLabel {
+										// Match by label (case-insensitive)
+										if sourceHandleUpper == labelUpper {
 											logrus.WithFields(logrus.Fields{
 												"matched_by": "label",
 												"sourceHandle": sourceHandle,
+												"condition_label": condLabel,
 												"target_node": target,
 												"strategy": "label_match",
 											}).Info("✅ WASAPBOT: Found target node by label match")
@@ -316,51 +326,63 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 								}
 							}
 							
-							// Strategy 2: Match by sourceHandle equals condition ID
-							for _, edge := range edges {
-								if source, ok := edge["source"].(string); ok && source == nodeID {
-									sourceHandle, _ := edge["sourceHandle"].(string)
-									target, _ := edge["target"].(string)
-									
-									if sourceHandle == condID {
-										logrus.WithFields(logrus.Fields{
-											"matched_by": "condition_id",
-											"sourceHandle": sourceHandle,
-											"target_node": target,
-											"strategy": "id_match",
-										}).Info("✅ WASAPBOT: Found target node by condition ID")
-										return target
-									}
-								}
-							}
-							
-							// Strategy 3: Match by edge index (condition index corresponds to edge index)
-							edgeIndex := 0
-							for _, edge := range edges {
-								if source, ok := edge["source"].(string); ok && source == nodeID {
-									if edgeIndex == condIndex {
+							// Priority 2: Match by sourceHandle equals condition ID
+							if condID != "" {
+								for _, edge := range edges {
+									if source, ok := edge["source"].(string); ok && source == nodeID {
+										sourceHandle, _ := edge["sourceHandle"].(string)
 										target, _ := edge["target"].(string)
-										logrus.WithFields(logrus.Fields{
-											"condition_index": condIndex,
-											"edge_index": edgeIndex,
-											"target_node": target,
-											"strategy": "index_match",
-										}).Info("✅ WASAPBOT: Found target node by index matching")
-										return target
+										
+										if sourceHandle == condID {
+											logrus.WithFields(logrus.Fields{
+												"matched_by": "condition_id",
+												"sourceHandle": sourceHandle,
+												"condition_id": condID,
+												"target_node": target,
+												"strategy": "id_match",
+											}).Info("✅ WASAPBOT: Found target node by condition ID")
+											return target
+										}
 									}
-									edgeIndex++
 								}
 							}
 							
-							// Log error if no edge found for matched condition
+							// Priority 3: Try matching sourceHandle with the condition value
+							if condValue != "" {
+								condValueUpper := strings.ToUpper(strings.TrimSpace(condValue))
+								for _, edge := range edges {
+									if source, ok := edge["source"].(string); ok && source == nodeID {
+										sourceHandle, _ := edge["sourceHandle"].(string)
+										sourceHandleUpper := strings.ToUpper(strings.TrimSpace(sourceHandle))
+										target, _ := edge["target"].(string)
+										
+										if sourceHandleUpper == condValueUpper {
+											logrus.WithFields(logrus.Fields{
+												"matched_by": "value",
+												"sourceHandle": sourceHandle,
+												"condition_value": condValue,
+												"target_node": target,
+												"strategy": "value_match",
+											}).Info("✅ WASAPBOT: Found target node by value match")
+											return target
+										}
+									}
+								}
+							}
+							
+							// WARNING: Index matching should be last resort and only if edges are in order
+							// Log error - we should have found an edge by now
 							logrus.WithFields(logrus.Fields{
 								"condition_id": condID,
 								"condition_label": condLabel,
+								"condition_value": condValue,
 								"condition_index": condIndex,
 								"node_id": nodeID,
 								"available_edges": availableEdges,
-							}).Error("❌ WASAPBOT: No edge found for matched condition")
-							// Don't return empty here, continue to check default
+							}).Error("❌ WASAPBOT: No edge found for matched condition using label/ID/value matching")
+							
+							// Don't use index matching as it's unreliable
+							// Instead, return empty and let default handling take over
 						}
 					}
 				}
