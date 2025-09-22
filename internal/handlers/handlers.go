@@ -100,6 +100,7 @@ type Handlers struct {
 	aiWhatsappHandlers    *AIWhatsappHandlers
 	authHandlers          *AuthHandlers
 	wasapBotHandlers      *WasapBotHandlers
+	db                    *sql.DB // Add database field
 }
 
 // NewHandlers creates a new handlers instance
@@ -149,6 +150,7 @@ func NewHandlers(
 		aiWhatsappHandlers:    aiWhatsappHandlers,
 		authHandlers:          authHandlers,
 		wasapBotHandlers:      wasapBotHandlers,
+		db:                    db, // Store the database
 	}
 	
 	// Set the reference to main handlers in AI WhatsApp handlers for flow routing
@@ -244,6 +246,13 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	wasapBot.Get("/data", h.wasapBotHandlers.GetWasapBotData)
 	wasapBot.Get("/stats", h.wasapBotHandlers.GetWasapBotStats)
 	wasapBot.Delete("/data/:id", h.wasapBotHandlers.DeleteWasapBotRecord)
+
+	// Stage Values routes (protected with authentication)
+	stageValues := api.Group("/stage-values")
+	stageValues.Use(h.authHandlers.AuthMiddleware())
+	stageValues.Get("/:deviceId", h.GetStageValuesByDevice)
+	stageValues.Post("/", h.CreateStageValue)
+	stageValues.Delete("/:id", h.DeleteStageValue)
 
 	// Authentication routes
 	h.authHandlers.SetupAuthRoutes(api)
