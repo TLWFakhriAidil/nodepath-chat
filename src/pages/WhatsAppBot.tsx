@@ -91,7 +91,6 @@ const WhatsAppBot = () => {
 
   // Statistics
   const [stats, setStats] = useState({
-    count: 0,
     totalProspects: 0,
     activeFlows: 0,
     completed: 0,
@@ -157,14 +156,13 @@ const WhatsAppBot = () => {
       // Calculate statistics
       const records = data.records || [];
       setStats({
-        count: records.length,
         totalProspects: records.length,
-        activeFlows: records.filter((r: WasapBotRecord) => r.status === 'active' || r.execution_status === 'active').length,
-        completed: records.filter((r: WasapBotRecord) => r.status === 'completed' || r.execution_status === 'completed').length,
+        activeFlows: records.filter((r: WasapBotRecord) => r.current_node_id && r.current_node_id !== 'end').length,
+        completed: records.filter((r: WasapBotRecord) => r.current_node_id === 'end').length,
         packages: new Set(records.map((r: WasapBotRecord) => r.pakej).filter(Boolean)).size,
         addresses: records.filter((r: WasapBotRecord) => r.alamat).length,
         names: records.filter((r: WasapBotRecord) => r.nama).length,
-        phoneNumbers: records.filter((r: WasapBotRecord) => r.prospect_num || r.no_fon).length,
+        phoneNumbers: records.filter((r: WasapBotRecord) => r.prospect_num).length,
         payments: records.filter((r: WasapBotRecord) => r.cara_bayaran).length
       });
       
@@ -179,7 +177,7 @@ const WhatsAppBot = () => {
 
   // Fetch data on component mount only
   useEffect(() => {
-    if (has_devices) {
+    if (has_devices && device_ids.length > 0) {
       fetchWasapBotData();
     }
   }, []); // Only run once on mount
@@ -293,15 +291,6 @@ const WhatsAppBot = () => {
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Count</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.count}</div>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Prospects</CardTitle>

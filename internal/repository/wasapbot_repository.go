@@ -356,9 +356,10 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		"userID": userID,
 	}).Info("GetAllWasapBotData called")
 	
-	// Build query with filters - only select needed columns
+	// Build query with filters - select all needed columns
 	query := `
-		SELECT id_prospect, prospect_num, nama, stage, date_last, id_device
+		SELECT id_prospect, prospect_num, nama, stage, date_last, id_device,
+		       niche, status, alamat, pakej, cara_bayaran, tarikh_gaji, current_node_id
 		FROM wasapBot_nodepath
 		WHERE 1=1
 	`
@@ -369,12 +370,18 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 	
 	// Apply filters
 	if deviceFilter != "" && deviceFilter != "all" {
-		// Filter by id_device field
-		query += " AND id_device = ?"
-		countQuery += " AND id_device = ?"
-		args = append(args, deviceFilter)
-		countArgs = append(countArgs, deviceFilter)
-		logrus.WithField("device_filter_applied", deviceFilter).Info("Applying device filter for id_device")
+		// Handle multiple device IDs
+		devices := utils.SplitAndTrim(deviceFilter, ",")
+		if len(devices) > 0 {
+			placeholders := utils.GeneratePlaceholders(len(devices))
+			query += " AND id_device IN (" + placeholders + ")"
+			countQuery += " AND id_device IN (" + placeholders + ")"
+			for _, device := range devices {
+				args = append(args, device)
+				countArgs = append(countArgs, device)
+			}
+			logrus.WithField("device_filter_applied", devices).Info("Applying device filter for multiple devices")
+		}
 	}
 	
 	if stageFilter != "" && stageFilter != "all" {
@@ -438,11 +445,18 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 	for rows.Next() {
 		var (
 			idProspect int
-			prospectNum string
+			prospectNum sql.NullString
 			nama sql.NullString
 			stage sql.NullString
 			dateLast sql.NullString
-			deviceID string
+			deviceID sql.NullString
+			niche sql.NullString
+			status sql.NullString
+			alamat sql.NullString
+			pakej sql.NullString
+			caraBayaran sql.NullString
+			tarikhGaji sql.NullString
+			currentNodeID sql.NullString
 		)
 		
 		err := rows.Scan(
@@ -452,6 +466,13 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			&stage,
 			&dateLast,
 			&deviceID,
+			&niche,
+			&status,
+			&alamat,
+			&pakej,
+			&caraBayaran,
+			&tarikhGaji,
+			&currentNodeID,
 		)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan wasapBot row")
@@ -462,35 +483,27 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		
 		// Convert to plain map for JSON - match frontend expectations
 		record := map[string]interface{}{
-			"id": idProspect,
-			"device": deviceID,
-			"name": "",
-			"phone": prospectNum,
-			"school": "",  // Keep for compatibility
-			"package": "", // Keep for compatibility  
-			"status": "",  // Keep for compatibility
-			"stage": "",
-			"payment": "", // Keep for compatibility
-			"lastUpdated": "",
-		}
-		
-		// Handle null values properly
-		if nama.Valid {
-			record["name"] = nama.String
-		}
-		if stage.Valid {
-			record["stage"] = stage.String
-		}
-		if dateLast.Valid {
-			record["lastUpdated"] = dateLast.String
+			"id_prospect": idProspect,
+			"id_device": utils.GetStringValue(deviceID),
+			"nama": utils.GetStringValue(nama),
+			"prospect_num": utils.GetStringValue(prospectNum),
+			"niche": utils.GetStringValue(niche),
+			"status": utils.GetStringValue(status),
+			"stage": utils.GetStringValue(stage),
+			"alamat": utils.GetStringValue(alamat),
+			"pakej": utils.GetStringValue(pakej),
+			"cara_bayaran": utils.GetStringValue(caraBayaran),
+			"tarikh_gaji": utils.GetStringValue(tarikhGaji),
+			"current_node_id": utils.GetStringValue(currentNodeID),
+			"date_last": utils.GetStringValue(dateLast),
 		}
 		
 		results = append(results, record)
 		
 		logrus.WithFields(logrus.Fields{
 			"row_id": idProspect,
-			"device": deviceID,
-			"prospect_num": prospectNum,
+			"device": utils.GetStringValue(deviceID),
+			"prospect_num": utils.GetStringValue(prospectNum),
 		}).Debug("Added record to results")
 	}
 	
