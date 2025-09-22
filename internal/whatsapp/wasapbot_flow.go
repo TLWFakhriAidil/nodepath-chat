@@ -626,6 +626,12 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			WHERE id_device = ? AND stage = ?
 		`
 		
+		logrus.WithFields(logrus.Fields{
+			"id_device": deviceID,
+			"stage": stageValue,
+			"query": "SELECT FROM stageSetValue_nodepath WHERE id_device=? AND stage=?",
+		}).Debug("🔍 WASAPBOT: Querying stage configuration for specific device and stage")
+		
 		rows, err := db.Query(query, deviceID, stageValue)
 		if err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
@@ -1034,6 +1040,12 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 							FROM stageSetValue_nodepath 
 							WHERE id_device = ? AND stage = ?
 						`
+						logrus.WithFields(logrus.Fields{
+							"query": "WHERE id_device = ? AND stage = ?",
+							"id_device": deviceID,
+							"stage": stageVal,
+						}).Debug("🔎 WASAPBOT: Checking stageSetValue_nodepath with device AND stage")
+						
 						var configCount int
 						err := db.QueryRow(checkQuery, deviceID, stageVal).Scan(&configCount)
 						if err != nil {
@@ -1041,9 +1053,10 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 						} else if configCount > 0 {
 							logrus.WithFields(logrus.Fields{
 								"stage": stageVal,
-								"deviceID": deviceID,
+								"id_device": deviceID,
 								"configCount": configCount,
-							}).Info("✅ WASAPBOT: Found stage configuration in stageSetValue_nodepath, processing data")
+								"query_used": fmt.Sprintf("WHERE id_device='%s' AND stage='%s'", deviceID, stageVal),
+							}).Info("✅ WASAPBOT: Found stage configuration in stageSetValue_nodepath for this device and stage")
 							
 							// Process dynamic data storage with user input
 							stageUpdates := saveDataByStage(stageVal, content)
@@ -1057,8 +1070,9 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 						} else {
 							logrus.WithFields(logrus.Fields{
 								"stage": stageVal,
-								"deviceID": deviceID,
-							}).Info("⚠️ WASAPBOT: No stage configuration found in stageSetValue_nodepath, only saving stage value")
+								"id_device": deviceID,
+								"query_used": fmt.Sprintf("WHERE id_device='%s' AND stage='%s'", deviceID, stageVal),
+							}).Info("⚠️ WASAPBOT: No stage configuration found in stageSetValue_nodepath for this device and stage combination")
 							// Just save the stage, no dynamic data processing
 						}
 					}
