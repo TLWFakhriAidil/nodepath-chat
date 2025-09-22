@@ -589,6 +589,16 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		return ""
 	}
 	
+	// Helper function to get last user input from database
+	getLastUserInput := func(prospectID int64) string {
+		var lastInput sql.NullString
+		err := db.QueryRow(`SELECT conv_last FROM wasapBot_nodepath WHERE id_prospect = ?`, prospectID).Scan(&lastInput)
+		if err != nil || !lastInput.Valid {
+			return ""
+		}
+		return lastInput.String
+	}
+	
 	// Helper function to save data based on stage - DYNAMIC DATABASE-DRIVEN APPROACH
 	saveDataByStage := func(stageValue, userInput string) map[string]interface{} {
 		updates := make(map[string]interface{})
@@ -805,8 +815,52 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			case "stage":
 				// Update stage in database
 				if stageVal != "" {
+					// First update the stage in database
 					db.Exec(`UPDATE wasapBot_nodepath SET stage = ? WHERE id_prospect = ?`, stageVal, idProspect)
-					logrus.WithField("stage", stageVal).Info("🎯 WASAPBOT: Stage updated")
+					logrus.WithField("stage", stageVal).Info("🎯 WASAPBOT: Stage updated from node")
+					
+					// For WasapBot Exama flow, check stageSetValue_nodepath for dynamic data configuration
+					if flowName == "WasapBot Exama" {
+						logrus.WithFields(logrus.Fields{
+							"stage": stageVal,
+							"deviceID": deviceID,
+							"flowName": flowName,
+						}).Info("🔍 WASAPBOT: Checking stageSetValue_nodepath for stage configuration")
+						
+						// Query stageSetValue_nodepath to check if configuration exists
+						checkQuery := `
+							SELECT COUNT(*) 
+							FROM stageSetValue_nodepath 
+							WHERE id_device = ? AND stage = ?
+						`
+						var configCount int
+						err := db.QueryRow(checkQuery, deviceID, stageVal).Scan(&configCount)
+						if err != nil {
+							logrus.WithError(err).Warn("Failed to check stage configuration count")
+						} else if configCount > 0 {
+							logrus.WithFields(logrus.Fields{
+								"stage": stageVal,
+								"deviceID": deviceID,
+								"configCount": configCount,
+							}).Info("✅ WASAPBOT: Found stage configuration in stageSetValue_nodepath")
+							
+							// If user has provided input previously, use it for dynamic data storage
+							// Otherwise, we'll wait for user input
+							if lastUserInput := getLastUserInput(idProspect); lastUserInput != "" {
+								logrus.WithField("lastInput", lastUserInput).Info("📝 WASAPBOT: Processing stage data with last user input")
+								stageUpdates := saveDataByStage(stageVal, lastUserInput)
+								for k, v := range stageUpdates {
+									updateQuery := fmt.Sprintf("UPDATE wasapBot_nodepath SET %s = ? WHERE id_prospect = ?", k)
+									db.Exec(updateQuery, v, idProspect)
+								}
+							}
+						} else {
+							logrus.WithFields(logrus.Fields{
+								"stage": stageVal,
+								"deviceID": deviceID,
+							}).Info("⚠️ WASAPBOT: No stage configuration found in stageSetValue_nodepath")
+						}
+					}
 				}
 				
 			case "message":
@@ -955,20 +1009,56 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					"node": currentNode,
 					"type": nodeType,
 					"stage": stageVal,
-					"has_message": msg != "",
-					"has_media": mediaURL != "",
-				}).Debug("Processing node after user input")
+				}).Info("🎯 WASAPBOT: Processing next node")
 				
-				// Update current node
 				updates["current_node_id"] = currentNode
 				
-				// Handle different node types dynamically
 				switch nodeType {
 				case "stage":
-					// Update stage
-					if stageVal != "" {
-						updates["stage"] = stageVal
-						logrus.WithField("stage", stageVal).Info("🎯 WASAPBOT: Stage updated from node")
+					updates["stage"] = stageVal
+					logrus.WithField("stage", stageVal).Info("🎯 WASAPBOT: Stage updated from node")
+					
+					// For WasapBot Exama flow, process dynamic data storage when stage changes
+					if flowName == "WasapBot Exama" && stageVal != "" {
+						logrus.WithFields(logrus.Fields{
+							"stage": stageVal,
+							"deviceID": deviceID,
+							"userInput": content,
+						}).Info("🔍 WASAPBOT: Processing stage data for WasapBot Exama")
+						
+						// Check if stage configuration exists in stageSetValue_nodepath
+						checkQuery := `
+							SELECT COUNT(*) 
+							FROM stageSetValue_nodepath 
+							WHERE id_device = ? AND stage = ?
+						`
+						var configCount int
+						err := db.QueryRow(checkQuery, deviceID, stageVal).Scan(&configCount)
+						if err != nil {
+							logrus.WithError(err).Warn("Failed to check stage configuration count")
+						} else if configCount > 0 {
+							logrus.WithFields(logrus.Fields{
+								"stage": stageVal,
+								"deviceID": deviceID,
+								"configCount": configCount,
+							}).Info("✅ WASAPBOT: Found stage configuration in stageSetValue_nodepath, processing data")
+							
+							// Process dynamic data storage with user input
+							stageUpdates := saveDataByStage(stageVal, content)
+							for k, v := range stageUpdates {
+								updates[k] = v
+								logrus.WithFields(logrus.Fields{
+									"field": k,
+									"value": v,
+								}).Info("💾 WASAPBOT: Stage data field set")
+							}
+						} else {
+							logrus.WithFields(logrus.Fields{
+								"stage": stageVal,
+								"deviceID": deviceID,
+							}).Info("⚠️ WASAPBOT: No stage configuration found in stageSetValue_nodepath, only saving stage value")
+							// Just save the stage, no dynamic data processing
+						}
 					}
 					
 				case "message":
