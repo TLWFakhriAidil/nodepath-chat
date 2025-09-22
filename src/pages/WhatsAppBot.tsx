@@ -42,12 +42,21 @@ import {
 // WasapBot data interface
 interface WasapBotRecord {
   id_prospect: number;
+  id_device?: string;
+  nama?: string;
+  prospect_num?: string;
+  niche?: string;
+  status?: string;
+  stage?: string;
+  alamat?: string;
+  pakej?: string;
+  cara_bayaran?: string;
+  tarikh_gaji?: string;
   flow_reference?: string;
   execution_id?: string;
   execution_status?: string;
   flow_id?: string;
   current_node_id?: string;
-  prospect_num?: string;
   niche?: string;
   instance?: string;
   peringkat_sekolah?: string;
@@ -82,12 +91,15 @@ const WhatsAppBot = () => {
 
   // Statistics
   const [stats, setStats] = useState({
+    count: 0,
     totalProspects: 0,
-    activeExecutions: 0,
-    completedExecutions: 0,
-    uniqueSchools: 0,
-    uniquePackages: 0,
-    totalWithPhone: 0
+    activeFlows: 0,
+    completed: 0,
+    packages: 0,
+    addresses: 0,
+    names: 0,
+    phoneNumbers: 0,
+    payments: 0
   });
 
   /**
@@ -145,12 +157,15 @@ const WhatsAppBot = () => {
       // Calculate statistics
       const records = data.records || [];
       setStats({
+        count: records.length,
         totalProspects: records.length,
-        activeExecutions: records.filter((r: WasapBotRecord) => r.execution_status === 'active').length,
-        completedExecutions: records.filter((r: WasapBotRecord) => r.execution_status === 'completed').length,
-        uniqueSchools: new Set(records.map((r: WasapBotRecord) => r.peringkat_sekolah).filter(Boolean)).size,
-        uniquePackages: new Set(records.map((r: WasapBotRecord) => r.pakej).filter(Boolean)).size,
-        totalWithPhone: records.filter((r: WasapBotRecord) => r.no_fon).length
+        activeFlows: records.filter((r: WasapBotRecord) => r.status === 'active' || r.execution_status === 'active').length,
+        completed: records.filter((r: WasapBotRecord) => r.status === 'completed' || r.execution_status === 'completed').length,
+        packages: new Set(records.map((r: WasapBotRecord) => r.pakej).filter(Boolean)).size,
+        addresses: records.filter((r: WasapBotRecord) => r.alamat).length,
+        names: records.filter((r: WasapBotRecord) => r.nama).length,
+        phoneNumbers: records.filter((r: WasapBotRecord) => r.prospect_num || r.no_fon).length,
+        payments: records.filter((r: WasapBotRecord) => r.cara_bayaran).length
       });
       
     } catch (err) {
@@ -162,10 +177,23 @@ const WhatsAppBot = () => {
     }
   };
 
-  // Fetch data on component mount and when filters change
+  // Fetch data on component mount only
   useEffect(() => {
-    fetchWasapBotData();
-  }, [has_devices, device_ids, searchTerm, selectedStatus, selectedStage]);
+    if (has_devices) {
+      fetchWasapBotData();
+    }
+  }, []); // Only run once on mount
+
+  // Separate effect for filter changes (with debounce)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (has_devices) {
+        fetchWasapBotData();
+      }
+    }, 500); // Debounce 500ms
+    
+    return () => clearTimeout(timer);
+  }, [searchTerm, selectedStatus, selectedStage]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -175,6 +203,28 @@ const WhatsAppBot = () => {
   const handleExport = () => {
     // TODO: Implement CSV export
     console.log('Export WasapBot data');
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this record?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/wasapbot/data/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        // Refresh data after deletion
+        fetchWasapBotData();
+      } else {
+        console.error('Failed to delete record');
+      }
+    } catch (error) {
+      console.error('Error deleting record:', error);
+    }
   };
 
   // Filter data based on search term
@@ -242,12 +292,19 @@ const WhatsAppBot = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Prospects
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Count</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.count}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Prospects</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalProspects}</div>
@@ -256,56 +313,64 @@ const WhatsAppBot = () => {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Flows
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Active Flows</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.activeExecutions}</div>
+            <div className="text-2xl font-bold text-green-600">{stats.activeFlows}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Completed
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Complete</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.completedExecutions}</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Schools
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Package</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.uniqueSchools}</div>
+            <div className="text-2xl font-bold">{stats.packages}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Packages
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Address</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.uniquePackages}</div>
+            <div className="text-2xl font-bold">{stats.addresses}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              With Phone
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Name</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalWithPhone}</div>
+            <div className="text-2xl font-bold">{stats.names}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Phone Number</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.phoneNumbers}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Payment</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.payments}</div>
           </CardContent>
         </Card>
       </div>
@@ -376,63 +441,57 @@ const WhatsAppBot = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>No</TableHead>
+                    <TableHead>ID Device</TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>School</TableHead>
-                    <TableHead>Package</TableHead>
+                    <TableHead>Prospect Number</TableHead>
+                    <TableHead>Niche</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Stage</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead>Package</TableHead>
                     <TableHead>Payment</TableHead>
-                    <TableHead>Last Updated</TableHead>
+                    <TableHead>Payday Date</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8">
+                      <TableCell colSpan={12} className="text-center py-8">
                         <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                         <p className="text-muted-foreground">No WasapBot data available</p>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredData.map((record) => (
+                    filteredData.map((record, index) => (
                       <TableRow key={record.id_prospect}>
-                        <TableCell className="font-medium">
-                          {record.nama || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {record.no_fon || record.prospect_num || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {record.peringkat_sekolah || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {record.pakej ? (
-                            <Badge variant="outline">{record.pakej}</Badge>
-                          ) : '-'}
-                        </TableCell>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>{record.id_device || '-'}</TableCell>
+                        <TableCell>{record.nama || '-'}</TableCell>
+                        <TableCell>{record.prospect_num || '-'}</TableCell>
+                        <TableCell>{record.niche || '-'}</TableCell>
                         <TableCell>
                           <Badge variant={
-                            record.status === 'Customer' ? 'default' : 
-                            record.status === 'Lead' ? 'secondary' : 
-                            'outline'
+                            record.status === 'active' ? 'default' :
+                            record.status === 'completed' ? 'success' :
+                            'secondary'
                           }>
-                            {record.status || 'Prospek'}
+                            {record.status || '-'}
                           </Badge>
                         </TableCell>
+                        <TableCell>{record.stage || '-'}</TableCell>
+                        <TableCell>{record.alamat || '-'}</TableCell>
+                        <TableCell>{record.pakej || '-'}</TableCell>
+                        <TableCell>{record.cara_bayaran || '-'}</TableCell>
+                        <TableCell>{record.tarikh_gaji || '-'}</TableCell>
                         <TableCell>
-                          {record.stage || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {record.cara_bayaran || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {record.date_last || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button size="sm" variant="ghost">
-                            View
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(record.id_prospect)}
+                          >
+                            Delete
                           </Button>
                         </TableCell>
                       </TableRow>
