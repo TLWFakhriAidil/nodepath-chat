@@ -936,12 +936,13 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			return nil
 		}
 		
-		// Save data based on current stage
+		// DON'T process stage data here - wait until we know the NEXT stage
+		// Just log what stage we're coming FROM
 		if stage.Valid && stage.String != "" {
-			stageUpdates := saveDataByStage(stage.String, content)
-			for k, v := range stageUpdates {
-				updates[k] = v
-			}
+			logrus.WithFields(logrus.Fields{
+				"previous_stage": stage.String,
+				"user_input": content,
+			}).Info("📋 WASAPBOT: User replied while at stage (will process with next stage)")
 		}
 		
 		// Get current node and check its type
@@ -1021,10 +1022,11 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					// For WasapBot Exama flow, process dynamic data storage when stage changes
 					if flowName == "WasapBot Exama" && stageVal != "" {
 						logrus.WithFields(logrus.Fields{
-							"stage": stageVal,
+							"new_stage": stageVal,
 							"deviceID": deviceID,
 							"userInput": content,
-						}).Info("🔍 WASAPBOT: Processing stage data for WasapBot Exama")
+							"info": "Processing with NEW stage from node, not old stage from DB",
+						}).Info("🔍 WASAPBOT: Processing stage data for WasapBot Exama with CURRENT NODE stage")
 						
 						// Check if stage configuration exists in stageSetValue_nodepath
 						checkQuery := `
