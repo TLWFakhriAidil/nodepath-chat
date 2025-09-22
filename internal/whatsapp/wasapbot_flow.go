@@ -589,87 +589,155 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		return ""
 	}
 	
-	// Helper function to save data based on stage
+	// Helper function to save data based on stage - DYNAMIC DATABASE-DRIVEN APPROACH
 	saveDataByStage := func(stageValue, userInput string) map[string]interface{} {
 		updates := make(map[string]interface{})
-		upperInput := strings.ToUpper(strings.TrimSpace(userInput))
 		
-		// Check for payment method selection FIRST (CASH/COD/GAJI)
-		// Only save cara_bayaran, NOT stage - stage comes from stage nodes
-		if strings.Contains(upperInput, "CASH") {
-			updates["cara_bayaran"] = "Online Transfer"
-			// Don't set stage here - let stage node handle it
-			logrus.WithFields(logrus.Fields{
-				"user_input": userInput,
-				"cara_bayaran": "Online Transfer",
-			}).Info("💳 WASAPBOT: Payment method set to Online Transfer (CASH)")
-		} else if strings.Contains(upperInput, "COD") {
-			updates["cara_bayaran"] = "COD"
-			// Don't set stage here - let stage node handle it
-			logrus.WithFields(logrus.Fields{
-				"user_input": userInput,
-				"cara_bayaran": "COD",
-			}).Info("💳 WASAPBOT: Payment method set to COD")
-		} else if strings.Contains(upperInput, "GAJI") {
-			updates["cara_bayaran"] = "COD Time Gaji"
-			// Don't set stage here - let stage node handle it
-			logrus.WithFields(logrus.Fields{
-				"user_input": userInput,
-				"cara_bayaran": "COD Time Gaji",
-			}).Info("💳 WASAPBOT: Payment method set to COD Time Gaji")
+		// Only apply dynamic data storage for WasapBot Exama flow
+		if flowName != "WasapBot Exama" {
+			// For non-WasapBot Exama flows, return basic updates
+			updates["conv_last"] = userInput
+			return updates
 		}
 		
-		// Always save user input to conv_last regardless
+		logrus.WithFields(logrus.Fields{
+			"stage": stageValue,
+			"userInput": userInput,
+			"deviceID": deviceID,
+		}).Info("🔄 WASAPBOT: Processing dynamic stage data storage")
+		
+		// Always save user input to conv_last
 		updates["conv_last"] = userInput
 		
-		// Dynamic stage processing based on stage value FROM THE STAGE NODE
-		switch stageValue {
-		case "2", "3", "4", "5", "6":
-			// Numeric stages - save user input
-			// Conv_last is already set above
-			
-			// Special handling for package selection (stage 4 or 5)
-			if stageValue == "4" || stageValue == "5" {
-				if strings.Contains(upperInput, "1") {
-					updates["pakej"] = "1 Botol RM79"
-				} else if strings.Contains(upperInput, "2") {
-					updates["pakej"] = "2 Botol RM140 + Gift"
-				} else if strings.Contains(upperInput, "3") {
-					updates["pakej"] = "3 Botol RM190 + Gift"
-				} else if strings.Contains(upperInput, "4") {
-					updates["pakej"] = "4 Botol RM250 + Gift"
-				}
-			}
-			
-		case "alamat":
-			updates["alamat"] = userInput
-			
-		case "nama":
-			updates["nama"] = userInput
-			
-		case "no_fon":
-			updates["no_fon"] = userInput
-			
-		case "done":
-			// Just a marker stage, no special data to save
-			
-		case "Online Transfer", "Online Transfer (Done)":
-			// Only set payment method if not already set by CASH/COD/GAJI check
-			if _, exists := updates["cara_bayaran"]; !exists {
-				updates["cara_bayaran"] = "Online Transfer"
-			}
-			
-		case "Tarikh COD":
-			// Save the date they'll pay
-			updates["tarikh_gaji"] = userInput
-			
-		case "HABIS":
-			// Mark as customer when flow completes
-			updates["status"] = "Customer"
-			
-		default:
-			// For any other stage, no special handling needed
+		// Query stageSetValue_nodepath for dynamic configuration
+		query := `
+			SELECT type_inputData, inputHardCode, columnsData 
+			FROM stageSetValue_nodepath 
+			WHERE id_device = ? AND stage = ?
+		`
+		
+		rows, err := db.Query(query, deviceID, stageValue)
+		if err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"device": deviceID,
+				"stage": stageValue,
+			}).Warn("Failed to query stage configuration from stageSetValue_nodepath")
+			// Fall back to basic user input storage
+			return updates
 		}
+		defer rows.Close()
+		
+		// Process each stage configuration
+		hasConfig := false
+		for rows.Next() {
+			hasConfig = true
+			var typeInputData string
+			var inputHardCode sql.NullString
+			var columnsData string
+			
+			if err := rows.Scan(&typeInputData, &inputHardCode, &columnsData); err != nil {
+				logrus.WithError(err).Warn("Failed to scan stage config row")
+				continue
+			}
+			
+			// Determine the value to store based on type_inputData
+			var valueToStore string
+			if typeInputData == "Set" && inputHardCode.Valid {
+				// Use the hardcoded value from database
+				valueToStore = inputHardCode.String
+				logrus.WithFields(logrus.Fields{
+					"stage": stageValue,
+					"column": columnsData,
+					"hardcoded_value": valueToStore,
+					"type": "Set",
+				}).Info("📝 WASAPBOT: Using hardcoded value from stageSetValue_nodepath")
+			} else if typeInputData == "User Input" {
+				// Use the user's actual input
+				valueToStore = userInput
+				logrus.WithFields(logrus.Fields{
+					"stage": stageValue,
+					"column": columnsData,
+					"user_value": valueToStore,
+					"type": "User Input",
+				}).Info("📝 WASAPBOT: Using user input value")
+			} else {
+				// Unknown type, skip
+				logrus.WithFields(logrus.Fields{
+					"stage": stageValue,
+					"type": typeInputData,
+					"column": columnsData,
+				}).Warn("Unknown type_inputData in stageSetValue_nodepath, skipping")
+				continue
+			}
+			
+			// Map columnsData to actual database column names
+			// This mapping ensures columnsData values match wasapBot_nodepath columns
+			columnMap := map[string]string{
+				"nama":         "nama",
+				"alamat":       "alamat", 
+				"pakej":        "pakej",
+				"no_fon":       "no_fon",
+				"tarikh_gaji":  "tarikh_gaji",
+				"cara_bayaran": "cara_bayaran",
+				"status":       "status",
+				"niche":        "niche",
+				"umur":         "umur",
+				"kerja":        "kerja",
+				"sijil":        "sijil",
+				"alasan":       "alasan",
+				"nota":         "nota",
+			}
+			
+			// Store the value in the mapped column
+			if dbColumn, ok := columnMap[columnsData]; ok {
+				updates[dbColumn] = valueToStore
+				logrus.WithFields(logrus.Fields{
+					"stage": stageValue,
+					"column": dbColumn,
+					"value": valueToStore,
+					"mapping": columnsData + " -> " + dbColumn,
+				}).Info("💾 WASAPBOT: Dynamic data saved to wasapBot_nodepath column")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"stage": stageValue,
+					"column": columnsData,
+				}).Warn("Unknown column mapping in columnsData, skipping. Add mapping if needed.")
+			}
+		}
+		
+		// Log if no configuration was found
+		if !hasConfig {
+			logrus.WithFields(logrus.Fields{
+				"stage": stageValue,
+				"device": deviceID,
+			}).Info("📋 WASAPBOT: No stage configuration found in stageSetValue_nodepath, using fallback")
+			
+			// Fallback: Check for special completion stages
+			upperStage := strings.ToUpper(strings.TrimSpace(stageValue))
+			if upperStage == "HABIS" || upperStage == "COMPLETE" || upperStage == "DONE" || upperStage == "END" {
+				updates["status"] = "Customer"
+				updates["current_node_id"] = "end"
+				logrus.Info("✅ WASAPBOT: Marked as complete/customer based on stage name")
+			}
+			
+			// Fallback: Check for payment method keywords in user input (backward compatibility)
+			upperInput := strings.ToUpper(strings.TrimSpace(userInput))
+			if strings.Contains(upperInput, "CASH") {
+				updates["cara_bayaran"] = "Online Transfer"
+				logrus.Info("💳 WASAPBOT: Payment method set to Online Transfer (CASH keyword)")
+			} else if strings.Contains(upperInput, "COD") {
+				updates["cara_bayaran"] = "COD"
+				logrus.Info("💳 WASAPBOT: Payment method set to COD")
+			} else if strings.Contains(upperInput, "GAJI") {
+				updates["cara_bayaran"] = "COD Time Gaji"
+				logrus.Info("💳 WASAPBOT: Payment method set to COD Time Gaji")
+			}
+		}
+		
+		logrus.WithFields(logrus.Fields{
+			"stage": stageValue,
+			"updates": updates,
+		}).Info("📊 WASAPBOT: Stage data processing complete")
 		
 		return updates
 	}
