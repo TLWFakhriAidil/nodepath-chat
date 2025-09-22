@@ -14,10 +14,11 @@ import (
 
 // processWasapBotExamaFlow handles the WasapBot Exama flow with dynamic stage processing
 func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, senderName string, flow *models.ChatbotFlow) error {
+	flowName := flow.Name
 	logrus.WithFields(logrus.Fields{
 		"phone": phoneNumber,
 		"device": deviceID,
-		"flow": flow.Name,
+		"flow": flowName,
 		"message": content,
 	}).Info("🎯 WASAPBOT: Starting WasapBot Exama flow processing")
 	
@@ -85,6 +86,76 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 			}
 		}
 		return nil
+	}
+	
+	// Helper function to replace template messages for WasapBot Exama flow
+	replaceTemplateMessage := func(flowName string, originalMessage string) string {
+		// Only apply to WasapBot Exama flow
+		if flowName != "WasapBot Exama" {
+			return originalMessage
+		}
+		
+		// Get current prospect data from database
+		var nama, alamat, noFon, pakej, caraBayaran, tarikhGaji sql.NullString
+		err := db.QueryRow(`
+			SELECT nama, alamat, no_fon, pakej, cara_bayaran, tarikh_gaji 
+			FROM wasapBot_nodepath 
+			WHERE id_prospect = ?`, idProspect).Scan(&nama, &alamat, &noFon, &pakej, &caraBayaran, &tarikhGaji)
+		
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to get prospect data for template replacement")
+			return originalMessage // Return original if can't get data
+		}
+		
+		// Check for exact template matches and replace
+		switch strings.TrimSpace(originalMessage) {
+		case "SEND DETAIL PEMBELI":
+			if nama.Valid && alamat.Valid {
+				replaced := fmt.Sprintf("Pengesahan Detail:\nNAMA : %s\nALAMAT : %s\nNO FON : %s", 
+					nama.String, alamat.String, content) // Use current user input as phone number
+				logrus.WithFields(logrus.Fields{
+					"template": "SEND DETAIL PEMBELI",
+					"flow": flowName,
+				}).Info("📝 WASAPBOT: Replaced template with dynamic data")
+				return replaced
+			}
+			
+		case "DETAIL PEMBELI COD":
+			if nama.Valid && alamat.Valid && noFon.Valid && pakej.Valid {
+				replaced := fmt.Sprintf("Baik, ini ringkasan tempahan Cik yaa...\nNAMA : %s\nALAMAT : %s\nNO FONE : %s\nPAKEJ : %s\n*COD @ POSTAGE PERCUMA*\nCARA BAYARAN : COD",
+					nama.String, alamat.String, noFon.String, pakej.String)
+				logrus.WithFields(logrus.Fields{
+					"template": "DETAIL PEMBELI COD",
+					"flow": flowName,
+				}).Info("📝 WASAPBOT: Replaced template with dynamic data")
+				return replaced
+			}
+			
+		case "DETAIL PEMBELI GAJI":
+			if nama.Valid && alamat.Valid && noFon.Valid && pakej.Valid && caraBayaran.Valid {
+				replaced := fmt.Sprintf("Baik, ini ringkasan tempahan Cik yaa...\nNAMA : %s\nALAMAT : %s\nNO FONE : %s\nPAKEJ : %s\n*COD @ POSTAGE PERCUMA*\nCARA BAYARAN : %s\nTARIKH GAJI : %s",
+					nama.String, alamat.String, noFon.String, pakej.String, caraBayaran.String, content) // Use current user input as date
+				logrus.WithFields(logrus.Fields{
+					"template": "DETAIL PEMBELI GAJI",
+					"flow": flowName,
+				}).Info("📝 WASAPBOT: Replaced template with dynamic data")
+				return replaced
+			}
+			
+		case "DETAIL PEMBELI CASH":
+			if nama.Valid && alamat.Valid && noFon.Valid && pakej.Valid {
+				replaced := fmt.Sprintf("Baik, ini ringkasan tempahan Cik yaa...\nNAMA : %s\nALAMAT : %s\nNO FONE : %s\nPAKEJ : %s\n*COD @ POSTAGE PERCUMA*\nCARA BAYARAN : Online Transfer",
+					nama.String, alamat.String, noFon.String, pakej.String)
+				logrus.WithFields(logrus.Fields{
+					"template": "DETAIL PEMBELI CASH",
+					"flow": flowName,
+				}).Info("📝 WASAPBOT: Replaced template with dynamic data")
+				return replaced
+			}
+		}
+		
+		// If no exact match, return original message
+		return originalMessage
 	}
 	
 	// Helper function to process node and extract info
@@ -671,9 +742,10 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 				}
 				
 			case "message":
-				// Send message immediately
+				// Apply template replacement for WasapBot Exama flow
 				if msg != "" {
-					err := s.SendMessageFromDevice(deviceID, phoneNumber, msg)
+					replacedMsg := replaceTemplateMessage(flowName, msg)
+					err := s.SendMessageFromDevice(deviceID, phoneNumber, replacedMsg)
 					if err != nil {
 						logrus.WithError(err).Error("Failed to send message")
 					}
@@ -832,9 +904,10 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 					}
 					
 				case "message":
-					// Send message immediately
+					// Apply template replacement for WasapBot Exama flow
 					if msg != "" {
-						err := s.SendMessageFromDevice(deviceID, phoneNumber, msg)
+						replacedMsg := replaceTemplateMessage(flowName, msg)
+						err := s.SendMessageFromDevice(deviceID, phoneNumber, replacedMsg)
 						if err != nil {
 							logrus.WithError(err).Error("Failed to send message")
 						}
