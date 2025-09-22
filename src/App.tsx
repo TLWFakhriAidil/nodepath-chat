@@ -140,11 +140,7 @@ function AppContent() {
                         <Routes>
                           <Route path="/" element={<Dashboard />} />
                           <Route path="/device-settings" element={<DeviceSettings />} />
-                          <Route path="/set-stage" element={
-                            <DeviceRequiredWrapper>
-                              <SetStage />
-                            </DeviceRequiredWrapper>
-                          } />
+                          <Route path="/set-stage" element={<SetStage />} />
                           <Route path="/flow-builder" element={
                             <DeviceRequiredWrapper>
                               <FlowBuilder />

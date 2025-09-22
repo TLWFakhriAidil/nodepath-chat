@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2, Plus, RefreshCw, Edit } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useDevice } from '@/contexts/DeviceContext';
 
 interface StageSetValue {
   stageSetValue_id: number;
@@ -20,11 +22,14 @@ interface StageSetValue {
 
 export default function SetStage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { has_devices, checkDeviceStatus } = useDevice();
   const [stageValues, setStageValues] = useState<StageSetValue[]>([]);
   const [loading, setLoading] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<StageSetValue | null>(null);
+  const [hasCheckedDevices, setHasCheckedDevices] = useState(false);
   const [formData, setFormData] = useState({
     stage: '',
     type_inputData: 'User Input',
@@ -33,8 +38,36 @@ export default function SetStage() {
   });
 
   useEffect(() => {
-    fetchStageValues();
+    // Check device status on mount
+    const checkAndFetch = async () => {
+      await checkDeviceStatus();
+      setHasCheckedDevices(true);
+      
+      // If has devices, fetch stage values
+      if (has_devices) {
+        fetchStageValues();
+      }
+    };
+    
+    checkAndFetch();
   }, []);
+
+  useEffect(() => {
+    // Check if we need to redirect
+    if (hasCheckedDevices && !has_devices) {
+      toast({
+        title: "Device Required",
+        description: "Please add a device first to access this feature",
+        variant: "destructive",
+      });
+      
+      setTimeout(() => {
+        navigate('/device-settings');
+      }, 1500);
+    } else if (hasCheckedDevices && has_devices) {
+      fetchStageValues();
+    }
+  }, [hasCheckedDevices, has_devices, navigate, toast]);
 
   const fetchStageValues = async () => {
     setLoading(true);
@@ -222,6 +255,29 @@ export default function SetStage() {
       inputHardCode: ''
     });
   };
+
+  // Show loading or redirect message if still checking or no devices
+  if (!hasCheckedDevices) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Loading...</h2>
+          <p className="text-muted-foreground">Checking device status...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasCheckedDevices && !has_devices) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">Device Required</h2>
+          <p className="text-muted-foreground">Redirecting to Device Settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6">
