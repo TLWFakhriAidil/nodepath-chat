@@ -23,7 +23,7 @@ interface StageSetValue {
 export default function SetStage() {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { has_devices, checkDeviceStatus } = useDevice();
+  const { has_devices, checkDeviceStatus, device_ids } = useDevice();
   const [stageValues, setStageValues] = useState<StageSetValue[]>([]);
   const [loading, setLoading] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -31,6 +31,7 @@ export default function SetStage() {
   const [editingItem, setEditingItem] = useState<StageSetValue | null>(null);
   const [hasCheckedDevices, setHasCheckedDevices] = useState(false);
   const [formData, setFormData] = useState({
+    id_device: '',
     stage: '',
     type_inputData: 'User Input',
     columnsData: 'nama',
@@ -94,6 +95,15 @@ export default function SetStage() {
   };
 
   const handleSubmit = async () => {
+    if (!formData.id_device || formData.id_device.trim() === '') {
+      toast({
+        title: "Error",
+        description: "Please select a device",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!formData.stage || formData.stage.trim() === '') {
       toast({
         title: "Error",
@@ -120,7 +130,8 @@ export default function SetStage() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          stage: formData.stage.trim(),  // Send as string
+          id_device: formData.id_device,
+          stage: formData.stage.trim(),
           type_inputData: formData.type_inputData,
           columnsData: formData.columnsData,
           inputHardCode: formData.type_inputData === 'Set' ? formData.inputHardCode : null
@@ -152,6 +163,7 @@ export default function SetStage() {
   const handleEdit = (item: StageSetValue) => {
     setEditingItem(item);
     setFormData({
+      id_device: item.id_device,
       stage: item.stage.toString(),
       type_inputData: item.type_inputData,
       columnsData: item.columnsData,
@@ -249,6 +261,7 @@ export default function SetStage() {
 
   const resetForm = () => {
     setFormData({
+      id_device: '',
       stage: '',
       type_inputData: 'User Input',
       columnsData: 'nama',
@@ -311,6 +324,26 @@ export default function SetStage() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="device" className="text-right">
+                        Device <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={formData.id_device}
+                        onValueChange={(value) => setFormData({ ...formData, id_device: value })}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select a device" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {device_ids.map((deviceId) => (
+                            <SelectItem key={deviceId} value={deviceId}>
+                              {deviceId}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="stage" className="text-right">
                         Stage
@@ -404,6 +437,19 @@ export default function SetStage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-device" className="text-right">
+                Device
+              </Label>
+              <Input
+                id="edit-device"
+                type="text"
+                className="col-span-3"
+                value={formData.id_device}
+                disabled
+                title="Device cannot be changed"
+              />
+            </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit-stage" className="text-right">
                 Stage
