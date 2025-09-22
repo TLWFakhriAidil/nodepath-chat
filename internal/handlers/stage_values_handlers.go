@@ -12,7 +12,7 @@ import (
 type StageSetValue struct {
 	StageSetValueID int            `json:"stageSetValue_id"`
 	IDDevice        string         `json:"id_device"`
-	Stage           int            `json:"stage"`
+	Stage           string         `json:"stage"` // Changed from int to string
 	TypeInputData   string         `json:"type_inputData"`
 	ColumnsData     string         `json:"columnsData"`
 	InputHardCode   sql.NullString `json:"inputHardCode"`
@@ -120,7 +120,7 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 
 	var req struct {
 		IDDevice      string  `json:"id_device"`
-		Stage         int     `json:"stage"`
+		Stage         string  `json:"stage"`  // Changed from int to string
 		TypeInputData string  `json:"type_inputData"`
 		ColumnsData   string  `json:"columnsData"`
 		InputHardCode *string `json:"inputHardCode"`
@@ -151,7 +151,7 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if req.Stage == 0 || req.TypeInputData == "" || req.ColumnsData == "" {
+	if req.Stage == "" || req.TypeInputData == "" || req.ColumnsData == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Missing required fields",
 		})
@@ -179,17 +179,29 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 		CREATE TABLE IF NOT EXISTS stageSetValue_nodepath (
 			stageSetValue_id INT AUTO_INCREMENT PRIMARY KEY,
 			id_device VARCHAR(255),
-			stage INT,
+			stage VARCHAR(255),
 			type_inputData VARCHAR(255),
 			columnsData VARCHAR(255),
 			inputHardCode VARCHAR(255),
-			INDEX idx_device (id_device)
+			INDEX idx_device (id_device),
+			INDEX idx_stage (stage)
 		)
 	`
 	_, err = h.db.Exec(createTableQuery)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create stage values table")
 		// Continue anyway, table might already exist
+	}
+
+	// Try to alter existing table if stage column is INT
+	alterTableQuery := `
+		ALTER TABLE stageSetValue_nodepath 
+		MODIFY COLUMN stage VARCHAR(255)
+	`
+	_, err = h.db.Exec(alterTableQuery)
+	if err != nil {
+		// This is expected if column is already VARCHAR or table doesn't exist
+		logrus.Debug("Stage column might already be VARCHAR or table doesn't exist")
 	}
 
 	// Insert the new stage value
@@ -239,7 +251,7 @@ func (h *Handlers) UpdateStageValue(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Stage         int     `json:"stage"`
+		Stage         string  `json:"stage"`  // Changed from int to string
 		TypeInputData string  `json:"type_inputData"`
 		ColumnsData   string  `json:"columnsData"`
 		InputHardCode *string `json:"inputHardCode"`

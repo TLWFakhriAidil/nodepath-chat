@@ -12,7 +12,7 @@ import { Trash2, Plus, RefreshCw, Edit } from 'lucide-react';
 interface StageSetValue {
   stageSetValue_id: number;
   id_device: string;
-  stage: number;
+  stage: string;  // Changed from number to string
   type_inputData: 'User Input' | 'Set';
   columnsData: string;
   inputHardCode: string | null;
@@ -61,10 +61,10 @@ export default function SetStage() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.stage || isNaN(Number(formData.stage))) {
+    if (!formData.stage || formData.stage.trim() === '') {
       toast({
         title: "Error",
-        description: "Stage must be a valid number",
+        description: "Stage is required",
         variant: "destructive"
       });
       return;
@@ -87,7 +87,7 @@ export default function SetStage() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          stage: Number(formData.stage),
+          stage: formData.stage.trim(),  // Send as string
           type_inputData: formData.type_inputData,
           columnsData: formData.columnsData,
           inputHardCode: formData.type_inputData === 'Set' ? formData.inputHardCode : null
@@ -130,10 +130,10 @@ export default function SetStage() {
   const handleUpdate = async () => {
     if (!editingItem) return;
 
-    if (!formData.stage || isNaN(Number(formData.stage))) {
+    if (!formData.stage || formData.stage.trim() === '') {
       toast({
         title: "Error",
-        description: "Stage must be a valid number",
+        description: "Stage is required",
         variant: "destructive"
       });
       return;
@@ -156,7 +156,7 @@ export default function SetStage() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          stage: Number(formData.stage),
+          stage: formData.stage.trim(),  // Send as string
           type_inputData: formData.type_inputData,
           columnsData: formData.columnsData,
           inputHardCode: formData.type_inputData === 'Set' ? formData.inputHardCode : null
@@ -261,11 +261,11 @@ export default function SetStage() {
                       </Label>
                       <Input
                         id="stage"
-                        type="number"
+                        type="text"
                         className="col-span-3"
                         value={formData.stage}
                         onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
-                        placeholder="Enter stage number"
+                        placeholder="Enter stage (e.g., S1, Stage1, 1)"
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
@@ -354,11 +354,11 @@ export default function SetStage() {
               </Label>
               <Input
                 id="edit-stage"
-                type="number"
+                type="text"
                 className="col-span-3"
                 value={formData.stage}
                 onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
-                placeholder="Enter stage number"
+                placeholder="Enter stage (e.g., S1, Stage1, 1)"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
