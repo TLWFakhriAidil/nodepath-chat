@@ -10,12 +10,12 @@ import (
 
 // StageSetValue represents the stage value configuration
 type StageSetValue struct {
-	StageSetValueID int            `json:"stageSetValue_id"`
-	IDDevice        string         `json:"id_device"`
-	Stage           string         `json:"stage"` // Changed from int to string
-	TypeInputData   string         `json:"type_inputData"`
-	ColumnsData     string         `json:"columnsData"`
-	InputHardCode   sql.NullString `json:"inputHardCode"`
+	StageSetValueID int     `json:"stageSetValue_id"`
+	IDDevice        string  `json:"id_device"`
+	Stage           string  `json:"stage"`
+	TypeInputData   string  `json:"type_inputData"`
+	ColumnsData     string  `json:"columnsData"`
+	InputHardCode   *string `json:"inputHardCode"` // Changed to *string to properly handle null
 }
 
 // GetAllStageValues gets all stage values for authenticated user's devices
@@ -92,10 +92,17 @@ func (h *Handlers) GetAllStageValues(c *fiber.Ctx) error {
 	var stageValues []StageSetValue
 	for rows.Next() {
 		var sv StageSetValue
-		err := rows.Scan(&sv.StageSetValueID, &sv.IDDevice, &sv.Stage, &sv.TypeInputData, &sv.ColumnsData, &sv.InputHardCode)
+		var inputHardCode sql.NullString
+		err := rows.Scan(&sv.StageSetValueID, &sv.IDDevice, &sv.Stage, &sv.TypeInputData, &sv.ColumnsData, &inputHardCode)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan stage value")
 			continue
+		}
+		// Convert sql.NullString to *string
+		if inputHardCode.Valid {
+			sv.InputHardCode = &inputHardCode.String
+		} else {
+			sv.InputHardCode = nil
 		}
 		stageValues = append(stageValues, sv)
 	}
