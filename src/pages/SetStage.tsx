@@ -405,6 +405,7 @@ export default function SetStage() {
                           <SelectItem value="pakej">Pakej</SelectItem>
                           <SelectItem value="no_fon">No Fon</SelectItem>
                           <SelectItem value="tarikh_gaji">Tarikh Gaji</SelectItem>
+                          <SelectItem value="cara_bayaran">Cara Bayaran</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -511,6 +512,7 @@ export default function SetStage() {
                   <SelectItem value="pakej">Pakej</SelectItem>
                   <SelectItem value="no_fon">No Fon</SelectItem>
                   <SelectItem value="tarikh_gaji">Tarikh Gaji</SelectItem>
+                  <SelectItem value="cara_bayaran">Cara Bayaran</SelectItem>
                 </SelectContent>
               </Select>
             </div>
