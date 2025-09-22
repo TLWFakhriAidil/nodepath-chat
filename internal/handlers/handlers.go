@@ -250,8 +250,9 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Stage Values routes (protected with authentication)
 	stageValues := api.Group("/stage-values")
 	stageValues.Use(h.authHandlers.AuthMiddleware())
-	stageValues.Get("/:deviceId", h.GetStageValuesByDevice)
+	stageValues.Get("/", h.GetAllStageValues)
 	stageValues.Post("/", h.CreateStageValue)
+	stageValues.Put("/:id", h.UpdateStageValue)
 	stageValues.Delete("/:id", h.DeleteStageValue)
 
 	// Authentication routes

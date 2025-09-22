@@ -18,12 +18,13 @@ type StageSetValue struct {
 	InputHardCode   sql.NullString `json:"inputHardCode"`
 }
 
-// GetStageValuesByDevice gets all stage values for a specific device
-func (h *Handlers) GetStageValuesByDevice(c *fiber.Ctx) error {
-	deviceID := c.Params("deviceId")
-	if deviceID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Device ID is required",
+// GetAllStageValues gets all stage values for authenticated user's devices
+func (h *Handlers) GetAllStageValues(c *fiber.Ctx) error {
+	// Get user ID from auth context
+	userID := c.Locals("userID")
+	if userID == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User not authenticated",
 		})
 	}
 
@@ -35,14 +36,51 @@ func (h *Handlers) GetStageValuesByDevice(c *fiber.Ctx) error {
 		})
 	}
 
+	// First, get all devices for this user
+	deviceQuery := `
+		SELECT id_device FROM device_setting_nodepath WHERE user_id = ?
+	`
+	deviceRows, err := h.db.Query(deviceQuery, userID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to fetch user devices")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch user devices",
+		})
+	}
+	defer deviceRows.Close()
+
+	var deviceIDs []string
+	for deviceRows.Next() {
+		var deviceID string
+		if err := deviceRows.Scan(&deviceID); err != nil {
+			continue
+		}
+		deviceIDs = append(deviceIDs, deviceID)
+	}
+
+	if len(deviceIDs) == 0 {
+		// Return empty array if user has no devices
+		return c.JSON([]StageSetValue{})
+	}
+
+	// Build query for stage values
 	query := `
 		SELECT stageSetValue_id, id_device, stage, type_inputData, columnsData, inputHardCode
 		FROM stageSetValue_nodepath
-		WHERE id_device = ?
-		ORDER BY stage ASC
-	`
+		WHERE id_device IN (`
+	
+	// Add placeholders for IN clause
+	args := make([]interface{}, len(deviceIDs))
+	for i, id := range deviceIDs {
+		if i > 0 {
+			query += ","
+		}
+		query += "?"
+		args[i] = id
+	}
+	query += ") ORDER BY id_device, stage ASC"
 
-	rows, err := h.db.Query(query, deviceID)
+	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to fetch stage values")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -72,6 +110,14 @@ func (h *Handlers) GetStageValuesByDevice(c *fiber.Ctx) error {
 
 // CreateStageValue creates a new stage value configuration
 func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
+	// Get user ID from auth context
+	userID := c.Locals("userID")
+	if userID == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User not authenticated",
+		})
+	}
+
 	var req struct {
 		IDDevice      string  `json:"id_device"`
 		Stage         int     `json:"stage"`
@@ -86,10 +132,37 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get device from context if available
+	deviceID := c.Locals("selectedDevice")
+	if deviceID != nil {
+		req.IDDevice = deviceID.(string)
+	}
+
+	// If no device ID provided, get first device for user
+	if req.IDDevice == "" {
+		var firstDevice string
+		err := h.db.QueryRow("SELECT id_device FROM device_setting_nodepath WHERE user_id = ? LIMIT 1", userID).Scan(&firstDevice)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "No device found for user",
+			})
+		}
+		req.IDDevice = firstDevice
+	}
+
 	// Validate required fields
-	if req.IDDevice == "" || req.Stage == 0 || req.TypeInputData == "" || req.ColumnsData == "" {
+	if req.Stage == 0 || req.TypeInputData == "" || req.ColumnsData == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Missing required fields",
+		})
+	}
+
+	// Verify user owns the device
+	var count int
+	err := h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", req.IDDevice, userID).Scan(&count)
+	if err != nil || count == 0 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "You don't have permission to modify this device",
 		})
 	}
 
@@ -113,7 +186,7 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 			INDEX idx_device (id_device)
 		)
 	`
-	_, err := h.db.Exec(createTableQuery)
+	_, err = h.db.Exec(createTableQuery)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create stage values table")
 		// Continue anyway, table might already exist
@@ -141,8 +214,110 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 	})
 }
 
+// UpdateStageValue updates an existing stage value configuration
+func (h *Handlers) UpdateStageValue(c *fiber.Ctx) error {
+	// Get user ID from auth context
+	userID := c.Locals("userID")
+	if userID == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User not authenticated",
+		})
+	}
+
+	idStr := c.Params("id")
+	if idStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Stage value ID is required",
+		})
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid stage value ID",
+		})
+	}
+
+	var req struct {
+		Stage         int     `json:"stage"`
+		TypeInputData string  `json:"type_inputData"`
+		ColumnsData   string  `json:"columnsData"`
+		InputHardCode *string `json:"inputHardCode"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	// Check if database is available
+	if h.db == nil {
+		logrus.Warn("Database not available for stage values")
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "Database service unavailable",
+		})
+	}
+
+	// First check if the stage value exists and get its device ID
+	var deviceID string
+	err = h.db.QueryRow("SELECT id_device FROM stageSetValue_nodepath WHERE stageSetValue_id = ?", id).Scan(&deviceID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Stage value not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch stage value",
+		})
+	}
+
+	// Verify user owns the device
+	var count int
+	err = h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", deviceID, userID).Scan(&count)
+	if err != nil || count == 0 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "You don't have permission to modify this stage value",
+		})
+	}
+
+	// Update the stage value
+	updateQuery := `
+		UPDATE stageSetValue_nodepath 
+		SET stage = ?, type_inputData = ?, columnsData = ?, inputHardCode = ?
+		WHERE stageSetValue_id = ?
+	`
+	result, err := h.db.Exec(updateQuery, req.Stage, req.TypeInputData, req.ColumnsData, req.InputHardCode, id)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to update stage value")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to update stage value",
+		})
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Stage value not found",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Stage value updated successfully",
+	})
+}
+
 // DeleteStageValue deletes a stage value configuration
 func (h *Handlers) DeleteStageValue(c *fiber.Ctx) error {
+	// Get user ID from auth context
+	userID := c.Locals("userID")
+	if userID == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User not authenticated",
+		})
+	}
+
 	idStr := c.Params("id")
 	if idStr == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -162,6 +337,29 @@ func (h *Handlers) DeleteStageValue(c *fiber.Ctx) error {
 		logrus.Warn("Database not available for stage values")
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"error": "Database service unavailable",
+		})
+	}
+
+	// First check if the stage value exists and get its device ID
+	var deviceID string
+	err = h.db.QueryRow("SELECT id_device FROM stageSetValue_nodepath WHERE stageSetValue_id = ?", id).Scan(&deviceID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Stage value not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch stage value",
+		})
+	}
+
+	// Verify user owns the device
+	var count int
+	err = h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", deviceID, userID).Scan(&count)
+	if err != nil || count == 0 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "You don't have permission to delete this stage value",
 		})
 	}
 
