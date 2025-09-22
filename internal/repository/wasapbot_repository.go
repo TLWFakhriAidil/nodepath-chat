@@ -359,7 +359,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 	// Build query with filters - select all needed columns
 	query := `
 		SELECT id_prospect, prospect_num, nama, stage, date_last, id_device,
-		       niche, status, alamat, pakej, cara_bayaran, tarikh_gaji, current_node_id
+		       niche, status, alamat, pakej, cara_bayaran, tarikh_gaji, current_node_id, no_fon
 		FROM wasapBot_nodepath
 		WHERE 1=1
 	`
@@ -457,6 +457,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			caraBayaran sql.NullString
 			tarikhGaji sql.NullString
 			currentNodeID sql.NullString
+			noFon sql.NullString
 		)
 		
 		err := rows.Scan(
@@ -473,6 +474,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			&caraBayaran,
 			&tarikhGaji,
 			&currentNodeID,
+			&noFon,
 		)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan wasapBot row")
@@ -495,6 +497,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			"cara_bayaran": utils.GetStringValue(caraBayaran),
 			"tarikh_gaji": utils.GetStringValue(tarikhGaji),
 			"current_node_id": utils.GetStringValue(currentNodeID),
+			"no_fon": utils.GetStringValue(noFon),
 			"date_last": utils.GetStringValue(dateLast),
 		}
 		

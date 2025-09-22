@@ -52,6 +52,7 @@ interface WasapBotRecord {
   pakej?: string;
   cara_bayaran?: string;
   tarikh_gaji?: string;
+  no_fon?: string;
   flow_reference?: string;
   execution_id?: string;
   execution_status?: string;
@@ -97,7 +98,7 @@ const WhatsAppBot = () => {
     packages: 0,
     addresses: 0,
     names: 0,
-    phoneNumbers: 0,
+    noPhone: 0,
     payments: 0
   });
 
@@ -162,7 +163,7 @@ const WhatsAppBot = () => {
         packages: new Set(records.map((r: WasapBotRecord) => r.pakej).filter(Boolean)).size,
         addresses: records.filter((r: WasapBotRecord) => r.alamat).length,
         names: records.filter((r: WasapBotRecord) => r.nama).length,
-        phoneNumbers: records.filter((r: WasapBotRecord) => r.prospect_num).length,
+        noPhone: records.filter((r: WasapBotRecord) => r.no_fon).length,
         payments: records.filter((r: WasapBotRecord) => r.cara_bayaran).length
       });
       
@@ -347,10 +348,10 @@ const WhatsAppBot = () => {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Phone Number</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">No Phone</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.phoneNumbers}</div>
+            <div className="text-2xl font-bold">{stats.noPhone}</div>
           </CardContent>
         </Card>
 
@@ -436,6 +437,7 @@ const WhatsAppBot = () => {
                     <TableHead>Prospect Number</TableHead>
                     <TableHead>Niche</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>No Phone</TableHead>
                     <TableHead>Stage</TableHead>
                     <TableHead>Address</TableHead>
                     <TableHead>Package</TableHead>
@@ -447,7 +449,7 @@ const WhatsAppBot = () => {
                 <TableBody>
                   {filteredData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={12} className="text-center py-8">
+                      <TableCell colSpan={13} className="text-center py-8">
                         <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                         <p className="text-muted-foreground">No WasapBot data available</p>
                       </TableCell>
@@ -469,6 +471,7 @@ const WhatsAppBot = () => {
                             {record.status || '-'}
                           </Badge>
                         </TableCell>
+                        <TableCell>{record.no_fon || '-'}</TableCell>
                         <TableCell>{record.stage || '-'}</TableCell>
                         <TableCell>{record.alamat || '-'}</TableCell>
                         <TableCell>{record.pakej || '-'}</TableCell>
