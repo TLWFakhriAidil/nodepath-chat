@@ -629,7 +629,8 @@ func (s *aiWhatsappService) SetHumanMode(prospectNum, idDevice string, human boo
 			ProspectNum: prospectNum,
 			IDDevice: idDevice,
 			Human: humanValue,
-			Stage: sql.NullString{String: "Prospek", Valid: true},
+			Stage: sql.NullString{}, // Explicitly NULL, not "Prospek"
+			Intro: "", // Will be converted to NULL in CreateAIWhatsapp
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
@@ -1201,9 +1202,25 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 			convCurrentValue = nil
 		}
 		
+		// Handle Stage as sql.NullString - MUST be NULL not empty string
+		var stageValue interface{}
+		if newAIConv.Stage.Valid && newAIConv.Stage.String != "" {
+			stageValue = newAIConv.Stage.String
+		} else {
+			stageValue = nil
+		}
+		
+		// Handle Intro properly - should be NULL if empty, not empty string
+		var introValue interface{}
+		if newAIConv.Intro != "" {
+			introValue = newAIConv.Intro
+		} else {
+			introValue = nil
+		}
+		
 		_, err := tx.Exec(query,
-			newAIConv.IDProspect, newAIConv.IDDevice, newAIConv.ProspectNum, newAIConv.Stage, newAIConv.DateOrder, nil,
-			convCurrentValue, newAIConv.Human, newAIConv.Niche, newAIConv.Intro,
+			newAIConv.IDProspect, newAIConv.IDDevice, newAIConv.ProspectNum, stageValue, newAIConv.DateOrder, nil,
+			convCurrentValue, newAIConv.Human, newAIConv.Niche, introValue,
 			newAIConv.Balas, newAIConv.KeywordIklan, newAIConv.Marketer, newAIConv.UpdateToday,
 			newAIConv.CreatedAt, newAIConv.UpdatedAt,
 		)

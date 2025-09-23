@@ -162,10 +162,26 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	} else {
 		prospectNameValue = nil
 	}
+	
+	// Handle Stage as sql.NullString - MUST be NULL not empty string
+	var stageValue interface{}
+	if ai.Stage.Valid && ai.Stage.String != "" {
+		stageValue = ai.Stage.String
+	} else {
+		stageValue = nil
+	}
+	
+	// Handle Intro properly - should be NULL if empty, not empty string
+	var introValue interface{}
+	if ai.Intro != "" {
+		introValue = ai.Intro
+	} else {
+		introValue = nil
+	}
 
 	_, err := r.db.Exec(query,
-		ai.IDDevice, ai.ProspectNum, prospectNameValue, ai.Stage, ai.DateOrder, convLastValue,
-		convCurrentValue, ai.Human, ai.Niche, ai.Intro,
+		ai.IDDevice, ai.ProspectNum, prospectNameValue, stageValue, ai.DateOrder, convLastValue,
+		convCurrentValue, ai.Human, ai.Niche, introValue,
 		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		flowReferenceValue, executionIDValue, executionStatusValue,

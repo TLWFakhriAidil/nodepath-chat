@@ -22,6 +22,15 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 		"message": content,
 	}).Info("🎯 WASAPBOT: Starting WasapBot Exama flow processing")
 	
+	// CRITICAL: Phone number validation - must be <= 13 digits OR start with 601
+	if len(phoneNumber) > 13 && !strings.HasPrefix(phoneNumber, "601") {
+		logrus.WithFields(logrus.Fields{
+			"phone": phoneNumber,
+			"reason": "Invalid phone number format (>13 digits and not 601 prefix)",
+		}).Warn("🚫 WASAPBOT: Phone validation failed, terminating without saving")
+		return nil // Terminate immediately without any database operations
+	}
+	
 	// Direct database access for WasapBot
 	db := s.flowService.GetDB()
 	if db == nil {
