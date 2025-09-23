@@ -206,7 +206,7 @@ type AIWhatsapp struct {
 	Niche           string          `json:"niche" db:"niche"`
 	ProspectName    sql.NullString  `json:"prospect_name" db:"prospect_name"`
 	ProspectNum     string          `json:"prospect_num" db:"prospect_num"`
-	Intro           string          `json:"intro" db:"intro"`
+	Intro           sql.NullString  `json:"intro" db:"intro"`                      // Changed to sql.NullString to handle NULL values
 	Stage           sql.NullString  `json:"stage" db:"stage"`
 	ConvLast        sql.NullString  `json:"conv_last" db:"conv_last"`             // Changed from json.RawMessage to sql.NullString for TEXT field
 	ConvCurrent     sql.NullString  `json:"conv_current" db:"conv_current"`

@@ -173,8 +173,8 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	
 	// Handle Intro properly - should be NULL if empty, not empty string
 	var introValue interface{}
-	if ai.Intro != "" {
-		introValue = ai.Intro
+	if ai.Intro.Valid && ai.Intro.String != "" {
+		introValue = ai.Intro.String
 	} else {
 		introValue = nil
 	}

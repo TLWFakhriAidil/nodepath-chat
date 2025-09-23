@@ -110,6 +110,14 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 	}
 	
 	// Default to ai_whatsapp_nodepath
+	// Set intro based on flow name
+	var introText string
+	if flow.Name == "Chatbot AI" {
+		introText = "Welcome to Chatbot AI flow"
+	} else {
+		introText = "Welcome" // Default intro for other flows
+	}
+	
 	aiWhatsapp := &models.AIWhatsapp{
 		FlowReference:   sql.NullString{String: flowID, Valid: true},
 		ExecutionID:     sql.NullString{String: executionID, Valid: true},
@@ -120,6 +128,7 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 		ProspectNum:     phoneNumber,
 		IDDevice:        deviceID,
 		ProspectName:    sql.NullString{String: prospectName, Valid: true},
+		Intro:           sql.NullString{String: introText, Valid: true}, // Set intro based on flow
 		Niche:           flow.Niche,
 		Stage:           sql.NullString{String: "welcome", Valid: true},
 		Human:           0,

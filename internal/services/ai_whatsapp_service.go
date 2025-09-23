@@ -631,7 +631,7 @@ func (s *aiWhatsappService) SetHumanMode(prospectNum, idDevice string, human boo
 			IDDevice: idDevice,
 			Human: humanValue,
 			Stage: sql.NullString{}, // Explicitly NULL, not "Prospek"
-			Intro: "", // Will be converted to NULL in CreateAIWhatsapp
+			Intro: sql.NullString{String: "Welcome to Chatbot AI flow", Valid: true}, // Set intro
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
@@ -1170,6 +1170,12 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		"niche":        niche,
 	}).Info("Creating new AI WhatsApp record for prospect tracking")
 	
+	// Determine intro based on niche/flow type
+	introText := "Welcome to Chatbot AI flow" // Default for Chatbot AI
+	if niche != "Chatbot AI" && niche != "" {
+		introText = fmt.Sprintf("Welcome to %s flow", niche)
+	}
+	
 	// Use transaction to ensure atomicity of AI record creation and conversation logging
 	return utils.WithTransaction(s.aiRepo.GetDB(), func(tx *sql.Tx) error {
 		// Create new AI WhatsApp conversation record
@@ -1179,7 +1185,8 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 			ProspectNum: prospectNum,
 			ProspectName: sql.NullString{String: "Sis", Valid: true}, // Default name to "Sis"
 			Stage:       sql.NullString{String: "welcome", Valid: true}, // Default initial stage
-			Human:       0,         // AI is active by default
+			Intro:       sql.NullString{String: introText, Valid: true}, // Use dynamic intro based on flow type
+			Human:       0,         // AI is active by default (0 = AI, 1 = human)
 			Niche:       niche,
 			DateOrder:   &now,
 			CreatedAt:   now,
@@ -1214,8 +1221,8 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		
 		// Handle Intro properly - should be NULL if empty, not empty string
 		var introValue interface{}
-		if newAIConv.Intro != "" {
-			introValue = newAIConv.Intro
+		if newAIConv.Intro.Valid && newAIConv.Intro.String != "" {
+			introValue = newAIConv.Intro.String
 		} else {
 			introValue = nil
 		}
@@ -1344,7 +1351,7 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 			Stage:           sql.NullString{String: "flow_start", Valid: true},
 			Human:           0,
 			DateOrder:       &now,
-			Intro:           flowIntro,  // Set intro from flow data
+			Intro:           sql.NullString{String: flowIntro, Valid: flowIntro != ""}, // Set intro from flow data
 			Niche:           flowNiche,  // Set niche from flow data
 			FlowReference:   sql.NullString{String: flowReference, Valid: true},
 			// New flow tracking fields
@@ -1366,7 +1373,7 @@ func (s *aiWhatsappService) StartFlowExecution(prospectNum, idDevice, flowRefere
 	} else {
 		// Update existing record with flow execution data
 		// First update intro and niche if they are empty (preserve existing values)
-		if aiConv.Intro == "" && flowIntro != "" {
+		if (!aiConv.Intro.Valid || aiConv.Intro.String == "") && flowIntro != "" {
 			// Update intro field separately to preserve other data
 			query := `UPDATE ai_whatsapp_nodepath SET intro = ?, updated_at = ? WHERE prospect_num = ? AND id_device = ?`
 			_, err := s.aiRepo.GetDB().Exec(query, flowIntro, now, prospectNum, idDevice)
