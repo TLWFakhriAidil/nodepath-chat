@@ -626,10 +626,12 @@ func (s *aiWhatsappService) SetHumanMode(prospectNum, idDevice string, human boo
 	if aiConv == nil {
 		// Create a new record if it doesn't exist
 		aiConv = &models.AIWhatsapp{
-			ProspectNum: sql.NullString{String: prospectNum, Valid: true},
-			IdDevice: sql.NullString{String: idDevice, Valid: true},
+			ProspectNum: prospectNum,
+			IDDevice: idDevice,
 			Human: humanValue,
-			Status: sql.NullString{String: "Prospek", Valid: true},
+			Stage: sql.NullString{String: "Prospek", Valid: true},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 		return s.aiRepo.CreateAIWhatsapp(aiConv)
 	}
