@@ -1341,18 +1341,25 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 // Uses database transactions to ensure data consistency
 // Now includes prospect_name parameter to ensure names are always updated
 func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error {
-	// Default prospect name to "Sis" if empty
+	// Default prospect name to "Sis" if empty - but preserve actual names
 	if prospectName == "" {
 		prospectName = "Sis"
 	}
 	
-	// Handle stage - NULL if empty string
+	// CRITICAL: Handle stage - MUST be NULL if empty string for Chatbot AI
 	var stageValue interface{}
 	if stage != "" {
 		stageValue = stage
 	} else {
-		stageValue = nil // NULL for empty stage
+		stageValue = nil // ALWAYS NULL for empty stage - no exceptions
 	}
+	
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"prospect_name": prospectName,
+		"stage": stage,
+		"stage_value": stageValue,
+	}).Info("Saving conversation history with stage handling")
 	
 	return utils.WithTransaction(r.db, func(tx *sql.Tx) error {
 		// Check if record exists within transaction

@@ -551,6 +551,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 					}).Info("💬 FLOW: Processing existing execution WITHOUT re-saving user message")
 					
 					// Save user message only once for existing execution
+					// For Chatbot AI, explicitly pass empty stage as it should be NULL
 					err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, content, "", "", senderName)
 					if err != nil {
 						logrus.WithError(err).Error("Failed to save user message for existing execution")
@@ -581,7 +582,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 							logrus.WithError(err).Error("Failed to send response for existing execution")
 						}
 						
-						// Save bot response
+						// Save bot response - explicitly pass empty stage for NULL
 						err = s.aiWhatsappService.SaveConversationHistory(phoneNumber, deviceID, "", response, "", senderName)
 						if err != nil {
 							logrus.WithError(err).Error("Failed to save bot response for existing execution")
