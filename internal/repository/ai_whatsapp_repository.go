@@ -1341,11 +1341,6 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 // Uses database transactions to ensure data consistency
 // Now includes prospect_name parameter to ensure names are always updated
 func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error {
-	// Default prospect name to "Sis" if empty - but preserve actual names
-	if prospectName == "" {
-		prospectName = "Sis"
-	}
-	
 	// CRITICAL: Handle stage - MUST be NULL if empty string for Chatbot AI
 	var stageValue interface{}
 	if stage != "" {
@@ -1353,13 +1348,6 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 	} else {
 		stageValue = nil // ALWAYS NULL for empty stage - no exceptions
 	}
-	
-	logrus.WithFields(logrus.Fields{
-		"prospect_num": prospectNum,
-		"prospect_name": prospectName,
-		"stage": stage,
-		"stage_value": stageValue,
-	}).Info("Saving conversation history with stage handling")
 	
 	return utils.WithTransaction(r.db, func(tx *sql.Tx) error {
 		// Check if record exists within transaction
@@ -1435,21 +1423,38 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 		now := time.Now()
 		if existingID != nil {
 			// Update existing record within transaction
+			// IMPORTANT: Only update conv_last, stage, and updated_at
+			// DO NOT update prospect_name, prospect_num, or human - these are set only on creation
 			updateQuery := `
 				UPDATE ai_whatsapp_nodepath 
-				SET conv_last = ?, stage = ?, prospect_name = ?, updated_at = ?
+				SET conv_last = ?, stage = ?, updated_at = ?
 				WHERE prospect_num = ? AND id_device = ?
 			`
-			_, err = tx.Exec(updateQuery, convLastValue, stageValue, prospectName, now, prospectNum, idDevice)
+			_, err = tx.Exec(updateQuery, convLastValue, stageValue, now, prospectNum, idDevice)
 			if err != nil {
 				return fmt.Errorf("failed to update conversation history: %w", err)
 			}
 			logrus.WithFields(logrus.Fields{
 				"prospect_num": prospectNum,
 				"id_device": idDevice,
+				"updating_fields": "conv_last, stage, updated_at ONLY",
+				"NOT_updating": "prospect_name, human, prospect_num",
 			}).Info("Conversation history updated successfully")
 		} else {
 			// Create new record within transaction
+			// Only set prospect_name, prospect_num, and human when creating NEW records
+			// Default prospect name to "Sis" if empty for new records ONLY
+			if prospectName == "" {
+				prospectName = "Sis"
+			}
+			
+			logrus.WithFields(logrus.Fields{
+				"prospect_num": prospectNum,
+				"id_device": idDevice,
+				"prospect_name": prospectName,
+				"creating_new": true,
+			}).Info("Creating new conversation record with initial prospect data")
+			
 			insertQuery := `
 				INSERT INTO ai_whatsapp_nodepath (
 					id_device, prospect_num, stage, conv_last, prospect_name, human, 
