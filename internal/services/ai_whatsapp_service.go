@@ -1184,7 +1184,7 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 			IDDevice:    idDevice,
 			ProspectNum: prospectNum,
 			ProspectName: sql.NullString{String: "Sis", Valid: true}, // Default name to "Sis"
-			Stage:       sql.NullString{String: "welcome", Valid: true}, // Default initial stage
+			Stage:       sql.NullString{}, // Leave stage as NULL - don't set "welcome"
 			Intro:       sql.NullString{String: introText, Valid: true}, // Use dynamic intro based on flow type
 			Human:       0,         // AI is active by default (0 = AI, 1 = human)
 			Niche:       niche,

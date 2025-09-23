@@ -130,7 +130,7 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 		ProspectName:    sql.NullString{String: prospectName, Valid: true},
 		Intro:           sql.NullString{String: introText, Valid: true}, // Set intro based on flow
 		Niche:           flow.Niche,
-		Stage:           sql.NullString{String: "welcome", Valid: true},
+		Stage:           sql.NullString{}, // Leave stage as NULL initially
 		Human:           0,
 	}
 	
