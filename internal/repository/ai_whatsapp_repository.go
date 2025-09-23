@@ -1346,6 +1346,14 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 		prospectName = "Sis"
 	}
 	
+	// Handle stage - NULL if empty string
+	var stageValue interface{}
+	if stage != "" {
+		stageValue = stage
+	} else {
+		stageValue = nil // NULL for empty stage
+	}
+	
 	return utils.WithTransaction(r.db, func(tx *sql.Tx) error {
 		// Check if record exists within transaction
 		var existingID *int
@@ -1425,7 +1433,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 				SET conv_last = ?, stage = ?, prospect_name = ?, updated_at = ?
 				WHERE prospect_num = ? AND id_device = ?
 			`
-			_, err = tx.Exec(updateQuery, convLastValue, stage, prospectName, now, prospectNum, idDevice)
+			_, err = tx.Exec(updateQuery, convLastValue, stageValue, prospectName, now, prospectNum, idDevice)
 			if err != nil {
 				return fmt.Errorf("failed to update conversation history: %w", err)
 			}
@@ -1441,7 +1449,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 					created_at, updated_at
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			`
-			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stage, convLastValue, prospectName, 0, now, now)
+			_, err = tx.Exec(insertQuery, idDevice, prospectNum, stageValue, convLastValue, prospectName, 0, now, now)
 			if err != nil {
 				return fmt.Errorf("failed to create new conversation record: %w", err)
 			}

@@ -86,6 +86,11 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 	
 	// Route to appropriate table
 	if tableName == "wasapBot_nodepath" {
+		// Default prospect name if empty
+		if prospectName == "" {
+			prospectName = "Sis"
+		}
+		
 		wasapBot := &models.WasapBot{
 			FlowReference:   sql.NullString{String: flowID, Valid: true},
 			ExecutionID:     sql.NullString{String: executionID, Valid: true},
@@ -116,6 +121,11 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 		introText = "Welcome to Chatbot AI flow"
 	} else {
 		introText = "Welcome" // Default intro for other flows
+	}
+	
+	// Default prospect name if empty
+	if prospectName == "" {
+		prospectName = "Sis"
 	}
 	
 	aiWhatsapp := &models.AIWhatsapp{
