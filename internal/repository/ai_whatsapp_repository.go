@@ -155,12 +155,12 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 		executionStatusValue = nil
 	}
 
-	// Handle ProspectName as sql.NullString
+	// Handle ProspectName as sql.NullString - Default to "Sis" if empty
 	var prospectNameValue interface{}
-	if ai.ProspectName.Valid {
+	if ai.ProspectName.Valid && ai.ProspectName.String != "" {
 		prospectNameValue = ai.ProspectName.String
 	} else {
-		prospectNameValue = nil
+		prospectNameValue = "Sis" // Default value
 	}
 	
 	// Handle Stage as sql.NullString - MUST be NULL not empty string
@@ -178,11 +178,33 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	} else {
 		introValue = nil
 	}
+	
+	// Handle other nullable fields - MUST be NULL not empty string
+	var balasValue interface{}
+	if ai.Balas.Valid && ai.Balas.String != "" {
+		balasValue = ai.Balas.String
+	} else {
+		balasValue = nil
+	}
+	
+	var keywordIklanValue interface{}
+	if ai.KeywordIklan.Valid && ai.KeywordIklan.String != "" {
+		keywordIklanValue = ai.KeywordIklan.String
+	} else {
+		keywordIklanValue = nil
+	}
+	
+	var marketerValue interface{}
+	if ai.Marketer.Valid && ai.Marketer.String != "" {
+		marketerValue = ai.Marketer.String
+	} else {
+		marketerValue = nil
+	}
 
 	_, err := r.db.Exec(query,
 		ai.IDDevice, ai.ProspectNum, prospectNameValue, stageValue, ai.DateOrder, convLastValue,
 		convCurrentValue, ai.Human, ai.Niche, introValue,
-		ai.Balas, ai.KeywordIklan, ai.Marketer, ai.UpdateToday,
+		balasValue, keywordIklanValue, marketerValue, ai.UpdateToday,
 		currentNodeIDValue, waitingForReplyValue, flowIDValue, lastNodeIDValue,
 		flowReferenceValue, executionIDValue, executionStatusValue,
 		ai.CreatedAt, ai.UpdatedAt,
@@ -358,10 +380,18 @@ func (r *aiWhatsappRepository) UpdateProspectName(prospectNum, idDevice, prospec
 		return fmt.Errorf("database connection is not available")
 	}
 
+	// Handle prospect name - default to "Sis" if empty, NULL if still empty somehow
+	var nameValue interface{}
+	if prospectName == "" {
+		nameValue = "Sis" // Default value when no name provided
+	} else {
+		nameValue = prospectName
+	}
+	
 	query := `UPDATE ai_whatsapp_nodepath SET prospect_name = ?, updated_at = ? WHERE prospect_num = ? AND id_device = ?`
 	now := time.Now()
 	
-	result, err := r.db.Exec(query, prospectName, now, prospectNum, idDevice)
+	result, err := r.db.Exec(query, nameValue, now, prospectNum, idDevice)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"prospect_num": prospectNum,
@@ -1311,6 +1341,11 @@ func (r *aiWhatsappRepository) GetAIWhatsappByProspectAndDevice(prospectNum, idD
 // Uses database transactions to ensure data consistency
 // Now includes prospect_name parameter to ensure names are always updated
 func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, userMessage, botResponse, stage, prospectName string) error {
+	// Default prospect name to "Sis" if empty
+	if prospectName == "" {
+		prospectName = "Sis"
+	}
+	
 	return utils.WithTransaction(r.db, func(tx *sql.Tx) error {
 		// Check if record exists within transaction
 		var existingID *int

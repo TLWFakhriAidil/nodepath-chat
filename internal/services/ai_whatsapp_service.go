@@ -627,6 +627,7 @@ func (s *aiWhatsappService) SetHumanMode(prospectNum, idDevice string, human boo
 		// Create a new record if it doesn't exist
 		aiConv = &models.AIWhatsapp{
 			ProspectNum: prospectNum,
+			ProspectName: sql.NullString{String: "Sis", Valid: true}, // Default to "Sis"
 			IDDevice: idDevice,
 			Human: humanValue,
 			Stage: sql.NullString{}, // Explicitly NULL, not "Prospek"
@@ -1176,6 +1177,7 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		newAIConv := &models.AIWhatsapp{
 			IDDevice:    idDevice,
 			ProspectNum: prospectNum,
+			ProspectName: sql.NullString{String: "Sis", Valid: true}, // Default name to "Sis"
 			Stage:       sql.NullString{String: "welcome", Valid: true}, // Default initial stage
 			Human:       0,         // AI is active by default
 			Niche:       niche,
@@ -1187,11 +1189,11 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 		// Create AI WhatsApp record within transaction
 		query := `
 			INSERT INTO ai_whatsapp_nodepath (
-				id_prospect, id_device, prospect_num, stage, date_order, conv_last, 
+				id_prospect, id_device, prospect_num, prospect_name, stage, date_order, conv_last, 
 				conv_current, human, niche, intro, 
 				balas, keywordiklan, marketer, update_today, 
 				created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		
 		// Handle ConvCurrent as sql.NullString
@@ -1218,8 +1220,14 @@ func (s *aiWhatsappService) CreateAIWhatsappRecord(prospectNum, idDevice, userMe
 			introValue = nil
 		}
 		
+		// Handle ProspectName - always "Sis" as default
+		prospectNameValue := "Sis"
+		if newAIConv.ProspectName.Valid && newAIConv.ProspectName.String != "" {
+			prospectNameValue = newAIConv.ProspectName.String
+		}
+		
 		_, err := tx.Exec(query,
-			newAIConv.IDProspect, newAIConv.IDDevice, newAIConv.ProspectNum, stageValue, newAIConv.DateOrder, nil,
+			newAIConv.IDProspect, newAIConv.IDDevice, newAIConv.ProspectNum, prospectNameValue, stageValue, newAIConv.DateOrder, nil,
 			convCurrentValue, newAIConv.Human, newAIConv.Niche, introValue,
 			newAIConv.Balas, newAIConv.KeywordIklan, newAIConv.Marketer, newAIConv.UpdateToday,
 			newAIConv.CreatedAt, newAIConv.UpdatedAt,
