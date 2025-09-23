@@ -314,6 +314,74 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 		logrus.Info("🎯 WASAPBOT: Processing WasapBot Exama flow")
 		return s.processWasapBotExamaFlow(phoneNumber, content, deviceID, senderName, defaultFlow)
 	}
+	
+	// Special handling for Chatbot AI flow
+	if defaultFlow != nil && defaultFlow.Name == "Chatbot AI" {
+		logrus.WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"phone": phoneNumber,
+			"content": content,
+		}).Info("🤖 CHATBOT AI: Processing Chatbot AI flow")
+		
+		// Check phone number validity for Chatbot AI
+		// Number must be <= 13 digits or start with 601
+		if len(phoneNumber) > 13 && !strings.HasPrefix(phoneNumber, "601") {
+			logrus.WithFields(logrus.Fields{
+				"phone": phoneNumber,
+				"reason": "Invalid phone number format",
+			}).Warn("🚫 CHATBOT AI: Phone number validation failed, terminating")
+			return nil // Terminate without processing
+		}
+		
+		// Check for special commands (WhaCenter style: # for continue)
+		if strings.HasPrefix(content, "#") {
+			logrus.Info("📱 CHATBOT AI: WhaCenter continue command detected (#)")
+			// Extract phone number after # and continue with "Teruskan"
+			targetPhone := strings.TrimPrefix(content, "#")
+			if targetPhone != "" {
+				phoneNumber = targetPhone
+				content = "Teruskan"
+			}
+		}
+		
+		// Check for human mode switch (WhaCenter style: /)
+		if strings.HasPrefix(content, "/") {
+			logrus.Info("👤 CHATBOT AI: Switch to human mode command detected (/)")
+			targetPhone := strings.TrimPrefix(content, "/")
+			if targetPhone != "" {
+				// Update human flag in ai_whatsapp_nodepath
+				err := s.aiWhatsappService.SetHumanMode(targetPhone, deviceID, true)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to set human mode")
+				} else {
+					logrus.Info("✅ CHATBOT AI: Switched to human mode successfully")
+				}
+				return nil // Terminate after switching
+			}
+		}
+		
+		// Check for Wablas-style commands (isFromMe check)
+		// For now we'll check if it's a command message (%, cmd)
+		if strings.HasPrefix(content, "%") {
+			logrus.Info("📱 CHATBOT AI: Wablas continue command detected (%)")
+			content = "Teruskan"
+		}
+		
+		if content == "cmd" {
+			logrus.Info("👤 CHATBOT AI: Wablas switch to human mode command (cmd)")
+			// Set human mode for current conversation
+			err := s.aiWhatsappService.SetHumanMode(phoneNumber, deviceID, true)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to set human mode via cmd")
+			} else {
+				logrus.Info("✅ CHATBOT AI: Switched to human mode via cmd successfully")
+			}
+			return nil // Terminate after switching
+		}
+		
+		// Continue with normal flow processing for Chatbot AI
+		logrus.Info("🤖 CHATBOT AI: Proceeding with normal flow processing")
+	}
 
 	if defaultFlow == nil {
 		logrus.WithFields(logrus.Fields{

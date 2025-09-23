@@ -61,6 +61,9 @@ type AIWhatsappService interface {
 	// Toggle human takeover
 	ToggleHumanTakeover(prospectNum string, human bool) error
 	
+	// Set human mode for a conversation
+	SetHumanMode(prospectNum, idDevice string, human bool) error
+	
 	// Process device commands (%, #, cmd)
 	ProcessDeviceCommand(prospectNum, command, idDevice string) error
 	
@@ -598,6 +601,40 @@ func (s *aiWhatsappService) ToggleHumanTakeover(prospectNum string, human bool) 
 		return fmt.Errorf("conversation not found for prospect: %s", prospectNum)
 	}
 	
+	aiConv.Human = humanValue
+	return s.aiRepo.UpdateAIWhatsapp(aiConv)
+}
+
+// SetHumanMode sets human mode for a specific conversation with device context
+func (s *aiWhatsappService) SetHumanMode(prospectNum, idDevice string, human bool) error {
+	humanValue := 0
+	if human {
+		humanValue = 1
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"prospect_num": prospectNum,
+		"id_device": idDevice,
+		"human": human,
+	}).Info("Setting human mode for conversation")
+	
+	// Get AI WhatsApp record by prospect and device
+	aiConv, err := s.aiRepo.GetAIWhatsappByProspectAndDevice(prospectNum, idDevice)
+	if err != nil {
+		return fmt.Errorf("failed to get conversation: %w", err)
+	}
+	if aiConv == nil {
+		// Create a new record if it doesn't exist
+		aiConv = &models.AIWhatsapp{
+			ProspectNum: sql.NullString{String: prospectNum, Valid: true},
+			IdDevice: sql.NullString{String: idDevice, Valid: true},
+			Human: humanValue,
+			Status: sql.NullString{String: "Prospek", Valid: true},
+		}
+		return s.aiRepo.CreateAIWhatsapp(aiConv)
+	}
+	
+	// Update human field
 	aiConv.Human = humanValue
 	return s.aiRepo.UpdateAIWhatsapp(aiConv)
 }
