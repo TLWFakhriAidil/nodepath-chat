@@ -101,8 +101,8 @@ const WhatsAppBot = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedStage, setSelectedStage] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedStage, setSelectedStage] = useState<string>('');
   const [showDeviceRequiredPopup, setShowDeviceRequiredPopup] = useState(false);
   
   // Date filter state - default to current month
@@ -150,11 +150,11 @@ const WhatsAppBot = () => {
         params.append('search', searchTerm);
       }
       
-      if (selectedStatus !== 'all') {
+      if (selectedStatus !== '' && selectedStatus !== 'all') {
         params.append('status', selectedStatus);
       }
       
-      if (selectedStage !== 'all') {
+      if (selectedStage !== '' && selectedStage !== 'all') {
         params.append('stage', selectedStage);
       }
       
@@ -333,10 +333,9 @@ const WhatsAppBot = () => {
               {/* Status Filter */}
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger className="w-32">
-                  <SelectValue placeholder="All Status" />
+                  <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="Prospek">Prospek</SelectItem>
                   <SelectItem value="Customer">Customer</SelectItem>
                   <SelectItem value="Lead">Lead</SelectItem>
@@ -346,10 +345,9 @@ const WhatsAppBot = () => {
               {/* Stage Filter */}
               <Select value={selectedStage} onValueChange={setSelectedStage}>
                 <SelectTrigger className="w-40">
-                  <SelectValue placeholder="All Stages" />
+                  <SelectValue placeholder="Stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Stages</SelectItem>
                   <SelectItem value="No Stage">No Stage</SelectItem>
                   {Object.keys(stageStats).filter(stage => stage !== 'No Stage').map(stage => (
                     <SelectItem key={stage} value={stage}>{stage}</SelectItem>
@@ -358,25 +356,32 @@ const WhatsAppBot = () => {
               </Select>
               
               {/* Date From */}
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="flex h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                />
+              <div className="relative">
+                <div className="flex items-center gap-2 border rounded-md px-3 py-1 bg-background">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="bg-transparent border-0 outline-none text-sm w-32 cursor-pointer"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
               </div>
               
               {/* Date To */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">to</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="flex h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                />
+                <div className="flex items-center gap-2 border rounded-md px-3 py-1 bg-background">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="bg-transparent border-0 outline-none text-sm w-32 cursor-pointer"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
               </div>
               
               {/* Spacer to push buttons to the right */}
