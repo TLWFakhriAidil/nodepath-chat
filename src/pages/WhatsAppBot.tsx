@@ -20,7 +20,8 @@ import {
   Package,
   Phone,
   CreditCard,
-  Calendar
+  Calendar,
+  Layers
 } from 'lucide-react';
 import {
   Table,
@@ -58,22 +59,36 @@ interface WasapBotRecord {
   execution_status?: string;
   flow_id?: string;
   current_node_id?: string;
-  niche?: string;
   instance?: string;
   peringkat_sekolah?: string;
-  alamat?: string;
-  nama?: string;
-  pakej?: string;
-  no_fon?: string;
-  cara_bayaran?: string;
-  tarikh_gaji?: string;
-  stage?: string;
-  status?: string;
   umur?: string;
   kerja?: string;
   sijil?: string;
+  date_start?: string;
   date_last?: string;
 }
+
+/**
+ * Get first day of current month and today's date
+ */
+const getCurrentMonthDateRange = () => {
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const today = now; // Today as the end date
+  
+  // Format as YYYY-MM-DD
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  return {
+    startDate: formatDate(firstDay),
+    endDate: formatDate(today)
+  };
+};
 
 /**
  * WhatsApp Bot component for managing WasapBot Exama flow data
@@ -89,6 +104,11 @@ const WhatsAppBot = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedStage, setSelectedStage] = useState<string>('all');
   const [showDeviceRequiredPopup, setShowDeviceRequiredPopup] = useState(false);
+  
+  // Date filter state - default to current month
+  const { startDate: defaultStartDate, endDate: defaultEndDate } = getCurrentMonthDateRange();
+  const [dateFrom, setDateFrom] = useState(defaultStartDate);
+  const [dateTo, setDateTo] = useState(defaultEndDate);
 
   // Statistics
   const [stats, setStats] = useState({
@@ -101,6 +121,9 @@ const WhatsAppBot = () => {
     noPhone: 0,
     payments: 0
   });
+
+  // Dynamic stage statistics
+  const [stageStats, setStageStats] = useState<Record<string, number>>({});
 
   /**
    * Fetch WasapBot data from backend API
@@ -135,6 +158,15 @@ const WhatsAppBot = () => {
         params.append('stage', selectedStage);
       }
       
+      // Add date filters
+      if (dateFrom) {
+        params.append('dateFrom', dateFrom);
+      }
+      
+      if (dateTo) {
+        params.append('dateTo', dateTo);
+      }
+      
       const apiUrl = `/api/wasapbot/data?${params.toString()}`;
       console.log('WhatsAppBot: Making API call to:', apiUrl);
       
@@ -154,18 +186,30 @@ const WhatsAppBot = () => {
       // Set the data
       setWasapBotData(data.records || []);
       
-      // Calculate statistics
+      // Calculate statistics with date filtering applied
       const records = data.records || [];
-      setStats({
+      
+      // Calculate fixed statistics
+      const fixedStats = {
         totalProspects: records.length,
         activeFlows: records.filter((r: WasapBotRecord) => r.current_node_id && r.current_node_id !== 'end').length,
         completed: records.filter((r: WasapBotRecord) => r.current_node_id === 'end').length,
-        packages: new Set(records.map((r: WasapBotRecord) => r.pakej).filter(Boolean)).size,
-        addresses: records.filter((r: WasapBotRecord) => r.alamat).length,
-        names: records.filter((r: WasapBotRecord) => r.nama).length,
-        noPhone: records.filter((r: WasapBotRecord) => r.no_fon).length,
-        payments: records.filter((r: WasapBotRecord) => r.cara_bayaran).length
+        packages: records.filter((r: WasapBotRecord) => r.pakej && r.pakej !== '').length,
+        addresses: records.filter((r: WasapBotRecord) => r.alamat && r.alamat !== '').length,
+        names: records.filter((r: WasapBotRecord) => r.nama && r.nama !== '').length,
+        noPhone: records.filter((r: WasapBotRecord) => r.no_fon && r.no_fon !== '').length,
+        payments: records.filter((r: WasapBotRecord) => r.cara_bayaran && r.cara_bayaran !== '').length
+      };
+      
+      setStats(fixedStats);
+      
+      // Calculate dynamic stage statistics
+      const stages: Record<string, number> = {};
+      records.forEach((record: WasapBotRecord) => {
+        const stage = (!record.stage || record.stage === '') ? 'No Stage' : record.stage;
+        stages[stage] = (stages[stage] || 0) + 1;
       });
+      setStageStats(stages);
       
     } catch (err) {
       console.error('WhatsAppBot: Error fetching data:', err);
@@ -192,7 +236,7 @@ const WhatsAppBot = () => {
     }, 500); // Debounce 500ms
     
     return () => clearTimeout(timer);
-  }, [searchTerm, selectedStatus, selectedStage]);
+  }, [searchTerm, selectedStatus, selectedStage, dateFrom, dateTo]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -290,7 +334,7 @@ const WhatsAppBot = () => {
         </div>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Statistics Cards - Fixed boxes first */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -365,21 +409,40 @@ const WhatsAppBot = () => {
         </Card>
       </div>
 
+      {/* Dynamic Stage Statistics Cards */}
+      {Object.keys(stageStats).length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {Object.entries(stageStats).map(([stage, count]) => (
+            <Card key={stage} className="border-dashed">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                  <Layers className="w-3 h-3" />
+                  {stage}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">{count}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Input
               placeholder="Search by name, phone, address..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
+              className="lg:col-span-1"
             />
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger>
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -390,17 +453,35 @@ const WhatsAppBot = () => {
               </SelectContent>
             </Select>
             <Select value={selectedStage} onValueChange={setSelectedStage}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger>
                 <SelectValue placeholder="Stage" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Stages</SelectItem>
-                <SelectItem value="welcome">Welcome</SelectItem>
-                <SelectItem value="qualification">Qualification</SelectItem>
-                <SelectItem value="presentation">Presentation</SelectItem>
-                <SelectItem value="closing">Closing</SelectItem>
+                <SelectItem value="No Stage">No Stage</SelectItem>
+                {Object.keys(stageStats).filter(stage => stage !== 'No Stage').map(stage => (
+                  <SelectItem key={stage} value={stage}>{stage}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-muted-foreground" />
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="flex-1"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-muted-foreground" />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="flex-1"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -472,7 +553,11 @@ const WhatsAppBot = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>{record.no_fon || '-'}</TableCell>
-                        <TableCell>{record.stage || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {record.stage || 'No Stage'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{record.alamat || '-'}</TableCell>
                         <TableCell>{record.pakej || '-'}</TableCell>
                         <TableCell>{record.cara_bayaran || '-'}</TableCell>

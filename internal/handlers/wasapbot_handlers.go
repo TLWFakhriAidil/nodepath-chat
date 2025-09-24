@@ -37,6 +37,8 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 	search := c.Query("search")
 	status := c.Query("status")
 	stage := c.Query("stage")
+	dateFrom := c.Query("dateFrom") // Add date from parameter
+	dateTo := c.Query("dateTo")     // Add date to parameter
 	limit := c.QueryInt("limit", 100)
 	offset := c.QueryInt("offset", 0)
 	
@@ -46,12 +48,14 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 		"search": search,
 		"status": status,
 		"stage": stage,
+		"date_from": dateFrom,
+		"date_to": dateTo,
 		"limit": limit,
 		"offset": offset,
 	}).Info("Getting WasapBot data")
 	
-	// Get data from repository
-	data, total, err := h.wasapBotRepo.GetAllWasapBotData(limit, offset, deviceIDs, stage, status, search, userID)
+	// Get data from repository with date filters
+	data, total, err := h.wasapBotRepo.GetAllWasapBotDataWithDates(limit, offset, deviceIDs, stage, status, search, dateFrom, dateTo, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get WasapBot data")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -96,14 +100,18 @@ func (h *WasapBotHandlers) GetWasapBotStats(c *fiber.Ctx) error {
 	
 	// Get device IDs from query
 	deviceIDs := c.Query("deviceIds")
+	dateFrom := c.Query("dateFrom") // Add date from parameter
+	dateTo := c.Query("dateTo")     // Add date to parameter
 	
 	logrus.WithFields(logrus.Fields{
 		"user_id": userID,
 		"device_ids": deviceIDs,
+		"date_from": dateFrom,
+		"date_to": dateTo,
 	}).Info("Getting WasapBot statistics")
 	
-	// Get stats from repository
-	stats, err := h.wasapBotRepo.GetWasapBotStats(deviceIDs, userID)
+	// Get stats from repository with date filters
+	stats, err := h.wasapBotRepo.GetWasapBotStatsWithDates(deviceIDs, dateFrom, dateTo, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get WasapBot stats")
 		// Return default stats on error

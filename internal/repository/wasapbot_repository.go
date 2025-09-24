@@ -23,7 +23,9 @@ type WasapBotRepository interface {
 	UpdateWaitingStatus(executionID string, waitingValue int) error
 	SaveConversationHistory(prospectNum, deviceID, userMessage, botResponse, stage, nama string) error
 	GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error)
+	GetAllWasapBotDataWithDates(limit, offset int, deviceFilter, stageFilter, statusFilter, search, dateFrom, dateTo string, userID int) ([]map[string]interface{}, int, error)
 	GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error)
+	GetWasapBotStatsWithDates(deviceFilter, dateFrom, dateTo string, userID int) (map[string]interface{}, error)
 	Delete(idProspect int) error
 }
 
@@ -604,4 +606,308 @@ func (r *wasapBotRepository) Delete(idProspect int) error {
 	
 	logrus.WithField("id_prospect", idProspect).Info("WasapBot record deleted successfully")
 	return nil
+}
+
+// GetAllWasapBotDataWithDates retrieves all WasapBot data with filters including date range
+func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, deviceFilter, stageFilter, statusFilter, search, dateFrom, dateTo string, userID int) ([]map[string]interface{}, int, error) {
+	// Log incoming parameters
+	logrus.WithFields(logrus.Fields{
+		"limit": limit,
+		"offset": offset,
+		"deviceFilter": deviceFilter,
+		"stageFilter": stageFilter,
+		"statusFilter": statusFilter,
+		"search": search,
+		"dateFrom": dateFrom,
+		"dateTo": dateTo,
+		"userID": userID,
+	}).Info("GetAllWasapBotDataWithDates called")
+	
+	// Build query with filters - select all needed columns including date_start for display
+	query := `
+		SELECT id_prospect, prospect_num, nama, stage, date_last, date_start, id_device,
+		       niche, status, alamat, pakej, cara_bayaran, tarikh_gaji, current_node_id, no_fon
+		FROM wasapBot_nodepath
+		WHERE 1=1
+	`
+	
+	countQuery := `SELECT COUNT(*) FROM wasapBot_nodepath WHERE 1=1`
+	args := []interface{}{}
+	countArgs := []interface{}{}
+	
+	// Apply date filters using DATE() function to ignore time
+	if dateFrom != "" {
+		query += " AND DATE(date_start) >= ?"
+		countQuery += " AND DATE(date_start) >= ?"
+		args = append(args, dateFrom)
+		countArgs = append(countArgs, dateFrom)
+		logrus.WithField("date_from_applied", dateFrom).Info("Applying date from filter")
+	}
+	
+	if dateTo != "" {
+		query += " AND DATE(date_start) <= ?"
+		countQuery += " AND DATE(date_start) <= ?"
+		args = append(args, dateTo)
+		countArgs = append(countArgs, dateTo)
+		logrus.WithField("date_to_applied", dateTo).Info("Applying date to filter")
+	}
+	
+	// Apply other filters
+	if deviceFilter != "" && deviceFilter != "all" {
+		// Handle multiple device IDs
+		devices := utils.SplitAndTrim(deviceFilter, ",")
+		if len(devices) > 0 {
+			placeholders := utils.GeneratePlaceholders(len(devices))
+			query += " AND id_device IN (" + placeholders + ")"
+			countQuery += " AND id_device IN (" + placeholders + ")"
+			for _, device := range devices {
+				args = append(args, device)
+				countArgs = append(countArgs, device)
+			}
+			logrus.WithField("device_filter_applied", devices).Info("Applying device filter for multiple devices")
+		}
+	}
+	
+	if stageFilter != "" && stageFilter != "all" {
+		if stageFilter == "No Stage" {
+			query += " AND (stage IS NULL OR stage = '')"
+			countQuery += " AND (stage IS NULL OR stage = '')"
+		} else {
+			query += " AND stage = ?"
+			countQuery += " AND stage = ?"
+			args = append(args, stageFilter)
+			countArgs = append(countArgs, stageFilter)
+		}
+	}
+	
+	if statusFilter != "" && statusFilter != "all" {
+		query += " AND status = ?"
+		countQuery += " AND status = ?"
+		args = append(args, statusFilter)
+		countArgs = append(countArgs, statusFilter)
+	}
+	
+	if search != "" {
+		query += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR peringkat_sekolah LIKE ? OR alamat LIKE ?)"
+		countQuery += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR peringkat_sekolah LIKE ? OR alamat LIKE ?)"
+		searchParam := "%" + search + "%"
+		args = append(args, searchParam, searchParam, searchParam, searchParam, searchParam)
+		countArgs = append(countArgs, searchParam, searchParam, searchParam, searchParam, searchParam)
+	}
+	
+	// Log the final query
+	logrus.WithFields(logrus.Fields{
+		"count_query": countQuery,
+		"count_args": countArgs,
+	}).Debug("Executing count query")
+	
+	// Get total count
+	var total int
+	err := r.db.QueryRow(countQuery, countArgs...).Scan(&total)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get count")
+		return nil, 0, fmt.Errorf("failed to get count: %w", err)
+	}
+	
+	logrus.WithField("total_count", total).Info("Total records found")
+	
+	// Add ORDER BY and pagination
+	query += " ORDER BY date_last DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	
+	// Log the data query
+	logrus.WithFields(logrus.Fields{
+		"data_query": query,
+		"data_args": args,
+	}).Debug("Executing data query")
+	
+	// Execute query
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to query wasapBot data")
+		return nil, 0, fmt.Errorf("failed to query wasapBot data: %w", err)
+	}
+	defer rows.Close()
+	
+	var results []map[string]interface{}
+	rowCount := 0
+	for rows.Next() {
+		var (
+			idProspect int
+			prospectNum sql.NullString
+			nama sql.NullString
+			stage sql.NullString
+			dateLast sql.NullString
+			dateStart sql.NullString
+			deviceID sql.NullString
+			niche sql.NullString
+			status sql.NullString
+			alamat sql.NullString
+			pakej sql.NullString
+			caraBayaran sql.NullString
+			tarikhGaji sql.NullString
+			currentNodeID sql.NullString
+			noFon sql.NullString
+		)
+		
+		err := rows.Scan(&idProspect, &prospectNum, &nama, &stage, &dateLast, &dateStart, 
+			&deviceID, &niche, &status, &alamat, &pakej, &caraBayaran, &tarikhGaji, 
+			&currentNodeID, &noFon)
+			
+		if err != nil {
+			logrus.WithError(err).Error("Failed to scan row")
+			continue
+		}
+		
+		rowCount++
+		
+		record := map[string]interface{}{
+			"id_prospect": idProspect,
+			"prospect_num": utils.GetStringValue(prospectNum),
+			"nama": utils.GetStringValue(nama),
+			"stage": utils.GetStringValue(stage),
+			"date_last": utils.GetStringValue(dateLast),
+			"date_start": utils.GetStringValue(dateStart),
+			"id_device": utils.GetStringValue(deviceID),
+			"niche": utils.GetStringValue(niche),
+			"status": utils.GetStringValue(status),
+			"alamat": utils.GetStringValue(alamat),
+			"pakej": utils.GetStringValue(pakej),
+			"cara_bayaran": utils.GetStringValue(caraBayaran),
+			"tarikh_gaji": utils.GetStringValue(tarikhGaji),
+			"current_node_id": utils.GetStringValue(currentNodeID),
+			"no_fon": utils.GetStringValue(noFon),
+		}
+		
+		results = append(results, record)
+		
+		logrus.WithFields(logrus.Fields{
+			"row_id": idProspect,
+			"device": utils.GetStringValue(deviceID),
+			"prospect_num": utils.GetStringValue(prospectNum),
+		}).Debug("Added record to results")
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"rows_scanned": rowCount,
+		"results_count": len(results),
+	}).Info("Query completed")
+	
+	return results, total, nil
+}
+
+// GetWasapBotStatsWithDates retrieves WasapBot statistics with date filtering
+func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, dateTo string, userID int) (map[string]interface{}, error) {
+	stats := map[string]interface{}{
+		"totalProspects": 0,
+		"activeExecutions": 0,
+		"completedExecutions": 0,
+		"uniqueSchools": 0,
+		"uniquePackages": 0,
+		"totalWithPhone": 0,
+		"stageBreakdown": make(map[string]int),
+	}
+	
+	baseWhere := "1=1"
+	args := []interface{}{}
+	
+	// Apply date filters
+	if dateFrom != "" {
+		baseWhere += " AND DATE(date_start) >= ?"
+		args = append(args, dateFrom)
+	}
+	
+	if dateTo != "" {
+		baseWhere += " AND DATE(date_start) <= ?"
+		args = append(args, dateTo)
+	}
+	
+	if deviceFilter != "" && deviceFilter != "all" {
+		// Handle multiple device IDs
+		devices := utils.SplitAndTrim(deviceFilter, ",")
+		if len(devices) > 0 {
+			placeholders := utils.GeneratePlaceholders(len(devices))
+			baseWhere += " AND id_device IN (" + placeholders + ")"
+			for _, device := range devices {
+				args = append(args, device)
+			}
+		}
+	}
+	
+	// Total prospects
+	var totalProspects int
+	query := "SELECT COUNT(DISTINCT prospect_num) FROM wasapBot_nodepath WHERE " + baseWhere
+	err := r.db.QueryRow(query, args...).Scan(&totalProspects)
+	if err == nil {
+		stats["totalProspects"] = totalProspects
+	}
+	
+	// Active executions
+	var activeExecutions int
+	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND execution_status = 'active'"
+	err = r.db.QueryRow(query, args...).Scan(&activeExecutions)
+	if err == nil {
+		stats["activeExecutions"] = activeExecutions
+	}
+	
+	// Completed executions
+	var completedExecutions int
+	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND status = 'Customer'"
+	err = r.db.QueryRow(query, args...).Scan(&completedExecutions)
+	if err == nil {
+		stats["completedExecutions"] = completedExecutions
+	}
+	
+	// Unique schools
+	var uniqueSchools int
+	query = "SELECT COUNT(DISTINCT peringkat_sekolah) FROM wasapBot_nodepath WHERE " + baseWhere + " AND peringkat_sekolah IS NOT NULL AND peringkat_sekolah != ''"
+	err = r.db.QueryRow(query, args...).Scan(&uniqueSchools)
+	if err == nil {
+		stats["uniqueSchools"] = uniqueSchools
+	}
+	
+	// Unique packages
+	var uniquePackages int
+	query = "SELECT COUNT(DISTINCT pakej) FROM wasapBot_nodepath WHERE " + baseWhere + " AND pakej IS NOT NULL AND pakej != ''"
+	err = r.db.QueryRow(query, args...).Scan(&uniquePackages)
+	if err == nil {
+		stats["uniquePackages"] = uniquePackages
+	}
+	
+	// Total with phone
+	var totalWithPhone int
+	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND no_fon IS NOT NULL AND no_fon != ''"
+	err = r.db.QueryRow(query, args...).Scan(&totalWithPhone)
+	if err == nil {
+		stats["totalWithPhone"] = totalWithPhone
+	}
+	
+	// Get stage breakdown
+	stageQuery := `
+		SELECT 
+			CASE 
+				WHEN stage IS NULL OR stage = '' THEN 'No Stage' 
+				ELSE stage 
+			END as stage_name, 
+			COUNT(*) as count 
+		FROM wasapBot_nodepath 
+		WHERE ` + baseWhere + ` 
+		GROUP BY stage_name
+	`
+	
+	rows, err := r.db.Query(stageQuery, args...)
+	if err == nil {
+		defer rows.Close()
+		stageBreakdown := make(map[string]int)
+		for rows.Next() {
+			var stageName string
+			var count int
+			if err := rows.Scan(&stageName, &count); err == nil {
+				stageBreakdown[stageName] = count
+			}
+		}
+		stats["stageBreakdown"] = stageBreakdown
+	}
+	
+	return stats, nil
 }
