@@ -308,30 +308,101 @@ const WhatsAppBot = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">WhatsApp Bot</h1>
-          <p className="text-muted-foreground">
-            Manage and monitor WasapBot Exama flow conversations
-          </p>
+      <div>
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">WhatsApp Bot</h1>
+            <p className="text-muted-foreground">
+              Manage and monitor WasapBot Exama flow conversations
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleExport}
-            disabled={loading}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button 
-            onClick={handleRefresh}
-            disabled={loading || refreshing}
-          >
-            <RefreshCw className={cn("w-4 h-4 mr-2", refreshing && "animate-spin")} />
-            Refresh
-          </Button>
-        </div>
+
+        {/* Filters Bar - Single Line */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Search Input */}
+              <Input
+                placeholder="Search by name, phone, address..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full md:w-64"
+              />
+              
+              {/* Status Filter */}
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="Prospek">Prospek</SelectItem>
+                  <SelectItem value="Customer">Customer</SelectItem>
+                  <SelectItem value="Lead">Lead</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/* Stage Filter */}
+              <Select value={selectedStage} onValueChange={setSelectedStage}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="All Stages" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Stages</SelectItem>
+                  <SelectItem value="No Stage">No Stage</SelectItem>
+                  {Object.keys(stageStats).filter(stage => stage !== 'No Stage').map(stage => (
+                    <SelectItem key={stage} value={stage}>{stage}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {/* Date From */}
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="flex h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+              
+              {/* Date To */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">to</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="flex h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+              
+              {/* Spacer to push buttons to the right */}
+              <div className="flex-1"></div>
+              
+              {/* Action Buttons */}
+              <Button 
+                variant="outline" 
+                onClick={handleExport}
+                disabled={loading}
+                size="sm"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+              <Button 
+                onClick={handleRefresh}
+                disabled={loading || refreshing}
+                size="sm"
+              >
+                <RefreshCw className={cn("w-4 h-4 mr-2", refreshing && "animate-spin")} />
+                Refresh
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Statistics Cards - Fixed boxes first */}
@@ -427,64 +498,6 @@ const WhatsAppBot = () => {
           ))}
         </div>
       )}
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <Input
-              placeholder="Search by name, phone, address..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="lg:col-span-1"
-            />
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="Prospek">Prospek</SelectItem>
-                <SelectItem value="Customer">Customer</SelectItem>
-                <SelectItem value="Lead">Lead</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={selectedStage} onValueChange={setSelectedStage}>
-              <SelectTrigger>
-                <SelectValue placeholder="Stage" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Stages</SelectItem>
-                <SelectItem value="No Stage">No Stage</SelectItem>
-                {Object.keys(stageStats).filter(stage => stage !== 'No Stage').map(stage => (
-                  <SelectItem key={stage} value={stage}>{stage}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="flex-1"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="flex-1"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Data Table */}
       <Card>
