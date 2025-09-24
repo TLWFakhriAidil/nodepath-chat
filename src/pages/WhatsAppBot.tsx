@@ -244,8 +244,64 @@ const WhatsAppBot = () => {
   };
 
   const handleExport = () => {
-    // TODO: Implement CSV export
-    console.log('Export WasapBot data');
+    // Export only filtered data that's visible in the table
+    if (filteredData.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Prepare CSV headers
+    const headers = ['No', 'ID Device', 'Name', 'Prospect Number', 'Niche', 'Status', 'No Phone', 'Stage', 'Address', 'Package', 'Payment', 'Payday Date'];
+    
+    // Prepare CSV rows
+    const csvData = filteredData.map((record, index) => {
+      return [
+        index + 1,
+        record.id_device || '',
+        record.nama || '',
+        record.prospect_num || '',
+        record.niche || '',
+        record.status || '',
+        record.no_fon || '',
+        record.stage || 'No Stage',
+        record.alamat || '',
+        record.pakej || '',
+        record.cara_bayaran || '',
+        record.tarikh_gaji || ''
+      ];
+    });
+
+    // Convert to CSV string
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => {
+        // Escape quotes and wrap in quotes if contains comma
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Generate filename with current date
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const filename = `wasapbot_export_${dateStr}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log(`Exported ${filteredData.length} records to ${filename}`);
   };
 
   const handleDelete = async (id: number) => {
