@@ -302,10 +302,47 @@ const AIWhatsappDataTable = () => {
     if (!convLast) return '-';
     
     try {
-      // If it's already an object, use it directly
-      const messages = typeof convLast === 'string' ? JSON.parse(convLast) : convLast;
+      let messages;
       
-      if (!Array.isArray(messages) || messages.length === 0) return '-';
+      // Check if it's already parsed JSON
+      if (typeof convLast === 'object' && Array.isArray(convLast)) {
+        messages = convLast;
+      } 
+      // Try to parse as JSON
+      else if (typeof convLast === 'string') {
+        // First check if it starts with [ or { (JSON)
+        const trimmed = convLast.trim();
+        if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+          try {
+            messages = JSON.parse(trimmed);
+          } catch (e) {
+            // If JSON parse fails, treat as plain text
+            return (
+              <div className="text-xs max-w-xs line-clamp-2">
+                {convLast}
+              </div>
+            );
+          }
+        } else {
+          // Plain text format - just display as is
+          return (
+            <div className="text-xs max-w-xs line-clamp-2">
+              {convLast}
+            </div>
+          );
+        }
+      } else {
+        return '-';
+      }
+      
+      if (!Array.isArray(messages) || messages.length === 0) {
+        // If not an array, just show the text
+        return (
+          <div className="text-xs max-w-xs line-clamp-2">
+            {typeof messages === 'string' ? messages : JSON.stringify(messages)}
+          </div>
+        );
+      }
       
       // Get last 2 messages
       const lastMessages = messages.slice(-2);
@@ -352,8 +389,13 @@ const AIWhatsappDataTable = () => {
         </Dialog>
       );
     } catch (e) {
-      console.error('Error parsing conversation history:', e);
-      return '-';
+      console.error('Error rendering conversation history:', e);
+      // Return the raw text if all parsing fails
+      return (
+        <div className="text-xs max-w-xs line-clamp-2">
+          {typeof convLast === 'string' ? convLast : '-'}
+        </div>
+      );
     }
   };
 
@@ -481,7 +523,7 @@ const AIWhatsappDataTable = () => {
                         <TableCell>{(currentPage - 1) * pageSize + index + 1}</TableCell>
                         <TableCell>{conv.id_device || '-'}</TableCell>
                         <TableCell>{conv.prospect_num || '-'}</TableCell>
-                        <TableCell>{conv.prospect_name || '-'}</TableCell>
+                        <TableCell>{conv.prospect_name || 'Sis'}</TableCell>
                         <TableCell>{conv.niche || '-'}</TableCell>
                         <TableCell>
                           <Badge 

@@ -35,6 +35,7 @@ type AIWhatsappRepository interface {
 	UpdateConversationStage(prospectNum string, stage string) error
 	UpdateProspectName(prospectNum, idDevice, prospectName string) error
 	UpdateHumanTakeover(prospectNum string, human int) error
+	UpdateHumanStatus(idProspect string, human int) error
 	UpdateConvCurrent(prospectNum string, convCurrent string) error
 	UpdateConvLast(prospectNum string, convLast interface{}) error
 	UpdateWaitingStatus(executionID string, waitingValue int32) error
@@ -599,7 +600,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			COUNT(DISTINCT niche) as unique_niches,
 			COUNT(CASE WHEN stage IS NOT NULL AND stage != '' THEN 1 END) as conversations_with_stage
 		FROM ai_whatsapp_nodepath
-		WHERE id_device IN (%s) AND date_order BETWEEN ? AND ?
+		WHERE id_device IN (%s) AND created_at BETWEEN ? AND ?
 	`, strings.Join(placeholders, ","))
 
 	// Add specific device filter if specified
@@ -656,7 +657,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_conversations,
 			COUNT(CASE WHEN human = 1 THEN 1 END) as human_conversations
 		FROM ai_whatsapp_nodepath
-		WHERE id_device IN (%s) AND date_order BETWEEN ? AND ?
+		WHERE id_device IN (%s) AND created_at BETWEEN ? AND ?
 	`, strings.Join(placeholders, ","))
 
 	// Reset args for daily query
@@ -705,7 +706,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			stage,
 			COUNT(*) as count
 		FROM ai_whatsapp_nodepath
-		WHERE id_device IN (%s) AND date_order BETWEEN ? AND ? AND stage IS NOT NULL AND stage != ''
+		WHERE id_device IN (%s) AND created_at BETWEEN ? AND ? AND stage IS NOT NULL AND stage != ''
 	`, strings.Join(placeholders, ","))
 
 	// Reset args for stage query
@@ -1612,4 +1613,28 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 	}
 
 	return conversations, nil
+}
+// UpdateHumanStatus updates the human status for a specific conversation by ID
+func (r *aiWhatsappRepository) UpdateHumanStatus(idProspect string, human int) error {
+	query := `
+		UPDATE ai_whatsapp_nodepath 
+		SET human = ?, updated_at = NOW() 
+		WHERE id_prospect = ?
+	`
+	
+	_, err := r.db.Exec(query, human, idProspect)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"id_prospect": idProspect,
+			"human": human,
+		}).Error("Failed to update human status")
+		return fmt.Errorf("failed to update human status: %w", err)
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"id_prospect": idProspect,
+		"human": human,
+	}).Info("Successfully updated human status")
+	
+	return nil
 }

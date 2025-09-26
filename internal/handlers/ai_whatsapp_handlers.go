@@ -113,6 +113,7 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 	// Data table endpoints
 	protected.Get("/ai-whatsapp/data", h.GetAllAIWhatsappData)
 	protected.Delete("/ai-whatsapp/data/:id", h.DeleteAIWhatsappData)
+	protected.Put("/ai-whatsapp/:id/human", h.UpdateHumanStatus)
 }
 
 // WhatsappWebhookRequest represents incoming WhatsApp webhook data
@@ -1523,5 +1524,43 @@ func (h *AIWhatsappHandlers) DebugWahaWebhook(c *fiber.Ctx) error {
 			"timestamp": time.Now().Unix(),
 		},
 		"message": "Debug data logged successfully",
+	})
+}
+// UpdateHumanStatus updates the human status for a conversation
+func (h *AIWhatsappHandlers) UpdateHumanStatus(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	if idStr == "" {
+		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid prospect ID")
+	}
+	
+	var req struct {
+		Human int `json:"human"`
+	}
+	
+	if err := c.BodyParser(&req); err != nil {
+		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid request format")
+	}
+	
+	// Validate human value (should be 0 or 1)
+	if req.Human != 0 && req.Human != 1 {
+		return h.errorResponse(c, fiber.StatusBadRequest, "Human value must be 0 (AI) or 1 (Human)")
+	}
+	
+	// Update human status in database
+	err := h.AIRepo.UpdateHumanStatus(idStr, req.Human)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to update human status")
+		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to update human status")
+	}
+	
+	logrus.WithFields(logrus.Fields{
+		"id_prospect": idStr,
+		"human": req.Human,
+	}).Info("Human status updated successfully")
+	
+	return h.successResponse(c, map[string]interface{}{
+		"id": idStr,
+		"human": req.Human,
+		"status": "updated",
 	})
 }
