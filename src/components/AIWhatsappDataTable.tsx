@@ -20,6 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { 
   Search, 
   RefreshCw, 
@@ -30,7 +38,10 @@ import {
   Calendar,
   Filter,
   Download,
-  Trash2
+  Trash2,
+  Bot,
+  UserCheck,
+  ExternalLink
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -97,13 +108,17 @@ const AIWhatsappDataTable = () => {
   // Available devices and stages for filters (filtered by user's devices)
   const [availableDevices, setAvailableDevices] = useState<string[]>([]);
   const [availableStages, setAvailableStages] = useState<string[]>([]);
+  
+  // Dialog state for human/AI toggle
+  const [showHumanDialog, setShowHumanDialog] = useState(false);
+  const [selectedProspect, setSelectedProspect] = useState<{id: string, human: number, name: string} | null>(null);
+  const [selectedHumanStatus, setSelectedHumanStatus] = useState<'AI' | 'Human'>('AI');
 
   /**
    * Fetch AI WhatsApp data from the backend
    * Automatically filters by user's device IDs from device context
    */
   const fetchAIWhatsappData = async () => {
-    // Remove device check - let backend handle it
     console.log('AIWhatsappDataTable: Fetching data...');
     console.log('AIWhatsappDataTable: Device IDs from context:', device_ids);
     
@@ -136,383 +151,476 @@ const AIWhatsappDataTable = () => {
       }
       
       const data: AIWhatsappDataResponse = await response.json();
+      console.log('AIWhatsappDataTable: Received data:', data);
       
-      setConversations(data.data);
-      setCurrentPage(data.pagination.current_page);
-      setTotalPages(data.pagination.total_pages);
-      setTotalRecords(data.pagination.total_records);
-      
-      // Extract unique devices and stages for filters (only from user's devices)
-      const devices = [...new Set(data.data.map(conv => conv.id_device).filter(Boolean))];
-      const stages = [...new Set(data.data.map(conv => conv.stage).filter(Boolean))];
-      
-      // Filter devices to only show user's devices
-      const userDevices = devices.filter(device => device_ids?.includes(device));
-      setAvailableDevices(userDevices);
-      setAvailableStages(stages);
-      
+      if (data.success) {
+        setConversations(data.data || []);
+        setTotalPages(data.pagination?.total_pages || 1);
+        setTotalRecords(data.pagination?.total_records || 0);
+        
+        // Extract unique devices and stages from the data (already filtered by user's devices)
+        const devices = Array.from(new Set(data.data?.map(c => c.id_device).filter(Boolean) || []));
+        const stages = Array.from(new Set(data.data?.map(c => c.stage || 'Welcome Message').filter(Boolean) || []));
+        
+        setAvailableDevices(devices);
+        setAvailableStages(stages);
+      } else {
+        throw new Error('Failed to fetch data');
+      }
     } catch (err) {
-      console.error('Error fetching AI WhatsApp data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch data');
+      console.error('AIWhatsappDataTable: Error fetching data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch AI WhatsApp data');
+      setConversations([]);
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Delete an AI WhatsApp conversation record
-   * @param id - The ID of the record to delete
-   */
-  const deleteConversation = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
+  // Fetch data on component mount and when filters/pagination change
+  useEffect(() => {
+    if (has_devices && device_ids && device_ids.length > 0) {
+      fetchAIWhatsappData();
+    } else if (!has_devices) {
+      setShowDeviceRequiredPopup(true);
+    }
+  }, [currentPage, pageSize, deviceFilter, stageFilter, searchTerm, has_devices, device_ids]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchAIWhatsappData();
+  };
+
+  const handleExport = () => {
+    // Export filtered data to CSV
+    if (conversations.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    const headers = ['No', 'ID Device', 'Phone Number', 'Prospect Name', 'Niche', 'Status', 'Stage', 'Keyword Iklan', 'Marketer', 'Updated'];
+    const csvData = conversations.map((conv, index) => [
+      index + 1,
+      conv.id_device || '',
+      conv.prospect_num || '',
+      conv.prospect_name || '',
+      conv.niche || '',
+      conv.human === 1 ? 'Human' : 'AI',
+      conv.stage || 'Welcome Message',
+      conv.keywordiklan || '',
+      conv.marketer || '',
+      conv.updated_at ? format(new Date(conv.updated_at), 'dd/MM/yyyy HH:mm') : ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => {
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const filename = `ai_whatsapp_export_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this conversation?')) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/ai-whatsapp/data/${id}`, {
+      const response = await fetch(`/api/ai-whatsapp/ai/ai-whatsapp/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error('Failed to delete conversation');
       }
 
-      const result = await response.json();
-      
-      if (result.success) {
-        // Refresh the data after successful deletion
-        await fetchAIWhatsappData();
-        // Show success message (you can replace this with a toast notification)
-        alert('Conversation deleted successfully!');
-      } else {
-        throw new Error(result.message || 'Failed to delete conversation');
-      }
-    } catch (error) {
-      console.error('Error deleting conversation:', error);
-      alert('Failed to delete conversation. Please try again.');
+      // Refresh data after deletion
+      fetchAIWhatsappData();
+    } catch (err) {
+      console.error('Error deleting conversation:', err);
+      alert('Failed to delete conversation');
     }
   };
 
-  // Load data on component mount and when filters change
-  useEffect(() => {
-    fetchAIWhatsappData();
-  }, [currentPage, pageSize, deviceFilter, stageFilter, searchTerm]);
+  const handleHumanToggleClick = (id: string, currentHuman: number, name: string) => {
+    setSelectedProspect({ id, human: currentHuman, name });
+    setSelectedHumanStatus(currentHuman === 1 ? 'Human' : 'AI');
+    setShowHumanDialog(true);
+  };
 
-  // Handle search with debounce
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (currentPage !== 1) {
-        setCurrentPage(1); // Reset to first page when searching
-      } else {
-        fetchAIWhatsappData();
+  const handleHumanToggleConfirm = async () => {
+    if (!selectedProspect) return;
+
+    const newHumanValue = selectedHumanStatus === 'Human' ? 1 : 0;
+
+    try {
+      const response = await fetch(`/api/ai-whatsapp/ai/ai-whatsapp/${selectedProspect.id}/human`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ human: newHumanValue }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update status');
       }
-    }, 500);
 
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
-
-  // Reset filters
-  const resetFilters = () => {
-    setDeviceFilter('all');
-    setStageFilter('all');
-    setSearchTerm('');
-    setCurrentPage(1);
+      // Refresh data after update
+      fetchAIWhatsappData();
+      setShowHumanDialog(false);
+      setSelectedProspect(null);
+    } catch (err) {
+      console.error('Error updating human status:', err);
+      alert('Failed to update status');
+    }
   };
 
-  // Export data (placeholder)
-  const exportData = () => {
-    // TODO: Implement export functionality
-    console.log('Export data functionality to be implemented');
+  const renderConversationHistory = (convLast: any) => {
+    if (!convLast) return '-';
+    
+    try {
+      // If it's already an object, use it directly
+      const messages = typeof convLast === 'string' ? JSON.parse(convLast) : convLast;
+      
+      if (!Array.isArray(messages) || messages.length === 0) return '-';
+      
+      // Get last 2 messages
+      const lastMessages = messages.slice(-2);
+      
+      return (
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-auto p-1">
+              <div className="text-left max-w-xs">
+                {lastMessages.map((msg: any, idx: number) => (
+                  <div key={idx} className="mb-1">
+                    <span className={`text-xs font-medium ${msg.sender === 'bot' ? 'text-blue-600' : 'text-green-600'}`}>
+                      {msg.sender === 'bot' ? 'Bot' : 'User'}:
+                    </span>
+                    <span className="text-xs ml-1 line-clamp-1">{msg.message}</span>
+                  </div>
+                ))}
+              </div>
+              <ExternalLink className="w-3 h-3 ml-1" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Conversation History</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              {messages.map((msg: any, idx: number) => (
+                <div key={idx} className={`p-3 rounded-lg ${msg.sender === 'bot' ? 'bg-blue-50' : 'bg-green-50'}`}>
+                  <div className="flex justify-between items-start mb-1">
+                    <span className={`font-medium ${msg.sender === 'bot' ? 'text-blue-700' : 'text-green-700'}`}>
+                      {msg.sender === 'bot' ? 'Bot' : 'User'}
+                    </span>
+                    {msg.timestamp && (
+                      <span className="text-xs text-gray-500">
+                        {format(new Date(msg.timestamp), 'dd/MM HH:mm')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      );
+    } catch (e) {
+      console.error('Error parsing conversation history:', e);
+      return '-';
+    }
   };
 
-  // Format conversation data for display
-  // Get status badge color
-  const getStatusBadgeColor = (human: number) => {
-    return human === 1 ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800';
-  };
-
-  // Get stage badge color
-  const getStageBadgeColor = (stage: string) => {
-    const colors = {
-      'Problem Identification': 'bg-blue-100 text-blue-800',
-      'Solution Presentation': 'bg-purple-100 text-purple-800',
-      'Closing': 'bg-green-100 text-green-800',
-      'Follow Up': 'bg-yellow-100 text-yellow-800',
-    };
-    return colors[stage as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
+  if (!has_devices) {
+    return (
+      <div>
+        <DeviceRequiredPopup 
+          open={showDeviceRequiredPopup} 
+          onOpenChange={setShowDeviceRequiredPopup} 
+        />
+        <Card>
+          <CardContent className="text-center py-12">
+            <MessageSquare className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">No Devices Configured</h2>
+            <p className="text-muted-foreground">
+              Please configure at least one device to view AI WhatsApp conversations
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <CardTitle className="flex items-center gap-2">
+    <div className="space-y-6">
+      <Card className="border-0 shadow-lg">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle className="flex items-center space-x-2">
               <MessageSquare className="w-5 h-5" />
-              AI WhatsApp Conversations
+              <span>AI WhatsApp Conversations</span>
             </CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              View and manage all AI WhatsApp conversation records
-            </p>
+            <div className="flex items-center space-x-2">
+              <Button onClick={handleExport} variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+              <Button onClick={handleRefresh} variant="outline" size="sm">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportData}
-              className="flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchAIWhatsappData}
-              disabled={loading}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+          <div className="text-sm text-muted-foreground mt-2">
+            View and manage all AI WhatsApp conversation records
           </div>
-        </div>
-      </CardHeader>
-      
-      <CardContent>
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        </CardHeader>
+        <CardContent>
+          {/* Filters */}
+          <div className="flex flex-wrap gap-4 mb-6">
+            <div className="flex-1 min-w-[200px]">
               <Input
                 placeholder="Search by phone number, niche, stage, or marketer..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="w-full"
+                icon={<Search className="w-4 h-4" />}
               />
             </div>
+            {availableDevices.length > 1 && (
+              <Select value={deviceFilter} onValueChange={setDeviceFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Devices" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Devices</SelectItem>
+                  {availableDevices.map(device => (
+                    <SelectItem key={device} value={device}>{device}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Select value={stageFilter} onValueChange={setStageFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Stages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Stages</SelectItem>
+                {availableStages.map(stage => (
+                  <SelectItem key={stage} value={stage}>{stage}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          
-          <Select value={deviceFilter} onValueChange={setDeviceFilter}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Filter by Device" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Devices</SelectItem>
-              {availableDevices.map((device) => (
-                <SelectItem key={device} value={device}>
-                  {device}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Filter by Stage" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stages</SelectItem>
-              {availableStages.map((stage) => (
-                <SelectItem key={stage} value={stage}>
-                  {stage}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Button
-            variant="outline"
-            onClick={resetFilters}
-            className="flex items-center gap-2"
-          >
-            <Filter className="w-4 h-4" />
-            Reset
-          </Button>
-        </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-            <p className="font-medium">Error loading data:</p>
-            <p className="text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-            <span>Loading conversations...</span>
-          </div>
-        )}
-
-        {/* Data Table */}
-        {!loading && !error && (
-          <>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">No</TableHead>
-                    <TableHead>Phone Number</TableHead>
-                    <TableHead>Prospect Name</TableHead>
-                    <TableHead>Device</TableHead>
-                    <TableHead>Stage</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Niche</TableHead>
-                    <TableHead>Keyword Iklan</TableHead>
-                    <TableHead className="min-w-[300px]">Conversation History</TableHead>
-                    <TableHead>Marketer</TableHead>
-                    <TableHead>Updated</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {conversations.length === 0 ? (
+          {/* Data Table */}
+          {loading ? (
+            <div className="text-center py-12">
+              <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading conversations...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-red-600 mb-4">{error}</p>
+              <Button onClick={handleRefresh}>Try Again</Button>
+            </div>
+          ) : conversations.length === 0 ? (
+            <div className="text-center py-12">
+              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-muted-foreground">No conversations found</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={12} className="text-center py-8">
-                        <div className="flex flex-col items-center gap-2">
-                          <MessageSquare className="w-8 h-8 text-gray-400" />
-                          <p className="text-gray-500">No conversations found</p>
-                          <p className="text-sm text-gray-400">
-                            Try adjusting your filters or search terms
-                          </p>
-                        </div>
-                      </TableCell>
+                      <TableHead className="w-12">No</TableHead>
+                      <TableHead>ID Device</TableHead>
+                      <TableHead>Phone Number</TableHead>
+                      <TableHead>Prospect Name</TableHead>
+                      <TableHead>Niche</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Stage</TableHead>
+                      <TableHead>Conversation History</TableHead>
+                      <TableHead>Keyword Iklan</TableHead>
+                      <TableHead>Marketer</TableHead>
+                      <TableHead>Updated</TableHead>
+                      <TableHead className="text-center">Actions</TableHead>
                     </TableRow>
-                  ) : (
-                    conversations.map((conversation, index) => (
-                      <TableRow key={conversation.id_prospect}>
-                        <TableCell className="font-medium">
-                          {((currentPage - 1) * pageSize) + index + 1}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {conversation.prospect_num || 'N/A'}
-                        </TableCell>
+                  </TableHeader>
+                  <TableBody>
+                    {conversations.map((conv, index) => (
+                      <TableRow key={conv.id_prospect}>
+                        <TableCell>{(currentPage - 1) * pageSize + index + 1}</TableCell>
+                        <TableCell>{conv.id_device || '-'}</TableCell>
+                        <TableCell>{conv.prospect_num || '-'}</TableCell>
+                        <TableCell>{conv.prospect_name || '-'}</TableCell>
+                        <TableCell>{conv.niche || '-'}</TableCell>
                         <TableCell>
-                          {conversation.prospect_name || 'N/A'}
+                          <Badge 
+                            variant={conv.human === 1 ? "secondary" : "default"}
+                            className="cursor-pointer"
+                            onClick={() => handleHumanToggleClick(conv.id_prospect, conv.human, conv.prospect_name)}
+                          >
+                            {conv.human === 1 ? (
+                              <>
+                                <UserCheck className="w-3 h-3 mr-1" />
+                                Human
+                              </>
+                            ) : (
+                              <>
+                                <Bot className="w-3 h-3 mr-1" />
+                                AI
+                              </>
+                            )}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">
-                            {conversation.id_device}
+                            {conv.stage || 'Welcome Message'}
                           </Badge>
                         </TableCell>
+                        <TableCell>{renderConversationHistory(conv.conv_last)}</TableCell>
+                        <TableCell>{conv.keywordiklan || '-'}</TableCell>
+                        <TableCell>{conv.marketer || '-'}</TableCell>
                         <TableCell>
-                          <Badge className={getStageBadgeColor(conversation.stage)}>
-                            {conversation.stage || 'No Stage'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getStatusBadgeColor(conversation.human)}>
-                            {conversation.human === 1 ? 'Human' : 'AI'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {conversation.niche || 'N/A'}
-                        </TableCell>
-                        <TableCell>
-                          {conversation.keywordiklan || 'N/A'}
-                        </TableCell>
-                        <TableCell className="min-w-[300px] max-w-[500px]">
-                          <div className="max-h-40 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
-                            <pre className="text-xs whitespace-pre-wrap break-words font-mono text-gray-700 dark:text-gray-300">
-                              {conversation.conv_last || 'No conversation history'}
-                            </pre>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {conversation.marketer || 'N/A'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-sm text-gray-500">
-                            <Calendar className="w-3 h-3" />
-                            {format(new Date(conversation.updated_at), 'MMM dd, HH:mm')}
-                          </div>
+                          {conv.updated_at ? format(new Date(conv.updated_at), 'dd/MM HH:mm') : '-'}
                         </TableCell>
                         <TableCell>
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            onClick={() => deleteConversation(conversation.id_prospect)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title="Delete conversation"
+                            onClick={() => handleDelete(conv.id_prospect)}
+                            className="text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
-            {/* Pagination */}
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>Showing</span>
-                <Select value={pageSize.toString()} onValueChange={(value) => {
-                  setPageSize(Number(value));
-                  setCurrentPage(1);
-                }}>
-                  <SelectTrigger className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span>of {totalRecords} records</span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1 || loading}
-                  className="flex items-center gap-1"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Previous
-                </Button>
-                
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-gray-600">
-                    Page {currentPage} of {totalPages}
-                  </span>
+              {/* Pagination */}
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalRecords)} of {totalRecords} records
                 </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages || loading}
-                  className="flex items-center gap-1"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </Button>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-sm">Page</span>
+                    <Input
+                      type="number"
+                      min="1"
+                      max={totalPages}
+                      value={currentPage}
+                      onChange={(e) => {
+                        const page = parseInt(e.target.value);
+                        if (!isNaN(page)) {
+                          handlePageChange(page);
+                        }
+                      }}
+                      className="w-16 text-center"
+                    />
+                    <span className="text-sm">of {totalPages}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Human/AI Toggle Dialog */}
+      <Dialog open={showHumanDialog} onOpenChange={setShowHumanDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Status</DialogTitle>
+            <DialogDescription>
+              Change the conversation status for {selectedProspect?.name || 'this prospect'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Status:</label>
+              <Select value={selectedHumanStatus} onValueChange={(value: 'AI' | 'Human') => setSelectedHumanStatus(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AI">
+                    <div className="flex items-center">
+                      <Bot className="w-4 h-4 mr-2" />
+                      AI (Automated responses)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="Human">
+                    <div className="flex items-center">
+                      <UserCheck className="w-4 h-4 mr-2" />
+                      Human (Manual takeover)
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </>
-        )}
-      </CardContent>
-      
-      {/* Device Required Popup */}
-      <DeviceRequiredPopup 
-        isOpen={showDeviceRequiredPopup} 
-        onClose={() => setShowDeviceRequiredPopup(false)} 
-      />
-    </Card>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowHumanDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleHumanToggleConfirm}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 
