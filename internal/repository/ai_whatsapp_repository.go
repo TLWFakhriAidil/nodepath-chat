@@ -418,7 +418,7 @@ func (r *aiWhatsappRepository) UpdateProspectName(prospectNum, idDevice, prospec
 func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error) {
 	// Build base query with JOIN to filter by user
 	baseQuery := `
-		SELECT a.id_prospect, a.id_device, a.prospect_num, a.stage, a.date_order, a.conv_last, 
+		SELECT a.id_prospect, a.id_device, a.prospect_num, a.prospect_name, a.stage, a.date_order, a.conv_last, 
 		       a.conv_current, a.human, a.niche, a.intro, 
 		       a.balas, a.keywordiklan, a.marketer, a.update_today, 
 		       a.created_at, a.updated_at
@@ -497,7 +497,7 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 		var convCurrentSQL sql.NullString
 
 		err := rows.Scan(
-			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.Stage, &ai.DateOrder, &convLastJSON,
+			&ai.IDProspect, &ai.IDDevice, &ai.ProspectNum, &ai.ProspectName, &ai.Stage, &ai.DateOrder, &convLastJSON,
 			&convCurrentSQL, &ai.Human, &ai.Niche, &ai.Intro,
 			&ai.Balas, &ai.KeywordIklan, &ai.Marketer, &ai.UpdateToday,
 			&ai.CreatedAt, &ai.UpdatedAt,
@@ -704,7 +704,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 	stageQuery := fmt.Sprintf(`
 		SELECT 
 			CASE 
-				WHEN stage IS NULL OR stage = '' THEN 'Problem Identification' 
+				WHEN stage IS NULL OR stage = '' THEN 'Welcome Message' 
 				ELSE stage 
 			END as stage_name,
 			COUNT(*) as count

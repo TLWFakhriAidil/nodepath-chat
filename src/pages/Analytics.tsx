@@ -510,7 +510,7 @@ const Analytics = () => {
                             </div>
                             <div>
                               <p className="font-medium text-slate-900 dark:text-white">
-                                {stage === 'No Stage' || !stage ? 'Welcome Message' : stage}
+                                {!stage || stage === 'No Stage' ? 'Welcome Message' : stage}
                               </p>
                               <p className="text-sm text-slate-600 dark:text-slate-400">
                                 {count} conversations
