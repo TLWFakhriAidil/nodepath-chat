@@ -652,7 +652,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 	// Get daily breakdown
 	dailyQuery := fmt.Sprintf(`
 		SELECT 
-			DATE(date_order) as date,
+			DATE(created_at) as date,
 			COUNT(*) as conversations,
 			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_conversations,
 			COUNT(CASE WHEN human = 1 THEN 1 END) as human_conversations
@@ -671,7 +671,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		dailyQuery += " AND id_device = ?"
 		dailyArgs = append(dailyArgs, idDevice)
 	}
-	dailyQuery += " GROUP BY DATE(date_order) ORDER BY DATE(date_order)"
+	dailyQuery += " GROUP BY DATE(created_at) ORDER BY DATE(created_at)"
 
 	dailyRows, err := r.db.Query(dailyQuery, dailyArgs...)
 	var dailyData []map[string]interface{}
@@ -700,13 +700,16 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		}
 	}
 
-	// Get stage distribution
+	// Get stage distribution including NULL stages
 	stageQuery := fmt.Sprintf(`
 		SELECT 
-			stage,
+			CASE 
+				WHEN stage IS NULL OR stage = '' THEN 'Problem Identification' 
+				ELSE stage 
+			END as stage_name,
 			COUNT(*) as count
 		FROM ai_whatsapp_nodepath
-		WHERE id_device IN (%s) AND created_at BETWEEN ? AND ? AND stage IS NOT NULL AND stage != ''
+		WHERE id_device IN (%s) AND created_at BETWEEN ? AND ?
 	`, strings.Join(placeholders, ","))
 
 	// Reset args for stage query
@@ -720,7 +723,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		stageQuery += " AND id_device = ?"
 		stageArgs = append(stageArgs, idDevice)
 	}
-	stageQuery += " GROUP BY stage ORDER BY count DESC"
+	stageQuery += " GROUP BY stage_name ORDER BY count DESC"
 
 	stageRows, err := r.db.Query(stageQuery, stageArgs...)
 	var stageDistribution []map[string]interface{}

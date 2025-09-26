@@ -87,7 +87,7 @@ interface AIWhatsappDataResponse {
  * AI WhatsApp Data Table component with device-based filtering
  * Automatically filters conversations by user's configured devices
  */
-const AIWhatsappDataTable = () => {
+const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) => {
   const { has_devices, device_ids } = useDevice();
   const [conversations, setConversations] = useState<AIWhatsappConversation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -101,9 +101,14 @@ const AIWhatsappDataTable = () => {
   const [pageSize, setPageSize] = useState(10);
   
   // Filter state
-  const [deviceFilter, setDeviceFilter] = useState('all');
+  const [deviceFilter, setDeviceFilter] = useState(selectedDevice || 'all');
   const [stageFilter, setStageFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Update deviceFilter when selectedDevice prop changes
+  useEffect(() => {
+    setDeviceFilter(selectedDevice || 'all');
+  }, [selectedDevice]);
   
   // Available devices and stages for filters (filtered by user's devices)
   const [availableDevices, setAvailableDevices] = useState<string[]>([]);
@@ -288,10 +293,13 @@ const AIWhatsappDataTable = () => {
         throw new Error('Failed to update status');
       }
 
-      // Refresh data after update
+      // Refresh data after update - this will trigger summary boxes to refresh too
       fetchAIWhatsappData();
       setShowHumanDialog(false);
       setSelectedProspect(null);
+      
+      // Force refresh of parent Analytics page if it exists
+      window.dispatchEvent(new Event('refreshAnalytics'));
     } catch (err) {
       console.error('Error updating human status:', err);
       alert('Failed to update status');
@@ -302,97 +310,62 @@ const AIWhatsappDataTable = () => {
     if (!convLast) return '-';
     
     try {
-      let messages;
+      let displayContent;
       
       // Check if it's already parsed JSON
       if (typeof convLast === 'object' && Array.isArray(convLast)) {
-        messages = convLast;
+        // JSON array format
+        displayContent = convLast.map((msg: any, idx: number) => (
+          <div key={idx} className="mb-2">
+            <span className={`text-xs font-medium ${msg.sender === 'bot' ? 'text-blue-600' : 'text-green-600'}`}>
+              {msg.sender === 'bot' ? 'Bot' : 'User'}:
+            </span>
+            <span className="text-xs ml-1">{msg.message}</span>
+          </div>
+        ));
       } 
       // Try to parse as JSON
       else if (typeof convLast === 'string') {
-        // First check if it starts with [ or { (JSON)
         const trimmed = convLast.trim();
         if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
           try {
-            messages = JSON.parse(trimmed);
+            const messages = JSON.parse(trimmed);
+            if (Array.isArray(messages)) {
+              displayContent = messages.map((msg: any, idx: number) => (
+                <div key={idx} className="mb-2">
+                  <span className={`text-xs font-medium ${msg.sender === 'bot' ? 'text-blue-600' : 'text-green-600'}`}>
+                    {msg.sender === 'bot' ? 'Bot' : 'User'}:
+                  </span>
+                  <span className="text-xs ml-1">{msg.message}</span>
+                </div>
+              ));
+            } else {
+              // Plain text display
+              displayContent = <div className="text-xs whitespace-pre-wrap">{convLast}</div>;
+            }
           } catch (e) {
             // If JSON parse fails, treat as plain text
-            return (
-              <div className="text-xs max-w-xs line-clamp-2">
-                {convLast}
-              </div>
-            );
+            displayContent = <div className="text-xs whitespace-pre-wrap">{convLast}</div>;
           }
         } else {
-          // Plain text format - just display as is
-          return (
-            <div className="text-xs max-w-xs line-clamp-2">
-              {convLast}
-            </div>
-          );
+          // Plain text format
+          displayContent = <div className="text-xs whitespace-pre-wrap">{convLast}</div>;
         }
       } else {
         return '-';
       }
       
-      if (!Array.isArray(messages) || messages.length === 0) {
-        // If not an array, just show the text
-        return (
-          <div className="text-xs max-w-xs line-clamp-2">
-            {typeof messages === 'string' ? messages : JSON.stringify(messages)}
-          </div>
-        );
-      }
-      
-      // Get last 2 messages
-      const lastMessages = messages.slice(-2);
-      
+      // Return scrollable div with full content
       return (
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-auto p-1">
-              <div className="text-left max-w-xs">
-                {lastMessages.map((msg: any, idx: number) => (
-                  <div key={idx} className="mb-1">
-                    <span className={`text-xs font-medium ${msg.sender === 'bot' ? 'text-blue-600' : 'text-green-600'}`}>
-                      {msg.sender === 'bot' ? 'Bot' : 'User'}:
-                    </span>
-                    <span className="text-xs ml-1 line-clamp-1">{msg.message}</span>
-                  </div>
-                ))}
-              </div>
-              <ExternalLink className="w-3 h-3 ml-1" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Conversation History</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-2">
-              {messages.map((msg: any, idx: number) => (
-                <div key={idx} className={`p-3 rounded-lg ${msg.sender === 'bot' ? 'bg-blue-50' : 'bg-green-50'}`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <span className={`font-medium ${msg.sender === 'bot' ? 'text-blue-700' : 'text-green-700'}`}>
-                      {msg.sender === 'bot' ? 'Bot' : 'User'}
-                    </span>
-                    {msg.timestamp && (
-                      <span className="text-xs text-gray-500">
-                        {format(new Date(msg.timestamp), 'dd/MM HH:mm')}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
-                </div>
-              ))}
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="max-h-20 overflow-y-auto p-1 border rounded text-left">
+          {displayContent}
+        </div>
       );
     } catch (e) {
       console.error('Error rendering conversation history:', e);
       // Return the raw text if all parsing fails
       return (
-        <div className="text-xs max-w-xs line-clamp-2">
+        <div className="text-xs max-h-20 overflow-y-auto p-1">
           {typeof convLast === 'string' ? convLast : '-'}
         </div>
       );

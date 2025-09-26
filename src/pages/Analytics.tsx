@@ -134,6 +134,16 @@ const Analytics = () => {
     fetchAnalyticsData();
   }, [dateRange, selectedDevice]);
 
+  // Listen for refresh events from AIWhatsappDataTable
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchAnalyticsData();
+    };
+    
+    window.addEventListener('refreshAnalytics', handleRefresh);
+    return () => window.removeEventListener('refreshAnalytics', handleRefresh);
+  }, []);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchAnalyticsData();
@@ -606,7 +616,7 @@ const Analytics = () => {
       
       {/* AI WhatsApp Data Table */}
       <div className="mt-8">
-        <AIWhatsappDataTable />
+        <AIWhatsappDataTable selectedDevice={selectedDevice} />
       </div>
       
       {/* Device Required Popup */}
