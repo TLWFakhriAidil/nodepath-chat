@@ -1560,15 +1560,15 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		}
 
 	case "waha":
-		// Extract data for WAHA provider from payload structure
-		// Following PHP: $payload = $data['payload']; $wa_no_raw = $payload['from']; $wa_text = $payload['body'];
-		if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
-			if fromVal, ok := payload["from"].(string); ok {
-				from = fromVal
-			}
-			if bodyVal, ok := payload["body"].(string); ok {
-				message = bodyVal
-			}
+		// WAHA data is already extracted by HandleWahaWebhook and passed in top-level webhookData
+		// Extract from/message/sender_name directly from webhookData (already processed)
+		if fromVal, ok := webhookData["from"].(string); ok {
+			from = fromVal
+			logrus.WithField("from", from).Info("✅ WAHA: Found 'from' field")
+		}
+		if msgVal, ok := webhookData["message"].(string); ok {
+			message = msgVal
+			logrus.WithField("message", truncateString(message, 50)).Info("✅ WAHA: Found 'message' field")
 		}
 		if msgTypeVal, ok := webhookData["message_type"].(string); ok {
 			messageType = msgTypeVal
@@ -1577,29 +1577,12 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			isGroup = isGroupVal
 		}
 
-		// Extract sender name - prioritize direct sender_name field, then fallback to payload structure
+		// Extract sender name - already extracted by HandleWahaWebhook
 		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
 			senderName = senderNameVal
+			logrus.WithField("sender_name", senderName).Info("✅ WAHA: Found 'sender_name' field")
 		} else {
-			// Fallback to WAHA payload structure
-			// Check payload._data.Info.PushName (correct path based on PHP implementation)
-			if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
-				if data, ok := payload["_data"].(map[string]interface{}); ok {
-					if info, ok := data["Info"].(map[string]interface{}); ok {
-						if pushName, ok := info["PushName"].(string); ok && pushName != "" {
-							senderName = pushName
-						} else {
-							senderName = "Sis"
-						}
-					} else {
-						senderName = "Sis"
-					}
-				} else {
-					senderName = "Sis"
-				}
-			} else {
-				senderName = "Sis"
-			}
+			senderName = "Sis"
 		}
 
 		// Check for check_percent parameter from WAHA isFromMe % command processing
