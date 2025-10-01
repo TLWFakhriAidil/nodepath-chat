@@ -81,7 +81,7 @@ func (h *AIWhatsappHandlers) SetupAIWhatsappRoutes(api fiber.Router) {
 
 	// Test endpoints for webhook data extraction (no auth required for testing)
 	api.Post("/test/waha/extraction", h.TestWahaExtraction)
-	
+
 	// Production debugging endpoint - logs everything and returns payload structure (no auth required for debugging)
 	api.Post("/debug/waha/:device_id", h.DebugWahaWebhook)
 
@@ -136,10 +136,10 @@ type WablasWebhookRequest struct {
 
 // WhacenterWebhookRequest represents incoming Whacenter webhook data
 type WhacenterWebhookRequest struct {
-	Number  string `json:"number"`
-	Text    string `json:"text"`
-	Device  string `json:"device"`
-	Date    string `json:"date"`
+	Number string `json:"number"`
+	Text   string `json:"text"`
+	Device string `json:"device"`
+	Date   string `json:"date"`
 }
 
 // WahaWebhookRequest represents incoming WAHA webhook data
@@ -285,22 +285,22 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	deviceID := c.Params("device_id")
 	body := c.Body()
-	
+
 	// Enhanced logging for production debugging - log ALL headers and payload details
 	headers := make(map[string]string)
 	c.Request().Header.VisitAll(func(key, value []byte) {
 		headers[string(key)] = string(value)
 	})
-	
+
 	logrus.WithFields(logrus.Fields{
-		"device_id": deviceID,
+		"device_id":    deviceID,
 		"payload_size": len(body),
 		"content_type": c.Get("Content-Type"),
-		"user_agent": c.Get("User-Agent"),
-		"headers": headers,
-		"raw_payload": string(body),
-		"method": c.Method(),
-		"url": c.OriginalURL(),
+		"user_agent":   c.Get("User-Agent"),
+		"headers":      headers,
+		"raw_payload":  string(body),
+		"method":       c.Method(),
+		"url":          c.OriginalURL(),
 	}).Error("🚨 WAHA PRODUCTION DEBUG: Complete webhook request details")
 
 	// Parse as generic map first for flexible extraction
@@ -320,12 +320,12 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	if extractedData.IsGroup {
 		logrus.WithFields(logrus.Fields{
 			"sender_phone": extractedData.SenderPhone,
-			"sender_name": extractedData.SenderName,
-			"device_id": deviceID,
+			"sender_name":  extractedData.SenderName,
+			"device_id":    deviceID,
 		}).Info("⏭️ WAHA: Ignoring group message as per requirements")
 		return c.JSON(fiber.Map{
-			"status": "ignored", 
-			"reason": "group message",
+			"status":         "ignored",
+			"reason":         "group message",
 			"extracted_data": extractedData,
 		})
 	}
@@ -334,16 +334,16 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	if extractedData.SenderPhone == "" || extractedData.Message == "" {
 		logrus.WithFields(logrus.Fields{
 			"sender_phone": extractedData.SenderPhone,
-			"message": truncateString(extractedData.Message, 100),
-			"sender_name": extractedData.SenderName,
-			"is_from_me": extractedData.IsFromMe,
-			"is_group": extractedData.IsGroup,
+			"message":      truncateString(extractedData.Message, 100),
+			"sender_name":  extractedData.SenderName,
+			"is_from_me":   extractedData.IsFromMe,
+			"is_group":     extractedData.IsGroup,
 		}).Warn("⚠️ WAHA: Missing required fields in extracted data")
 		return c.Status(400).JSON(fiber.Map{
 			"error": "Missing required fields",
 			"missing": map[string]bool{
 				"sender_phone": extractedData.SenderPhone == "",
-				"message": extractedData.Message == "",
+				"message":      extractedData.Message == "",
 			},
 			"extracted_data": extractedData,
 		})
@@ -353,7 +353,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	if strings.HasSuffix(extractedData.SenderPhone, "@c.us") {
 		extractedData.SenderPhone = strings.TrimSuffix(extractedData.SenderPhone, "@c.us")
 		logrus.WithFields(logrus.Fields{
-			"device_id": deviceID,
+			"device_id":    deviceID,
 			"cleaned_from": extractedData.SenderPhone,
 		}).Info("🔧 WAHA: Phone number cleaned - stripped @c.us suffix")
 	}
@@ -361,47 +361,47 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	// Handle isFromMe messages using user-specified logic
 	if extractedData.IsFromMe {
 		cleanText := strings.TrimSpace(extractedData.Message)
-		
+
 		logrus.WithFields(logrus.Fields{
 			"sender_phone": extractedData.SenderPhone,
-			"message": truncateString(cleanText, 50),
-			"device_id": deviceID,
+			"message":      truncateString(cleanText, 50),
+			"device_id":    deviceID,
 		}).Info("🔧 WAHA: Processing isFromMe message with user-specified logic")
-		
+
 		// Check if message starts with '%' (percent command)
 		if len(cleanText) > 0 && cleanText[0] == '%' {
 			logrus.WithFields(logrus.Fields{
-				"device_id": deviceID,
+				"device_id":    deviceID,
 				"sender_phone": extractedData.SenderPhone,
 			}).Info("🔧 WAHA: Processing % command - setting wa_nama='Sis', wa_text='Teruskan', checkPercent=1")
-			
+
 			// Update extracted data for % command
 			extractedData.SenderName = "Sis"
 			extractedData.Message = "Teruskan"
 			checkPercent := 1
-			
+
 			// Process through standardized flow with modified data
 			webhookData := map[string]interface{}{
-				"from": extractedData.SenderPhone,
-				"message": extractedData.Message,
-				"message_type": "text",
-				"is_group": extractedData.IsGroup,
-				"sender_name": extractedData.SenderName,
-				"is_from_me": extractedData.IsFromMe,
+				"from":          extractedData.SenderPhone,
+				"message":       extractedData.Message,
+				"message_type":  "text",
+				"is_group":      extractedData.IsGroup,
+				"sender_name":   extractedData.SenderName,
+				"is_from_me":    extractedData.IsFromMe,
 				"check_percent": checkPercent,
 			}
-			
+
 			go func() {
 				if h.mainHandlers != nil {
 					err := h.mainHandlers.processWebhookMessage(webhookData, deviceID, "waha")
 					if err != nil {
 						logrus.WithError(err).WithFields(logrus.Fields{
-							"device_id": deviceID,
+							"device_id":    deviceID,
 							"sender_phone": extractedData.SenderPhone,
 						}).Error("❌ WAHA: Failed to process % command")
 					} else {
 						logrus.WithFields(logrus.Fields{
-							"device_id": deviceID,
+							"device_id":    deviceID,
 							"sender_phone": extractedData.SenderPhone,
 						}).Info("✅ WAHA: Successfully processed % command")
 					}
@@ -409,67 +409,67 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 					h.processIncomingMessage(extractedData.SenderPhone, extractedData.Message, deviceID, "waha", extractedData.SenderName)
 				}
 			}()
-			
+
 			return c.JSON(fiber.Map{
-				"status": "success",
-				"type": "percent_command",
+				"status":         "success",
+				"type":           "percent_command",
 				"extracted_data": extractedData,
-				"check_percent": checkPercent,
+				"check_percent":  checkPercent,
 			})
 		}
-		
+
 		// Check if message equals 'cmd' (human takeover command)
 		if cleanText == "cmd" {
 			logrus.WithFields(logrus.Fields{
-				"device_id": deviceID,
+				"device_id":    deviceID,
 				"sender_phone": extractedData.SenderPhone,
 			}).Info("🔧 WAHA: Processing cmd command - setting human=1")
-			
+
 			// Find AIWhatsapp record and set human = 1
 			go func() {
 				whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedData.SenderPhone, deviceID)
 				if err != nil {
 					logrus.WithError(err).WithFields(logrus.Fields{
-						"device_id": deviceID,
+						"device_id":    deviceID,
 						"prospect_num": extractedData.SenderPhone,
 					}).Error("❌ WAHA: Failed to find AIWhatsapp record for cmd command")
 					return
 				}
-				
+
 				if whats != nil {
 					whats.Human = 1
 					err = h.AIRepo.UpdateAIWhatsapp(whats)
 					if err != nil {
 						logrus.WithError(err).WithFields(logrus.Fields{
-							"device_id": deviceID,
+							"device_id":    deviceID,
 							"prospect_num": extractedData.SenderPhone,
 						}).Error("❌ WAHA: Failed to update human=1 for cmd command")
 					} else {
 						logrus.WithFields(logrus.Fields{
-							"device_id": deviceID,
+							"device_id":    deviceID,
 							"prospect_num": extractedData.SenderPhone,
 						}).Info("✅ WAHA: Successfully set human=1 for cmd command")
 					}
 				}
 			}()
-			
+
 			return c.JSON(fiber.Map{
-				"status": "success",
-				"type": "cmd_command",
+				"status":  "success",
+				"type":    "cmd_command",
 				"message": "Human takeover activated",
 			})
 		}
-		
+
 		// For any other isFromMe message, return empty (ignore)
 		logrus.WithFields(logrus.Fields{
 			"sender_phone": extractedData.SenderPhone,
-			"message": truncateString(cleanText, 100),
-			"device_id": deviceID,
+			"message":      truncateString(cleanText, 100),
+			"device_id":    deviceID,
 		}).Info("⏭️ WAHA: Ignoring other isFromMe message (not % or cmd)")
-		
+
 		return c.JSON(fiber.Map{
-			"status": "ignored",
-			"reason": "isFromMe message (not % or cmd)",
+			"status":         "ignored",
+			"reason":         "isFromMe message (not % or cmd)",
 			"extracted_data": extractedData,
 		})
 	}
@@ -477,20 +477,20 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	// Logic 3: Otherwise → treat as normal customer message
 	logrus.WithFields(logrus.Fields{
 		"sender_phone": extractedData.SenderPhone,
-		"sender_name": extractedData.SenderName,
-		"message": truncateString(extractedData.Message, 100),
-		"device_id": deviceID,
+		"sender_name":  extractedData.SenderName,
+		"message":      truncateString(extractedData.Message, 100),
+		"device_id":    deviceID,
 	}).Info("💬 WAHA: Processing normal customer message through standardized flow routing")
 
 	// STANDARDIZED FLOW ROUTING: Use the same flow processing logic as Whacenter
 	// Create webhook data structure compatible with processWebhookMessage
 	webhookData := map[string]interface{}{
-		"from": extractedData.SenderPhone,
-		"message": extractedData.Message,
+		"from":         extractedData.SenderPhone,
+		"message":      extractedData.Message,
 		"message_type": "text",
-		"is_group": extractedData.IsGroup,
-		"sender_name": extractedData.SenderName,
-		"is_from_me": extractedData.IsFromMe,
+		"is_group":     extractedData.IsGroup,
+		"sender_name":  extractedData.SenderName,
+		"is_from_me":   extractedData.IsFromMe,
 	}
 
 	// Route through the standardized webhook processing system
@@ -500,12 +500,12 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 			err := h.mainHandlers.processWebhookMessage(webhookData, deviceID, "waha")
 			if err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{
-					"device_id": deviceID,
+					"device_id":    deviceID,
 					"sender_phone": extractedData.SenderPhone,
 				}).Error("❌ WAHA: Failed to process message through standardized flow routing")
 			} else {
 				logrus.WithFields(logrus.Fields{
-					"device_id": deviceID,
+					"device_id":    deviceID,
 					"sender_phone": extractedData.SenderPhone,
 				}).Info("✅ WAHA: Successfully processed message through standardized flow routing")
 			}
@@ -517,9 +517,9 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 	}()
 
 	return c.JSON(fiber.Map{
-		"status": "success",
-		"type": "customer_message",
-		"routing": "standardized_flow",
+		"status":         "success",
+		"type":           "customer_message",
+		"routing":        "standardized_flow",
 		"extracted_data": extractedData,
 	})
 }
@@ -529,12 +529,12 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 func (h *AIWhatsappHandlers) extractWahaFields(payload map[string]interface{}) (from, message, event, session string, isGroup bool) {
 	// Use the new standardized extraction function
 	extractedData := h.extractWahaWebhookData(payload)
-	
+
 	// Map to old function signature for backward compatibility
 	from = extractedData.SenderPhone
 	message = extractedData.Message
 	isGroup = extractedData.IsGroup
-	
+
 	// Extract event and session from top level for backward compatibility
 	if eventVal, ok := payload["event"].(string); ok {
 		event = eventVal
@@ -542,7 +542,7 @@ func (h *AIWhatsappHandlers) extractWahaFields(payload map[string]interface{}) (
 	if sessionVal, ok := payload["session"].(string); ok {
 		session = sessionVal
 	}
-	
+
 	return from, message, event, session, isGroup
 }
 
@@ -560,12 +560,12 @@ type WahaWebhookData struct {
 // Handles isFromMe messages with specific command processing
 func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]interface{}) WahaWebhookData {
 	var result WahaWebhookData
-	
+
 	logrus.WithFields(logrus.Fields{
 		"payload_keys": getMapKeys(webhookPayload),
-		"has_payload": webhookPayload["payload"] != nil,
+		"has_payload":  webhookPayload["payload"] != nil,
 	}).Info("🔍 WAHA: Starting data extraction with user-specified format")
-	
+
 	// Extract using exact user-specified format: $payload = $data['payload']
 	var payload map[string]interface{}
 	if payloadData, ok := webhookPayload["payload"].(map[string]interface{}); ok {
@@ -576,7 +576,7 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		payload = webhookPayload
 		logrus.Info("🔍 WAHA: Using direct payload structure as fallback")
 	}
-	
+
 	// Check for _data nested structure (common in WAHA webhooks)
 	var dataPayload map[string]interface{}
 	if dataObj, ok := payload["_data"].(map[string]interface{}); ok {
@@ -586,7 +586,7 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		dataPayload = payload
 		logrus.Info("🔍 WAHA: Using direct payload structure")
 	}
-	
+
 	// Extract data using user-specified format:
 	// $wa_text = $payload['body'] or $payload['_data']['body']
 	if bodyVal, ok := dataPayload["body"].(string); ok {
@@ -596,7 +596,7 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		result.Message = bodyVal
 		logrus.WithField("extraction_method", "payload_body").Info("🔍 WAHA: Message extracted from payload.body")
 	}
-	
+
 	// $wa_no_raw = $payload['from'] or $payload['_data']['from'] ?? null
 	if fromVal, ok := dataPayload["from"].(string); ok {
 		result.SenderPhone = fromVal
@@ -605,28 +605,46 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		result.SenderPhone = fromVal
 		logrus.WithField("extraction_method", "payload_from").Info("🔍 WAHA: Sender phone extracted from payload.from")
 	}
-	
-	// $wa_nama = $data['payload']['_data']['info']['pushName'] ?? 'Sis'
-	if infoObj, ok := dataPayload["info"].(map[string]interface{}); ok {
-		if pushNameVal, ok := infoObj["pushName"].(string); ok {
-			result.SenderName = pushNameVal
-			logrus.WithField("extraction_method", "data_info_pushname").Info("🔍 WAHA: Sender name extracted from data.info.pushName")
-		}
-	} else if mediaObj, ok := payload["media"].(map[string]interface{}); ok {
-		if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
+
+	// $wa_nama = $payload['_data']['Info']['PushName'] ?? 'Sis'
+	// First check payload._data.Info.PushName (PHP format with capital letters)
+	if _dataObj, ok := payload["_data"].(map[string]interface{}); ok {
+		if infoObj, ok := _dataObj["Info"].(map[string]interface{}); ok {
 			if pushNameVal, ok := infoObj["PushName"].(string); ok {
 				result.SenderName = pushNameVal
-				logrus.WithField("extraction_method", "payload_media_info_pushname").Info("🔍 WAHA: Sender name extracted from payload.media.Info.PushName")
+				logrus.WithField("extraction_method", "payload._data.Info.PushName").Info("🔍 WAHA: Sender name extracted from payload._data.Info.PushName")
 			}
 		}
 	}
 	
+	// Fallback: check data.info.pushName (lowercase)
+	if result.SenderName == "" {
+		if infoObj, ok := dataPayload["info"].(map[string]interface{}); ok {
+			if pushNameVal, ok := infoObj["pushName"].(string); ok {
+				result.SenderName = pushNameVal
+				logrus.WithField("extraction_method", "data_info_pushname").Info("🔍 WAHA: Sender name extracted from data.info.pushName")
+			}
+		}
+	}
+	
+	// Fallback: check payload.media.Info.PushName
+	if result.SenderName == "" {
+		if mediaObj, ok := payload["media"].(map[string]interface{}); ok {
+			if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
+				if pushNameVal, ok := infoObj["PushName"].(string); ok {
+					result.SenderName = pushNameVal
+					logrus.WithField("extraction_method", "payload_media_info_pushname").Info("🔍 WAHA: Sender name extracted from payload.media.Info.PushName")
+				}
+			}
+		}
+	}
+
 	// Default to 'Sis' if no sender name found
 	if result.SenderName == "" {
 		result.SenderName = "Sis"
 		logrus.Info("🔍 WAHA: Using default sender name 'Sis'")
 	}
-	
+
 	// Extract isFromMe for special handling
 	if infoObj, ok := dataPayload["info"].(map[string]interface{}); ok {
 		if isFromMeVal, ok := infoObj["fromMe"].(bool); ok {
@@ -637,7 +655,7 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		result.IsFromMe = isFromMeVal
 		logrus.WithField("is_from_me", isFromMeVal).Info("🔍 WAHA: IsFromMe extracted from payload.isFromMe")
 	}
-	
+
 	// Extract additional fields for completeness
 	if infoObj, ok := dataPayload["info"].(map[string]interface{}); ok {
 		if isGroupVal, ok := infoObj["isGroup"].(bool); ok {
@@ -650,36 +668,36 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 			}
 		}
 	}
-	
+
 	// Log extraction results with production debugging
 	logrus.WithFields(logrus.Fields{
-		"sender_phone": result.SenderPhone,
-		"sender_name": result.SenderName,
-		"message": truncateString(result.Message, 100),
-		"is_from_me": result.IsFromMe,
-		"is_group": result.IsGroup,
+		"sender_phone":       result.SenderPhone,
+		"sender_name":        result.SenderName,
+		"message":            truncateString(result.Message, 100),
+		"is_from_me":         result.IsFromMe,
+		"is_group":           result.IsGroup,
 		"extraction_success": result.SenderPhone != "" && result.Message != "",
 	}).Error("🚨 WAHA PRODUCTION: Final extraction results")
-	
+
 	// Log critical error if fields are still missing after all fallbacks
 	if result.SenderPhone == "" || result.Message == "" {
 		logrus.WithFields(logrus.Fields{
 			"missing_sender_phone": result.SenderPhone == "",
-			"missing_message": result.Message == "",
-			"all_payload_keys": getMapKeys(webhookPayload),
-			"payload_structure": analyzePayloadDepth(webhookPayload),
+			"missing_message":      result.Message == "",
+			"all_payload_keys":     getMapKeys(webhookPayload),
+			"payload_structure":    analyzePayloadDepth(webhookPayload),
 		}).Error("🚨 WAHA PRODUCTION CRITICAL: All extraction methods failed - payload structure unknown")
 	}
-	
+
 	// Console debug output for checking extracted data
 	logrus.WithFields(logrus.Fields{
 		"sender_phone": result.SenderPhone,
-		"sender_name": result.SenderName,
-		"message": result.Message,
-		"is_from_me": result.IsFromMe,
-		"is_group": result.IsGroup,
+		"sender_name":  result.SenderName,
+		"message":      result.Message,
+		"is_from_me":   result.IsFromMe,
+		"is_group":     result.IsGroup,
 	}).Info("🧪 WAHA EXTRACTION DEBUG: Final extracted data")
-	
+
 	return result
 }
 
@@ -876,27 +894,27 @@ func (h *AIWhatsappHandlers) TestWahaExtraction(c *fiber.Ctx) error {
 	if err := c.BodyParser(&rawPayload); err != nil {
 		logrus.WithError(err).Error("❌ WAHA TEST: Failed to parse webhook request")
 		return c.Status(400).JSON(fiber.Map{
-			"error": "Invalid request format",
+			"error":   "Invalid request format",
 			"details": err.Error(),
 		})
 	}
 
 	// Log the raw payload structure for debugging
 	logrus.WithFields(logrus.Fields{
-		"raw_payload": rawPayload,
+		"raw_payload":  rawPayload,
 		"payload_keys": getMapKeys(rawPayload),
 	}).Info("🧪 WAHA TEST: Raw payload received")
-	
+
 	// Extract standardized webhook data
 	extractedData := h.extractWahaWebhookData(rawPayload)
 
 	// Log the test extraction
 	logrus.WithFields(logrus.Fields{
 		"sender_phone": extractedData.SenderPhone,
-		"sender_name": extractedData.SenderName,
-		"message": truncateString(extractedData.Message, 100),
-		"is_from_me": extractedData.IsFromMe,
-		"is_group": extractedData.IsGroup,
+		"sender_name":  extractedData.SenderName,
+		"message":      truncateString(extractedData.Message, 100),
+		"is_from_me":   extractedData.IsFromMe,
+		"is_group":     extractedData.IsGroup,
 	}).Info("🧪 WAHA TEST: Extraction completed")
 
 	// Return extracted fields in standardized JSON format as specified
@@ -1021,16 +1039,16 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 		req.StartDate = c.Query("startDate", "")
 		req.EndDate = c.Query("endDate", "")
 		req.DeviceID = c.Query("idDevice", "")
-		
+
 		// Handle deviceIds parameter (comma-separated list from frontend)
 		deviceIds := c.Query("deviceIds", "")
 		logrus.WithFields(logrus.Fields{
 			"deviceIds": deviceIds,
-			"idDevice": req.DeviceID,
+			"idDevice":  req.DeviceID,
 			"startDate": req.StartDate,
-			"endDate": req.EndDate,
+			"endDate":   req.EndDate,
 		}).Info("Analytics request received")
-		
+
 		if deviceIds != "" && req.DeviceID == "" {
 			// Use the first device ID from the list for now
 			// TODO: Enhance repository to handle multiple device IDs
@@ -1125,7 +1143,7 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 
 	// Transform data to match frontend expectations
 	summary := analyticsData["summary"].(map[string]interface{})
-	
+
 	// Transform stage distribution from array to object format
 	stageDistributionArray := analyticsData["stage_distribution"].([]map[string]interface{})
 	stageDistributionMap := make(map[string]interface{})
@@ -1134,19 +1152,19 @@ func (h *AIWhatsappHandlers) GetAnalytics(c *fiber.Ctx) error {
 		count := item["count"]
 		stageDistributionMap[stage] = count
 	}
-	
+
 	responseData := map[string]interface{}{
-		"totalConversations":       summary["total_conversations"],
-		"aiActiveConversations":    summary["ai_active"],
-		"humanTakeovers":           summary["human_takeover"],
-		"uniqueDevices":            summary["unique_devices"],
-		"uniqueNiches":             summary["unique_niches"],
-		"conversationsWithStages":  summary["conversations_with_stage"],
-		"aiActivePercentage":       summary["ai_active_percentage"],
-		"humanTakeoverPercentage":  summary["human_takeover_percentage"],
-		"dailyBreakdown":           analyticsData["daily_data"],
-		"stageDistribution":        stageDistributionMap,
-		"dateRange":                analyticsData["date_range"],
+		"totalConversations":      summary["total_conversations"],
+		"aiActiveConversations":   summary["ai_active"],
+		"humanTakeovers":          summary["human_takeover"],
+		"uniqueDevices":           summary["unique_devices"],
+		"uniqueNiches":            summary["unique_niches"],
+		"conversationsWithStages": summary["conversations_with_stage"],
+		"aiActivePercentage":      summary["ai_active_percentage"],
+		"humanTakeoverPercentage": summary["human_takeover_percentage"],
+		"dailyBreakdown":          analyticsData["daily_data"],
+		"stageDistribution":       stageDistributionMap,
+		"dateRange":               analyticsData["date_range"],
 	}
 
 	return c.JSON(responseData)
@@ -1188,117 +1206,117 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 	transformedData := make([]map[string]interface{}, len(data))
 	for i, item := range data {
 		transformed := map[string]interface{}{
-			"id_prospect":   item.IDProspect,
-			"id_device":     item.IDDevice,
-			"prospect_num":  item.ProspectNum,
-			"human":         item.Human,
-			"niche":         item.Niche,
-			"intro":         item.Intro,
-			"created_at":    item.CreatedAt,
-			"updated_at":    item.UpdatedAt,
+			"id_prospect":  item.IDProspect,
+			"id_device":    item.IDDevice,
+			"prospect_num": item.ProspectNum,
+			"human":        item.Human,
+			"niche":        item.Niche,
+			"intro":        item.Intro,
+			"created_at":   item.CreatedAt,
+			"updated_at":   item.UpdatedAt,
 		}
-		
+
 		// Handle nullable fields
 		if item.ProspectName.Valid {
 			transformed["prospect_name"] = item.ProspectName.String
 		} else {
 			transformed["prospect_name"] = nil
 		}
-		
+
 		if item.Stage.Valid {
 			transformed["stage"] = item.Stage.String
 		} else {
 			transformed["stage"] = nil
 		}
-		
+
 		if item.Balas.Valid {
 			transformed["balas"] = item.Balas.String
 		} else {
 			transformed["balas"] = nil
 		}
-		
+
 		if item.KeywordIklan.Valid {
 			transformed["keywordiklan"] = item.KeywordIklan.String
 		} else {
 			transformed["keywordiklan"] = nil
 		}
-		
+
 		if item.Marketer.Valid {
 			transformed["marketer"] = item.Marketer.String
 		} else {
 			transformed["marketer"] = nil
 		}
-		
+
 		if item.DateOrder != nil {
 			transformed["date_order"] = item.DateOrder
 		} else {
 			transformed["date_order"] = nil
 		}
-		
+
 		if item.ConvCurrent.Valid {
 			transformed["conv_current"] = item.ConvCurrent.String
 		} else {
 			transformed["conv_current"] = nil
 		}
-		
+
 		if item.UpdateToday != nil {
 			transformed["update_today"] = item.UpdateToday
 		} else {
 			transformed["update_today"] = nil
 		}
-		
+
 		// Handle JSON fields
 		if item.ConvLast.Valid && len(item.ConvLast.String) > 0 && item.ConvLast.String != "null" {
 			transformed["conv_last"] = item.ConvLast.String
 		} else {
 			transformed["conv_last"] = nil
 		}
-		
+
 		// Flow execution fields
 		if item.FlowReference.Valid {
 			transformed["flow_reference"] = item.FlowReference.String
 		} else {
 			transformed["flow_reference"] = nil
 		}
-		
+
 		// No current_node field anymore - removed from schema
-		
+
 		if item.ExecutionStatus.Valid {
 			transformed["execution_status"] = item.ExecutionStatus.String
 		} else {
 			transformed["execution_status"] = nil
 		}
-		
+
 		if item.ExecutionID.Valid {
 			transformed["execution_id"] = item.ExecutionID.String
 		} else {
 			transformed["execution_id"] = nil
 		}
-		
+
 		if item.CurrentNodeID.Valid {
 			transformed["current_node_id"] = item.CurrentNodeID.String
 		} else {
 			transformed["current_node_id"] = nil
 		}
-		
+
 		if item.WaitingForReply.Valid {
 			transformed["waiting_for_reply"] = item.WaitingForReply.Int32
 		} else {
 			transformed["waiting_for_reply"] = nil
 		}
-		
+
 		if item.FlowID.Valid {
 			transformed["flow_id"] = item.FlowID.String
 		} else {
 			transformed["flow_id"] = nil
 		}
-		
+
 		if item.LastNodeID.Valid {
 			transformed["last_node_id"] = item.LastNodeID.String
 		} else {
 			transformed["last_node_id"] = nil
 		}
-		
+
 		transformedData[i] = transformed
 	}
 
@@ -1308,12 +1326,12 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 	// Return paginated response with transformed data
 	return c.JSON(fiber.Map{
 		"success": true,
-		"data": transformedData,
+		"data":    transformedData,
 		"pagination": fiber.Map{
-			"current_page": page,
-			"total_pages":  totalPages,
+			"current_page":  page,
+			"total_pages":   totalPages,
 			"total_records": total,
-			"limit":        limit,
+			"limit":         limit,
 		},
 	})
 }
@@ -1425,23 +1443,23 @@ func getMapKeys(m map[string]interface{}) []string {
 // analyzePayloadDepth analyzes the depth and structure of nested payload
 func analyzePayloadDepth(payload map[string]interface{}) map[string]interface{} {
 	analysis := make(map[string]interface{})
-	
+
 	for key, value := range payload {
 		switch v := value.(type) {
 		case map[string]interface{}:
 			analysis[key] = map[string]interface{}{
-				"type": "object",
-				"keys": getMapKeys(v),
+				"type":      "object",
+				"keys":      getMapKeys(v),
 				"key_count": len(v),
 			}
 		case []interface{}:
 			analysis[key] = map[string]interface{}{
-				"type": "array",
+				"type":   "array",
 				"length": len(v),
 			}
 		case string:
 			analysis[key] = map[string]interface{}{
-				"type": "string",
+				"type":   "string",
 				"length": len(v),
 			}
 		default:
@@ -1450,7 +1468,7 @@ func analyzePayloadDepth(payload map[string]interface{}) map[string]interface{} 
 			}
 		}
 	}
-	
+
 	return analysis
 }
 
@@ -1467,100 +1485,101 @@ func truncateString(s string, maxLen int) string {
 func (h *AIWhatsappHandlers) DebugWahaWebhook(c *fiber.Ctx) error {
 	deviceID := c.Params("device_id")
 	body := c.Body()
-	
+
 	// Log ALL request details for production debugging
 	headers := make(map[string]string)
 	c.Request().Header.VisitAll(func(key, value []byte) {
 		headers[string(key)] = string(value)
 	})
-	
+
 	logrus.WithFields(logrus.Fields{
-		"device_id": deviceID,
+		"device_id":    deviceID,
 		"payload_size": len(body),
 		"content_type": c.Get("Content-Type"),
-		"user_agent": c.Get("User-Agent"),
-		"headers": headers,
-		"raw_payload": string(body),
-		"method": c.Method(),
-		"url": c.OriginalURL(),
-		"ip": c.IP(),
+		"user_agent":   c.Get("User-Agent"),
+		"headers":      headers,
+		"raw_payload":  string(body),
+		"method":       c.Method(),
+		"url":          c.OriginalURL(),
+		"ip":           c.IP(),
 	}).Error("🚨 WAHA DEBUG ENDPOINT: Complete webhook request details")
-	
+
 	// Parse as generic map for structure analysis
 	var rawPayload map[string]interface{}
 	if err := json.Unmarshal(body, &rawPayload); err != nil {
 		logrus.WithError(err).Error("🚨 WAHA DEBUG: Failed to parse JSON")
 		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error": "Invalid JSON format",
+			"success":  false,
+			"error":    "Invalid JSON format",
 			"raw_body": string(body),
 		})
 	}
-	
+
 	// Perform complete payload analysis
 	payloadAnalysis := analyzePayloadDepth(rawPayload)
 	extractedData := h.extractWahaWebhookData(rawPayload)
-	
+
 	// Log detailed analysis
 	logrus.WithFields(logrus.Fields{
-		"payload_keys": getMapKeys(rawPayload),
-		"payload_analysis": payloadAnalysis,
-		"extracted_data": extractedData,
+		"payload_keys":       getMapKeys(rawPayload),
+		"payload_analysis":   payloadAnalysis,
+		"extracted_data":     extractedData,
 		"extraction_success": extractedData.SenderPhone != "" && extractedData.Message != "",
 	}).Error("🚨 WAHA DEBUG: Complete payload analysis")
-	
+
 	// Return comprehensive debug information
 	return c.JSON(fiber.Map{
 		"success": true,
 		"debug_info": fiber.Map{
-			"device_id": deviceID,
-			"payload_size": len(body),
-			"headers": headers,
-			"raw_payload": rawPayload,
-			"payload_keys": getMapKeys(rawPayload),
-			"payload_analysis": payloadAnalysis,
-			"extracted_data": extractedData,
+			"device_id":          deviceID,
+			"payload_size":       len(body),
+			"headers":            headers,
+			"raw_payload":        rawPayload,
+			"payload_keys":       getMapKeys(rawPayload),
+			"payload_analysis":   payloadAnalysis,
+			"extracted_data":     extractedData,
 			"extraction_success": extractedData.SenderPhone != "" && extractedData.Message != "",
-			"timestamp": time.Now().Unix(),
+			"timestamp":          time.Now().Unix(),
 		},
 		"message": "Debug data logged successfully",
 	})
 }
+
 // UpdateHumanStatus updates the human status for a conversation
 func (h *AIWhatsappHandlers) UpdateHumanStatus(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	if idStr == "" {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid prospect ID")
 	}
-	
+
 	var req struct {
 		Human int `json:"human"`
 	}
-	
+
 	if err := c.BodyParser(&req); err != nil {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Invalid request format")
 	}
-	
+
 	// Validate human value (should be 0 or 1)
 	if req.Human != 0 && req.Human != 1 {
 		return h.errorResponse(c, fiber.StatusBadRequest, "Human value must be 0 (AI) or 1 (Human)")
 	}
-	
+
 	// Update human status in database
 	err := h.AIRepo.UpdateHumanStatus(idStr, req.Human)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to update human status")
 		return h.errorResponse(c, fiber.StatusInternalServerError, "Failed to update human status")
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
 		"id_prospect": idStr,
-		"human": req.Human,
+		"human":       req.Human,
 	}).Info("Human status updated successfully")
-	
+
 	return h.successResponse(c, map[string]interface{}{
-		"id": idStr,
-		"human": req.Human,
+		"id":     idStr,
+		"human":  req.Human,
 		"status": "updated",
 	})
 }
