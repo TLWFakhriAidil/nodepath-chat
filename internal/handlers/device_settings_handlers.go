@@ -1580,26 +1580,23 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			senderName = senderNameVal
 		} else {
 			// Fallback to WAHA payload structure
-			// Check payload.Info.PushName first (correct path based on actual webhook structure)
+			// Check payload._data.Info.PushName (correct path based on PHP implementation)
 			if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
-				if info, ok := payload["Info"].(map[string]interface{}); ok {
-					if pushName, ok := info["PushName"].(string); ok && pushName != "" {
-						senderName = pushName
-						logrus.WithFields(logrus.Fields{
-							"sender_name":       senderName,
-							"extraction_method": "payload.Info.PushName",
-						}).Info("🔍 WAHA: Sender name extracted from payload.Info.PushName")
+				if data, ok := payload["_data"].(map[string]interface{}); ok {
+					if info, ok := data["Info"].(map[string]interface{}); ok {
+						if pushName, ok := info["PushName"].(string); ok && pushName != "" {
+							senderName = pushName
+						} else {
+							senderName = "Sis"
+						}
 					} else {
-						senderName = "Sis" // Default fallback
-						logrus.Info("🔍 WAHA: Using default sender name 'Sis' (PushName empty)")
+						senderName = "Sis"
 					}
 				} else {
-					senderName = "Sis" // Default fallback
-					logrus.Info("🔍 WAHA: Using default sender name 'Sis' (Info not found)")
+					senderName = "Sis"
 				}
 			} else {
-				senderName = "Sis" // Default fallback
-				logrus.Info("🔍 WAHA: Using default sender name 'Sis' (payload not found)")
+				senderName = "Sis"
 			}
 		}
 
