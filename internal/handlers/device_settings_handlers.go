@@ -9,10 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path/filepath"
-	"regexp"
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/services"
+	"path/filepath"
+	"regexp"
 
 	"strings"
 	"time"
@@ -74,9 +74,9 @@ func (h *Handlers) GetDeviceSettingsById(c *fiber.Ctx) error {
 	// Check if the device setting belongs to the authenticated user
 	if setting.UserID.Valid && int(setting.UserID.Int32) != userID {
 		logrus.WithFields(logrus.Fields{
-			"userID": userID,
+			"userID":        userID,
 			"settingUserID": setting.UserID.Int32,
-			"settingID": id,
+			"settingID":     id,
 		}).Warn("User attempted to access device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only access your own device settings")
 	}
@@ -89,16 +89,16 @@ func (h *Handlers) validateProvider(provider string) error {
 	if provider == "" {
 		return nil // Provider is optional, will default to "wablas"
 	}
-	
+
 	validProviders := []string{"wablas", "whacenter", "waha"}
 	providerLower := strings.ToLower(provider)
-	
+
 	for _, validProvider := range validProviders {
 		if providerLower == validProvider {
 			return nil
 		}
 	}
-	
+
 	return fmt.Errorf("invalid provider '%s'. Supported providers: %s", provider, strings.Join(validProviders, ", "))
 }
 
@@ -126,12 +126,12 @@ func (h *Handlers) CreateDeviceSettings(c *fiber.Ctx) error {
 	if req.IDAdmin == "" {
 		return h.errorResponse(c, 400, "ID Admin is required")
 	}
-	
+
 	// Validate provider
 	if err := h.validateProvider(req.Provider); err != nil {
 		return h.errorResponse(c, 400, err.Error())
 	}
-	
+
 	// DeviceID is optional - it will be generated later if not provided
 	// Automatically set the user ID from the authenticated user
 	req.UserID = &userID
@@ -172,9 +172,9 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 	// Check ownership
 	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int32) != userID {
 		logrus.WithFields(logrus.Fields{
-			"userID": userID,
+			"userID":        userID,
 			"settingUserID": existingSetting.UserID.Int32,
-			"settingID": id,
+			"settingID":     id,
 		}).Warn("User attempted to update device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only update your own device settings")
 	}
@@ -183,7 +183,7 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return h.errorResponse(c, 400, "Invalid request body")
 	}
-	
+
 	// Validate provider if provided
 	if err := h.validateProvider(req.Provider); err != nil {
 		return h.errorResponse(c, 400, err.Error())
@@ -227,10 +227,10 @@ func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 
 	// Check ownership
 	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int32) != userID {
-			logrus.WithFields(logrus.Fields{
-				"userID": userID,
-				"settingUserID": existingSetting.UserID.Int32,
-			"settingID": id,
+		logrus.WithFields(logrus.Fields{
+			"userID":        userID,
+			"settingUserID": existingSetting.UserID.Int32,
+			"settingID":     id,
 		}).Warn("User attempted to delete device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only delete your own device settings")
 	}
@@ -289,7 +289,7 @@ func (h *Handlers) GetDeviceIDs(c *fiber.Ctx) error {
 func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	// Get user ID from context
 	userID := c.Locals("userID").(int)
-	
+
 	var req struct {
 		models.CreateDeviceSettingsRequest
 		WebhookURL string `json:"webhook_url"`
@@ -314,12 +314,12 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	// Check existing device settings by IDDevice to get instance value
 	existingDevice, err := h.deviceSettingsService.GetByIDDevice(req.IDDevice)
 	var whacenterAPIKey string
-	
+
 	if err != nil {
 		// No existing device found, create new with hardcoded API key
 		logrus.WithFields(logrus.Fields{
 			"id_device": req.IDDevice,
-			"action": "create_new",
+			"action":    "create_new",
 		}).Info("🆕 WHACENTER: No existing device found, creating new device")
 		whacenterAPIKey = "abebe840-156c-441c-8252-da0342c5a07c" // Hardcoded API key for new devices
 	} else {
@@ -328,21 +328,21 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 			// Instance is null, create new device with hardcoded API key
 			logrus.WithFields(logrus.Fields{
 				"id_device": req.IDDevice,
-				"action": "create_new_null_instance",
+				"action":    "create_new_null_instance",
 			}).Info("🆕 WHACENTER: Instance is null, creating new device")
 			whacenterAPIKey = "abebe840-156c-441c-8252-da0342c5a07c" // Hardcoded API key for new devices
 		} else {
 			// Instance is not null, delete existing device data using instance value
 			logrus.WithFields(logrus.Fields{
 				"id_device": req.IDDevice,
-				"instance": existingDevice.Instance.String,
-				"action": "delete_existing",
+				"instance":  existingDevice.Instance.String,
+				"action":    "delete_existing",
 			}).Info("🗑️ WHACENTER: Instance found, deleting existing device data")
-			
+
 			// Delete existing device using instance value as device_id
-			deleteURL := fmt.Sprintf("https://api.whacenter.com/api/deleteDevice?api_key=%s&device_id=%s", 
+			deleteURL := fmt.Sprintf("https://api.whacenter.com/api/deleteDevice?api_key=%s&device_id=%s",
 				"abebe840-156c-441c-8252-da0342c5a07c", existingDevice.Instance.String)
-			
+
 			deleteClient := &http.Client{Timeout: 30 * time.Second}
 			deleteReq, err := http.NewRequest("GET", deleteURL, nil)
 			if err != nil {
@@ -350,26 +350,26 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 			} else {
 				deleteReq.Header.Set("Accept", "application/json")
 				deleteReq.Header.Set("Content-Type", "application/json")
-				
+
 				deleteResp, err := deleteClient.Do(deleteReq)
 				if err != nil {
 					logrus.WithError(err).Warn("Failed to delete existing device")
 				} else {
 					defer deleteResp.Body.Close()
 					logrus.WithFields(logrus.Fields{
-						"status": deleteResp.StatusCode,
+						"status":    deleteResp.StatusCode,
 						"device_id": existingDevice.Instance.String,
 					}).Info("📥 WHACENTER: Device deletion attempted")
 				}
 			}
-			
+
 			// Now create new device with hardcoded API key
 			whacenterAPIKey = "abebe840-156c-441c-8252-da0342c5a07c"
 		}
 	}
 
 	// Prepare Whacenter API request with GET parameters (without webhook initially)
-	whacenterURL := fmt.Sprintf("https://api.whacenter.com/api/addDevice?api_key=%s&name=%s&number=%s", 
+	whacenterURL := fmt.Sprintf("https://api.whacenter.com/api/addDevice?api_key=%s&name=%s&number=%s",
 		whacenterAPIKey, req.IDDevice, req.PhoneNumber)
 
 	// Create HTTP client with timeout
@@ -388,37 +388,37 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 	// Make request to Whacenter API
 	logrus.WithFields(logrus.Fields{
-		"provider": "whacenter",
-		"url": whacenterURL,
-		"device_name": req.IDDevice,
-		"phone_number": req.PhoneNumber,
-		"webhook_url": req.WebhookURL,
+		"provider":       "whacenter",
+		"url":            whacenterURL,
+		"device_name":    req.IDDevice,
+		"phone_number":   req.PhoneNumber,
+		"webhook_url":    req.WebhookURL,
 		"api_key_length": len(req.APIKey),
 	}).Info("🔵 WHACENTER: Making external API request")
-	
+
 	// Log request headers (without sensitive data)
 	logrus.WithFields(logrus.Fields{
-		"content_type": request.Header.Get("Content-Type"),
+		"content_type":    request.Header.Get("Content-Type"),
 		"has_auth_header": request.Header.Get("Authorization") != "",
-		"request_method": "GET",
+		"request_method":  "GET",
 	}).Info("🔵 WHACENTER: Request details")
-	
+
 	resp, err := client.Do(request)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"provider": "whacenter",
-			"url": whacenterURL,
-			"error": err.Error(),
+			"url":      whacenterURL,
+			"error":    err.Error(),
 		}).Error("❌ WHACENTER: Failed to call external API")
 		return h.errorResponse(c, 500, fmt.Sprintf("Failed to communicate with Whacenter API: %v", err))
 	}
 	defer resp.Body.Close()
-	
+
 	logrus.WithFields(logrus.Fields{
-		"provider": "whacenter",
-		"status_code": resp.StatusCode,
-		"status": resp.Status,
-		"content_type": resp.Header.Get("Content-Type"),
+		"provider":       "whacenter",
+		"status_code":    resp.StatusCode,
+		"status":         resp.Status,
+		"content_type":   resp.Header.Get("Content-Type"),
 		"content_length": resp.Header.Get("Content-Length"),
 	}).Info("📥 WHACENTER: Received response from external API")
 
@@ -426,22 +426,22 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"provider": "whacenter",
-			"error": err.Error(),
+			"error":    err.Error(),
 		}).Error("❌ WHACENTER: Failed to read response body")
 		return h.errorResponse(c, 500, "Failed to read API response")
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"provider": "whacenter",
-		"response_body": string(body),
+		"provider":        "whacenter",
+		"response_body":   string(body),
 		"response_length": len(body),
 	}).Info("📄 WHACENTER: API response body received")
 
 	var apiResponse map[string]interface{}
 	if err := json.Unmarshal(body, &apiResponse); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"provider": "whacenter",
-			"error": err.Error(),
+			"provider":      "whacenter",
+			"error":         err.Error(),
 			"response_body": string(body),
 		}).Error("❌ WHACENTER: Failed to unmarshal response JSON")
 		return h.errorResponse(c, 500, "Failed to parse API response")
@@ -470,7 +470,7 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 	deviceID, _ := device["device_id"].(string)
 	apiKey, _ := device["device_key"].(string)
-	
+
 	// If device_key is empty, use the whacenterAPIKey as fallback
 	if apiKey == "" {
 		apiKey = whacenterAPIKey
@@ -478,25 +478,25 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 	// Construct production webhook URL using the actual device_id from API response
 	productionWebhookURL := fmt.Sprintf("https://nodepath-chat-production.up.railway.app/api/webhook/%s/%s", req.IDDevice, deviceID)
-	
+
 	// Set webhook for the created device
-	setWebhookURL := fmt.Sprintf("https://api.whacenter.com/api/setWebhook?device_id=%s&webhook=%s", 
+	setWebhookURL := fmt.Sprintf("https://api.whacenter.com/api/setWebhook?device_id=%s&webhook=%s",
 		deviceID, url.QueryEscape(productionWebhookURL))
-	
+
 	logrus.WithFields(logrus.Fields{
-		"provider": "whacenter",
-		"device_id": deviceID,
-		"webhook_url": productionWebhookURL,
+		"provider":        "whacenter",
+		"device_id":       deviceID,
+		"webhook_url":     productionWebhookURL,
 		"set_webhook_url": setWebhookURL,
 	}).Info("🔗 WHACENTER: Setting webhook for device")
-	
+
 	// Create webhook request
 	webhookRequest, err := http.NewRequest("GET", setWebhookURL, nil)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create webhook request")
 	} else {
 		webhookRequest.Header.Set("Accept", "application/json")
-		
+
 		// Execute webhook request
 		webhookResp, err := client.Do(webhookRequest)
 		if err != nil {
@@ -504,17 +504,17 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 		} else {
 			defer webhookResp.Body.Close()
 			webhookBody, _ := io.ReadAll(webhookResp.Body)
-			
+
 			logrus.WithFields(logrus.Fields{
 				"status_code": webhookResp.StatusCode,
-				"response": string(webhookBody),
+				"response":    string(webhookBody),
 			}).Info("📥 WHACENTER: Webhook set response")
 		}
 	}
 
 	// Save device data to database - Whacenter mapping: webhook_id stores webhook_url, instance stores device_id, device_id should be null
 	createReq := &models.CreateDeviceSettingsRequest{
-		UserID:       &userID, // Set user ID from context
+		UserID: &userID, // Set user ID from context
 		// DeviceID is intentionally left empty (null) for Whacenter devices
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    productionWebhookURL, // Store webhook URL
@@ -529,10 +529,10 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 	// Debug logging for database save
 	logrus.WithFields(logrus.Fields{
-		"device_id": deviceID,
-		"webhook_id": productionWebhookURL,
-		"instance": deviceID,
-		"provider": "whacenter",
+		"device_id":    deviceID,
+		"webhook_id":   productionWebhookURL,
+		"instance":     deviceID,
+		"provider":     "whacenter",
 		"phone_number": req.PhoneNumber,
 	}).Info("💾 WHACENTER: Saving device data to database")
 
@@ -547,12 +547,12 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 	// Log successful device generation
 	logrus.WithFields(logrus.Fields{
-		"provider": "whacenter",
-		"device_id": deviceID,
-		"webhook_url": req.WebhookURL,
+		"provider":     "whacenter",
+		"device_id":    deviceID,
+		"webhook_url":  req.WebhookURL,
 		"phone_number": req.PhoneNumber,
 	}).Info("✅ WHACENTER: Device generated successfully")
-	
+
 	// Return success response
 	return h.successResponse(c, map[string]interface{}{
 		"success": true,
@@ -571,18 +571,18 @@ func (h *Handlers) HandleWebhook(c *fiber.Ctx) error {
 	// Extract all data before returning
 	idDevice := c.Params("id_device")
 	instance := c.Params("instance")
-	
+
 	// Copy body immediately
 	body := c.Body()
 	bodyCopy := make([]byte, len(body))
 	copy(bodyCopy, body)
-	
+
 	// Launch async processing BEFORE returning
 	go h.processWebhookAsync(idDevice, instance, bodyCopy)
-	
+
 	// Return 200 OK immediately
 	return c.Status(200).JSON(fiber.Map{
-		"status": "success",
+		"status":  "success",
 		"message": "received",
 	})
 }
@@ -592,36 +592,36 @@ func (h *Handlers) processWebhookAsync(idDevice, instance string, body []byte) {
 	// Log
 	logrus.WithFields(logrus.Fields{
 		"id_device": idDevice,
-		"instance": instance,
+		"instance":  instance,
 		"body_size": len(body),
 	}).Info("📨 WEBHOOK: Async processing started")
-	
+
 	// Validate
 	if idDevice == "" || instance == "" {
 		logrus.Warn("Missing device ID or instance")
 		return
 	}
-	
+
 	// Get device
 	deviceSettings, err := h.deviceSettingsService.GetByIDDevice(idDevice)
 	if err != nil {
 		logrus.WithError(err).Warn("Device not found")
 		return
 	}
-	
+
 	// Parse webhook data
 	var webhookData map[string]interface{}
 	if err := json.Unmarshal(body, &webhookData); err != nil {
 		logrus.WithError(err).Warn("Failed to parse webhook data")
 		webhookData = make(map[string]interface{})
 	}
-	
+
 	// Log parsed data
 	logrus.WithFields(logrus.Fields{
 		"webhook_data": webhookData,
-		"id_device": idDevice,
+		"id_device":    idDevice,
 	}).Info("📨 WEBHOOK DATA RECEIVED")
-	
+
 	// Process the message
 	err = h.processWebhookMessageWithRetry(webhookData, idDevice, deviceSettings.Provider)
 	if err != nil {
@@ -635,7 +635,7 @@ func (h *Handlers) processWebhookAsync(idDevice, instance string, body []byte) {
 func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	// Get user ID from context
 	userID := c.Locals("userID").(int)
-	
+
 	var req struct {
 		models.CreateDeviceSettingsRequest
 		WebhookURL string `json:"webhook_url"`
@@ -660,12 +660,12 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	// Check existing device settings by IDDevice to get instance value
 	existingDevice, err := h.deviceSettingsService.GetByIDDevice(req.IDDevice)
 	var wablasToken string
-	
+
 	if err != nil {
 		// No existing device found, create new with hardcoded token
 		logrus.WithFields(logrus.Fields{
 			"id_device": req.IDDevice,
-			"action": "create_new",
+			"action":    "create_new",
 		}).Info("🆕 WABLAS: No existing device found, creating new device")
 		wablasToken = "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY.7hDkbW0f" // Hardcoded token for new devices
 	} else {
@@ -674,25 +674,25 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 			// Instance is null, create new device with hardcoded token
 			logrus.WithFields(logrus.Fields{
 				"id_device": req.IDDevice,
-				"action": "create_new_null_instance",
+				"action":    "create_new_null_instance",
 			}).Info("🆕 WABLAS: Instance is null, creating new device")
 			wablasToken = "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY.7hDkbW0f" // Hardcoded token for new devices
 		} else {
 			// Instance is not null, delete existing device data using instance value
 			logrus.WithFields(logrus.Fields{
 				"id_device": req.IDDevice,
-				"instance": existingDevice.Instance.String,
-				"action": "delete_existing",
+				"instance":  existingDevice.Instance.String,
+				"action":    "delete_existing",
 			}).Info("🗑️ WABLAS: Instance found, deleting existing device data")
-			
+
 			// Delete existing device using instance value as authorization
 			deleteURL := "https://my.wablas.com/api/device/delete"
-			
+
 			// Create HTTP client for delete request
 			deleteClient := &http.Client{
 				Timeout: 30 * time.Second,
 			}
-			
+
 			// Create delete request
 			deleteRequest, err := http.NewRequest("DELETE", deleteURL, nil)
 			if err != nil {
@@ -701,7 +701,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 				// Set headers for delete request using instance value
 				deleteRequest.Header.Set("Authorization", existingDevice.Instance.String)
 				deleteRequest.Header.Set("Accept", "application/json")
-				
+
 				// Execute delete request
 				deleteResp, err := deleteClient.Do(deleteRequest)
 				if err != nil {
@@ -710,11 +710,11 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 					defer deleteResp.Body.Close()
 					logrus.WithFields(logrus.Fields{
 						"status_code": deleteResp.StatusCode,
-						"auth_token": existingDevice.Instance.String,
+						"auth_token":  existingDevice.Instance.String,
 					}).Info("📥 WABLAS: Device deletion attempted")
 				}
 			}
-			
+
 			// Now create new device with hardcoded token
 			wablasToken = "j0oB1aibqYDQlgyk9SIqLyfeGgRJjjmOUFMVqxGd8Irk6JCwl1ZxYtY.7hDkbW0f"
 		}
@@ -722,7 +722,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 
 	// Prepare Wablas API request for device creation
 	wablasURL := "https://my.wablas.com/api/device/create"
-	
+
 	// Prepare form data
 	formData := url.Values{}
 	formData.Set("name", req.IDDevice)
@@ -730,7 +730,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	formData.Set("bank", "BCA")
 	formData.Set("periode", "monthly")
 	formData.Set("product", "large")
-	
+
 	formDataEncoded := formData.Encode()
 
 	// Create HTTP client with timeout
@@ -746,42 +746,42 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 
 	// Use the determined Wablas token for device creation
 	authHeader := wablasToken
-	
+
 	request.Header.Set("Authorization", authHeader)
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Make request to Wablas API
 	logrus.WithFields(logrus.Fields{
-		"provider": "wablas",
-		"url": wablasURL,
-		"device_name": req.IDDevice,
-		"phone_number": req.PhoneNumber,
+		"provider":       "wablas",
+		"url":            wablasURL,
+		"device_name":    req.IDDevice,
+		"phone_number":   req.PhoneNumber,
 		"api_key_length": len(req.APIKey),
 	}).Info("🟡 WABLAS: Making external API request")
-	
+
 	// Log request headers (without sensitive data)
 	logrus.WithFields(logrus.Fields{
-		"content_type": request.Header.Get("Content-Type"),
+		"content_type":    request.Header.Get("Content-Type"),
 		"has_auth_header": request.Header.Get("Authorization") != "",
-		"request_body": formDataEncoded,
+		"request_body":    formDataEncoded,
 	}).Info("🟡 WABLAS: Request details")
-	
+
 	resp, err := client.Do(request)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"provider": "wablas",
-			"url": wablasURL,
-			"error": err.Error(),
+			"url":      wablasURL,
+			"error":    err.Error(),
 		}).Error("❌ WABLAS: Failed to call external API")
 		return h.errorResponse(c, 500, fmt.Sprintf("Failed to communicate with Wablas API: %v", err))
 	}
 	defer resp.Body.Close()
-	
+
 	logrus.WithFields(logrus.Fields{
-		"provider": "wablas",
-		"status_code": resp.StatusCode,
-		"status": resp.Status,
-		"content_type": resp.Header.Get("Content-Type"),
+		"provider":       "wablas",
+		"status_code":    resp.StatusCode,
+		"status":         resp.Status,
+		"content_type":   resp.Header.Get("Content-Type"),
 		"content_length": resp.Header.Get("Content-Length"),
 	}).Info("📥 WABLAS: Received response from external API")
 
@@ -789,22 +789,22 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"provider": "wablas",
-			"error": err.Error(),
+			"error":    err.Error(),
 		}).Error("❌ WABLAS: Failed to read response body")
 		return h.errorResponse(c, 500, "Failed to read API response")
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"provider": "wablas",
-		"response_body": string(body),
+		"provider":        "wablas",
+		"response_body":   string(body),
 		"response_length": len(body),
 	}).Info("📄 WABLAS: API response body received")
 
 	var apiResponse map[string]interface{}
 	if err := json.Unmarshal(body, &apiResponse); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"provider": "wablas",
-			"error": err.Error(),
+			"provider":      "wablas",
+			"error":         err.Error(),
 			"response_body": string(body),
 		}).Error("❌ WABLAS: Failed to unmarshal response JSON")
 		return h.errorResponse(c, 500, "Failed to parse API response")
@@ -838,7 +838,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	// Setup webhook configuration using the correct endpoint
 	webhookFormData := url.Values{}
 	webhookFormData.Set("webhook_url", productionWebhookURL)
-	
+
 	webhookFormEncoded := webhookFormData.Encode()
 
 	// Setup webhook
@@ -855,7 +855,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 			logrus.WithError(err).Error("Failed to setup webhook")
 		} else {
 			defer webhookResp.Body.Close()
-			
+
 			// Read webhook response
 			webhookBody, err := io.ReadAll(webhookResp.Body)
 			if err != nil {
@@ -875,7 +875,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - Wablas mapping: device_id stores device_id, webhook_id stores webhook_url, instance stores api_key
 	createReq := &models.CreateDeviceSettingsRequest{
-		UserID:       &userID, // Set user ID from context
+		UserID:       &userID,  // Set user ID from context
 		DeviceID:     deviceID, // Store device_id
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    productionWebhookURL, // Store webhook URL
@@ -890,10 +890,10 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 
 	// Debug logging for database save
 	logrus.WithFields(logrus.Fields{
-		"device_id": deviceID,
-		"webhook_id": productionWebhookURL,
-		"instance": newAuthHeader,
-		"provider": "wablas",
+		"device_id":    deviceID,
+		"webhook_id":   productionWebhookURL,
+		"instance":     newAuthHeader,
+		"provider":     "wablas",
 		"phone_number": req.PhoneNumber,
 	}).Info("💾 WABLAS: Saving device data to database")
 
@@ -908,12 +908,12 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 
 	// Log successful device generation
 	logrus.WithFields(logrus.Fields{
-		"provider": "wablas",
-		"device_id": deviceID,
-		"webhook_url": productionWebhookURL,
+		"provider":     "wablas",
+		"device_id":    deviceID,
+		"webhook_url":  productionWebhookURL,
 		"phone_number": req.PhoneNumber,
 	}).Info("✅ WABLAS: Device generated successfully")
-	
+
 	// Return success response
 	return h.successResponse(c, map[string]interface{}{
 		"success": true,
@@ -931,7 +931,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 func (h *Handlers) GetDeviceStatus(c *fiber.Ctx) error {
 	deviceID := c.Params("id")
 	logrus.WithField("device_id", deviceID).Info("[STATUS] Starting device status check")
-	
+
 	if deviceID == "" {
 		logrus.Error("[STATUS] Device ID is empty")
 		return h.errorResponse(c, 400, "Device ID is required")
@@ -983,11 +983,11 @@ func (h *Handlers) GetDeviceStatus(c *fiber.Ctx) error {
 // checkWhacenterStatus checks the status of a Whacenter device
 func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status map[string]interface{}) map[string]interface{} {
 	logrus.WithFields(logrus.Fields{
-		"device_id": device.ID,
+		"device_id":      device.ID,
 		"instance_valid": device.Instance.Valid,
 		"instance_value": device.Instance.String,
 	}).Info("[WHACENTER] Starting Whacenter status check")
-	
+
 	if !device.Instance.Valid || device.Instance.String == "" {
 		logrus.Error("[WHACENTER] Device instance not configured")
 		status["status"] = "not_configured"
@@ -1002,9 +1002,9 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 	// Use the hardcoded API key for whacenter requests
 	whacenterAPIKey := "abebe840-156c-441c-8252-da0342c5a07c"
 	// Use the correct statusDevice API endpoint with device_id and api_key parameters
-	apiURL := fmt.Sprintf("https://api.whacenter.com/api/statusDevice?api_key=%s&device_id=%s", 
+	apiURL := fmt.Sprintf("https://api.whacenter.com/api/statusDevice?api_key=%s&device_id=%s",
 		whacenterAPIKey, url.QueryEscape(device.Instance.String))
-	
+
 	logrus.WithFields(logrus.Fields{
 		"api_url": apiURL,
 	}).Info("[WHACENTER] Making API request")
@@ -1014,7 +1014,7 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 		logrus.WithError(err).Error("[WHACENTER] Failed to create HTTP request")
 		status["status"] = "error"
 		status["details"] = map[string]interface{}{
-			"error": "Failed to create status request",
+			"error":   "Failed to create status request",
 			"details": err.Error(),
 		}
 		return status
@@ -1032,7 +1032,7 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 		logrus.WithError(err).Error("[WHACENTER] HTTP request failed")
 		status["status"] = "connection_error"
 		status["details"] = map[string]interface{}{
-			"error": "Failed to connect to Whacenter API",
+			"error":   "Failed to connect to Whacenter API",
 			"details": err.Error(),
 		}
 		return status
@@ -1041,7 +1041,7 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 
 	logrus.WithFields(logrus.Fields{
 		"status_code": resp.StatusCode,
-		"headers": resp.Header,
+		"headers":     resp.Header,
 	}).Info("[WHACENTER] Received API response")
 
 	// Read response body for logging
@@ -1050,31 +1050,31 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 		logrus.WithError(err).Error("[WHACENTER] Failed to read response body")
 		status["status"] = "error"
 		status["details"] = map[string]interface{}{
-			"error": "Failed to read API response",
+			"error":   "Failed to read API response",
 			"details": err.Error(),
 		}
 		return status
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
 		"response_body": string(bodyBytes),
-		"body_length": len(bodyBytes),
+		"body_length":   len(bodyBytes),
 	}).Info("[WHACENTER] Response body received")
 
 	if resp.StatusCode == 200 {
 		var apiResponse map[string]interface{}
 		if err := json.Unmarshal(bodyBytes, &apiResponse); err == nil {
 			logrus.WithField("parsed_response", apiResponse).Info("[WHACENTER] Successfully parsed JSON response")
-			
+
 			// Parse the response according to statusDevice API format
 			if data, ok := apiResponse["data"].(map[string]interface{}); ok {
 				if deviceStatus, ok := data["status"].(string); ok {
 					logrus.WithField("device_status", deviceStatus).Info("[WHACENTER] Found device status")
-					
+
 					if deviceStatus == "NOT CONNECTED" {
 						status["connected"] = false
 						status["status"] = "disconnected"
-						
+
 						// Fetch QR code when device is not connected
 						qrCode := h.getWhacenterQRCode(device.Instance.String)
 						if qrCode != "" {
@@ -1099,38 +1099,38 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 			logrus.WithError(err).Error("[WHACENTER] Failed to parse JSON response")
 			status["status"] = "parse_error"
 			status["details"] = map[string]interface{}{
-				"error": "Failed to parse API response",
+				"error":        "Failed to parse API response",
 				"raw_response": string(bodyBytes),
-				"parse_error": err.Error(),
+				"parse_error":  err.Error(),
 			}
 		}
 	} else if resp.StatusCode == 404 {
 		// Handle 404 specifically - device not found in Whacenter
 		logrus.WithFields(logrus.Fields{
 			"device_instance": device.Instance.String,
-			"api_url": apiURL,
+			"api_url":         apiURL,
 		}).Warn("[WHACENTER] Device not found in Whacenter system")
-		
+
 		status["status"] = "device_not_found"
 		status["connected"] = false
 		status["details"] = map[string]interface{}{
-			"error": "Device not found in Whacenter system",
-			"message": "The device may have been deleted from Whacenter or the device ID is incorrect",
+			"error":           "Device not found in Whacenter system",
+			"message":         "The device may have been deleted from Whacenter or the device ID is incorrect",
 			"device_instance": device.Instance.String,
-			"http_status": 404,
-			"response_body": string(bodyBytes),
-			"suggestion": "Please regenerate the device or check if it exists in your Whacenter dashboard",
+			"http_status":     404,
+			"response_body":   string(bodyBytes),
+			"suggestion":      "Please regenerate the device or check if it exists in your Whacenter dashboard",
 		}
 	} else {
 		logrus.WithFields(logrus.Fields{
-			"status_code": resp.StatusCode,
+			"status_code":   resp.StatusCode,
 			"response_body": string(bodyBytes),
 		}).Error("[WHACENTER] API returned non-200 status")
-		
+
 		status["status"] = "api_error"
 		status["details"] = map[string]interface{}{
-			"http_status": resp.StatusCode,
-			"error":       "API returned error status",
+			"http_status":   resp.StatusCode,
+			"error":         "API returned error status",
 			"response_body": string(bodyBytes),
 		}
 	}
@@ -1142,44 +1142,44 @@ func (h *Handlers) checkWhacenterStatus(device *models.DeviceSettings, status ma
 // getWhacenterQRCode fetches QR code for Whacenter device when not connected
 func (h *Handlers) getWhacenterQRCode(deviceID string) string {
 	logrus.WithField("device_id", deviceID).Info("[WHACENTER] Fetching QR code")
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	// Use the hardcoded API key for whacenter requests
 	whacenterAPIKey := "abebe840-156c-441c-8252-da0342c5a07c"
-	qrURL := fmt.Sprintf("https://api.whacenter.com/api/qr?api_key=%s&device_id=%s", 
+	qrURL := fmt.Sprintf("https://api.whacenter.com/api/qr?api_key=%s&device_id=%s",
 		whacenterAPIKey, url.QueryEscape(deviceID))
-	
+
 	req, err := http.NewRequest("GET", qrURL, nil)
 	if err != nil {
 		logrus.WithError(err).Error("[WHACENTER] Failed to create QR request")
 		return ""
 	}
-	
+
 	// Accept both JSON and image responses
 	req.Header.Set("Accept", "application/json, image/png")
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("[WHACENTER] QR request failed")
 		return ""
 	}
 	defer resp.Body.Close()
-	
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logrus.WithError(err).Error("[WHACENTER] Failed to read QR response")
 		return ""
 	}
-	
+
 	if resp.StatusCode == 200 {
 		// Check if response is a PNG image (like in the PHP code)
 		// PNG signature: \x89PNG\r\n\x1a\n (first 8 bytes)
 		logrus.WithFields(logrus.Fields{
 			"response_length": len(bodyBytes),
-			"first_8_bytes": fmt.Sprintf("%x", bodyBytes[:min(8, len(bodyBytes))]),
-			"content_type": resp.Header.Get("Content-Type"),
+			"first_8_bytes":   fmt.Sprintf("%x", bodyBytes[:min(8, len(bodyBytes))]),
+			"content_type":    resp.Header.Get("Content-Type"),
 		}).Info("[WHACENTER] Analyzing QR response format")
-		
+
 		if len(bodyBytes) >= 8 {
 			// Check for PNG signature: first byte is 0x89, followed by "PNG"
 			if bodyBytes[0] == 0x89 && string(bodyBytes[1:4]) == "PNG" {
@@ -1188,7 +1188,7 @@ func (h *Handlers) getWhacenterQRCode(deviceID string) string {
 				return fmt.Sprintf("data:image/png;base64,%s", base64.StdEncoding.EncodeToString(bodyBytes))
 			}
 		}
-		
+
 		// If not PNG, try to parse as JSON response
 		logrus.Info("[WHACENTER] Response is not PNG format, trying JSON parsing")
 		var qrResponse map[string]interface{}
@@ -1209,24 +1209,24 @@ func (h *Handlers) getWhacenterQRCode(deviceID string) string {
 			logrus.WithField("raw_response", string(bodyBytes[:min(200, len(bodyBytes))])).Warn("[WHACENTER] Raw response preview")
 		}
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"status_code": resp.StatusCode,
+		"status_code":     resp.StatusCode,
 		"response_length": len(bodyBytes),
-		"content_type": resp.Header.Get("Content-Type"),
+		"content_type":    resp.Header.Get("Content-Type"),
 	}).Warn("[WHACENTER] Failed to fetch QR code")
-	
+
 	return ""
 }
 
 // checkWablasStatus checks the status of a Wablas device
 func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[string]interface{}) map[string]interface{} {
 	logrus.WithFields(logrus.Fields{
-		"device_id": device.ID,
+		"device_id":      device.ID,
 		"instance_valid": device.Instance.Valid,
 		"instance_value": device.Instance.String,
 	}).Info("[WABLAS] Starting Wablas status check")
-	
+
 	// Check if instance (API key) is configured
 	if !device.Instance.Valid || device.Instance.String == "" {
 		logrus.Error("[WABLAS] Device instance not configured")
@@ -1251,15 +1251,15 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 	// **STEP 1: CHECK DEVICE STATUS** - following PHP pattern
 	client := &http.Client{Timeout: 10 * time.Second}
 	apiURL := fmt.Sprintf("https://my.wablas.com/api/device/info?token=%s", url.QueryEscape(token))
-	
+
 	// Log API request (without sensitive token details)
 	logrus.WithFields(logrus.Fields{
-		"api_url": "https://my.wablas.com/api/device/info",
+		"api_url":      "https://my.wablas.com/api/device/info",
 		"token_prefix": token[:min(8, len(token))] + "...",
 	}).Info("[WABLAS] Making API request")
-	
+
 	logrus.WithFields(logrus.Fields{
-		"api_url": apiURL,
+		"api_url":      apiURL,
 		"token_prefix": token[:min(8, len(token))] + "...",
 	}).Info("[WABLAS] Making API request")
 
@@ -1269,7 +1269,7 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 		status["status"] = "NOT CONNECTED"
 		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
-			"error": "Failed to create status request",
+			"error":   "Failed to create status request",
 			"details": err.Error(),
 		}
 		return status
@@ -1284,7 +1284,7 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 		status["status"] = "NOT CONNECTED"
 		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
-			"error": "Failed to connect to Wablas API",
+			"error":   "Failed to connect to Wablas API",
 			"details": err.Error(),
 		}
 		return status
@@ -1298,28 +1298,28 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 		status["status"] = "NOT CONNECTED"
 		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
-			"error": "Failed to read API response",
+			"error":   "Failed to read API response",
 			"details": err.Error(),
 		}
 		return status
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"status_code": resp.StatusCode,
+		"status_code":   resp.StatusCode,
 		"response_body": string(bodyBytes),
 	}).Info("[WABLAS] Received API response")
 
 	if resp.StatusCode != 200 {
 		logrus.WithFields(logrus.Fields{
-			"status_code": resp.StatusCode,
+			"status_code":   resp.StatusCode,
 			"response_body": string(bodyBytes),
 		}).Error("[WABLAS] API returned non-200 status")
-		
+
 		status["status"] = "NOT CONNECTED"
 		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
-			"http_status": resp.StatusCode,
-			"error":       "API returned error status",
+			"http_status":   resp.StatusCode,
+			"error":         "API returned error status",
 			"response_body": string(bodyBytes),
 		}
 		return status
@@ -1332,9 +1332,9 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 		status["status"] = "NOT CONNECTED"
 		status["qr"] = "timeout"
 		status["details"] = map[string]interface{}{
-			"error": "Failed to parse API response",
+			"error":        "Failed to parse API response",
 			"raw_response": string(bodyBytes),
-			"parse_error": err.Error(),
+			"parse_error":  err.Error(),
 		}
 		return status
 	}
@@ -1397,31 +1397,31 @@ func (h *Handlers) checkWablasStatus(device *models.DeviceSettings, status map[s
 func (h *Handlers) getWablasQRCode(token string) string {
 	client := &http.Client{Timeout: 10 * time.Second}
 	qrURL := fmt.Sprintf("https://my.wablas.com/api/device/scan?token=%s", url.QueryEscape(token))
-	
+
 	logrus.WithField("qr_url", qrURL).Info("[WABLAS] Fetching QR code")
-	
+
 	req, err := http.NewRequest("GET", qrURL, nil)
 	if err != nil {
 		logrus.WithError(err).Error("[WABLAS] Failed to create QR request")
 		return ""
 	}
-	
+
 	req.Header.Set("Authorization", token)
 	req.Header.Set("Accept", "application/json")
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("[WABLAS] Failed to fetch QR code")
 		return ""
 	}
 	defer resp.Body.Close()
-	
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logrus.WithError(err).Error("[WABLAS] Failed to read QR response body")
 		return ""
 	}
-	
+
 	if resp.StatusCode == 200 {
 		var qrResponse map[string]interface{}
 		if err := json.Unmarshal(bodyBytes, &qrResponse); err == nil {
@@ -1433,12 +1433,12 @@ func (h *Handlers) getWablasQRCode(token string) string {
 			}
 		}
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"status_code": resp.StatusCode,
+		"status_code":   resp.StatusCode,
 		"response_body": string(bodyBytes),
 	}).Warn("[WABLAS] Failed to get QR code")
-	
+
 	return ""
 }
 
@@ -1453,14 +1453,14 @@ func (h *Handlers) DebugDevices(c *fiber.Ctx) error {
 	var debugData []map[string]interface{}
 	for _, device := range devices {
 		data := map[string]interface{}{
-				"id":          device.ID,
-				"provider":    device.Provider,
-				"id_device":   getStringFromNullString(device.IDDevice),
-				"instance":    getStringFromNullString(device.Instance),
-				"device_id":   getStringFromNullString(device.DeviceID),
-				"phone_number": getStringFromNullString(device.PhoneNumber),
-				"created_at":  device.CreatedAt,
-			}
+			"id":           device.ID,
+			"provider":     device.Provider,
+			"id_device":    getStringFromNullString(device.IDDevice),
+			"instance":     getStringFromNullString(device.Instance),
+			"device_id":    getStringFromNullString(device.DeviceID),
+			"phone_number": getStringFromNullString(device.PhoneNumber),
+			"created_at":   device.CreatedAt,
+		}
 		debugData = append(debugData, data)
 	}
 
@@ -1477,11 +1477,11 @@ func (h *Handlers) processWebhookMessageWithRetry(webhookData map[string]interfa
 		if r := recover(); r != nil {
 			logrus.WithFields(logrus.Fields{
 				"id_device": idDevice,
-				"panic": r,
+				"panic":     r,
 			}).Error("❌ WEBHOOK: Panic recovered in webhook processing")
 		}
 	}()
-	
+
 	err := h.processWebhookMessage(webhookData, idDevice, provider)
 	if err != nil {
 		return fmt.Errorf("webhook processing failed: %w", err)
@@ -1493,9 +1493,9 @@ func (h *Handlers) processWebhookMessageWithRetry(webhookData map[string]interfa
 func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idDevice, provider string) error {
 	startTime := time.Now()
 	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"provider": provider,
-		"webhook_data": webhookData,
+		"id_device":             idDevice,
+		"provider":              provider,
+		"webhook_data":          webhookData,
 		"processing_start_time": startTime,
 	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration with monitoring")
 
@@ -1505,9 +1505,9 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 
 	// Debug log to check provider value
 	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"provider": provider,
-		"provider_type": fmt.Sprintf("%T", provider),
+		"id_device":         idDevice,
+		"provider":          provider,
+		"provider_type":     fmt.Sprintf("%T", provider),
 		"webhook_data_keys": getMapKeys(webhookData),
 	}).Info("🔍 WEBHOOK: Provider debug info - checking field extraction")
 
@@ -1530,7 +1530,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
 			isGroup = isGroupVal
 		}
-		
+
 		// Extract sender name for Whacenter
 		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
 			senderName = senderNameVal
@@ -1551,7 +1551,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		}
 		// Wablas doesn't have is_group field, default to false
 		isGroup = false
-		
+
 		// Extract sender name for Wablas
 		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
 			senderName = senderNameVal
@@ -1574,50 +1574,53 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
 			isGroup = isGroupVal
 		}
-		
+
 		// Extract sender name - prioritize direct sender_name field, then fallback to payload structure
 		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
 			senderName = senderNameVal
 		} else {
 			// Fallback to WAHA payload structure
-			// Following the pattern: $data['payload']['media']['Info']['PushName'] ?? 'Sis'
+			// Check payload.Info.PushName first (correct path based on actual webhook structure)
 			if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
-				if media, ok := payload["media"].(map[string]interface{}); ok {
-					if info, ok := media["Info"].(map[string]interface{}); ok {
-						if pushName, ok := info["PushName"].(string); ok && pushName != "" {
-							senderName = pushName
-						} else {
-							senderName = "Sis" // Default fallback
-						}
+				if info, ok := payload["Info"].(map[string]interface{}); ok {
+					if pushName, ok := info["PushName"].(string); ok && pushName != "" {
+						senderName = pushName
+						logrus.WithFields(logrus.Fields{
+							"sender_name":       senderName,
+							"extraction_method": "payload.Info.PushName",
+						}).Info("🔍 WAHA: Sender name extracted from payload.Info.PushName")
 					} else {
 						senderName = "Sis" // Default fallback
+						logrus.Info("🔍 WAHA: Using default sender name 'Sis' (PushName empty)")
 					}
 				} else {
 					senderName = "Sis" // Default fallback
+					logrus.Info("🔍 WAHA: Using default sender name 'Sis' (Info not found)")
 				}
 			} else {
 				senderName = "Sis" // Default fallback
+				logrus.Info("🔍 WAHA: Using default sender name 'Sis' (payload not found)")
 			}
 		}
-		
+
 		// Check for check_percent parameter from WAHA isFromMe % command processing
 		var checkPercent int
 		if checkPercentVal, ok := webhookData["check_percent"].(int); ok {
 			checkPercent = checkPercentVal
 			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"from": from,
+				"id_device":     idDevice,
+				"from":          from,
 				"check_percent": checkPercent,
 			}).Info("🔧 WAHA: Processing message with check_percent parameter from % command")
 		}
-		
+
 		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"provider": provider,
-			"from": from,
-			"message": truncateString(message, 100),
-			"is_group": isGroup,
-			"sender_name": senderName,
+			"id_device":     idDevice,
+			"provider":      provider,
+			"from":          from,
+			"message":       truncateString(message, 100),
+			"is_group":      isGroup,
+			"sender_name":   senderName,
 			"check_percent": checkPercent,
 		}).Info("📨 WEBHOOK: Processing WAHA message through standardized flow routing")
 
@@ -1637,7 +1640,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		if isGroupVal, ok := webhookData["is_group"].(bool); ok {
 			isGroup = isGroupVal
 		}
-		
+
 		// Extract sender name for generic provider
 		if senderNameVal, ok := webhookData["sender_name"].(string); ok && senderNameVal != "" {
 			senderName = senderNameVal
@@ -1650,8 +1653,8 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	if from == "" || message == "" {
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
-			"from": from,
-			"message": message,
+			"from":      from,
+			"message":   message,
 		}).Warn("⚠️ WEBHOOK: Missing required fields (from or message)")
 		return fmt.Errorf("missing required fields: from=%s, message=%s", from, message)
 	}
@@ -1660,7 +1663,7 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	if isGroup {
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
-			"from": from,
+			"from":      from,
 		}).Info("📱 WEBHOOK: Skipping group message")
 		return nil // Successfully skipped group message
 	}
@@ -1672,23 +1675,23 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		if len(mediaResults) > 0 {
 			// Use the clean text (with bracket format removed) for further processing
 			cleanMessage := mediaResults[0].CleanText
-			
+
 			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"from": from,
-				"original_message": message,
-				"clean_message": cleanMessage,
+				"id_device":            idDevice,
+				"from":                 from,
+				"original_message":     message,
+				"clean_message":        cleanMessage,
 				"detected_media_count": len(mediaResults),
 			}).Info("📎 WEBHOOK: Detected bracket format media URLs, using clean text for processing")
-			
+
 			// Update message to clean text for further processing
 			message = strings.TrimSpace(cleanMessage)
-			
+
 			// If clean message is empty after removing media URLs, skip processing
 			if message == "" {
 				logrus.WithFields(logrus.Fields{
 					"id_device": idDevice,
-					"from": from,
+					"from":      from,
 				}).Info("📎 WEBHOOK: Message contained only media URLs, skipping text processing")
 				return nil // Successfully skipped media-only message
 			}
@@ -1698,8 +1701,8 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	// Only process text messages for non-media content
 	if messageType != "text" && messageType != "" {
 		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
+			"id_device":    idDevice,
+			"from":         from,
 			"message_type": messageType,
 		}).Info("📱 WEBHOOK: Skipping non-text message")
 		return nil // Successfully skipped non-text message
@@ -1709,8 +1712,8 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	if strings.HasPrefix(message, "%") || strings.HasPrefix(message, "#") || strings.ToLower(strings.TrimSpace(message)) == "cmd" {
 		logrus.WithFields(logrus.Fields{
 			"id_device": idDevice,
-			"from": from,
-			"command": message,
+			"from":      from,
+			"command":   message,
 		}).Info("⚙️ WEBHOOK: Processing device command")
 
 		// Process device command through AI WhatsApp handlers asynchronously
@@ -1727,18 +1730,16 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		return nil // Return immediately
 	}
 
-
-
 	// Check if device has a configured flow - prioritize flow engine over AI conversation
 	flowCheckStart := time.Now()
 	flows, err := h.flowService.GetFlowsByDevice(idDevice)
 	flowCheckDuration := time.Since(flowCheckStart)
-	
+
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
+			"id_device":           idDevice,
 			"flow_check_duration": flowCheckDuration,
-			"error": err.Error(),
+			"error":               err.Error(),
 		}).Warn("⚠️ WEBHOOK: Failed to check for device flows")
 	}
 
@@ -1746,11 +1747,11 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 	if len(flows) > 0 {
 		flowProcessingStart := time.Now()
 		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
-			"message": message,
-			"provider": provider,
-			"flow_count": len(flows),
+			"id_device":           idDevice,
+			"from":                from,
+			"message":             message,
+			"provider":            provider,
+			"flow_count":          len(flows),
 			"flow_check_duration": flowCheckDuration,
 		}).Info("🔄 WEBHOOK: Processing message through flow engine")
 
@@ -1760,26 +1761,26 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 			go func() {
 				err := h.whatsappService.ProcessIncomingMessageFromWebhook(from, message, idDevice, provider, senderName)
 				flowProcessingDuration := time.Since(flowProcessingStart)
-				
+
 				if err != nil {
 					logrus.WithFields(logrus.Fields{
-						"id_device": idDevice,
+						"id_device":                idDevice,
 						"flow_processing_duration": flowProcessingDuration,
-						"error": err.Error(),
+						"error":                    err.Error(),
 					}).Error("❌ WEBHOOK: Failed to process message through flow engine")
 					// Fallback to AI conversation if flow processing fails
 					h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
 				} else {
 					logrus.WithFields(logrus.Fields{
-						"id_device": idDevice,
+						"id_device":                idDevice,
 						"flow_processing_duration": flowProcessingDuration,
-						"total_processing_time": time.Since(startTime),
+						"total_processing_time":    time.Since(startTime),
 					}).Info("✅ WEBHOOK: Successfully processed through flow engine")
 				}
 			}()
 		} else {
 			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
+				"id_device":                idDevice,
 				"flow_processing_duration": time.Since(flowProcessingStart),
 			}).Error("❌ WEBHOOK: WhatsApp service not available, falling back to AI conversation")
 			go h.processAIConversation(from, message, idDevice, provider, senderName, startTime)
@@ -1789,10 +1790,10 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 
 	// No flows configured, use AI conversation system
 	logrus.WithFields(logrus.Fields{
-		"id_device": idDevice,
-		"from": from,
-		"message": message,
-		"provider": provider,
+		"id_device":           idDevice,
+		"from":                from,
+		"message":             message,
+		"provider":            provider,
 		"flow_check_duration": flowCheckDuration,
 	}).Info("🤖 WEBHOOK: No flows configured, processing message through AI conversation")
 
@@ -1804,29 +1805,29 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 // processAIConversation handles message processing through the AI conversation system with performance monitoring
 func (h *Handlers) processAIConversation(from, message, idDevice, provider, senderName string, requestStartTime time.Time) {
 	aiProcessingStart := time.Now()
-	
+
 	// Get current conversation stage from AI WhatsApp repository
 	var stage string
 	stageRetrievalStart := time.Now()
 	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
 		aiConv, err := h.aiWhatsappHandlers.AIRepo.GetAIWhatsappByProspectNum(from)
 		stageRetrievalDuration := time.Since(stageRetrievalStart)
-		
+
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"from": from,
+				"id_device":                idDevice,
+				"from":                     from,
 				"stage_retrieval_duration": stageRetrievalDuration,
-				"error": err.Error(),
+				"error":                    err.Error(),
 			}).Warn("⚠️ WEBHOOK: Failed to get AI conversation stage")
 		} else if aiConv != nil {
 			if aiConv.Stage.Valid {
 				stage = aiConv.Stage.String
 			}
 			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"from": from,
-				"current_stage": stage,
+				"id_device":                idDevice,
+				"from":                     from,
+				"current_stage":            stage,
 				"stage_retrieval_duration": stageRetrievalDuration,
 			}).Debug("📋 WEBHOOK: Retrieved AI conversation stage")
 		}
@@ -1837,15 +1838,15 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider, send
 		aiCallStart := time.Now()
 		response, err := h.aiWhatsappHandlers.AIWhatsappService.ProcessAIConversation(from, idDevice, message, stage, senderName)
 		aiCallDuration := time.Since(aiCallStart)
-		
+
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"from": from,
-				"ai_call_duration": aiCallDuration,
+				"id_device":                idDevice,
+				"from":                     from,
+				"ai_call_duration":         aiCallDuration,
 				"total_ai_processing_time": time.Since(aiProcessingStart),
-				"total_request_time": time.Since(requestStartTime),
-				"error": err.Error(),
+				"total_request_time":       time.Since(requestStartTime),
+				"error":                    err.Error(),
 			}).Error("❌ WEBHOOK: Failed to process AI conversation")
 			return
 		}
@@ -1859,34 +1860,34 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider, send
 			responseSendStart := time.Now()
 			h.sendWhatsappResponse(from, idDevice, provider, response)
 			responseSendDuration := time.Since(responseSendStart)
-			
+
 			totalProcessingTime := time.Since(aiProcessingStart)
 			totalRequestTime := time.Since(requestStartTime)
-			
+
 			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"to": from,
-				"provider": provider,
-				"ai_call_duration": aiCallDuration,
-				"response_send_duration": responseSendDuration,
+				"id_device":                idDevice,
+				"to":                       from,
+				"provider":                 provider,
+				"ai_call_duration":         aiCallDuration,
+				"response_send_duration":   responseSendDuration,
 				"total_ai_processing_time": totalProcessingTime,
-				"total_request_time": totalRequestTime,
-				"response_items_count": len(response.Response),
-				"new_stage": response.Stage,
+				"total_request_time":       totalRequestTime,
+				"response_items_count":     len(response.Response),
+				"new_stage":                response.Stage,
 			}).Info("📤 WEBHOOK: Successfully processed and sent AI response")
 		} else {
 			logrus.WithFields(logrus.Fields{
-				"id_device": idDevice,
-				"from": from,
-				"ai_call_duration": aiCallDuration,
+				"id_device":                idDevice,
+				"from":                     from,
+				"ai_call_duration":         aiCallDuration,
 				"total_ai_processing_time": time.Since(aiProcessingStart),
-				"total_request_time": time.Since(requestStartTime),
+				"total_request_time":       time.Since(requestStartTime),
 			}).Warn("⚠️ WEBHOOK: AI conversation processed but no response generated")
 		}
 	} else {
 		logrus.WithFields(logrus.Fields{
-			"id_device": idDevice,
-			"from": from,
+			"id_device":          idDevice,
+			"from":               from,
 			"total_request_time": time.Since(requestStartTime),
 		}).Error("❌ WEBHOOK: AI WhatsApp service not available")
 	}
@@ -1896,7 +1897,7 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider, send
 func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 	// Get user ID from context
 	userID := c.Locals("userID").(int)
-	
+
 	var req struct {
 		models.CreateDeviceSettingsRequest
 		WebhookURL string `json:"webhook_url"`
@@ -1939,9 +1940,9 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 		// STEP 1: Delete old session (if exists)
 		oldSession := existingDevice.Instance.String
 		logrus.WithFields(logrus.Fields{
-			"id_device": req.IDDevice,
+			"id_device":   req.IDDevice,
 			"old_session": oldSession,
-			"action": "delete_existing",
+			"action":      "delete_existing",
 		}).Info("🗑️ WAHA: Deleting existing session")
 
 		deleteURL := fmt.Sprintf("%s/api/sessions/%s", apiBase, oldSession)
@@ -1956,7 +1957,7 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 			} else {
 				defer deleteResp.Body.Close()
 				logrus.WithFields(logrus.Fields{
-					"status_code": deleteResp.StatusCode,
+					"status_code":  deleteResp.StatusCode,
 					"session_name": oldSession,
 				}).Info("📥 WAHA: Session deletion attempted")
 			}
@@ -2008,10 +2009,10 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 
 	// Make request to WAHA API
 	logrus.WithFields(logrus.Fields{
-		"provider":     "waha",
-		"url":          createURL,
-		"session_name": sessionName,
-		"webhook":      webhook,
+		"provider":       "waha",
+		"url":            createURL,
+		"session_name":   sessionName,
+		"webhook":        webhook,
 		"api_key_length": len(apiKey),
 	}).Info("🟢 WAHA: Making session creation request")
 
@@ -2086,7 +2087,7 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 	createReq := &models.CreateDeviceSettingsRequest{
 		UserID:       &userID, // Set user ID from context
 		APIKeyOption: req.APIKeyOption,
-		WebhookID:    webhook,        // Store webhook URL
+		WebhookID:    webhook, // Store webhook URL
 		Provider:     "waha",
 		PhoneNumber:  req.PhoneNumber,
 		APIKey:       req.APIKey, // Preserve the original OpenRouter API key
@@ -2137,9 +2138,9 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 // This function now properly implements the PHP logic for onemessage combining
 func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response interface{}) {
 	logrus.WithFields(logrus.Fields{
-		"to": to,
+		"to":        to,
 		"id_device": idDevice,
-		"provider": provider,
+		"provider":  provider,
 	}).Info("📤 WHATSAPP: Sending response")
 
 	// Get device settings to retrieve API credentials
@@ -2170,7 +2171,7 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 	// Process response items with onemessage combining logic (matching PHP implementation)
 	var textParts []string
 	isOnemessageActive := false
-	
+
 	for index, respItem := range aiResponse.Response {
 		if respItem.Content == "" {
 			logrus.WithField("index", index).Warning("⚠️ WHATSAPP: Empty content in response item")
@@ -2184,14 +2185,14 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 			isOnemessageActive = true
 
 			logrus.WithFields(logrus.Fields{
-				"index": index,
+				"index":       index,
 				"parts_count": len(textParts),
 			}).Debug("📝 WHATSAPP: Collecting onemessage part")
 
 			// Check if next part is also onemessage
 			isLastPart := index == len(aiResponse.Response)-1
 			nextIsNotOnemessage := false
-			
+
 			if !isLastPart {
 				nextItem := aiResponse.Response[index+1]
 				nextIsNotOnemessage = nextItem.Type != "text" || nextItem.Jenis != "onemessage"
@@ -2201,7 +2202,7 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 			if isLastPart || nextIsNotOnemessage {
 				combinedMessage := strings.Join(textParts, "\n")
 				h.sendTextMessage(to, combinedMessage, deviceSettings, provider)
-				
+
 				logrus.WithFields(logrus.Fields{
 					"combined_parts": len(textParts),
 					"message_length": len(combinedMessage),
@@ -2216,7 +2217,7 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 			if isOnemessageActive && len(textParts) > 0 {
 				combinedMessage := strings.Join(textParts, "\n")
 				h.sendTextMessage(to, combinedMessage, deviceSettings, provider)
-				
+
 				logrus.WithFields(logrus.Fields{
 					"combined_parts": len(textParts),
 				}).Info("✅ WHATSAPP: Flushed onemessage parts before non-onemessage item")
@@ -2251,7 +2252,7 @@ func (h *Handlers) sendWhatsappResponse(to, idDevice, provider string, response 
 	if isOnemessageActive && len(textParts) > 0 {
 		combinedMessage := strings.Join(textParts, "\n")
 		h.sendTextMessage(to, combinedMessage, deviceSettings, provider)
-		
+
 		logrus.WithField("parts", len(textParts)).Warning("⚠️ WHATSAPP: Flushed remaining onemessage parts at end")
 	}
 }
@@ -2315,9 +2316,9 @@ func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *
 	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
 	payload := map[string]interface{}{
 		"device_id": deviceSettings.Instance.String, // ✅ Use instance
-		"number": to,
-		"message": message,
-		"type": "text",
+		"number":    to,
+		"message":   message,
+		"type":      "text",
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -2355,8 +2356,8 @@ func (h *Handlers) sendWhacenterTextMessage(to, message string, deviceSettings *
 
 	// Log response details
 	logFields := logrus.Fields{
-		"to": to,
-		"status_code": resp.StatusCode,
+		"to":            to,
+		"status_code":   resp.StatusCode,
 		"response_body": string(respBody),
 	}
 
@@ -2414,8 +2415,8 @@ func (h *Handlers) sendWablasTextMessage(to, message string, deviceSettings *mod
 
 	// Log response details
 	logFields := logrus.Fields{
-		"to": to,
-		"status_code": resp.StatusCode,
+		"to":            to,
+		"status_code":   resp.StatusCode,
 		"response_body": string(respBody),
 	}
 
@@ -2457,9 +2458,9 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, fileURL, fileType string, 
 	// Prepare form data exactly as specified by user PHP code
 	data := url.Values{}
 	data.Set("device_id", deviceSettings.Instance.String) // device_id from instance
-	data.Set("number", to)                               // recipient number
-	data.Set("file", fileURL)                           // media file URL
-	
+	data.Set("number", to)                                // recipient number
+	data.Set("file", fileURL)                             // media file URL
+
 	// Add type parameter for video and audio only (as per PHP code)
 	if mediaType != "" && mediaType != "image" {
 		data.Set("type", mediaType)
@@ -2493,9 +2494,9 @@ func (h *Handlers) sendWhacenterMultimediaMessage(to, fileURL, fileType string, 
 
 	// Log response details
 	logFields := logrus.Fields{
-		"to":          to,
-		"file_type":   fileType,
-		"status_code": resp.StatusCode,
+		"to":            to,
+		"file_type":     fileType,
+		"status_code":   resp.StatusCode,
 		"response_body": string(respBody),
 	}
 
@@ -2589,11 +2590,11 @@ func (h *Handlers) determineProviderFromInstance(instance string) string {
 func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *models.DeviceSettings, delay time.Duration) {
 	// Console log for tracing media URL in handlers
 	logrus.WithFields(logrus.Fields{
-		"to": to,
-		"file_url": fileURL,
-		"device_id": deviceSettings.IDDevice,
+		"to":              to,
+		"file_url":        fileURL,
+		"device_id":       deviceSettings.IDDevice,
 		"file_url_length": len(fileURL),
-		"delay_ms": delay.Milliseconds(),
+		"delay_ms":        delay.Milliseconds(),
 	}).Info("🔍 HANDLERS: MEDIA URL RECEIVED FOR TRACING")
 
 	// Add delay before sending
@@ -2624,23 +2625,23 @@ func (h *Handlers) sendChatMessage(to, reply, fileURL string, deviceSettings *mo
 // sendWahaMultimediaMessage sends multimedia message via WAHA provider - EXACTLY matching PHP implementation
 func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, deviceSettings *models.DeviceSettings) {
 	logrus.WithFields(logrus.Fields{
-		"to": to,
-		"file_url": fileURL,
-		"provider": "waha",
+		"to":        to,
+		"file_url":  fileURL,
+		"provider":  "waha",
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending multimedia message via WAHA")
 
 	// Fixed API key as per PHP code
 	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
-	
+
 	// Prepare variables matching PHP
 	session := deviceSettings.Instance.String
 	number := regexp.MustCompile(`[^0-9]`).ReplaceAllString(to, "")
 	chatId := number + "@c.us"
-	
+
 	var apiURL string
 	var data map[string]interface{}
-	
+
 	// Check file type and prepare request - EXACTLY as PHP
 	if strings.Contains(fileURL, ".mp4") {
 		// Video file
@@ -2677,7 +2678,7 @@ func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, device
 		if ext != "" && ext[0] == '.' {
 			ext = ext[1:] // Remove leading dot
 		}
-		
+
 		// Mimetype map matching PHP
 		mimeMap := map[string]string{
 			"jpg":  "image/jpeg",
@@ -2688,7 +2689,7 @@ func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, device
 			"bmp":  "image/bmp",
 			"svg":  "image/svg+xml",
 		}
-		
+
 		// Step 1: Try to use extension
 		mimetype := ""
 		if ext != "" {
@@ -2696,7 +2697,7 @@ func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, device
 				mimetype = mime
 			}
 		}
-		
+
 		// Step 2: Try to detect from headers (simplified for Go)
 		if mimetype == "" {
 			// Try to get content type from URL
@@ -2711,12 +2712,12 @@ func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, device
 				}
 			}
 		}
-		
+
 		// Step 3: Fallback default
 		if mimetype == "" {
 			mimetype = "image/jpeg"
 		}
-		
+
 		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendImage"
 		data = map[string]interface{}{
 			"session": session,
@@ -2729,25 +2730,25 @@ func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, device
 			"caption": caption,
 		}
 	}
-	
+
 	// Marshal the data
 	jsonPayload, err := json.Marshal(data)
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to marshal payload")
 		return
 	}
-	
+
 	// Create HTTP request
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
 		return
 	}
-	
+
 	// Set headers exactly as PHP
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Api-Key", apiKey)
-	
+
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -2756,14 +2757,14 @@ func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, device
 		return
 	}
 	defer resp.Body.Close()
-	
+
 	// Read response
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to read response body")
 		return
 	}
-	
+
 	// Log response
 	logFields := logrus.Fields{
 		"to":            to,
@@ -2772,7 +2773,7 @@ func (h *Handlers) sendWahaMultimediaMessage(to, fileURL, caption string, device
 		"url":           apiURL,
 		"file_url":      fileURL,
 	}
-	
+
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		logFields["status"] = "success"
 		logrus.WithFields(logFields).Info("📤 WAHA: Multimedia message sent successfully")
@@ -2795,17 +2796,15 @@ func (h *Handlers) getFileType(fileURL string) string {
 
 	// Console log for tracing file type determination
 	logrus.WithFields(logrus.Fields{
-		"file_url": fileURL,
-		"determined_type": fileType,
-		"has_mp4": strings.Contains(fileURL, ".mp4"),
-		"has_mp3": strings.Contains(fileURL, ".mp3"),
+		"file_url":         fileURL,
+		"determined_type":  fileType,
+		"has_mp4":          strings.Contains(fileURL, ".mp4"),
+		"has_mp3":          strings.Contains(fileURL, ".mp3"),
 		"default_to_image": !strings.Contains(fileURL, ".mp4") && !strings.Contains(fileURL, ".mp3"),
 	}).Info("🔍 HANDLERS: FILE TYPE DETERMINED FOR TRACING")
 
 	return fileType
 }
-
-
 
 func getStringFromNullString(ns sql.NullString) string {
 	if ns.Valid {
@@ -2821,19 +2820,19 @@ func (h *Handlers) validateWebhookPayload(data map[string]interface{}) error {
 	if len(payloadBytes) > 1024*1024 {
 		return fmt.Errorf("payload too large: %d bytes", len(payloadBytes))
 	}
-	
+
 	// Validate required fields based on common webhook structures
 	if len(data) == 0 {
 		return fmt.Errorf("empty payload")
 	}
-	
+
 	// Check for suspicious patterns that might indicate injection attempts
 	for key, value := range data {
 		if err := h.validateField(key, value); err != nil {
 			return fmt.Errorf("invalid field %s: %w", key, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -2864,12 +2863,12 @@ func (h *Handlers) validateField(key string, value interface{}) error {
 		// For other types (numbers, booleans), convert to string
 		strValue = fmt.Sprintf("%v", v)
 	}
-	
+
 	// Check string length limit (10KB per field)
 	if len(strValue) > 10240 {
 		return fmt.Errorf("field too long: %d characters", len(strValue))
 	}
-	
+
 	// Check for SQL injection patterns
 	sqlPatterns := []string{
 		"'", "--", "/*", "*/", "xp_", "sp_", "union", "select", "insert", "update", "delete", "drop", "create", "alter",
@@ -2878,13 +2877,13 @@ func (h *Handlers) validateField(key string, value interface{}) error {
 	for _, pattern := range sqlPatterns {
 		if strings.Contains(lowerValue, pattern) {
 			logrus.WithFields(logrus.Fields{
-				"field": key,
-				"pattern": pattern,
+				"field":         key,
+				"pattern":       pattern,
 				"value_preview": strValue[:min(len(strValue), 50)],
 			}).Warn("⚠️ SECURITY: Potential SQL injection pattern detected")
 		}
 	}
-	
+
 	// Check for XSS patterns
 	xssPatterns := []string{
 		"<script", "javascript:", "onload=", "onerror=", "onclick=", "onmouseover=",
@@ -2892,24 +2891,24 @@ func (h *Handlers) validateField(key string, value interface{}) error {
 	for _, pattern := range xssPatterns {
 		if strings.Contains(lowerValue, pattern) {
 			logrus.WithFields(logrus.Fields{
-				"field": key,
-				"pattern": pattern,
+				"field":         key,
+				"pattern":       pattern,
 				"value_preview": strValue[:min(len(strValue), 50)],
 			}).Warn("⚠️ SECURITY: Potential XSS pattern detected")
 		}
 	}
-	
+
 	return nil
 }
 
 // sanitizeWebhookData sanitizes webhook data to prevent injection attacks
 func (h *Handlers) sanitizeWebhookData(data map[string]interface{}) map[string]interface{} {
 	sanitized := make(map[string]interface{})
-	
+
 	for key, value := range data {
 		sanitized[key] = h.sanitizeValue(value)
 	}
-	
+
 	return sanitized
 }
 
@@ -3142,11 +3141,10 @@ func (h *Handlers) GetWahaDeviceStatus(c *fiber.Ctx) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"provider": "WAHA",
-		"status":   status,
+		"provider":  "WAHA",
+		"status":    status,
 		"has_image": image != nil,
 	}).Info("📤 WAHA: Returning device status response")
 
 	return c.JSON(response)
 }
-
