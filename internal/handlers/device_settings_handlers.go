@@ -1560,13 +1560,15 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		}
 
 	case "waha":
-		// Extract data for WAHA provider using standardized format
-		// WAHA now uses the same field structure as Whacenter for consistency
-		if fromVal, ok := webhookData["from"].(string); ok {
-			from = fromVal
-		}
-		if msgVal, ok := webhookData["message"].(string); ok {
-			message = msgVal
+		// Extract data for WAHA provider from payload structure
+		// Following PHP: $payload = $data['payload']; $wa_no_raw = $payload['from']; $wa_text = $payload['body'];
+		if payload, ok := webhookData["payload"].(map[string]interface{}); ok {
+			if fromVal, ok := payload["from"].(string); ok {
+				from = fromVal
+			}
+			if bodyVal, ok := payload["body"].(string); ok {
+				message = bodyVal
+			}
 		}
 		if msgTypeVal, ok := webhookData["message_type"].(string); ok {
 			messageType = msgTypeVal
