@@ -63,6 +63,8 @@ const Analytics = () => {
     to: new Date() // Today
   });
   const [selectedDevice, setSelectedDevice] = useState<string>(''); // Empty string means all devices
+  const [selectedStage, setSelectedStage] = useState<string>(''); // Empty string means all stages
+  const [availableStages, setAvailableStages] = useState<string[]>([]);
   const [showDeviceRequiredPopup, setShowDeviceRequiredPopup] = useState(false);
 
   /**
@@ -93,6 +95,11 @@ const Analytics = () => {
       } else if (device_ids && device_ids.length > 0) {
         // Send all device IDs as comma-separated string
         params.append('deviceIds', device_ids.join(','));
+      }
+      
+      // Add stage filter if selected
+      if (selectedStage) {
+        params.append('stage', selectedStage);
       }
       
       const apiUrl = `/api/ai-whatsapp/ai/analytics?${params.toString()}`;
@@ -129,10 +136,38 @@ const Analytics = () => {
     }
   };
   
+  // Fetch available stages
+  const fetchAvailableStages = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (device_ids && device_ids.length > 0) {
+        params.append('deviceIds', device_ids.join(','));
+      }
+      
+      const response = await fetch(`/api/ai-whatsapp/ai/ai-whatsapp/stages?${params}`, {
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        const stages = await response.json();
+        setAvailableStages(stages);
+      }
+    } catch (err) {
+      console.error('Error fetching available stages:', err);
+    }
+  };
+  
   // Load data on component mount and when filters change
   useEffect(() => {
     fetchAnalyticsData();
-  }, [dateRange, selectedDevice]);
+  }, [dateRange, selectedDevice, selectedStage]);
+  
+  // Fetch available stages on mount
+  useEffect(() => {
+    if (has_devices) {
+      fetchAvailableStages();
+    }
+  }, [has_devices, device_ids]);
 
   // Listen for refresh events from AIWhatsappDataTable
   useEffect(() => {
@@ -288,6 +323,28 @@ const Analytics = () => {
                   onClick={() => setSelectedDevice(deviceId)}
                 >
                   {deviceId}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={!has_devices}>
+                <Filter className="w-4 h-4 mr-2" />
+                {selectedStage ? `Stage: ${selectedStage}` : 'All Stages'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setSelectedStage('')}>
+                All Stages
+              </DropdownMenuItem>
+              {availableStages && availableStages.map((stage) => (
+                <DropdownMenuItem 
+                  key={stage} 
+                  onClick={() => setSelectedStage(stage)}
+                >
+                  {stage || 'Welcome Message'}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -616,7 +673,7 @@ const Analytics = () => {
       
       {/* AI WhatsApp Data Table */}
       <div className="mt-8">
-        <AIWhatsappDataTable selectedDevice={selectedDevice} />
+        <AIWhatsappDataTable selectedDevice={selectedDevice} selectedStage={selectedStage} />
       </div>
       
       {/* Device Required Popup */}
