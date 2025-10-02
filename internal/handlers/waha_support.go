@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"nodepath-chat/internal/models"
 	"github.com/sirupsen/logrus"
+	"nodepath-chat/internal/models"
 )
 
 // sendWahaTextMessage sends text message via WAHA API - NO RETRY

@@ -285,7 +285,7 @@ func (r *wasapBotRepository) SaveConversationHistory(prospectNum, deviceID, user
 		}
 
 		now := time.Now().Format("2006-01-02 15:04:05")
-		
+
 		if existingID != nil {
 			// Update existing record
 			updateQuery := `
@@ -308,21 +308,20 @@ func (r *wasapBotRepository) SaveConversationHistory(prospectNum, deviceID, user
 					date_start, date_last, status, waiting_for_reply
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`
-			_, err = tx.Exec(insertQuery, prospectNum, deviceID, stage, convLastValue, nama, 
+			_, err = tx.Exec(insertQuery, prospectNum, deviceID, stage, convLastValue, nama,
 				now, now, "Prospek", 0)
 			if err != nil {
 				return fmt.Errorf("failed to create new conversation record: %w", err)
 			}
 			logrus.WithFields(logrus.Fields{
 				"prospect_num": prospectNum,
-				"id_device": deviceID,
+				"id_device":    deviceID,
 			}).Info("New WasapBot conversation record created successfully")
 		}
 
 		return nil
 	})
 }
-
 
 // UpdateWaitingStatus updates the waiting status for an execution
 func (r *wasapBotRepository) UpdateWaitingStatus(executionID string, waitingValue int) error {
@@ -331,33 +330,32 @@ func (r *wasapBotRepository) UpdateWaitingStatus(executionID string, waitingValu
 		SET waiting_for_reply = ?, date_last = NOW()
 		WHERE execution_id = ?
 	`
-	
+
 	_, err := r.db.Exec(query, waitingValue, executionID)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
-			"execution_id":   executionID,
+			"execution_id":  executionID,
 			"waiting_value": waitingValue,
 		}).Error("Failed to update waiting status in wasapBot")
 		return fmt.Errorf("failed to update waiting status: %w", err)
 	}
-	
+
 	return nil
 }
-
 
 // GetAllWasapBotData retrieves all WasapBot data with filters
 func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error) {
 	// Log incoming parameters
 	logrus.WithFields(logrus.Fields{
-		"limit": limit,
-		"offset": offset,
+		"limit":        limit,
+		"offset":       offset,
 		"deviceFilter": deviceFilter,
-		"stageFilter": stageFilter,
+		"stageFilter":  stageFilter,
 		"statusFilter": statusFilter,
-		"search": search,
-		"userID": userID,
+		"search":       search,
+		"userID":       userID,
 	}).Info("GetAllWasapBotData called")
-	
+
 	// Build query with filters - select all needed columns
 	query := `
 		SELECT id_prospect, prospect_num, nama, stage, date_last, id_device,
@@ -365,11 +363,11 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		FROM wasapBot_nodepath
 		WHERE 1=1
 	`
-	
+
 	countQuery := `SELECT COUNT(*) FROM wasapBot_nodepath WHERE 1=1`
 	args := []interface{}{}
 	countArgs := []interface{}{}
-	
+
 	// Apply filters
 	if deviceFilter != "" && deviceFilter != "all" {
 		// Handle multiple device IDs
@@ -385,21 +383,21 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			logrus.WithField("device_filter_applied", devices).Info("Applying device filter for multiple devices")
 		}
 	}
-	
+
 	if stageFilter != "" && stageFilter != "all" {
 		query += " AND stage = ?"
 		countQuery += " AND stage = ?"
 		args = append(args, stageFilter)
 		countArgs = append(countArgs, stageFilter)
 	}
-	
+
 	if statusFilter != "" && statusFilter != "all" {
 		query += " AND status = ?"
 		countQuery += " AND status = ?"
 		args = append(args, statusFilter)
 		countArgs = append(countArgs, statusFilter)
 	}
-	
+
 	if search != "" {
 		query += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR peringkat_sekolah LIKE ?)"
 		countQuery += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR peringkat_sekolah LIKE ?)"
@@ -407,13 +405,13 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		args = append(args, searchParam, searchParam, searchParam, searchParam)
 		countArgs = append(countArgs, searchParam, searchParam, searchParam, searchParam)
 	}
-	
+
 	// Log the final query
 	logrus.WithFields(logrus.Fields{
 		"count_query": countQuery,
-		"count_args": countArgs,
+		"count_args":  countArgs,
 	}).Debug("Executing count query")
-	
+
 	// Get total count
 	var total int
 	err := r.db.QueryRow(countQuery, countArgs...).Scan(&total)
@@ -421,19 +419,19 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		logrus.WithError(err).Error("Failed to get count")
 		return nil, 0, fmt.Errorf("failed to get count: %w", err)
 	}
-	
+
 	logrus.WithField("total_count", total).Info("Total records found")
-	
+
 	// Add ORDER BY and pagination
 	query += " ORDER BY date_last DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
-	
+
 	// Log the data query
 	logrus.WithFields(logrus.Fields{
 		"data_query": query,
-		"data_args": args,
+		"data_args":  args,
 	}).Debug("Executing data query")
-	
+
 	// Execute query
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
@@ -441,27 +439,27 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 		return nil, 0, fmt.Errorf("failed to query wasapBot data: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var results []map[string]interface{}
 	rowCount := 0
 	for rows.Next() {
 		var (
-			idProspect int
-			prospectNum sql.NullString
-			nama sql.NullString
-			stage sql.NullString
-			dateLast sql.NullString
-			deviceID sql.NullString
-			niche sql.NullString
-			status sql.NullString
-			alamat sql.NullString
-			pakej sql.NullString
-			caraBayaran sql.NullString
-			tarikhGaji sql.NullString
+			idProspect    int
+			prospectNum   sql.NullString
+			nama          sql.NullString
+			stage         sql.NullString
+			dateLast      sql.NullString
+			deviceID      sql.NullString
+			niche         sql.NullString
+			status        sql.NullString
+			alamat        sql.NullString
+			pakej         sql.NullString
+			caraBayaran   sql.NullString
+			tarikhGaji    sql.NullString
 			currentNodeID sql.NullString
-			noFon sql.NullString
+			noFon         sql.NullString
 		)
-		
+
 		err := rows.Scan(
 			&idProspect,
 			&prospectNum,
@@ -482,128 +480,127 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 			logrus.WithError(err).Error("Failed to scan wasapBot row")
 			continue
 		}
-		
+
 		rowCount++
-		
+
 		// Convert to plain map for JSON - match frontend expectations
 		record := map[string]interface{}{
-			"id_prospect": idProspect,
-			"id_device": utils.GetStringValue(deviceID),
-			"nama": utils.GetStringValue(nama),
-			"prospect_num": utils.GetStringValue(prospectNum),
-			"niche": utils.GetStringValue(niche),
-			"status": utils.GetStringValue(status),
-			"stage": utils.GetStringValue(stage),
-			"alamat": utils.GetStringValue(alamat),
-			"pakej": utils.GetStringValue(pakej),
-			"cara_bayaran": utils.GetStringValue(caraBayaran),
-			"tarikh_gaji": utils.GetStringValue(tarikhGaji),
+			"id_prospect":     idProspect,
+			"id_device":       utils.GetStringValue(deviceID),
+			"nama":            utils.GetStringValue(nama),
+			"prospect_num":    utils.GetStringValue(prospectNum),
+			"niche":           utils.GetStringValue(niche),
+			"status":          utils.GetStringValue(status),
+			"stage":           utils.GetStringValue(stage),
+			"alamat":          utils.GetStringValue(alamat),
+			"pakej":           utils.GetStringValue(pakej),
+			"cara_bayaran":    utils.GetStringValue(caraBayaran),
+			"tarikh_gaji":     utils.GetStringValue(tarikhGaji),
 			"current_node_id": utils.GetStringValue(currentNodeID),
-			"no_fon": utils.GetStringValue(noFon),
-			"date_last": utils.GetStringValue(dateLast),
+			"no_fon":          utils.GetStringValue(noFon),
+			"date_last":       utils.GetStringValue(dateLast),
 		}
-		
+
 		results = append(results, record)
-		
+
 		logrus.WithFields(logrus.Fields{
-			"row_id": idProspect,
-			"device": utils.GetStringValue(deviceID),
+			"row_id":       idProspect,
+			"device":       utils.GetStringValue(deviceID),
 			"prospect_num": utils.GetStringValue(prospectNum),
 		}).Debug("Added record to results")
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"rows_scanned": rowCount,
+		"rows_scanned":  rowCount,
 		"results_count": len(results),
 	}).Info("Query completed")
-	
+
 	return results, total, nil
 }
 
 // GetWasapBotStats retrieves WasapBot statistics
 func (r *wasapBotRepository) GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error) {
 	stats := map[string]interface{}{
-		"totalProspects": 0,
-		"activeExecutions": 0,
+		"totalProspects":      0,
+		"activeExecutions":    0,
 		"completedExecutions": 0,
-		"uniqueSchools": 0,
-		"uniquePackages": 0,
-		"totalWithPhone": 0,
+		"uniqueSchools":       0,
+		"uniquePackages":      0,
+		"totalWithPhone":      0,
 	}
-	
+
 	baseWhere := "1=1"
 	args := []interface{}{}
-	
+
 	if deviceFilter != "" && deviceFilter != "all" {
 		baseWhere += " AND instance = ?"
 		args = append(args, deviceFilter)
 	}
-	
+
 	// Total prospects
 	var totalProspects int
 	err := r.db.QueryRow("SELECT COUNT(DISTINCT prospect_num) FROM wasapBot_nodepath WHERE "+baseWhere, args...).Scan(&totalProspects)
 	if err == nil {
 		stats["totalProspects"] = totalProspects
 	}
-	
+
 	// Active executions
 	var activeExecutions int
 	err = r.db.QueryRow("SELECT COUNT(*) FROM wasapBot_nodepath WHERE "+baseWhere+" AND execution_status = 'active'", args...).Scan(&activeExecutions)
 	if err == nil {
 		stats["activeExecutions"] = activeExecutions
 	}
-	
+
 	// Completed executions
 	var completedExecutions int
 	err = r.db.QueryRow("SELECT COUNT(*) FROM wasapBot_nodepath WHERE "+baseWhere+" AND status = 'Customer'", args...).Scan(&completedExecutions)
 	if err == nil {
 		stats["completedExecutions"] = completedExecutions
 	}
-	
+
 	// Unique schools
 	var uniqueSchools int
 	err = r.db.QueryRow("SELECT COUNT(DISTINCT peringkat_sekolah) FROM wasapBot_nodepath WHERE "+baseWhere+" AND peringkat_sekolah IS NOT NULL AND peringkat_sekolah != ''", args...).Scan(&uniqueSchools)
 	if err == nil {
 		stats["uniqueSchools"] = uniqueSchools
 	}
-	
+
 	// Unique packages
 	var uniquePackages int
 	err = r.db.QueryRow("SELECT COUNT(DISTINCT pakej) FROM wasapBot_nodepath WHERE "+baseWhere+" AND pakej IS NOT NULL AND pakej != ''", args...).Scan(&uniquePackages)
 	if err == nil {
 		stats["uniquePackages"] = uniquePackages
 	}
-	
+
 	// Total with phone
 	var totalWithPhone int
 	err = r.db.QueryRow("SELECT COUNT(*) FROM wasapBot_nodepath WHERE "+baseWhere+" AND no_fon IS NOT NULL AND no_fon != ''", args...).Scan(&totalWithPhone)
 	if err == nil {
 		stats["totalWithPhone"] = totalWithPhone
 	}
-	
+
 	return stats, nil
 }
-
 
 // Delete deletes a WasapBot record by ID
 func (r *wasapBotRepository) Delete(idProspect int) error {
 	query := `DELETE FROM wasapBot_nodepath WHERE id_prospect = ?`
-	
+
 	result, err := r.db.Exec(query, idProspect)
 	if err != nil {
 		logrus.WithError(err).WithField("id_prospect", idProspect).Error("Failed to delete WasapBot record")
 		return fmt.Errorf("failed to delete WasapBot record: %w", err)
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-	
+
 	if rowsAffected == 0 {
 		return fmt.Errorf("no record found with id_prospect: %d", idProspect)
 	}
-	
+
 	logrus.WithField("id_prospect", idProspect).Info("WasapBot record deleted successfully")
 	return nil
 }
@@ -612,17 +609,17 @@ func (r *wasapBotRepository) Delete(idProspect int) error {
 func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, deviceFilter, stageFilter, statusFilter, search, dateFrom, dateTo string, userID int) ([]map[string]interface{}, int, error) {
 	// Log incoming parameters
 	logrus.WithFields(logrus.Fields{
-		"limit": limit,
-		"offset": offset,
+		"limit":        limit,
+		"offset":       offset,
 		"deviceFilter": deviceFilter,
-		"stageFilter": stageFilter,
+		"stageFilter":  stageFilter,
 		"statusFilter": statusFilter,
-		"search": search,
-		"dateFrom": dateFrom,
-		"dateTo": dateTo,
-		"userID": userID,
+		"search":       search,
+		"dateFrom":     dateFrom,
+		"dateTo":       dateTo,
+		"userID":       userID,
 	}).Info("GetAllWasapBotDataWithDates called")
-	
+
 	// Build query with filters - select all needed columns including date_start for display
 	query := `
 		SELECT id_prospect, prospect_num, nama, stage, date_last, date_start, id_device,
@@ -630,11 +627,11 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 		FROM wasapBot_nodepath
 		WHERE 1=1
 	`
-	
+
 	countQuery := `SELECT COUNT(*) FROM wasapBot_nodepath WHERE 1=1`
 	args := []interface{}{}
 	countArgs := []interface{}{}
-	
+
 	// Apply date filters using DATE() function to ignore time
 	if dateFrom != "" {
 		query += " AND DATE(date_start) >= ?"
@@ -643,7 +640,7 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 		countArgs = append(countArgs, dateFrom)
 		logrus.WithField("date_from_applied", dateFrom).Info("Applying date from filter")
 	}
-	
+
 	if dateTo != "" {
 		query += " AND DATE(date_start) <= ?"
 		countQuery += " AND DATE(date_start) <= ?"
@@ -651,7 +648,7 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 		countArgs = append(countArgs, dateTo)
 		logrus.WithField("date_to_applied", dateTo).Info("Applying date to filter")
 	}
-	
+
 	// Apply other filters
 	if deviceFilter != "" && deviceFilter != "all" {
 		// Handle multiple device IDs
@@ -667,7 +664,7 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 			logrus.WithField("device_filter_applied", devices).Info("Applying device filter for multiple devices")
 		}
 	}
-	
+
 	if stageFilter != "" && stageFilter != "all" {
 		if stageFilter == "No Stage" {
 			query += " AND (stage IS NULL OR stage = '')"
@@ -679,14 +676,14 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 			countArgs = append(countArgs, stageFilter)
 		}
 	}
-	
+
 	if statusFilter != "" && statusFilter != "all" {
 		query += " AND status = ?"
 		countQuery += " AND status = ?"
 		args = append(args, statusFilter)
 		countArgs = append(countArgs, statusFilter)
 	}
-	
+
 	if search != "" {
 		query += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR peringkat_sekolah LIKE ? OR alamat LIKE ?)"
 		countQuery += " AND (prospect_num LIKE ? OR nama LIKE ? OR no_fon LIKE ? OR peringkat_sekolah LIKE ? OR alamat LIKE ?)"
@@ -694,13 +691,13 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 		args = append(args, searchParam, searchParam, searchParam, searchParam, searchParam)
 		countArgs = append(countArgs, searchParam, searchParam, searchParam, searchParam, searchParam)
 	}
-	
+
 	// Log the final query
 	logrus.WithFields(logrus.Fields{
 		"count_query": countQuery,
-		"count_args": countArgs,
+		"count_args":  countArgs,
 	}).Debug("Executing count query")
-	
+
 	// Get total count
 	var total int
 	err := r.db.QueryRow(countQuery, countArgs...).Scan(&total)
@@ -708,19 +705,19 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 		logrus.WithError(err).Error("Failed to get count")
 		return nil, 0, fmt.Errorf("failed to get count: %w", err)
 	}
-	
+
 	logrus.WithField("total_count", total).Info("Total records found")
-	
+
 	// Add ORDER BY and pagination
 	query += " ORDER BY date_last DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
-	
+
 	// Log the data query
 	logrus.WithFields(logrus.Fields{
 		"data_query": query,
-		"data_args": args,
+		"data_args":  args,
 	}).Debug("Executing data query")
-	
+
 	// Execute query
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
@@ -728,100 +725,100 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 		return nil, 0, fmt.Errorf("failed to query wasapBot data: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var results []map[string]interface{}
 	rowCount := 0
 	for rows.Next() {
 		var (
-			idProspect int
-			prospectNum sql.NullString
-			nama sql.NullString
-			stage sql.NullString
-			dateLast sql.NullString
-			dateStart sql.NullString
-			deviceID sql.NullString
-			niche sql.NullString
-			status sql.NullString
-			alamat sql.NullString
-			pakej sql.NullString
-			caraBayaran sql.NullString
-			tarikhGaji sql.NullString
+			idProspect    int
+			prospectNum   sql.NullString
+			nama          sql.NullString
+			stage         sql.NullString
+			dateLast      sql.NullString
+			dateStart     sql.NullString
+			deviceID      sql.NullString
+			niche         sql.NullString
+			status        sql.NullString
+			alamat        sql.NullString
+			pakej         sql.NullString
+			caraBayaran   sql.NullString
+			tarikhGaji    sql.NullString
 			currentNodeID sql.NullString
-			noFon sql.NullString
+			noFon         sql.NullString
 		)
-		
-		err := rows.Scan(&idProspect, &prospectNum, &nama, &stage, &dateLast, &dateStart, 
-			&deviceID, &niche, &status, &alamat, &pakej, &caraBayaran, &tarikhGaji, 
+
+		err := rows.Scan(&idProspect, &prospectNum, &nama, &stage, &dateLast, &dateStart,
+			&deviceID, &niche, &status, &alamat, &pakej, &caraBayaran, &tarikhGaji,
 			&currentNodeID, &noFon)
-			
+
 		if err != nil {
 			logrus.WithError(err).Error("Failed to scan row")
 			continue
 		}
-		
+
 		rowCount++
-		
+
 		record := map[string]interface{}{
-			"id_prospect": idProspect,
-			"prospect_num": utils.GetStringValue(prospectNum),
-			"nama": utils.GetStringValue(nama),
-			"stage": utils.GetStringValue(stage),
-			"date_last": utils.GetStringValue(dateLast),
-			"date_start": utils.GetStringValue(dateStart),
-			"id_device": utils.GetStringValue(deviceID),
-			"niche": utils.GetStringValue(niche),
-			"status": utils.GetStringValue(status),
-			"alamat": utils.GetStringValue(alamat),
-			"pakej": utils.GetStringValue(pakej),
-			"cara_bayaran": utils.GetStringValue(caraBayaran),
-			"tarikh_gaji": utils.GetStringValue(tarikhGaji),
+			"id_prospect":     idProspect,
+			"prospect_num":    utils.GetStringValue(prospectNum),
+			"nama":            utils.GetStringValue(nama),
+			"stage":           utils.GetStringValue(stage),
+			"date_last":       utils.GetStringValue(dateLast),
+			"date_start":      utils.GetStringValue(dateStart),
+			"id_device":       utils.GetStringValue(deviceID),
+			"niche":           utils.GetStringValue(niche),
+			"status":          utils.GetStringValue(status),
+			"alamat":          utils.GetStringValue(alamat),
+			"pakej":           utils.GetStringValue(pakej),
+			"cara_bayaran":    utils.GetStringValue(caraBayaran),
+			"tarikh_gaji":     utils.GetStringValue(tarikhGaji),
 			"current_node_id": utils.GetStringValue(currentNodeID),
-			"no_fon": utils.GetStringValue(noFon),
+			"no_fon":          utils.GetStringValue(noFon),
 		}
-		
+
 		results = append(results, record)
-		
+
 		logrus.WithFields(logrus.Fields{
-			"row_id": idProspect,
-			"device": utils.GetStringValue(deviceID),
+			"row_id":       idProspect,
+			"device":       utils.GetStringValue(deviceID),
 			"prospect_num": utils.GetStringValue(prospectNum),
 		}).Debug("Added record to results")
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"rows_scanned": rowCount,
+		"rows_scanned":  rowCount,
 		"results_count": len(results),
 	}).Info("Query completed")
-	
+
 	return results, total, nil
 }
 
 // GetWasapBotStatsWithDates retrieves WasapBot statistics with date filtering
 func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, dateTo string, userID int) (map[string]interface{}, error) {
 	stats := map[string]interface{}{
-		"totalProspects": 0,
-		"activeExecutions": 0,
+		"totalProspects":      0,
+		"activeExecutions":    0,
 		"completedExecutions": 0,
-		"uniqueSchools": 0,
-		"uniquePackages": 0,
-		"totalWithPhone": 0,
-		"stageBreakdown": make(map[string]int),
+		"uniqueSchools":       0,
+		"uniquePackages":      0,
+		"totalWithPhone":      0,
+		"stageBreakdown":      make(map[string]int),
 	}
-	
+
 	baseWhere := "1=1"
 	args := []interface{}{}
-	
+
 	// Apply date filters
 	if dateFrom != "" {
 		baseWhere += " AND DATE(date_start) >= ?"
 		args = append(args, dateFrom)
 	}
-	
+
 	if dateTo != "" {
 		baseWhere += " AND DATE(date_start) <= ?"
 		args = append(args, dateTo)
 	}
-	
+
 	if deviceFilter != "" && deviceFilter != "all" {
 		// Handle multiple device IDs
 		devices := utils.SplitAndTrim(deviceFilter, ",")
@@ -833,7 +830,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 			}
 		}
 	}
-	
+
 	// Total prospects
 	var totalProspects int
 	query := "SELECT COUNT(DISTINCT prospect_num) FROM wasapBot_nodepath WHERE " + baseWhere
@@ -841,7 +838,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 	if err == nil {
 		stats["totalProspects"] = totalProspects
 	}
-	
+
 	// Active executions
 	var activeExecutions int
 	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND execution_status = 'active'"
@@ -849,7 +846,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 	if err == nil {
 		stats["activeExecutions"] = activeExecutions
 	}
-	
+
 	// Completed executions
 	var completedExecutions int
 	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND status = 'Customer'"
@@ -857,7 +854,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 	if err == nil {
 		stats["completedExecutions"] = completedExecutions
 	}
-	
+
 	// Unique schools
 	var uniqueSchools int
 	query = "SELECT COUNT(DISTINCT peringkat_sekolah) FROM wasapBot_nodepath WHERE " + baseWhere + " AND peringkat_sekolah IS NOT NULL AND peringkat_sekolah != ''"
@@ -865,7 +862,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 	if err == nil {
 		stats["uniqueSchools"] = uniqueSchools
 	}
-	
+
 	// Unique packages
 	var uniquePackages int
 	query = "SELECT COUNT(DISTINCT pakej) FROM wasapBot_nodepath WHERE " + baseWhere + " AND pakej IS NOT NULL AND pakej != ''"
@@ -873,7 +870,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 	if err == nil {
 		stats["uniquePackages"] = uniquePackages
 	}
-	
+
 	// Total with phone
 	var totalWithPhone int
 	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND no_fon IS NOT NULL AND no_fon != ''"
@@ -881,7 +878,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 	if err == nil {
 		stats["totalWithPhone"] = totalWithPhone
 	}
-	
+
 	// Get stage breakdown
 	stageQuery := `
 		SELECT 
@@ -894,7 +891,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 		WHERE ` + baseWhere + ` 
 		GROUP BY stage_name
 	`
-	
+
 	rows, err := r.db.Query(stageQuery, args...)
 	if err == nil {
 		defer rows.Close()
@@ -908,6 +905,6 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 		}
 		stats["stageBreakdown"] = stageBreakdown
 	}
-	
+
 	return stats, nil
 }

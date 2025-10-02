@@ -13,9 +13,9 @@ import (
 
 // UnifiedFlowService handles flow execution with table routing based on flow name
 type UnifiedFlowService struct {
-	flowService        *FlowService
-	aiWhatsappRepo     repository.AIWhatsappRepository
-	wasapBotRepo       repository.WasapBotRepository
+	flowService    *FlowService
+	aiWhatsappRepo repository.AIWhatsappRepository
+	wasapBotRepo   repository.WasapBotRepository
 }
 
 // NewUnifiedFlowService creates a new unified flow service
@@ -38,31 +38,31 @@ func (s *UnifiedFlowService) GetActiveExecutionByFlow(phoneNumber, deviceID, flo
 	if err != nil {
 		return nil, "", err
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"flow_name": flow.Name,
-		"table_name": tableName,
+		"flow_name":    flow.Name,
+		"table_name":   tableName,
 		"phone_number": phoneNumber,
-		"device_id": deviceID,
+		"device_id":    deviceID,
 	}).Info("Checking for active execution in determined table")
-	
+
 	// Route to appropriate table
 	if tableName == "wasapBot_nodepath" {
 		execution, err := s.wasapBotRepo.GetActiveExecution(phoneNumber, deviceID)
 		return execution, tableName, err
 	}
-	
+
 	// Default to ai_whatsapp_nodepath - get any execution with active status
 	execution, err := s.aiWhatsappRepo.GetAIWhatsappByProspectAndDevice(phoneNumber, deviceID)
 	if err != nil {
 		return nil, "ai_whatsapp_nodepath", err
 	}
-	
+
 	// Check if execution is active
 	if execution != nil && execution.ExecutionStatus.Valid && execution.ExecutionStatus.String == "active" {
 		return execution, "ai_whatsapp_nodepath", nil
 	}
-	
+
 	return nil, "ai_whatsapp_nodepath", nil
 }
 
@@ -73,24 +73,24 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 	if err != nil {
 		return "", "", err
 	}
-	
+
 	executionID := fmt.Sprintf("exec_%s_%s", flowID, uuid.New().String())
-	
+
 	logrus.WithFields(logrus.Fields{
-		"flow_name": flow.Name,
-		"table_name": tableName,
+		"flow_name":    flow.Name,
+		"table_name":   tableName,
 		"execution_id": executionID,
 		"phone_number": phoneNumber,
-		"device_id": deviceID,
+		"device_id":    deviceID,
 	}).Info("Creating new execution in determined table")
-	
+
 	// Route to appropriate table
 	if tableName == "wasapBot_nodepath" {
 		// Default prospect name if empty
 		if prospectName == "" {
 			prospectName = "Sis"
 		}
-		
+
 		wasapBot := &models.WasapBot{
 			FlowReference:   sql.NullString{String: flowID, Valid: true},
 			ExecutionID:     sql.NullString{String: executionID, Valid: true},
@@ -105,15 +105,15 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 			Stage:           sql.NullString{String: "welcome", Valid: true},
 			Status:          sql.NullString{String: "Prospek", Valid: true},
 		}
-		
+
 		err = s.wasapBotRepo.Create(wasapBot)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to create WasapBot execution: %w", err)
 		}
-		
+
 		return executionID, tableName, nil
 	}
-	
+
 	// Default to ai_whatsapp_nodepath
 	// Set intro based on flow name
 	var introText string
@@ -122,12 +122,12 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 	} else {
 		introText = "Welcome" // Default intro for other flows
 	}
-	
+
 	// Default prospect name if empty
 	if prospectName == "" {
 		prospectName = "Sis"
 	}
-	
+
 	aiWhatsapp := &models.AIWhatsapp{
 		FlowReference:   sql.NullString{String: flowID, Valid: true},
 		ExecutionID:     sql.NullString{String: executionID, Valid: true},
@@ -143,12 +143,12 @@ func (s *UnifiedFlowService) CreateExecutionByFlow(phoneNumber, deviceID, flowID
 		Stage:           sql.NullString{}, // Leave stage as NULL initially
 		Human:           0,
 	}
-	
+
 	err = s.aiWhatsappRepo.CreateAIWhatsapp(aiWhatsapp)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create AI WhatsApp execution: %w", err)
 	}
-	
+
 	return executionID, "ai_whatsapp_nodepath", nil
 }
 
@@ -159,20 +159,20 @@ func (s *UnifiedFlowService) UpdateExecutionNodeByFlow(executionID, nodeID, flow
 	if err != nil {
 		return err
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"table_name": tableName,
+		"table_name":   tableName,
 		"execution_id": executionID,
-		"node_id": nodeID,
+		"node_id":      nodeID,
 	}).Info("Updating execution node in determined table")
-	
+
 	// Route to appropriate table
 	if tableName == "wasapBot_nodepath" {
 		return s.wasapBotRepo.UpdateCurrentNode(executionID, nodeID)
 	}
-	
+
 	// Default to ai_whatsapp_nodepath
-	// Since we don't have a direct method to get by execution ID, 
+	// Since we don't have a direct method to get by execution ID,
 	// we'll need to add one or work around it
 	// For now, let's just log an error
 	logrus.WithField("execution_id", executionID).Error("Update by execution ID not fully implemented for ai_whatsapp_nodepath")
@@ -184,11 +184,11 @@ func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userM
 	// Get flow to determine which table to use
 	flow, tableName, err := s.flowService.GetFlowAndDetermineTable(flowID)
 	var flowName string
-	
+
 	if err != nil {
 		// If flow not found, try to determine by checking existing records
 		logrus.WithError(err).Warn("Flow not found, checking existing records")
-		
+
 		// Check wasapBot first
 		wasapBot, _ := s.wasapBotRepo.GetByProspectAndDevice(phoneNumber, deviceID)
 		if wasapBot != nil {
@@ -208,32 +208,32 @@ func (s *UnifiedFlowService) SaveConversationByFlow(phoneNumber, deviceID, userM
 			flowName = "Unknown"
 		}
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"table_name": tableName,
+		"table_name":   tableName,
 		"phone_number": phoneNumber,
-		"device_id": deviceID,
-		"flow_id": flowID,
-		"flow_name": flowName,
+		"device_id":    deviceID,
+		"flow_id":      flowID,
+		"flow_name":    flowName,
 	}).Info("🗄️ SAVING CONVERSATION: Determined table for saving conversation")
-	
+
 	// Route to appropriate table
 	if tableName == "wasapBot_nodepath" {
 		logrus.WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
-			"device_id": deviceID,
-			"flow_id": flowID,
-			"flow_name": flowName,
+			"device_id":    deviceID,
+			"flow_id":      flowID,
+			"flow_name":    flowName,
 		}).Info("💾 DATABASE: Saving to wasapBot_nodepath table")
 		return s.wasapBotRepo.SaveConversationHistory(phoneNumber, deviceID, userMessage, botResponse, stage, prospectName)
 	}
-	
+
 	// Default to ai_whatsapp_nodepath
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
-		"device_id": deviceID,
-		"flow_id": flowID,
-		"flow_name": flowName,
+		"device_id":    deviceID,
+		"flow_id":      flowID,
+		"flow_name":    flowName,
 	}).Info("💾 DATABASE: Saving to ai_whatsapp_nodepath table")
 	return s.aiWhatsappRepo.SaveConversationHistory(phoneNumber, deviceID, userMessage, botResponse, stage, prospectName)
 }
@@ -245,18 +245,18 @@ func (s *UnifiedFlowService) UpdateWaitingStatusByFlow(executionID string, waiti
 	if err != nil {
 		return err
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
 		"table_name":    tableName,
 		"execution_id":  executionID,
 		"waiting_value": waitingValue,
 	}).Info("Updating waiting status in determined table")
-	
+
 	// Route to appropriate table
 	if tableName == "wasapBot_nodepath" {
 		return s.wasapBotRepo.UpdateWaitingStatus(executionID, int(waitingValue))
 	}
-	
+
 	// Default to ai_whatsapp_nodepath
 	return s.aiWhatsappRepo.UpdateWaitingStatus(executionID, waitingValue)
 }

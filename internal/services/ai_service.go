@@ -21,12 +21,12 @@ import (
 )
 
 const (
-	openRouterBaseURL = "https://openrouter.ai/api/v1"
-	openAIBaseURL     = "https://api.openai.com/v1"
-	defaultModel      = "openai/gpt-4o"
-	maxRetries        = 3
-	retryDelay       = time.Second * 1 // Reduced from 2s for faster retries
-	circuitBreakerThreshold = 5 // Number of consecutive failures before circuit opens
+	openRouterBaseURL       = "https://openrouter.ai/api/v1"
+	openAIBaseURL           = "https://api.openai.com/v1"
+	defaultModel            = "openai/gpt-4o"
+	maxRetries              = 3
+	retryDelay              = time.Second * 1  // Reduced from 2s for faster retries
+	circuitBreakerThreshold = 5                // Number of consecutive failures before circuit opens
 	circuitBreakerTimeout   = 30 * time.Second // Time to wait before trying again
 )
 
@@ -50,9 +50,9 @@ type AIService struct {
 	deviceRepo repository.DeviceSettingsRepository
 	httpClient *http.Client
 	// Response cache for frequently asked questions
-	cache     map[string]*CachedResponse
-	cacheMux  sync.RWMutex
-	cacheTTL  time.Duration
+	cache    map[string]*CachedResponse
+	cacheMux sync.RWMutex
+	cacheTTL time.Duration
 	// Rate limiting for concurrent requests
 	semaphore chan struct{}
 	// Circuit breaker for API failure handling
@@ -80,11 +80,11 @@ func NewAIService(cfg *config.Config, deviceRepo repository.DeviceSettingsReposi
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second, // Reduced from 30s for better real-time performance
 		},
-		cache:     make(map[string]*CachedResponse),
-		cacheTTL:  5 * time.Minute, // Cache responses for 5 minutes
-		semaphore: make(chan struct{}, 100), // Limit concurrent AI requests
-		circuitBreaker: &CircuitBreaker{}, // Initialize circuit breaker
-		rateLimiter:    rateLimiter,       // Initialize rate limiter
+		cache:          make(map[string]*CachedResponse),
+		cacheTTL:       5 * time.Minute,          // Cache responses for 5 minutes
+		semaphore:      make(chan struct{}, 100), // Limit concurrent AI requests
+		circuitBreaker: &CircuitBreaker{},        // Initialize circuit breaker
+		rateLimiter:    rateLimiter,              // Initialize rate limiter
 	}
 }
 
@@ -105,10 +105,10 @@ func (s *AIService) GenerateResponse(systemPrompt, userInput, apiKey, deviceID s
 
 	// 🔍 DEBUG TRACE: Log final API key state
 	logrus.WithFields(logrus.Fields{
-		"device_id": deviceID,
-		"api_key_final_preview": maskAPIKey(apiKey),
-		"system_prompt_length": len(systemPrompt),
-		"user_input": userInput,
+		"device_id":                  deviceID,
+		"api_key_final_preview":      maskAPIKey(apiKey),
+		"system_prompt_length":       len(systemPrompt),
+		"user_input":                 userInput,
 		"conversation_history_count": len(conversationHistory),
 	}).Info("🔍 AI_SERVICE_DEBUG: Final parameters for AI API call")
 
@@ -255,10 +255,10 @@ func (s *AIService) GenerateAdvancedResponse(systemPrompt, userInput, apiKey, de
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"model":         response.Model,
-		"prompt_tokens": response.Usage.PromptTokens,
-		"total_tokens":  response.Usage.TotalTokens,
-		"stage":         parsedResponse.Stage,
+		"model":          response.Model,
+		"prompt_tokens":  response.Usage.PromptTokens,
+		"total_tokens":   response.Usage.TotalTokens,
+		"stage":          parsedResponse.Stage,
 		"response_parts": len(parsedResponse.Response),
 	}).Info("Advanced OpenRouter API call successful")
 
@@ -324,22 +324,22 @@ func (s *AIService) getAIModel(deviceID string) string {
 	if deviceID == "SCHQ-S94" || deviceID == "SCHQ-S12" {
 		return "gpt-4.1"
 	}
-	
+
 	// Fetch device settings from database to get api_key_option
 	deviceSettings, err := s.deviceRepo.GetDeviceSettingsByDevice(deviceID)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"device_id": deviceID,
-			"error": err.Error(),
+			"error":     err.Error(),
 		}).Warn("Failed to fetch device settings for AI model, using default")
 		return defaultModel
 	}
-	
+
 	// Use API key option from device settings as the model
 	if deviceSettings.APIKeyOption != "" {
 		return deviceSettings.APIKeyOption
 	}
-	
+
 	// Fallback to default model
 	return defaultModel
 }
@@ -447,14 +447,14 @@ func (s *AIService) generateCacheKey(systemPrompt, userInput string, conversatio
 	hasher := md5.New()
 	hasher.Write([]byte(systemPrompt))
 	hasher.Write([]byte(userInput))
-	
+
 	// Include last few messages from conversation history
 	for i, msg := range conversationHistory {
 		if i >= len(conversationHistory)-3 { // Only last 3 messages for cache key
 			hasher.Write([]byte(msg.Content))
 		}
 	}
-	
+
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
@@ -462,19 +462,19 @@ func (s *AIService) generateCacheKey(systemPrompt, userInput string, conversatio
 func (s *AIService) getCachedResponse(cacheKey string) string {
 	s.cacheMux.RLock()
 	defer s.cacheMux.RUnlock()
-	
+
 	cached, exists := s.cache[cacheKey]
 	if !exists {
 		return ""
 	}
-	
+
 	// Check if cache entry is still valid
 	if time.Since(cached.Timestamp) > s.cacheTTL {
 		// Cache expired, remove it
 		go s.removeCachedResponse(cacheKey)
 		return ""
 	}
-	
+
 	return cached.Response
 }
 
@@ -482,12 +482,12 @@ func (s *AIService) getCachedResponse(cacheKey string) string {
 func (s *AIService) setCachedResponse(cacheKey, response string) {
 	s.cacheMux.Lock()
 	defer s.cacheMux.Unlock()
-	
+
 	s.cache[cacheKey] = &CachedResponse{
 		Response:  response,
 		Timestamp: time.Now(),
 	}
-	
+
 	// Clean up old cache entries periodically
 	go s.cleanupCache()
 }
@@ -503,7 +503,7 @@ func (s *AIService) removeCachedResponse(cacheKey string) {
 func (s *AIService) cleanupCache() {
 	s.cacheMux.Lock()
 	defer s.cacheMux.Unlock()
-	
+
 	now := time.Now()
 	for key, cached := range s.cache {
 		if now.Sub(cached.Timestamp) > s.cacheTTL {
@@ -574,11 +574,11 @@ func (s *AIService) EstimateTokens(text string) int {
 func (s *AIService) isCircuitBreakerOpen() bool {
 	s.circuitBreaker.mutex.RLock()
 	defer s.circuitBreaker.mutex.RUnlock()
-	
+
 	if !s.circuitBreaker.isOpen {
 		return false
 	}
-	
+
 	// Check if enough time has passed to try again
 	if time.Since(s.circuitBreaker.lastFailureTime) > circuitBreakerTimeout {
 		s.circuitBreaker.mutex.RUnlock()
@@ -589,7 +589,7 @@ func (s *AIService) isCircuitBreakerOpen() bool {
 		s.circuitBreaker.mutex.RLock()
 		return false
 	}
-	
+
 	return true
 }
 
@@ -597,7 +597,7 @@ func (s *AIService) isCircuitBreakerOpen() bool {
 func (s *AIService) recordAPISuccess() {
 	s.circuitBreaker.mutex.Lock()
 	defer s.circuitBreaker.mutex.Unlock()
-	
+
 	s.circuitBreaker.failureCount = 0
 	s.circuitBreaker.isOpen = false
 }
@@ -606,10 +606,10 @@ func (s *AIService) recordAPISuccess() {
 func (s *AIService) recordAPIFailure() {
 	s.circuitBreaker.mutex.Lock()
 	defer s.circuitBreaker.mutex.Unlock()
-	
+
 	s.circuitBreaker.failureCount++
 	s.circuitBreaker.lastFailureTime = time.Now()
-	
+
 	if s.circuitBreaker.failureCount >= circuitBreakerThreshold {
 		s.circuitBreaker.isOpen = true
 		logrus.WithField("failure_count", s.circuitBreaker.failureCount).Warn("Circuit breaker opened due to consecutive API failures")
@@ -688,16 +688,16 @@ func (s *AIService) parseAIResponse(content string) (*models.AIPromptResponse, e
 	// Detect and log response format characteristics
 	formatInfo := s.detectResponseFormat(content)
 	logrus.WithFields(logrus.Fields{
-		"content_length": len(content),
-		"format_info": formatInfo,
+		"content_length":  len(content),
+		"format_info":     formatInfo,
 		"content_preview": s.getContentPreview(content, 100),
 	}).Debug("Starting AI response parsing")
 
 	// Step 1: Try to parse as structured JSON (direct format)
 	if response, ok := s.parseStructuredJSON(content); ok {
 		logrus.WithFields(logrus.Fields{
-			"method": "structured_json",
-			"stage": response.Stage,
+			"method":         "structured_json",
+			"stage":          response.Stage,
 			"response_count": len(response.Response),
 		}).Info("Successfully parsed AI response")
 		return response, nil
@@ -706,8 +706,8 @@ func (s *AIService) parseAIResponse(content string) (*models.AIPromptResponse, e
 	// Step 2: Try to parse older format with Stage and Response fields
 	if response, ok := s.parseOlderFormat(content); ok {
 		logrus.WithFields(logrus.Fields{
-			"method": "older_format",
-			"stage": response.Stage,
+			"method":         "older_format",
+			"stage":          response.Stage,
 			"response_count": len(response.Response),
 		}).Info("Successfully parsed AI response")
 		return response, nil
@@ -716,8 +716,8 @@ func (s *AIService) parseAIResponse(content string) (*models.AIPromptResponse, e
 	// Step 3: Try to extract encapsulated JSON (JSON within text)
 	if response, ok := s.parseEncapsulatedJSON(content); ok {
 		logrus.WithFields(logrus.Fields{
-			"method": "encapsulated_json",
-			"stage": response.Stage,
+			"method":         "encapsulated_json",
+			"stage":          response.Stage,
 			"response_count": len(response.Response),
 		}).Info("Successfully parsed AI response")
 		return response, nil
@@ -726,8 +726,8 @@ func (s *AIService) parseAIResponse(content string) (*models.AIPromptResponse, e
 	// Step 4: Try advanced regex patterns for various formats
 	if response, ok := s.parseWithAdvancedRegex(content); ok {
 		logrus.WithFields(logrus.Fields{
-			"method": "advanced_regex",
-			"stage": response.Stage,
+			"method":         "advanced_regex",
+			"stage":          response.Stage,
 			"response_count": len(response.Response),
 		}).Info("Successfully parsed AI response")
 		return response, nil
@@ -735,9 +735,9 @@ func (s *AIService) parseAIResponse(content string) (*models.AIPromptResponse, e
 
 	// Step 5: Final fallback - treat as plain text
 	logrus.WithFields(logrus.Fields{
-		"method": "plain_text_fallback",
+		"method":         "plain_text_fallback",
 		"content_length": len(content),
-		"format_info": formatInfo,
+		"format_info":    formatInfo,
 		"content_sample": s.getContentPreview(content, 200),
 	}).Warn("All parsing methods failed, using plain text fallback")
 	return s.getPlainTextFallback(content), nil
@@ -767,7 +767,7 @@ func (s *AIService) parseOlderFormat(content string) (*models.AIPromptResponse, 
 	if len(matches) == 3 {
 		stage := strings.TrimSpace(matches[1])
 		responseJSON := matches[2]
-		
+
 		var responseParts []models.AIResponsePart
 		err := json.Unmarshal([]byte(responseJSON), &responseParts)
 		if err == nil && len(responseParts) > 0 {
@@ -803,23 +803,23 @@ func (s *AIService) parseEncapsulatedJSON(content string) (*models.AIPromptRespo
 		for _, match := range matches {
 			// Clean the match
 			cleanMatch := s.cleanJSONMatch(match)
-			
+
 			var response models.AIPromptResponse
 			err := json.Unmarshal([]byte(cleanMatch), &response)
 			if err == nil && response.Stage != "" && len(response.Response) > 0 {
 				logrus.WithFields(logrus.Fields{
-					"pattern": p.name,
+					"pattern":      p.name,
 					"match_length": len(cleanMatch),
 				}).Debug("Successfully parsed encapsulated JSON")
 				return &response, true
 			}
-			
+
 			// Log parsing attempt for debugging
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
 					"pattern": p.name,
-					"error": err.Error(),
-					"match": cleanMatch[:minInt(100, len(cleanMatch))],
+					"error":   err.Error(),
+					"match":   cleanMatch[:minInt(100, len(cleanMatch))],
 				}).Debug("Failed to parse encapsulated JSON match")
 			}
 		}
@@ -835,11 +835,11 @@ func (s *AIService) cleanJSONMatch(match string) string {
 	if strings.HasPrefix(clean, `"`) && strings.HasSuffix(clean, `"`) {
 		clean = clean[1 : len(clean)-1]
 	}
-	
+
 	// Remove escape characters
 	clean = strings.ReplaceAll(clean, `\"`, `"`)
 	clean = strings.ReplaceAll(clean, `\\`, `\`)
-	
+
 	// Remove array brackets if they wrap the entire JSON
 	if strings.HasPrefix(clean, "[") && strings.HasSuffix(clean, "]") {
 		// Try to extract the JSON object from within the array
@@ -849,7 +849,7 @@ func (s *AIService) cleanJSONMatch(match string) string {
 			}
 		}
 	}
-	
+
 	return clean
 }
 
@@ -873,18 +873,18 @@ func (s *AIService) parseWithAdvancedRegex(content string) (*models.AIPromptResp
 		{"json_like_structure", `(?s)^\s*\{\s*"Stage"\s*:\s*"([^"]+)"\s*,\s*"Response"\s*:\s*(\[.*?\])\s*\}\s*$`},
 		{"loose_json_structure", `(?s)Stage[\s:]*([^\n,}]+)[\s,]*Response[\s:]*\[(.*?)\]`},
 		{"quoted_stage_response", `(?s)"Stage"\s*:\s*"([^"]+)".*?"Response"\s*:\s*(\[.*?\])`},
-		
+
 		// Extended patterns for edge cases
 		{"stage_colon_response", `(?s)Stage\s*:\s*([^\n\r]+)[\s\n\r]*Response\s*:\s*(\[.*?\])(?:\s*$|\s*[}\]])`},
 		{"stage_equals_response", `(?s)Stage\s*=\s*([^\n\r]+)[\s\n\r]*Response\s*=\s*(\[.*?\])`},
 		{"stage_arrow_response", `(?s)Stage\s*=>\s*([^\n\r]+)[\s\n\r]*Response\s*=>\s*(\[.*?\])`},
 		{"stage_dash_response", `(?s)Stage\s*-\s*([^\n\r]+)[\s\n\r]*Response\s*-\s*(\[.*?\])`},
-		
+
 		// Flexible patterns for malformed JSON
 		{"flexible_stage_response", `(?s)(?:Stage|stage|STAGE)[\s:=\-]*([^\n\r,}]+)[\s\n\r,]*(?:Response|response|RESPONSE)[\s:=\-]*(\[.*?\])`},
 		{"case_insensitive_json", `(?si)\{[\s\S]*?"?stage"?\s*:\s*"?([^"\n,}]+)"?[\s\S]*?"?response"?\s*:\s*(\[.*?\])[\s\S]*?\}`},
 		{"partial_json_structure", `(?s)"?Stage"?\s*:\s*"?([^"\n,}]+)"?[\s\S]*?"?Response"?\s*:\s*(\[.*?\])`},
-		
+
 		// Patterns for text with embedded JSON
 		{"text_with_json", `(?s).*?\{[\s\S]*?"Stage"\s*:\s*"([^"]+)"[\s\S]*?"Response"\s*:\s*(\[.*?\])[\s\S]*?\}.*?`},
 		{"markdown_json", `(?s)` + "`" + `(?:json)?[\s\S]*?\{[\s\S]*?"Stage"\s*:\s*"([^"]+)"[\s\S]*?"Response"\s*:\s*(\[.*?\])[\s\S]*?\}[\s\S]*?` + "`" + `?`},
@@ -896,20 +896,20 @@ func (s *AIService) parseWithAdvancedRegex(content string) (*models.AIPromptResp
 		if len(matches) >= 3 {
 			stage := s.cleanStageValue(matches[1])
 			responseJSON := s.cleanResponseJSON(matches[2])
-			
+
 			// Validate stage is not empty
 			if stage == "" {
 				logrus.WithField("pattern", p.name).Debug("Empty stage found, skipping")
 				continue
 			}
-			
+
 			// Try to parse the response array
 			var responseParts []models.AIResponsePart
 			err := json.Unmarshal([]byte(responseJSON), &responseParts)
 			if err == nil && len(responseParts) > 0 {
 				logrus.WithFields(logrus.Fields{
-					"pattern": p.name,
-					"stage": stage,
+					"pattern":        p.name,
+					"stage":          stage,
 					"response_count": len(responseParts),
 				}).Debug("Successfully parsed with advanced regex")
 				return &models.AIPromptResponse{
@@ -917,13 +917,13 @@ func (s *AIService) parseWithAdvancedRegex(content string) (*models.AIPromptResp
 					Response: responseParts,
 				}, true
 			}
-			
+
 			// Log parsing failure for debugging
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
-					"pattern": p.name,
-					"stage": stage,
-					"error": err.Error(),
+					"pattern":       p.name,
+					"stage":         stage,
+					"error":         err.Error(),
 					"response_json": responseJSON[:minInt(200, len(responseJSON))],
 				}).Debug("Failed to parse response JSON in advanced regex")
 			}
@@ -938,19 +938,19 @@ func (s *AIService) cleanStageValue(stage string) string {
 	clean := strings.TrimSpace(stage)
 	clean = strings.Trim(clean, `"'`)
 	clean = strings.TrimSpace(clean)
-	
+
 	// Remove common prefixes/suffixes
 	clean = strings.TrimSuffix(clean, ",")
 	clean = strings.TrimSuffix(clean, ";")
 	clean = strings.TrimSpace(clean)
-	
+
 	return clean
 }
 
 // cleanResponseJSON cleans and validates the response JSON
 func (s *AIService) cleanResponseJSON(responseJSON string) string {
 	clean := strings.TrimSpace(responseJSON)
-	
+
 	// Ensure it starts and ends with brackets
 	if !strings.HasPrefix(clean, "[") {
 		clean = "[" + clean
@@ -958,7 +958,7 @@ func (s *AIService) cleanResponseJSON(responseJSON string) string {
 	if !strings.HasSuffix(clean, "]") {
 		clean = clean + "]"
 	}
-	
+
 	return clean
 }
 
@@ -993,7 +993,7 @@ func (s *AIService) sanitizeContent(content string) string {
 func (s *AIService) getPlainTextFallback(content string) *models.AIPromptResponse {
 	// Clean the content
 	cleanContent := s.sanitizeContent(content)
-	
+
 	// If content is empty, provide a default response
 	if strings.TrimSpace(cleanContent) == "" {
 		cleanContent = "I apologize, but I'm having trouble processing your request. Please try again."
@@ -1014,35 +1014,35 @@ func (s *AIService) getPlainTextFallback(content string) *models.AIPromptRespons
 // detectResponseFormat analyzes the content to determine its format characteristics
 func (s *AIService) detectResponseFormat(content string) map[string]interface{} {
 	formatInfo := make(map[string]interface{})
-	
+
 	// Basic content analysis
 	formatInfo["has_json_markers"] = strings.Contains(content, "```json") || strings.Contains(content, "```")
 	formatInfo["has_stage_field"] = strings.Contains(content, "Stage") || strings.Contains(content, "stage")
 	formatInfo["has_response_field"] = strings.Contains(content, "Response") || strings.Contains(content, "response")
 	formatInfo["has_curly_braces"] = strings.Contains(content, "{") && strings.Contains(content, "}")
 	formatInfo["has_square_brackets"] = strings.Contains(content, "[") && strings.Contains(content, "]")
-	
+
 	// JSON structure detection
 	formatInfo["appears_json"] = s.looksLikeJSON(content)
 	formatInfo["has_quoted_fields"] = strings.Contains(content, `"Stage"`) && strings.Contains(content, `"Response"`)
-	
+
 	// Content characteristics
 	lines := strings.Split(content, "\n")
 	formatInfo["line_count"] = len(lines)
 	formatInfo["starts_with_brace"] = strings.HasPrefix(strings.TrimSpace(content), "{")
 	formatInfo["ends_with_brace"] = strings.HasSuffix(strings.TrimSpace(content), "}")
-	
+
 	// Pattern detection
 	formatInfo["has_colon_separator"] = strings.Contains(content, "Stage:") && strings.Contains(content, "Response:")
 	formatInfo["has_equals_separator"] = strings.Contains(content, "Stage=") && strings.Contains(content, "Response=")
-	
+
 	return formatInfo
 }
 
 // looksLikeJSON performs a basic check to see if content resembles JSON
 func (s *AIService) looksLikeJSON(content string) bool {
 	trimmed := strings.TrimSpace(content)
-	
+
 	// Remove code block markers for analysis
 	if strings.HasPrefix(trimmed, "```json") {
 		trimmed = strings.TrimPrefix(trimmed, "```json")
@@ -1054,10 +1054,10 @@ func (s *AIService) looksLikeJSON(content string) bool {
 		trimmed = strings.TrimSuffix(trimmed, "```")
 	}
 	trimmed = strings.TrimSpace(trimmed)
-	
+
 	// Basic JSON structure check
 	return (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
-		   (strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]"))
+		(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]"))
 }
 
 // getContentPreview returns a safe preview of the content for logging
@@ -1065,20 +1065,20 @@ func (s *AIService) getContentPreview(content string, maxLength int) string {
 	if len(content) <= maxLength {
 		return content
 	}
-	
+
 	// Try to break at a reasonable point
 	preview := content[:maxLength]
-	
+
 	// Try to break at word boundary
 	if lastSpace := strings.LastIndex(preview, " "); lastSpace > maxLength/2 {
 		preview = preview[:lastSpace]
 	}
-	
+
 	// Try to break at line boundary
 	if lastNewline := strings.LastIndex(preview, "\n"); lastNewline > maxLength/2 {
 		preview = preview[:lastNewline]
 	}
-	
+
 	return preview + "..."
 }
 
@@ -1093,7 +1093,7 @@ func (s *AIService) getFallbackAdvancedResponse(userInput string) *models.AIProm
 
 	// Simple hash-based selection for consistent fallback
 	index := len(userInput) % len(fallbackResponses)
-	
+
 	return &models.AIPromptResponse{
 		Stage: "error",
 		Response: []models.AIResponsePart{

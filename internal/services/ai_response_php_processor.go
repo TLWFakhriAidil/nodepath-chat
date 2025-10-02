@@ -34,28 +34,28 @@ type ProcessedAIMessage struct {
 func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messages []ProcessedAIMessage, err error) {
 	// Log raw input for debugging
 	logrus.WithFields(logrus.Fields{
-		"raw_content": replyContent,
+		"raw_content":    replyContent,
 		"content_length": len(replyContent),
 	}).Debug("🔍 AI_PROCESSOR: Raw AI response received")
-	
+
 	// Remove markdown code blocks if present (exactly like PHP: '/^```json|```$/')
-	sanitizedContent := regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(strings.TrimSpace(replyContent), "")
-	
+	sanitizedContent := regexp.MustCompile(`^`+"```"+`json|`+"```"+`$`).ReplaceAllString(strings.TrimSpace(replyContent), "")
+
 	// Log sanitized content
 	logrus.WithFields(logrus.Fields{
 		"sanitized_content": sanitizedContent,
 	}).Debug("🔍 AI_PROCESSOR: Sanitized content")
-	
+
 	var data AIResponseData
 	var replyParts []AIResponsePart
-	
+
 	// 1. Try to decode JSON directly (is_array($data) && isset($data['Stage']) && isset($data['Response']))
 	err = json.Unmarshal([]byte(sanitizedContent), &data)
 	if err == nil && data.Stage != "" && len(data.Response) > 0 {
 		stage = data.Stage
 		replyParts = data.Response
 		logrus.WithFields(logrus.Fields{
-			"stage": stage,
+			"stage":       stage,
 			"parts_count": len(replyParts),
 		}).Info("✅ AI_PROCESSOR: Parsed standard JSON format")
 	} else if matches := regexp.MustCompile(`Stage:\s*(.+?)\nResponse:\s*(\[.*?\])$`).FindStringSubmatch(replyContent); len(matches) == 3 {
@@ -64,7 +64,7 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 		responseJSON := matches[2]
 		if err := json.Unmarshal([]byte(responseJSON), &replyParts); err == nil {
 			logrus.WithFields(logrus.Fields{
-				"stage": stage,
+				"stage":       stage,
 				"parts_count": len(replyParts),
 			}).Info("✅ AI_PROCESSOR: Parsed Stage: Response: format")
 		}
@@ -74,22 +74,22 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			stage = data.Stage
 			replyParts = data.Response
 			logrus.WithFields(logrus.Fields{
-				"stage": stage,
+				"stage":       stage,
 				"parts_count": len(replyParts),
 			}).Info("✅ AI_PROCESSOR: Parsed clean JSON format")
 		} else {
 			logrus.WithField("content", sanitizedContent).Error("Failed to parse specified JSON format")
 			// In PHP, this returns early, but we'll continue to plain text fallback
 		}
-	} else if len(replyParts) > 0 && replyParts[0].Type == "text" && regexp.MustCompile(`^` + "```" + `json.*` + "```" + `$`).MatchString(replyParts[0].Content) {
+	} else if len(replyParts) > 0 && replyParts[0].Type == "text" && regexp.MustCompile(`^`+"```"+`json.*`+"```"+`$`).MatchString(replyParts[0].Content) {
 		// 4. Encapsulated JSON within triple backticks (this only runs if replyParts already has content)
-		jsonContent := regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(strings.TrimSpace(replyParts[0].Content), "")
+		jsonContent := regexp.MustCompile(`^`+"```"+`json|`+"```"+`$`).ReplaceAllString(strings.TrimSpace(replyParts[0].Content), "")
 		var decodedContent AIResponseData
 		if err := json.Unmarshal([]byte(jsonContent), &decodedContent); err == nil && decodedContent.Stage != "" && len(decodedContent.Response) > 0 {
 			stage = decodedContent.Stage
 			replyParts = decodedContent.Response
 			logrus.WithFields(logrus.Fields{
-				"stage": stage,
+				"stage":       stage,
 				"parts_count": len(replyParts),
 			}).Info("✅ AI_PROCESSOR: Parsed encapsulated JSON format")
 		} else {
@@ -99,7 +99,7 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 	} else {
 		// 5. DYNAMIC EXTRACTION - Extract ALL URLs and let the system determine what they are
 		extractedParts := ExtractAllMediaDynamically(replyContent)
-		
+
 		if len(extractedParts) > 0 {
 			// We found content with media
 			replyParts = extractedParts
@@ -108,7 +108,7 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			}
 			logrus.WithFields(logrus.Fields{
 				"parts_count": len(replyParts),
-				"stage": stage,
+				"stage":       stage,
 			}).Info("🎯 AI_PROCESSOR: Dynamically extracted content from response")
 		} else {
 			// 6. True plain text fallback - no URLs found at all
@@ -121,54 +121,54 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			}
 		}
 	}
-	
+
 	// Validate we have replyParts
 	if len(replyParts) == 0 {
 		logrus.Error("Failed to decode the response JSON properly.")
 		return stage, messages, nil // Return empty like PHP does
 	}
-	
+
 	// Log the parts we're about to process
 	logrus.WithFields(logrus.Fields{
-		"stage": stage,
+		"stage":       stage,
 		"parts_count": len(replyParts),
 	}).Info("📋 AI_PROCESSOR: Processing response parts")
-	
+
 	// Process reply parts exactly like PHP
 	textParts := []string{}
 	isOnemessageActive := false
 	delay := time.Duration(delayMs) * time.Millisecond
-	
+
 	for index, part := range replyParts {
 		// Log each part being processed
 		logrus.WithFields(logrus.Fields{
-			"index": index,
-			"type": part.Type,
-			"jenis": part.Jenis,
+			"index":           index,
+			"type":            part.Type,
+			"jenis":           part.Jenis,
 			"content_preview": truncateString(part.Content, 100),
 		}).Debug("🔄 AI_PROCESSOR: Processing part")
-		
+
 		// Validate part structure
 		if part.Type == "" || part.Content == "" {
 			logrus.WithField("part", part).Warning("Invalid response part structure")
 			continue
 		}
-		
+
 		// Check if type=text and Jenis=onemessage
 		if part.Type == "text" && part.Jenis == "onemessage" {
 			// Start collecting
 			textParts = append(textParts, part.Content)
 			isOnemessageActive = true
-			
+
 			// Check if next part is also onemessage
 			isLastPart := index == len(replyParts)-1
 			nextIsNotOnemessage := false
-			
+
 			if !isLastPart {
 				nextPart := replyParts[index+1]
 				nextIsNotOnemessage = nextPart.Type != "text" || nextPart.Jenis != "onemessage"
 			}
-			
+
 			// If this is last part OR next part is not onemessage, send combined
 			if isLastPart || nextIsNotOnemessage {
 				combinedMessage := strings.Join(textParts, "\n")
@@ -177,12 +177,12 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 					Content: combinedMessage,
 					Delay:   delay,
 				})
-				
+
 				logrus.WithFields(logrus.Fields{
 					"combined_parts": len(textParts),
 					"message_length": len(combinedMessage),
 				}).Info("✅ AI_PROCESSOR: Combined onemessage parts")
-				
+
 				// Reset
 				textParts = []string{}
 				isOnemessageActive = false
@@ -196,11 +196,11 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 					Content: combinedMessage,
 					Delay:   delay,
 				})
-				
+
 				textParts = []string{}
 				isOnemessageActive = false
 			}
-			
+
 			// Now handle normal text or media
 			if part.Type == "text" {
 				messages = append(messages, ProcessedAIMessage{
@@ -211,12 +211,12 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			} else if part.Type == "image" || part.Type == "audio" || part.Type == "video" {
 				// Clean and decode the URL (exactly like PHP: trim(urldecode($part['content'])))
 				mediaURL := strings.TrimSpace(part.Content)
-				
+
 				// URL decode if needed
 				if decodedURL, err := url.QueryUnescape(mediaURL); err == nil {
 					mediaURL = decodedURL
 				}
-				
+
 				messages = append(messages, ProcessedAIMessage{
 					Type:    part.Type,
 					Content: mediaURL,
@@ -225,7 +225,7 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			}
 		}
 	}
-	
+
 	// Handle any remaining onemessage parts (shouldn't happen but just in case)
 	if isOnemessageActive && len(textParts) > 0 {
 		combinedMessage := strings.Join(textParts, "\n")
@@ -235,13 +235,13 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 			Delay:   delay,
 		})
 	}
-	
+
 	// Log final processed messages
 	logrus.WithFields(logrus.Fields{
-		"stage": stage,
+		"stage":          stage,
 		"total_messages": len(messages),
 	}).Info("✅ AI_PROCESSOR: Response processing complete")
-	
+
 	return stage, messages, nil
 }
 
@@ -249,31 +249,31 @@ func ProcessAIResponsePHP(replyContent string, delayMs int) (stage string, messa
 // This handles ANY format users might create in their prompts
 func ExtractAllMediaDynamically(content string) []AIResponsePart {
 	var parts []AIResponsePart
-	
+
 	// Find ALL URLs in the content using a very broad pattern
 	// This will catch URLs in ANY format: [URL], (URL), <URL>, "URL", 'URL', or just URL
 	urlPattern := regexp.MustCompile(`https?://[^\s<>"{}|\\\^` + "`" + `\[\]]+`)
 	allMatches := urlPattern.FindAllStringIndex(content, -1)
-	
+
 	if len(allMatches) == 0 {
 		return parts // No URLs found, return empty
 	}
-	
+
 	// Process content and build parts
 	lastEnd := 0
-	
+
 	for _, match := range allMatches {
 		urlStart := match[0]
 		urlEnd := match[1]
 		url := content[urlStart:urlEnd]
-		
+
 		// Clean the URL
 		url = strings.TrimRight(url, ".,;:!?)]}")
-		
+
 		// Look for context around the URL to remove (like "Gambar 1: [URL]")
 		contextStart := urlStart
 		contextEnd := urlEnd
-		
+
 		// Check backwards for media indicators
 		beforeURL := ""
 		if urlStart > 0 {
@@ -283,7 +283,7 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 				lookbackStart = 0
 			}
 			beforeURL = content[lookbackStart:urlStart]
-			
+
 			// Find media indicator patterns before the URL
 			indicatorPatterns := []string{
 				`(?i)Gambar\s*\d*\s*:\s*\[?$`,
@@ -292,7 +292,7 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 				`(?i)Foto\s*\d*\s*:\s*\[?$`,
 				`(?i)Video\s*\d*\s*:\s*\[?$`,
 			}
-			
+
 			for _, pattern := range indicatorPatterns {
 				re := regexp.MustCompile(pattern)
 				if matches := re.FindStringIndex(beforeURL); matches != nil {
@@ -302,7 +302,7 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 				}
 			}
 		}
-		
+
 		// Check after URL for closing brackets/parentheses
 		if urlEnd < len(content) {
 			afterURL := ""
@@ -311,7 +311,7 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 				lookAheadEnd = len(content)
 			}
 			afterURL = content[urlEnd:lookAheadEnd]
-			
+
 			// Count how many closing brackets/parentheses to include
 			for i, char := range afterURL {
 				if char == ']' || char == ')' || char == '}' || char == '>' {
@@ -321,7 +321,7 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 				}
 			}
 		}
-		
+
 		// Extract text before this media (if any)
 		if contextStart > lastEnd {
 			textBefore := strings.TrimSpace(content[lastEnd:contextStart])
@@ -332,17 +332,17 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 				})
 			}
 		}
-		
+
 		// Add the media
 		mediaType := determineMediaType(url)
 		parts = append(parts, AIResponsePart{
 			Type:    mediaType,
 			Content: url,
 		})
-		
+
 		lastEnd = contextEnd
 	}
-	
+
 	// Get any remaining text after the last URL
 	if lastEnd < len(content) {
 		remainingText := strings.TrimSpace(content[lastEnd:])
@@ -353,19 +353,19 @@ func ExtractAllMediaDynamically(content string) []AIResponsePart {
 			})
 		}
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"total_urls": len(allMatches),
+		"total_urls":  len(allMatches),
 		"total_parts": len(parts),
 	}).Info("🔍 AI_PROCESSOR: Dynamically extracted media from content")
-	
+
 	return parts
 }
 
 // determineMediaType checks URL to determine if it's image, video, audio, or generic media
 func determineMediaType(url string) string {
 	lowerURL := strings.ToLower(url)
-	
+
 	// Check by file extension
 	imageExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
 	for _, ext := range imageExts {
@@ -373,31 +373,31 @@ func determineMediaType(url string) string {
 			return "image"
 		}
 	}
-	
+
 	videoExts := []string{".mp4", ".avi", ".mov", ".webm", ".mkv", ".m4v"}
 	for _, ext := range videoExts {
 		if strings.Contains(lowerURL, ext) {
 			return "video"
 		}
 	}
-	
+
 	audioExts := []string{".mp3", ".wav", ".ogg", ".m4a", ".aac"}
 	for _, ext := range audioExts {
 		if strings.Contains(lowerURL, ext) {
 			return "audio"
 		}
 	}
-	
+
 	// Check for common image hosting patterns
-	if strings.Contains(lowerURL, "/images/") || 
-	   strings.Contains(lowerURL, "/image/") ||
-	   strings.Contains(lowerURL, "/img/") ||
-	   strings.Contains(lowerURL, "/photo/") ||
-	   strings.Contains(lowerURL, "/gambar/") ||
-	   strings.Contains(lowerURL, "chatgpt") { // Your specific pattern
+	if strings.Contains(lowerURL, "/images/") ||
+		strings.Contains(lowerURL, "/image/") ||
+		strings.Contains(lowerURL, "/img/") ||
+		strings.Contains(lowerURL, "/photo/") ||
+		strings.Contains(lowerURL, "/gambar/") ||
+		strings.Contains(lowerURL, "chatgpt") { // Your specific pattern
 		return "image"
 	}
-	
+
 	// Default to image for unrecognized media
 	return "image"
 }
@@ -411,20 +411,20 @@ func cleanTextFromMediaIndicators(text string) string {
 		`(?i)Photo\s*\d*\s*:\s*$`,
 		`(?i)Foto\s*\d*\s*:\s*$`,
 		`(?i)Video\s*\d*\s*:\s*$`,
-		`^\[\s*\]$`, // Empty brackets
-		`^\(\s*\)$`, // Empty parentheses
+		`^\[\s*\]$`,    // Empty brackets
+		`^\(\s*\)$`,    // Empty parentheses
 		`^\d+[.)\s]*$`, // Just numbers like "1." or "1)"
-		`^[*-]\s*$`, // Just bullets
+		`^[*-]\s*$`,    // Just bullets
 	}
-	
+
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		text = re.ReplaceAllString(text, "")
 	}
-	
+
 	// Clean up multiple blank lines
 	text = regexp.MustCompile(`\n\s*\n\s*\n+`).ReplaceAllString(text, "\n\n")
-	
+
 	return strings.TrimSpace(text)
 }
 

@@ -29,7 +29,7 @@ func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("database not available")
 	}
-	
+
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
 		       id_device, id_erp, id_admin, instance, created_at, updated_at, user_id
@@ -80,7 +80,7 @@ func (s *DeviceSettingsService) GetByUserID(userID int) ([]*models.DeviceSetting
 	if s.db == nil {
 		return nil, fmt.Errorf("database not available")
 	}
-	
+
 	query := `
 		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
 		       id_device, id_erp, id_admin, instance, created_at, updated_at, user_id
@@ -222,7 +222,7 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 	}
 
 	var resultID string
-	
+
 	err := utils.WithTransaction(s.db, func(tx *sql.Tx) error {
 		// Check if a device setting already exists for this id_device within transaction
 		var existingID string
@@ -233,26 +233,26 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			FOR UPDATE
 		`
 		err := tx.QueryRow(checkQuery, req.IDDevice).Scan(&existingID)
-		
+
 		if err == nil {
 			// Device setting exists, update it within transaction
 			now := time.Now()
-			
+
 			// Set defaults if not provided
 			apiKeyOption := req.APIKeyOption
 			if apiKeyOption == "" {
 				apiKeyOption = "openai/gpt-4.1"
 			}
-			
+
 			provider := req.Provider
 			if provider == "" {
 				provider = "wablas"
 			}
-			
+
 			// Convert strings to sql.NullString for nullable fields
 			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
 			var userID sql.NullInt32
-			
+
 			if req.DeviceID != "" {
 				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
 			}
@@ -280,52 +280,52 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.UserID != nil && *req.UserID != 0 {
 				userID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
 			}
-			
+
 			updateQuery := `
 				UPDATE device_setting_nodepath 
 				SET device_id = ?, api_key_option = ?, webhook_id = ?, provider = ?, phone_number = ?, api_key = ?, 
 				    id_device = ?, id_erp = ?, id_admin = ?, instance = ?, updated_at = ?, user_id = ?
 				WHERE id = ?
 			`
-			
+
 			_, err = tx.Exec(updateQuery,
 				deviceID, apiKeyOption, webhookID, provider, phoneNumber, apiKey,
 				idDevice, idERP, idAdmin, instance, now, userID, existingID,
 			)
-			
+
 			if err != nil {
 				return fmt.Errorf("failed to update device setting: %w", err)
 			}
-			
+
 			resultID = existingID
 			logrus.WithFields(logrus.Fields{
-				"id":         existingID,
-				"device_id":  req.DeviceID,
-				"id_device":  req.IDDevice,
-				"id_erp":     req.IDERP,
-				"id_admin":   req.IDAdmin,
+				"id":        existingID,
+				"device_id": req.DeviceID,
+				"id_device": req.IDDevice,
+				"id_erp":    req.IDERP,
+				"id_admin":  req.IDAdmin,
 			}).Info("Device setting updated")
-			
+
 		} else if err == sql.ErrNoRows {
 			// Device setting doesn't exist, create new one within transaction
 			id := uuid.New().String()
 			now := time.Now()
-			
+
 			// Set defaults if not provided
 			apiKeyOption := req.APIKeyOption
 			if apiKeyOption == "" {
 				apiKeyOption = "openai/gpt-4.1"
 			}
-			
+
 			provider := req.Provider
 			if provider == "" {
 				provider = "wablas"
 			}
-			
+
 			// Convert strings to sql.NullString for nullable fields
 			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
 			var userID sql.NullInt32
-			
+
 			if req.DeviceID != "" {
 				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
 			}
@@ -353,42 +353,42 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.UserID != nil && *req.UserID != 0 {
 				userID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
 			}
-			
+
 			insertQuery := `
 				INSERT INTO device_setting_nodepath 
 				(id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, id_device, id_erp, id_admin, instance, created_at, updated_at, user_id)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`
-			
+
 			_, err = tx.Exec(insertQuery,
 				id, deviceID, apiKeyOption, webhookID, provider, phoneNumber, apiKey,
 				idDevice, idERP, idAdmin, instance, now, now, userID,
 			)
-			
+
 			if err != nil {
 				return fmt.Errorf("failed to create device setting: %w", err)
 			}
-			
+
 			resultID = id
 			logrus.WithFields(logrus.Fields{
-				"id":         id,
-				"device_id":  req.DeviceID,
-				"id_device":  req.IDDevice,
-				"id_erp":     req.IDERP,
-				"id_admin":   req.IDAdmin,
+				"id":        id,
+				"device_id": req.DeviceID,
+				"id_device": req.IDDevice,
+				"id_erp":    req.IDERP,
+				"id_admin":  req.IDAdmin,
 			}).Info("Device setting created")
-			
+
 		} else {
 			return fmt.Errorf("failed to check existing device setting: %w", err)
 		}
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Return the created/updated device setting
 	return s.GetByID(resultID)
 }
@@ -417,7 +417,7 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 	// Convert strings to sql.NullString for nullable fields
 	var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
 	var userID sql.NullInt32
-	
+
 	if req.DeviceID != "" {
 		deviceID = sql.NullString{String: req.DeviceID, Valid: true}
 	}
@@ -474,11 +474,11 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"id":         id,
-		"device_id":  req.DeviceID,
-		"id_device":  req.IDDevice,
-		"id_erp":     req.IDERP,
-		"id_admin":   req.IDAdmin,
+		"id":        id,
+		"device_id": req.DeviceID,
+		"id_device": req.IDDevice,
+		"id_erp":    req.IDERP,
+		"id_admin":  req.IDAdmin,
 	}).Info("Device setting created")
 
 	return s.GetByID(id)
@@ -557,11 +557,11 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"id":         id,
-		"device_id":  existing.DeviceID,
-		"id_device":  existing.IDDevice,
-		"id_erp":     existing.IDERP,
-		"id_admin":   existing.IDAdmin,
+		"id":        id,
+		"device_id": existing.DeviceID,
+		"id_device": existing.IDDevice,
+		"id_erp":    existing.IDERP,
+		"id_admin":  existing.IDAdmin,
 	}).Info("Device setting updated")
 
 	return existing, nil

@@ -2,9 +2,9 @@ package services
 
 import (
 	"fmt"
-	"strings"
 	"github.com/sirupsen/logrus"
 	"nodepath-chat/internal/models"
+	"strings"
 )
 
 // Simple patch for EvaluateConditionNode to handle ALL conditions properly
@@ -38,8 +38,8 @@ func (s *FlowService) EvaluateConditionNodePatch(flow *models.ChatbotFlow, condi
 	// Log the actual counts
 	logrus.WithFields(logrus.Fields{
 		"conditions_count": len(conditions),
-		"edges_count": len(outgoingEdges),
-		"node_id": conditionNodeID,
+		"edges_count":      len(outgoingEdges),
+		"node_id":          conditionNodeID,
 	}).Info("CONDITION FIX: Processing ALL conditions")
 
 	// Normalize user input
@@ -54,7 +54,7 @@ func (s *FlowService) EvaluateConditionNodePatch(flow *models.ChatbotFlow, condi
 
 		conditionType, _ := condition["type"].(string)
 		conditionValue, _ := condition["value"].(string)
-		
+
 		if conditionType == "default" {
 			continue // Handle default later
 		}
@@ -62,7 +62,7 @@ func (s *FlowService) EvaluateConditionNodePatch(flow *models.ChatbotFlow, condi
 		// Check if condition matches
 		conditionValueLower := strings.ToLower(strings.TrimSpace(conditionValue))
 		var matches bool
-		
+
 		if conditionType == "contains" || conditionValue != "" {
 			// For contains or when value exists, check if input contains the value
 			matches = strings.Contains(userInputLower, conditionValueLower)
@@ -74,8 +74,8 @@ func (s *FlowService) EvaluateConditionNodePatch(flow *models.ChatbotFlow, condi
 			if edgeIndex < len(outgoingEdges) {
 				logrus.WithFields(logrus.Fields{
 					"condition_index": i,
-					"edge_index": edgeIndex,
-					"matched_value": conditionValue,
+					"edge_index":      edgeIndex,
+					"matched_value":   conditionValue,
 				}).Info("CONDITION FIX: Matched condition")
 				return s.FindNodeByID(flow, outgoingEdges[edgeIndex].Target)
 			}
@@ -88,7 +88,7 @@ func (s *FlowService) EvaluateConditionNodePatch(flow *models.ChatbotFlow, condi
 		if !ok {
 			continue
 		}
-		
+
 		conditionType, _ := condition["type"].(string)
 		if conditionType == "default" {
 			edgeIndex := i % len(outgoingEdges)

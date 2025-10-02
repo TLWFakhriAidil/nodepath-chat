@@ -53,7 +53,7 @@ func (h *StageSetValueHandlers) GetByDevice(c *fiber.Ctx) error {
 // Create handles POST /api/set-stage
 func (h *StageSetValueHandlers) Create(c *fiber.Ctx) error {
 	var value models.StageSetValue
-	
+
 	if err := c.BodyParser(&value); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
@@ -70,18 +70,18 @@ func (h *StageSetValueHandlers) Create(c *fiber.Ctx) error {
 			ColumnsData   string  `json:"columnsData"`
 			InputHardCode *string `json:"inputHardCode"`
 		}
-		
+
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid request body",
 			})
 		}
-		
+
 		value.IDDevice = req.IDDevice
 		value.Stage = req.Stage
 		value.TypeInputData = req.TypeInputData
 		value.ColumnsData = req.ColumnsData
-		
+
 		if req.InputHardCode != nil && *req.InputHardCode != "" {
 			value.InputHardCode = sql.NullString{
 				String: *req.InputHardCode,
@@ -125,17 +125,17 @@ func (h *StageSetValueHandlers) Update(c *fiber.Ctx) error {
 			ColumnsData   string  `json:"columnsData"`
 			InputHardCode *string `json:"inputHardCode"`
 		}
-		
+
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid request body",
 			})
 		}
-		
+
 		value.Stage = req.Stage
 		value.TypeInputData = req.TypeInputData
 		value.ColumnsData = req.ColumnsData
-		
+
 		if req.InputHardCode != nil && *req.InputHardCode != "" {
 			value.InputHardCode = sql.NullString{
 				String: *req.InputHardCode,

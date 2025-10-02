@@ -2,10 +2,10 @@ package services
 
 import (
 	"fmt"
-	"strings"
-	"strconv"
 	"github.com/sirupsen/logrus"
 	"nodepath-chat/internal/models"
+	"strconv"
+	"strings"
 )
 
 // EvaluateConditionNodeFixed properly matches user input with condition edges
@@ -46,10 +46,10 @@ func (s *FlowService) EvaluateConditionNodeFixed(flow *models.ChatbotFlow, condi
 	userInputLower := strings.ToLower(strings.TrimSpace(userInput))
 
 	logrus.WithFields(logrus.Fields{
-		"user_input": userInput,
+		"user_input":       userInput,
 		"conditions_count": len(conditions),
-		"edges_count": len(outgoingEdges),
-		"node_id": conditionNodeID,
+		"edges_count":      len(outgoingEdges),
+		"node_id":          conditionNodeID,
 	}).Info("🔍 CONDITION: Evaluating user input against conditions")
 
 	// CRITICAL FIX: First check if user input is a direct edge number (1, 2, 3, 4, etc.)
@@ -59,9 +59,9 @@ func (s *FlowService) EvaluateConditionNodeFixed(flow *models.ChatbotFlow, condi
 		if edgeIndex >= 0 && edgeIndex < len(outgoingEdges) {
 			targetNodeID := outgoingEdges[edgeIndex].Target
 			logrus.WithFields(logrus.Fields{
-				"user_input": userInput,
+				"user_input":  userInput,
 				"edge_number": edgeNum,
-				"edge_index": edgeIndex,
+				"edge_index":  edgeIndex,
 				"target_node": targetNodeID,
 			}).Info("✅ CONDITION: User selected edge by number")
 			return s.FindNodeByID(flow, targetNodeID)
@@ -90,9 +90,9 @@ func (s *FlowService) EvaluateConditionNodeFixed(flow *models.ChatbotFlow, condi
 			if i < len(outgoingEdges) {
 				targetNodeID := outgoingEdges[i].Target
 				logrus.WithFields(logrus.Fields{
-					"matched_label": conditionLabel,
+					"matched_label":   conditionLabel,
 					"condition_index": i,
-					"target_node": targetNodeID,
+					"target_node":     targetNodeID,
 				}).Info("✅ CONDITION: Matched by edge label")
 				return s.FindNodeByID(flow, targetNodeID)
 			}
@@ -120,10 +120,10 @@ func (s *FlowService) EvaluateConditionNodeFixed(flow *models.ChatbotFlow, condi
 				if i < len(outgoingEdges) {
 					targetNodeID := outgoingEdges[i].Target
 					logrus.WithFields(logrus.Fields{
-						"condition_type": conditionType,
+						"condition_type":  conditionType,
 						"condition_value": conditionValue,
 						"condition_index": i,
-						"target_node": targetNodeID,
+						"target_node":     targetNodeID,
 					}).Info("✅ CONDITION: Matched by condition value")
 					return s.FindNodeByID(flow, targetNodeID)
 				}
@@ -144,7 +144,7 @@ func (s *FlowService) EvaluateConditionNodeFixed(flow *models.ChatbotFlow, condi
 				targetNodeID := outgoingEdges[i].Target
 				logrus.WithFields(logrus.Fields{
 					"condition_index": i,
-					"target_node": targetNodeID,
+					"target_node":     targetNodeID,
 				}).Info("⚡ CONDITION: Using default condition")
 				return s.FindNodeByID(flow, targetNodeID)
 			}
@@ -172,7 +172,7 @@ func (s *FlowService) evaluateDirectEdgeSelection(flow *models.ChatbotFlow, user
 		if edgeIndex >= 0 && edgeIndex < len(outgoingEdges) {
 			targetNodeID := outgoingEdges[edgeIndex].Target
 			logrus.WithFields(logrus.Fields{
-				"user_input": userInput,
+				"user_input":  userInput,
 				"edge_number": edgeNum,
 				"target_node": targetNodeID,
 			}).Info("✅ CONDITION: Direct edge selection by number")

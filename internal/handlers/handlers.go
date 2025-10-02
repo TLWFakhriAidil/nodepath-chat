@@ -34,13 +34,13 @@ func parseMySQLURI(uri string) (*DatabaseConfig, error) {
 		return nil, fmt.Errorf("invalid MySQL URI format: missing mysql:// prefix")
 	}
 	uri = strings.TrimPrefix(uri, "mysql://")
-	
+
 	// Split by @ to separate credentials from host/database
 	parts := strings.Split(uri, "@")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid MySQL URI format: missing @ separator")
 	}
-	
+
 	// Parse credentials (user:password)
 	credentials := parts[0]
 	credParts := strings.Split(credentials, ":")
@@ -49,34 +49,34 @@ func parseMySQLURI(uri string) (*DatabaseConfig, error) {
 	}
 	user := credParts[0]
 	password := credParts[1]
-	
+
 	// Parse host:port/database
 	hostDatabase := parts[1]
-	
+
 	// Split by / to separate host:port from database
 	hostDbParts := strings.Split(hostDatabase, "/")
 	if len(hostDbParts) != 2 {
 		return nil, fmt.Errorf("invalid MySQL URI format: missing database")
 	}
-	
+
 	hostPort := hostDbParts[0]
 	database := hostDbParts[1]
-	
+
 	// Parse host and port
 	hostPortParts := strings.Split(hostPort, ":")
 	if len(hostPortParts) != 2 {
 		return nil, fmt.Errorf("invalid MySQL URI format: missing port")
 	}
-	
+
 	host := hostPortParts[0]
 	portStr := hostPortParts[1]
-	
+
 	// Convert port to integer
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid port number: %v", err)
 	}
-	
+
 	return &DatabaseConfig{
 		Host:     host,
 		Port:     port,
@@ -120,22 +120,22 @@ func NewHandlers(
 	aiRepo := repository.NewAIWhatsappRepository(db)
 	deviceRepo := repository.NewDeviceSettingsRepository(db)
 	wasapBotRepo := repository.NewWasapBotRepository(db)
-	
+
 	// Initialize media detection service
 	mediaDetectionService := services.NewMediaDetectionService()
-	
+
 	// Initialize AI WhatsApp service
 	aiWhatsappService := services.NewAIWhatsappService(aiRepo, deviceRepo, flowService, mediaDetectionService, cfg)
-	
+
 	// Initialize AI WhatsApp handlers
 	aiWhatsappHandlers := NewAIWhatsappHandlers(aiWhatsappService, aiRepo, deviceRepo)
-	
+
 	// Initialize WasapBot handlers
 	wasapBotHandlers := NewWasapBotHandlers(wasapBotRepo)
-	
+
 	// Initialize authentication handlers
 	authHandlers := NewAuthHandlers(db)
-	
+
 	// Create main handlers instance
 	mainHandlers := &Handlers{
 		flowService:           flowService,
@@ -152,10 +152,10 @@ func NewHandlers(
 		wasapBotHandlers:      wasapBotHandlers,
 		db:                    db, // Store the database
 	}
-	
+
 	// Set the reference to main handlers in AI WhatsApp handlers for flow routing
 	aiWhatsappHandlers.SetMainHandlers(mainHandlers)
-	
+
 	return mainHandlers
 }
 
@@ -307,7 +307,7 @@ func (h *Handlers) GetFlows(c *fiber.Ctx) error {
 	if !ok {
 		return h.errorResponse(c, 401, "Authentication required")
 	}
-	
+
 	// Get flows filtered by user's devices
 	flows, err := h.flowService.GetFlowsByUserDevices(userID)
 	if err != nil {
@@ -394,16 +394,16 @@ func (h *Handlers) DeleteFlow(c *fiber.Ctx) error {
 // HandleHealthCheck returns overall system health status
 func (h *Handlers) HandleHealthCheck(c *fiber.Ctx) error {
 	logrus.Info("Health check endpoint called")
-	
+
 	// Add panic recovery
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.WithField("panic", r).Error("Panic in health check handler")
 		}
 	}()
-	
+
 	ctx := context.Background()
-	
+
 	// Check if health service is nil
 	if h.healthService == nil {
 		logrus.Error("Health service is nil")
@@ -411,7 +411,7 @@ func (h *Handlers) HandleHealthCheck(c *fiber.Ctx) error {
 			"error": "Health service not initialized",
 		})
 	}
-	
+
 	health := h.healthService.GetSystemHealth(ctx)
 
 	status := fiber.StatusOK
@@ -427,11 +427,11 @@ func (h *Handlers) HandleHealthCheck(c *fiber.Ctx) error {
 func (h *Handlers) HandleLivenessProbe(c *fiber.Ctx) error {
 	ctx := context.Background()
 	isAlive := h.healthService.IsHealthy(ctx)
-	
+
 	if !isAlive {
 		return c.Status(503).JSON(fiber.Map{"status": "unhealthy"})
 	}
-	
+
 	return c.JSON(fiber.Map{"status": "healthy"})
 }
 
@@ -439,11 +439,11 @@ func (h *Handlers) HandleLivenessProbe(c *fiber.Ctx) error {
 func (h *Handlers) HandleReadinessProbe(c *fiber.Ctx) error {
 	ctx := context.Background()
 	isReady := h.healthService.IsHealthy(ctx)
-	
+
 	if !isReady {
 		return c.Status(503).JSON(fiber.Map{"status": "unhealthy"})
 	}
-	
+
 	return c.JSON(fiber.Map{"status": "healthy"})
 }
 
@@ -476,7 +476,7 @@ func (h *Handlers) HandleComponentHealth(c *fiber.Ctx) error {
 func (h *Handlers) HandleHealthMetrics(c *fiber.Ctx) error {
 	ctx := context.Background()
 	health := h.healthService.GetSystemHealth(ctx)
-	
+
 	// Create metrics from health data
 	metrics := fiber.Map{
 		"status":     health.Status,
@@ -485,7 +485,7 @@ func (h *Handlers) HandleHealthMetrics(c *fiber.Ctx) error {
 		"version":    health.Version,
 		"components": health.Components,
 	}
-	
+
 	return c.JSON(metrics)
 }
 
@@ -502,14 +502,14 @@ func (h *Handlers) GetDatabaseConfig(c *fiber.Ctx) error {
 	// Get MYSQL_URI from Railway environment variables
 	mysqlURI := os.Getenv("MYSQL_URI")
 	logrus.WithField("mysql_uri", mysqlURI).Info("Database config endpoint called")
-	
+
 	if mysqlURI == "" {
 		logrus.Error("MYSQL_URI environment variable not set")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "MYSQL_URI environment variable not set",
 		})
 	}
-	
+
 	// Parse the MySQL URI
 	config, err := parseMySQLURI(mysqlURI)
 	if err != nil {
@@ -518,7 +518,7 @@ func (h *Handlers) GetDatabaseConfig(c *fiber.Ctx) error {
 			"error": "Failed to parse MYSQL_URI: " + err.Error(),
 		})
 	}
-	
+
 	logrus.WithField("config", config).Info("Database config parsed successfully")
 	return c.JSON(config)
 }

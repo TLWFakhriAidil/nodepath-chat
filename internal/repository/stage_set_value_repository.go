@@ -146,7 +146,7 @@ func (r *StageSetValueRepository) Create(value *models.StageSetValue) error {
 		VALUES (?, ?, ?, ?, ?, NOW(), NOW())
 	`
 
-	result, err := r.db.Exec(query, 
+	result, err := r.db.Exec(query,
 		value.IDDevice,
 		value.Stage,
 		value.TypeInputData,

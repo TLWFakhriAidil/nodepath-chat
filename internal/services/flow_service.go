@@ -39,7 +39,7 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 		logrus.Warn("Database not available, flow creation skipped (fallback mode)")
 		return nil // Return success in fallback mode
 	}
-	
+
 	if flow.ID == "" {
 		flow.ID = uuid.New().String()
 	}
@@ -55,7 +55,7 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 	`
 
 	_, err := s.db.Exec(query,
-		flow.ID, flow.Name, flow.Niche, flow.IdDevice, flow.Nodes, flow.Edges, 
+		flow.ID, flow.Name, flow.Niche, flow.IdDevice, flow.Nodes, flow.Edges,
 		flow.CreatedAt, flow.UpdatedAt,
 	)
 
@@ -65,7 +65,7 @@ func (s *FlowService) CreateFlow(flow *models.ChatbotFlow) error {
 
 	logrus.WithFields(logrus.Fields{
 		"flow_reference": flow.ID,
-		"name":    flow.Name,
+		"name":           flow.Name,
 	}).Info("Flow created successfully")
 
 	return nil
@@ -77,7 +77,7 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 		logrus.Warn("Database not available, returning nil flow (fallback mode)")
 		return nil, nil // Return nil flow in fallback mode
 	}
-	
+
 	query := `
 		SELECT id, name, niche, id_device,
 		       nodes, edges, created_at, updated_at
@@ -88,7 +88,7 @@ func (s *FlowService) GetFlow(flowID string) (*models.ChatbotFlow, error) {
 
 	var flow models.ChatbotFlow
 	err := s.db.QueryRow(query, flowID).Scan(
-		&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges, 
+		&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges,
 		&flow.CreatedAt, &flow.UpdatedAt,
 	)
 
@@ -123,16 +123,16 @@ func (s *FlowService) GetFlowAndDetermineTable(flowID string) (*models.ChatbotFl
 	if flow == nil {
 		return nil, "", fmt.Errorf("flow not found")
 	}
-	
+
 	// Determine which table to use based on flow name
 	tableName := s.DetermineTableByFlowName(flow.Name)
-	
+
 	logrus.WithFields(logrus.Fields{
-		"flow_id": flowID,
-		"flow_name": flow.Name,
+		"flow_id":    flowID,
+		"flow_name":  flow.Name,
 		"table_name": tableName,
 	}).Info("Determined table for flow processing")
-	
+
 	return flow, tableName, nil
 }
 
@@ -142,7 +142,7 @@ func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 		logrus.Warn("Database not available, returning empty flows list (fallback mode)")
 		return []*models.ChatbotFlow{}, nil // Return empty list in fallback mode
 	}
-	
+
 	query := `
 		SELECT id, name, niche, id_device,
 		       nodes, edges, created_at, updated_at
@@ -160,7 +160,7 @@ func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 	for rows.Next() {
 		var flow models.ChatbotFlow
 		err := rows.Scan(
-			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges, 
+			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges,
 			&flow.CreatedAt, &flow.UpdatedAt,
 		)
 		if err != nil {
@@ -178,7 +178,7 @@ func (s *FlowService) GetFlowsByUserDevices(userID int) ([]*models.ChatbotFlow, 
 		logrus.Warn("Database not available, returning empty flows list for user devices (fallback mode)")
 		return []*models.ChatbotFlow{}, nil // Return empty list in fallback mode
 	}
-	
+
 	// First get all device IDs for this user
 	deviceQuery := `SELECT id_device FROM device_setting_nodepath WHERE user_id = ?`
 	deviceRows, err := s.db.Query(deviceQuery, userID)
@@ -186,7 +186,7 @@ func (s *FlowService) GetFlowsByUserDevices(userID int) ([]*models.ChatbotFlow, 
 		return nil, fmt.Errorf("failed to get user devices: %w", err)
 	}
 	defer deviceRows.Close()
-	
+
 	var deviceIDs []string
 	for deviceRows.Next() {
 		var deviceID string
@@ -196,16 +196,16 @@ func (s *FlowService) GetFlowsByUserDevices(userID int) ([]*models.ChatbotFlow, 
 		}
 		deviceIDs = append(deviceIDs, deviceID)
 	}
-	
+
 	// If user has no devices, return empty list
 	if len(deviceIDs) == 0 {
 		return []*models.ChatbotFlow{}, nil
 	}
-	
+
 	// Build query with IN clause for device filtering
 	placeholders := strings.Repeat("?,", len(deviceIDs))
 	placeholders = placeholders[:len(placeholders)-1] // Remove trailing comma
-	
+
 	query := fmt.Sprintf(`
 		SELECT id, name, niche, id_device,
 		       nodes, edges, created_at, updated_at
@@ -213,24 +213,24 @@ func (s *FlowService) GetFlowsByUserDevices(userID int) ([]*models.ChatbotFlow, 
 		WHERE id_device IN (%s)
 		ORDER BY created_at DESC
 	`, placeholders)
-	
+
 	// Convert deviceIDs to interface{} slice for query
 	args := make([]interface{}, len(deviceIDs))
 	for i, deviceID := range deviceIDs {
 		args[i] = deviceID
 	}
-	
+
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flows for user devices: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var flows []*models.ChatbotFlow
 	for rows.Next() {
 		var flow models.ChatbotFlow
 		err := rows.Scan(
-			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges, 
+			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges,
 			&flow.CreatedAt, &flow.UpdatedAt,
 		)
 		if err != nil {
@@ -238,7 +238,7 @@ func (s *FlowService) GetFlowsByUserDevices(userID int) ([]*models.ChatbotFlow, 
 		}
 		flows = append(flows, &flow)
 	}
-	
+
 	return flows, nil
 }
 
@@ -248,7 +248,7 @@ func (s *FlowService) GetFlowsByDevice(idDevice string) ([]*models.ChatbotFlow, 
 		logrus.Warn("Database not available, returning empty flows list for device (fallback mode)")
 		return []*models.ChatbotFlow{}, nil // Return empty list in fallback mode
 	}
-	
+
 	query := `
 		SELECT id, name, niche, id_device,
 		       nodes, edges, created_at, updated_at
@@ -267,7 +267,7 @@ func (s *FlowService) GetFlowsByDevice(idDevice string) ([]*models.ChatbotFlow, 
 	for rows.Next() {
 		var flow models.ChatbotFlow
 		err := rows.Scan(
-			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges, 
+			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges,
 			&flow.CreatedAt, &flow.UpdatedAt,
 		)
 		if err != nil {
@@ -285,11 +285,11 @@ func (s *FlowService) GetDefaultFlowForDevice(idDevice string) (*models.ChatbotF
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(flows) == 0 {
 		return nil, nil
 	}
-	
+
 	return flows[0], nil // Return the first flow as default
 }
 
@@ -364,7 +364,7 @@ func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 		logrus.Warn("Database not available, flow update skipped (fallback mode)")
 		return nil // Return success in fallback mode
 	}
-	
+
 	flow.UpdatedAt = time.Now()
 
 	query := `
@@ -375,7 +375,7 @@ func (s *FlowService) UpdateFlow(flow *models.ChatbotFlow) error {
 	`
 
 	_, err := s.db.Exec(query,
-		flow.Name, flow.Niche, flow.IdDevice, flow.Nodes, flow.Edges, 
+		flow.Name, flow.Niche, flow.IdDevice, flow.Nodes, flow.Edges,
 		flow.UpdatedAt, flow.ID,
 	)
 
@@ -392,14 +392,14 @@ func (s *FlowService) DeleteFlow(flowID string) error {
 		logrus.Warn("Database not available, flow deletion skipped (fallback mode)")
 		return nil // Return success in fallback mode
 	}
-	
+
 	query := `DELETE FROM chatbot_flows_nodepath WHERE id = ?`
 	_, err := s.db.Exec(query, flowID)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to delete flow: %w", err)
 	}
-	
+
 	return nil
 }
 

@@ -29,9 +29,9 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 			"error": "User not authenticated",
 		})
 	}
-	
+
 	userID := userIDInterface.(int)
-	
+
 	// Get query parameters
 	deviceIDs := c.Query("deviceIds")
 	search := c.Query("search")
@@ -41,19 +41,19 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 	dateTo := c.Query("dateTo")     // Add date to parameter
 	limit := c.QueryInt("limit", 100)
 	offset := c.QueryInt("offset", 0)
-	
+
 	logrus.WithFields(logrus.Fields{
-		"user_id": userID,
+		"user_id":    userID,
 		"device_ids": deviceIDs,
-		"search": search,
-		"status": status,
-		"stage": stage,
-		"date_from": dateFrom,
-		"date_to": dateTo,
-		"limit": limit,
-		"offset": offset,
+		"search":     search,
+		"status":     status,
+		"stage":      stage,
+		"date_from":  dateFrom,
+		"date_to":    dateTo,
+		"limit":      limit,
+		"offset":     offset,
 	}).Info("Getting WasapBot data")
-	
+
 	// Get data from repository with date filters
 	data, total, err := h.wasapBotRepo.GetAllWasapBotDataWithDates(limit, offset, deviceIDs, stage, status, search, dateFrom, dateTo, userID)
 	if err != nil {
@@ -62,27 +62,27 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 			"error": "Failed to retrieve data",
 		})
 	}
-	
+
 	// Log the data being returned
 	logrus.WithFields(logrus.Fields{
 		"data_count": len(data),
-		"total": total,
-		"data": data,
+		"total":      total,
+		"data":       data,
 	}).Info("WasapBot data retrieved")
-	
+
 	// Ensure we return an empty array if no data
 	if data == nil {
 		data = []map[string]interface{}{}
 	}
-	
+
 	// Format response
 	response := fiber.Map{
 		"records": data,
-		"total": total,
+		"total":   total,
 	}
-	
+
 	logrus.WithField("response", response).Info("Sending WasapBot response")
-	
+
 	return c.JSON(response)
 }
 
@@ -95,39 +95,38 @@ func (h *WasapBotHandlers) GetWasapBotStats(c *fiber.Ctx) error {
 			"error": "User not authenticated",
 		})
 	}
-	
+
 	userID := userIDInterface.(int)
-	
+
 	// Get device IDs from query
 	deviceIDs := c.Query("deviceIds")
 	dateFrom := c.Query("dateFrom") // Add date from parameter
 	dateTo := c.Query("dateTo")     // Add date to parameter
-	
+
 	logrus.WithFields(logrus.Fields{
-		"user_id": userID,
+		"user_id":    userID,
 		"device_ids": deviceIDs,
-		"date_from": dateFrom,
-		"date_to": dateTo,
+		"date_from":  dateFrom,
+		"date_to":    dateTo,
 	}).Info("Getting WasapBot statistics")
-	
+
 	// Get stats from repository with date filters
 	stats, err := h.wasapBotRepo.GetWasapBotStatsWithDates(deviceIDs, dateFrom, dateTo, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get WasapBot stats")
 		// Return default stats on error
 		stats = map[string]interface{}{
-			"totalProspects": 0,
-			"activeExecutions": 0,
+			"totalProspects":      0,
+			"activeExecutions":    0,
 			"completedExecutions": 0,
-			"uniqueSchools": 0,
-			"uniquePackages": 0,
-			"totalWithPhone": 0,
+			"uniqueSchools":       0,
+			"uniquePackages":      0,
+			"totalWithPhone":      0,
 		}
 	}
-	
+
 	return c.JSON(stats)
 }
-
 
 // DeleteWasapBotRecord deletes a WasapBot record
 func (h *WasapBotHandlers) DeleteWasapBotRecord(c *fiber.Ctx) error {
@@ -138,7 +137,7 @@ func (h *WasapBotHandlers) DeleteWasapBotRecord(c *fiber.Ctx) error {
 			"error": "User not authenticated",
 		})
 	}
-	
+
 	// Get record ID from params
 	idStr := c.Params("id")
 	id, err := strconv.Atoi(idStr)
@@ -147,9 +146,9 @@ func (h *WasapBotHandlers) DeleteWasapBotRecord(c *fiber.Ctx) error {
 			"error": "Invalid record ID",
 		})
 	}
-	
+
 	logrus.WithField("id", id).Info("Deleting WasapBot record")
-	
+
 	// Delete the record
 	err = h.wasapBotRepo.Delete(id)
 	if err != nil {
@@ -158,7 +157,7 @@ func (h *WasapBotHandlers) DeleteWasapBotRecord(c *fiber.Ctx) error {
 			"error": "Failed to delete record",
 		})
 	}
-	
+
 	return c.JSON(fiber.Map{
 		"success": true,
 		"message": "Record deleted successfully",

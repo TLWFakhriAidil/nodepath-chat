@@ -3,7 +3,7 @@ package services
 import (
 	"database/sql"
 	"time"
-	
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -30,27 +30,27 @@ func (s *aiWhatsappService) CheckTimeThrottleWithNullString(balasNullString sql.
 	if thresholdSeconds <= 0 {
 		thresholdSeconds = 4
 	}
-	
+
 	if !balasNullString.Valid || balasNullString.String == "" {
 		return true // No previous response, allow
 	}
-	
+
 	// Parse the timestamp string
 	lastTime, err := time.Parse("2006-01-02 15:04:05", balasNullString.String)
 	if err != nil {
 		return true // Can't parse, allow request
 	}
-	
+
 	currentTime := time.Now()
 	timeDifference := currentTime.Sub(lastTime).Seconds()
-	
+
 	if timeDifference < float64(thresholdSeconds) {
 		logrus.WithFields(logrus.Fields{
-			"time_diff":  timeDifference,
-			"threshold":  thresholdSeconds,
+			"time_diff": timeDifference,
+			"threshold": thresholdSeconds,
 		}).Debug("⏱️ THROTTLE: Request throttled")
 		return false
 	}
-	
+
 	return true
 }

@@ -44,9 +44,9 @@ func InitializeRedis(cfg *config.Config) redis.Cmdable {
 		logrus.Info("Using Redis Cluster configuration")
 	} else {
 		// Single Redis instance with optimized settings
-		opt.PoolSize = 50 // Increased pool size
+		opt.PoolSize = 50     // Increased pool size
 		opt.MinIdleConns = 10 // Minimum idle connections
-		opt.MaxRetries = 3 // Retry failed commands
+		opt.MaxRetries = 3    // Retry failed commands
 		opt.DialTimeout = 5 * time.Second
 		opt.ReadTimeout = 3 * time.Second
 		opt.WriteTimeout = 3 * time.Second
@@ -72,7 +72,7 @@ type QueueService struct {
 	redis redis.Cmdable // Interface to support both single and cluster clients
 	// WhatsApp service interface for flow continuation
 	whatsappService WhatsAppServiceInterface
-	queueMonitor *QueueMonitor
+	queueMonitor    *QueueMonitor
 }
 
 // WhatsAppServiceInterface defines the interface for WhatsApp service methods needed by queue service
@@ -83,7 +83,7 @@ type WhatsAppServiceInterface interface {
 // NewQueueService creates a new queue service with monitoring
 func NewQueueService(redis redis.Cmdable, queueMonitor *QueueMonitor) *QueueService {
 	return &QueueService{
-		redis: redis,
+		redis:        redis,
 		queueMonitor: queueMonitor,
 	}
 }
@@ -233,10 +233,10 @@ func (s *QueueService) RequeueFailedMessage(message *QueueMessage, err error) er
 	message.Retries++
 
 	logrus.WithFields(logrus.Fields{
-		"message_id": message.ID,
-		"retries":    message.Retries,
+		"message_id":  message.ID,
+		"retries":     message.Retries,
 		"max_retries": message.MaxRetries,
-		"error":      err.Error(),
+		"error":       err.Error(),
 	}).Warn("Message failed, requeuing")
 
 	ctx := context.Background()
@@ -448,7 +448,7 @@ func (s *QueueService) processFlowContinuation(message *QueueMessage) error {
 			// Return nil to prevent retries and remove from queue
 			return nil
 		}
-		
+
 		// For other errors, log as error
 		logrus.WithError(err).Error("🔄 QUEUE: Failed to process flow continuation")
 		return fmt.Errorf("failed to process flow continuation: %w", err)

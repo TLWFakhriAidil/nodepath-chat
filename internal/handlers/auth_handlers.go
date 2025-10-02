@@ -400,7 +400,7 @@ func (ah *AuthHandlers) storeSession(token string, userID string, ipAddress, use
 		INSERT INTO user_sessions (id, user_id, token, expires_at) 
 		VALUES (?, ?, ?, ?)
 	`, sessionID, userID, token, expiresAt)
-	
+
 	return err
 }
 
@@ -408,16 +408,16 @@ func (ah *AuthHandlers) storeSession(token string, userID string, ipAddress, use
 func (ah *AuthHandlers) getSession(token string) (string, bool) {
 	var userID string
 	var expiresAt time.Time
-	
+
 	err := ah.db.QueryRow(`
 		SELECT user_id, expires_at FROM user_sessions 
 		WHERE token = ? AND expires_at > NOW()
 	`, token).Scan(&userID, &expiresAt)
-	
+
 	if err != nil {
 		return "", false
 	}
-	
+
 	return userID, true
 }
 
@@ -570,8 +570,8 @@ func (ah *AuthHandlers) GetDeviceStatus(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"success":     true,
-		"has_devices": count > 0,
+		"success":      true,
+		"has_devices":  count > 0,
 		"device_count": count,
 		"device_ids":   deviceIDs,
 	})
@@ -584,7 +584,7 @@ func (ah *AuthHandlers) SetupAuthRoutes(api fiber.Router) {
 	auth.Post("/login", ah.Login)
 	auth.Post("/logout", ah.Logout)
 	auth.Get("/me", ah.AuthMiddleware(), ah.GetCurrentUser)
-	
+
 	// Device check endpoint
 	auth.Get("/device-status", ah.AuthMiddleware(), ah.GetDeviceStatus)
 }
@@ -633,10 +633,10 @@ func (ah *AuthHandlers) loginWithFallback(c *fiber.Ctx) error {
 	if expectedPassword, exists := fallbackCredentials[req.Email]; exists && expectedPassword == req.Password {
 		// Create a temporary user object
 		user := models.User{
-			ID:       generateUUID(),
-			Email:    req.Email,
-			FullName: "Fallback User",
-			IsActive: true,
+			ID:        generateUUID(),
+			Email:     req.Email,
+			FullName:  "Fallback User",
+			IsActive:  true,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}

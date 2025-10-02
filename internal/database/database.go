@@ -17,7 +17,7 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 	if dsn == "" {
 		return nil, fmt.Errorf("MYSQL_URI environment variable is required")
 	}
-	
+
 	// Log which database URL is being used
 	logrus.Info("Connecting to MySQL database using MYSQL_URI")
 
@@ -28,8 +28,8 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 
 	// Configure connection pool for high concurrency (3000+ users)
 	// Optimized settings for handling 3000+ concurrent users with real-time messaging
-	db.SetMaxOpenConns(500)  // Increased significantly for 3000+ concurrent users
-	db.SetMaxIdleConns(100)  // Higher idle connections to reduce connection overhead
+	db.SetMaxOpenConns(500)                 // Increased significantly for 3000+ concurrent users
+	db.SetMaxIdleConns(100)                 // Higher idle connections to reduce connection overhead
 	db.SetConnMaxLifetime(60 * time.Minute) // Longer lifetime to reduce connection churn
 	db.SetConnMaxIdleTime(15 * time.Minute) // Balanced idle time for resource efficiency
 
@@ -46,7 +46,7 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 func RunMigrations(db *sql.DB) error {
 	logrus.Info("Running database migrations")
 
-// Test chat executions table removed from migrations
+	// Test chat executions table removed from migrations
 	migrations := []string{
 		createFlowsTable,
 		createDeviceSettingsTable,
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-	// AI WhatsApp conversation table for managing AI-powered WhatsApp conversations
+// AI WhatsApp conversation table for managing AI-powered WhatsApp conversations
 const createAIWhatsappTable = `
 CREATE TABLE IF NOT EXISTS ai_whatsapp_nodepath (
     id_prospect INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -244,12 +244,10 @@ CREATE TABLE IF NOT EXISTS conversation_log_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-
-
 // addMissingColumnsToFlowsTable adds missing columns to the flows table
 func addMissingColumnsToFlowsTable(db *sql.DB) error {
 	columns := []struct {
-		name string
+		name       string
 		definition string
 	}{
 		{"niche", "TEXT COLLATE utf8mb4_unicode_ci"},
@@ -266,11 +264,11 @@ func addMissingColumnsToFlowsTable(db *sql.DB) error {
 			AND TABLE_NAME = 'chatbot_flows_nodepath' 
 			AND COLUMN_NAME = ?
 		`, col.name).Scan(&count)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to check column %s: %w", col.name, err)
 		}
-		
+
 		if count == 0 {
 			// Column doesn't exist, add it
 			query := fmt.Sprintf("ALTER TABLE chatbot_flows_nodepath ADD COLUMN %s %s", col.name, col.definition)
@@ -281,7 +279,7 @@ func addMissingColumnsToFlowsTable(db *sql.DB) error {
 		} else {
 			logrus.WithField("column", col.name).Debug("Column already exists")
 		}
-	}	
+	}
 	return nil
 }
 
@@ -292,18 +290,18 @@ func updateProviderRvsbWasapToWaha(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to update provider values: %w", err)
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-	
+
 	if rowsAffected > 0 {
 		logrus.WithField("rows_updated", rowsAffected).Info("Updated provider values from 'rvsb_wasap' to 'waha'")
 	} else {
 		logrus.Debug("No records found with 'rvsb_wasap' provider to update")
 	}
-	
+
 	return nil
 }
 
@@ -324,11 +322,11 @@ func removeDeprecatedColumnsFromFlowsTable(db *sql.DB) error {
 			AND TABLE_NAME = 'chatbot_flows_nodepath' 
 			AND COLUMN_NAME = ?
 		`, col).Scan(&count)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to check column %s: %w", col, err)
 		}
-		
+
 		if count > 0 {
 			// Column exists, drop it
 			query := fmt.Sprintf("ALTER TABLE chatbot_flows_nodepath DROP COLUMN %s", col)
@@ -339,7 +337,7 @@ func removeDeprecatedColumnsFromFlowsTable(db *sql.DB) error {
 		} else {
 			logrus.WithField("column", col).Debug("Deprecated column does not exist")
 		}
-	}	
+	}
 	return nil
 }
 
@@ -365,11 +363,11 @@ func addMissingColumnsToDeviceSettingsTable(db *sql.DB) error {
 			AND TABLE_NAME = 'device_setting_nodepath' 
 			AND COLUMN_NAME = ?
 		`, col.name).Scan(&count)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to check column %s: %w", col.name, err)
 		}
-		
+
 		if count == 0 {
 			// Column doesn't exist, add it
 			query := fmt.Sprintf("ALTER TABLE device_setting_nodepath ADD COLUMN %s %s", col.name, col.definition)
@@ -381,6 +379,6 @@ func addMissingColumnsToDeviceSettingsTable(db *sql.DB) error {
 			logrus.WithField("column", col.name).Debug("Column already exists in device_setting_nodepath")
 		}
 	}
-	
+
 	return nil
 }

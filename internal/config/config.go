@@ -13,7 +13,7 @@ type Config struct {
 	AppEnv string
 
 	// Database configuration
-	MySQLURI    string // Primary MySQL connection URI
+	MySQLURI string // Primary MySQL connection URI
 
 	// Redis configuration
 	RedisURL          string
@@ -34,9 +34,9 @@ type Config struct {
 	SessionSecret string
 
 	// Performance configuration
-	MaxConcurrentUsers int // Maximum concurrent users
-	WebSocketEnabled   bool // Enable WebSocket support
-	CDNEnabled         bool // Enable CDN for media files
+	MaxConcurrentUsers int    // Maximum concurrent users
+	WebSocketEnabled   bool   // Enable WebSocket support
+	CDNEnabled         bool   // Enable CDN for media files
 	CDNBaseURL         string // CDN base URL
 }
 
@@ -48,7 +48,7 @@ func Load() *Config {
 		AppEnv: getEnv("APP_ENV", "development"),
 
 		// Database configuration
-		MySQLURI:    getEnv("MYSQL_URI", ""),    // Primary MySQL connection
+		MySQLURI: getEnv("MYSQL_URI", ""), // Primary MySQL connection
 
 		// Redis configuration with clustering support
 		RedisURL:          getEnv("REDIS_URL", ""),
@@ -84,7 +84,7 @@ func (c *Config) GetDSN() string {
 	if c.MySQLURI == "" {
 		return "" // Return empty if no database URL provided
 	}
-	
+
 	// Convert mysql:// to proper DSN format if needed
 	if strings.HasPrefix(c.MySQLURI, "mysql://") {
 		// Remove mysql:// prefix and add tcp() wrapper
@@ -110,7 +110,7 @@ func (c *Config) GetDSN() string {
 			}
 		}
 	}
-	
+
 	// Return as-is if already in proper format
 	return c.MySQLURI
 }

@@ -79,9 +79,9 @@ func WithTransactionRetry(db *sql.DB, fn TransactionFunc, maxRetries int) error 
 
 		if attempt < maxRetries {
 			logrus.WithFields(logrus.Fields{
-				"attempt": attempt + 1,
+				"attempt":     attempt + 1,
 				"max_retries": maxRetries,
-				"error": err.Error(),
+				"error":       err.Error(),
 			}).Warn("Transaction failed, retrying...")
 		}
 	}
@@ -96,7 +96,7 @@ func isRetryableError(err error) bool {
 	}
 
 	errorStr := err.Error()
-	
+
 	// MySQL deadlock and timeout errors
 	return contains(errorStr, "Deadlock found") ||
 		contains(errorStr, "Lock wait timeout") ||
@@ -106,12 +106,12 @@ func isRetryableError(err error) bool {
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		(s == substr || 
-		 len(s) > len(substr) && 
-		 (s[:len(substr)] == substr || 
-		  s[len(s)-len(substr):] == substr || 
-		  indexOfSubstring(s, substr) >= 0))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					indexOfSubstring(s, substr) >= 0))
 }
 
 // indexOfSubstring finds the index of a substring in a string

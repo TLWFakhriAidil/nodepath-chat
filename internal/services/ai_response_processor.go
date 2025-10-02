@@ -54,7 +54,7 @@ func (p *AIResponseProcessor) ProcessAIResponse(rawResponse string, updateConver
 
 	// Clean and prepare response
 	sanitizedContent := p.sanitizeResponse(rawResponse)
-	
+
 	// Try to parse the response
 	aiResponse, err := p.parseResponse(sanitizedContent, rawResponse)
 	if err != nil {
@@ -83,31 +83,31 @@ func (p *AIResponseProcessor) ProcessAIResponse(rawResponse string, updateConver
 // while removing formatting issues that interfere with JSON parsing
 func (p *AIResponseProcessor) sanitizeResponse(rawResponse string) string {
 	sanitized := strings.TrimSpace(rawResponse)
-	
+
 	// Step 1: Preserve user-intended content by identifying and protecting it
 	protectedContent := p.identifyProtectedContent(sanitized)
-	
+
 	// Step 2: Clean markdown code blocks (but preserve content structure)
 	sanitized = p.cleanMarkdownBlocks(sanitized)
-	
+
 	// Step 3: Adaptive URL cleaning - preserve intentional formatting
 	sanitized = p.adaptiveURLCleaning(sanitized, protectedContent)
-	
+
 	// Step 4: Clean formatting artifacts while preserving content meaning
 	sanitized = p.cleanFormattingArtifacts(sanitized)
-	
+
 	// Step 5: Restore protected content if needed
 	sanitized = p.restoreProtectedContent(sanitized, protectedContent)
-	
+
 	return strings.TrimSpace(sanitized)
 }
 
 // identifyProtectedContent identifies content that should be preserved during sanitization
 func (p *AIResponseProcessor) identifyProtectedContent(content string) map[string]string {
 	protected := make(map[string]string)
-	
+
 	// Protect quoted strings that might contain intentional formatting
-	quotedPattern := regexp.MustCompile(`"([^"]*[!`+"`"+`][^"]*)"`)
+	quotedPattern := regexp.MustCompile(`"([^"]*[!` + "`" + `][^"]*)"`)
 	matches := quotedPattern.FindAllStringSubmatch(content, -1)
 	for i, match := range matches {
 		if len(match) > 1 {
@@ -115,7 +115,7 @@ func (p *AIResponseProcessor) identifyProtectedContent(content string) map[strin
 			protected[placeholder] = match[1]
 		}
 	}
-	
+
 	// Protect content within JSON strings that might have intentional markdown
 	contentPattern := regexp.MustCompile(`"content"\s*:\s*"([^"]*)"`)
 	matches = contentPattern.FindAllStringSubmatch(content, -1)
@@ -125,7 +125,7 @@ func (p *AIResponseProcessor) identifyProtectedContent(content string) map[strin
 			protected[placeholder] = match[1]
 		}
 	}
-	
+
 	return protected
 }
 
@@ -137,17 +137,17 @@ func (p *AIResponseProcessor) cleanMarkdownBlocks(content string) string {
 		// Extract content from code blocks
 		content = codeBlockPattern.ReplaceAllString(content, "$1")
 	}
-	
+
 	// Clean up standalone markdown markers
-	content = regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(content, "")
-	
+	content = regexp.MustCompile(`^`+"```"+`json|`+"```"+`$`).ReplaceAllString(content, "")
+
 	return content
 }
 
 // adaptiveURLCleaning cleans URLs while preserving intentional formatting
 func (p *AIResponseProcessor) adaptiveURLCleaning(content string, protected map[string]string) string {
 	// Only clean URLs that are clearly formatting artifacts, not intentional content
-	
+
 	// Clean AI-generated markdown image URLs: ! `URL` -> URL (but only outside protected content)
 	// This handles cases where AI generates: Gambar 1: ! `https://example.com/image.jpg`
 	aiImagePattern := regexp.MustCompile(`!\s*` + "`" + `(https?://[^` + "`" + `\s]+)` + "`")
@@ -161,7 +161,7 @@ func (p *AIResponseProcessor) adaptiveURLCleaning(content string, protected map[
 		// Clean the URL
 		return aiImagePattern.ReplaceAllString(match, "$1")
 	})
-	
+
 	// Clean backticks around URLs only if they appear to be formatting artifacts
 	backtickPattern := regexp.MustCompile("`" + `(https?://[^` + "`" + `\s]+)` + "`")
 	content = backtickPattern.ReplaceAllStringFunc(content, func(match string) string {
@@ -172,7 +172,7 @@ func (p *AIResponseProcessor) adaptiveURLCleaning(content string, protected map[
 		// Clean standalone backticked URLs
 		return backtickPattern.ReplaceAllString(match, "$1")
 	})
-	
+
 	return content
 }
 
@@ -180,22 +180,22 @@ func (p *AIResponseProcessor) adaptiveURLCleaning(content string, protected map[
 func (p *AIResponseProcessor) cleanFormattingArtifacts(content string) string {
 	// Remove extra whitespace and line breaks that interfere with JSON parsing
 	content = regexp.MustCompile(`\s+`).ReplaceAllString(content, " ")
-	
+
 	// Clean up common AI response artifacts
 	artifacts := []struct {
 		pattern string
 		replace string
 	}{
-		{`\s*,\s*,`, ","}, // Double commas
-		{`\s*}\s*}`, "}"},  // Double closing braces
-		{`\s*]\s*]`, "]"},  // Double closing brackets
+		{`\s*,\s*,`, ","},      // Double commas
+		{`\s*}\s*}`, "}"},      // Double closing braces
+		{`\s*]\s*]`, "]"},      // Double closing brackets
 		{`"\s*,\s*"`, "\",\""}, // Spaced commas in strings
 	}
-	
+
 	for _, artifact := range artifacts {
 		content = regexp.MustCompile(artifact.pattern).ReplaceAllString(content, artifact.replace)
 	}
-	
+
 	return content
 }
 
@@ -225,8 +225,8 @@ func (p *AIResponseProcessor) parseResponse(sanitizedContent, rawResponse string
 	if len(aiResponse.Response) > 0 && aiResponse.Response[0].Type == "text" {
 		content := aiResponse.Response[0].Content
 		if regexp.MustCompile(`^` + "```" + `json.*` + "```" + `$`).MatchString(content) {
-			jsonContent := regexp.MustCompile(`^` + "```" + `json|` + "```" + `$`).ReplaceAllString(strings.TrimSpace(content), "")
-			
+			jsonContent := regexp.MustCompile(`^`+"```"+`json|`+"```"+`$`).ReplaceAllString(strings.TrimSpace(content), "")
+
 			var decodedContent AIResponse
 			if err := json.Unmarshal([]byte(jsonContent), &decodedContent); err == nil {
 				if decodedContent.Stage != "" && len(decodedContent.Response) > 0 {
@@ -241,7 +241,7 @@ func (p *AIResponseProcessor) parseResponse(sanitizedContent, rawResponse string
 	if matches := regexp.MustCompile(`Stage:\s*(.+?)\nResponse:\s*(\[.*?\])$`).FindStringSubmatch(rawResponse); len(matches) == 3 {
 		stage = strings.TrimSpace(matches[1])
 		responseJSON := matches[2]
-		
+
 		if err := json.Unmarshal([]byte(responseJSON), &replyParts); err == nil {
 			logrus.Info("✅ AI_PROCESSOR: Parsed Format 3 - Old Stage/Response format")
 			return &AIResponse{
@@ -299,7 +299,7 @@ func (p *AIResponseProcessor) processResponseItems(items []ResponseItem) []Proce
 			// Check if next part is also onemessage
 			isLastPart := index == len(items)-1
 			nextIsNotOnemessage := false
-			
+
 			if !isLastPart {
 				nextPart := items[index+1]
 				nextIsNotOnemessage = nextPart.Type != "text" || nextPart.Jenis != "onemessage"
@@ -381,7 +381,7 @@ func (p *AIResponseProcessor) processContent(contentType, content string) string
 			// Remove backticks if present
 			url = strings.Trim(url, "`")
 			logrus.WithFields(logrus.Fields{
-				"original": content,
+				"original":  content,
 				"extracted": url,
 			}).Debug("🔗 AI_PROCESSOR: Extracted media URL from bracket format")
 			return url
@@ -404,10 +404,10 @@ func truncateForLog(s string, maxLen int) string {
 // FormatResponseForLogging formats processed messages for conversation logging
 func (p *AIResponseProcessor) FormatResponseForLogging(messages []ProcessedMessage, logType string) []string {
 	var logEntries []string
-	
+
 	for _, msg := range messages {
 		var entry string
-		
+
 		switch msg.Type {
 		case "text":
 			// Check if this was a combined message by looking for newlines
@@ -423,10 +423,10 @@ func (p *AIResponseProcessor) FormatResponseForLogging(messages []ProcessedMessa
 			contentJSON, _ := json.Marshal(msg.Content)
 			entry = fmt.Sprintf("%s: %s", logType, string(contentJSON))
 		}
-		
+
 		logEntries = append(logEntries, entry)
 	}
-	
+
 	return logEntries
 }
 
@@ -435,15 +435,15 @@ func (p *AIResponseProcessor) ValidateAIResponse(response *AIResponse) error {
 	if response == nil {
 		return fmt.Errorf("response is nil")
 	}
-	
+
 	if response.Stage == "" {
 		return fmt.Errorf("stage is empty")
 	}
-	
+
 	if len(response.Response) == 0 {
 		return fmt.Errorf("response array is empty")
 	}
-	
+
 	// Validate each response item
 	for i, item := range response.Response {
 		if item.Type == "" {
@@ -453,6 +453,6 @@ func (p *AIResponseProcessor) ValidateAIResponse(response *AIResponse) error {
 			return fmt.Errorf("response item %d has empty content", i)
 		}
 	}
-	
+
 	return nil
 }

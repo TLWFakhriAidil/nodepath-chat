@@ -68,7 +68,7 @@ func (h *Handlers) GetAllStageValues(c *fiber.Ctx) error {
 		SELECT stageSetValue_id, id_device, stage, type_inputData, columnsData, inputHardCode
 		FROM stageSetValue_nodepath
 		WHERE id_device IN (`
-	
+
 	// Add placeholders for IN clause
 	args := make([]interface{}, len(deviceIDs))
 	for i, id := range deviceIDs {
@@ -127,7 +127,7 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 
 	var req struct {
 		IDDevice      string  `json:"id_device"`
-		Stage         string  `json:"stage"`  // Changed from int to string
+		Stage         string  `json:"stage"` // Changed from int to string
 		TypeInputData string  `json:"type_inputData"`
 		ColumnsData   string  `json:"columnsData"`
 		InputHardCode *string `json:"inputHardCode"`
@@ -258,7 +258,7 @@ func (h *Handlers) UpdateStageValue(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Stage         string  `json:"stage"`  // Changed from int to string
+		Stage         string  `json:"stage"` // Changed from int to string
 		TypeInputData string  `json:"type_inputData"`
 		ColumnsData   string  `json:"columnsData"`
 		InputHardCode *string `json:"inputHardCode"`

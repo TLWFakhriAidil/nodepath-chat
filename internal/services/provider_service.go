@@ -96,7 +96,7 @@ func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettin
 	}
 
 	apiURL := "https://my.wablas.com/api/send-message"
-	
+
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
@@ -114,8 +114,8 @@ func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettin
 
 	// Prepare form data exactly as specified by user
 	data := url.Values{}
-	data.Set("phone", phoneNumber)    // Recipient phone number
-	data.Set("message", message)      // Message content
+	data.Set("phone", phoneNumber) // Recipient phone number
+	data.Set("message", message)   // Message content
 
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
@@ -124,7 +124,7 @@ func (ps *ProviderService) sendWablasMessage(deviceSettings *models.DeviceSettin
 	}
 
 	// Set headers exactly as specified by user
-	req.Header.Set("Authorization", instance)  // Set the Authorization header
+	req.Header.Set("Authorization", instance) // Set the Authorization header
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send request
@@ -170,7 +170,7 @@ func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceS
 	mediaType := ""
 	var apiURL string
 	var fieldName string
-	
+
 	if strings.Contains(mediaURL, ".mp4") {
 		mediaType = "video"
 		apiURL = "https://my.wablas.com/api/send-video"
@@ -185,7 +185,7 @@ func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceS
 		apiURL = "https://my.wablas.com/api/send-image"
 		fieldName = "image"
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
@@ -204,8 +204,8 @@ func (ps *ProviderService) sendWablasImageMessage(deviceSettings *models.DeviceS
 
 	// Prepare form data with appropriate field name
 	data := url.Values{}
-	data.Set("phone", phoneNumber)        // Recipient phone number
-	data.Set(fieldName, mediaURL)         // Media file URL with correct field name
+	data.Set("phone", phoneNumber) // Recipient phone number
+	data.Set(fieldName, mediaURL)  // Media file URL with correct field name
 
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
@@ -268,7 +268,7 @@ func (ps *ProviderService) sendWhacenterMessage(deviceSettings *models.DeviceSet
 	}
 
 	apiURL := "https://api.whacenter.com/api/send"
-	
+
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
@@ -286,9 +286,9 @@ func (ps *ProviderService) sendWhacenterMessage(deviceSettings *models.DeviceSet
 
 	// Prepare form data exactly as specified by user
 	data := url.Values{}
-	data.Set("device_id", instance)    // device_id from instance
-	data.Set("number", phoneNumber)    // recipient number
-	data.Set("message", message)       // message content
+	data.Set("device_id", instance) // device_id from instance
+	data.Set("number", phoneNumber) // recipient number
+	data.Set("message", message)    // message content
 
 	// Create request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
@@ -339,7 +339,7 @@ func (ps *ProviderService) sendWhacenterMessage(deviceSettings *models.DeviceSet
 // Uses the exact API format specified by user requirements with type detection
 func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.DeviceSettings, phoneNumber, mediaURL string) error {
 	apiURL := "https://api.whacenter.com/api/send"
-	
+
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,
 		"phone_number": phoneNumber,
@@ -367,10 +367,10 @@ func (ps *ProviderService) sendWhacenterMediaMessage(deviceSettings *models.Devi
 
 	// Prepare form data exactly as specified by user PHP code
 	data := url.Values{}
-	data.Set("device_id", instance)    // device_id from instance
-	data.Set("number", phoneNumber)    // recipient number
-	data.Set("file", mediaURL)         // media file URL
-	
+	data.Set("device_id", instance) // device_id from instance
+	data.Set("number", phoneNumber) // recipient number
+	data.Set("file", mediaURL)      // media file URL
+
 	// Add type parameter for video and audio only (as per PHP code)
 	if mediaType != "" && mediaType != "image" {
 		data.Set("type", mediaType)
@@ -448,7 +448,7 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 
 	// WAHA API endpoint for sending text messages
 	apiURL := "https://waha-plus-production-705f.up.railway.app/api/sendText"
-	
+
 	// 🚨 DEBUG: Log API key details (masked for security)
 	maskedAPIKey := "<empty>"
 	if len(apiKey) > 8 {
@@ -456,13 +456,13 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 	} else if len(apiKey) > 0 {
 		maskedAPIKey = "****" + apiKey[len(apiKey)-2:]
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"api_url":      apiURL,
-		"phone_number": phoneNumber,
-		"message_len":  len(message),
-		"device_id":    deviceSettings.Instance.String,
-		"instance":     instance,
+		"api_url":        apiURL,
+		"phone_number":   phoneNumber,
+		"message_len":    len(message),
+		"device_id":      deviceSettings.Instance.String,
+		"instance":       instance,
 		"api_key_masked": maskedAPIKey,
 		"api_key_length": len(apiKey),
 	}).Error("🚨 WAHA DEBUG: Preparing request with API key details")
@@ -476,9 +476,9 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 
 	// Prepare JSON payload as per WAHA API documentation
 	payload := map[string]interface{}{
-		"session": instance,    // Session name from instance
-		"chatId":  chatId,      // Phone number in WAHA format
-		"text":    message,     // Message content
+		"session": instance, // Session name from instance
+		"chatId":  chatId,   // Phone number in WAHA format
+		"text":    message,  // Message content
 	}
 
 	// Convert payload to JSON
@@ -489,11 +489,11 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 
 	// 🚨 DEBUG: Log complete payload details
 	logrus.WithFields(logrus.Fields{
-		"payload": payload,
+		"payload":   payload,
 		"json_data": string(jsonData),
-		"chat_id": chatId,
-		"session": instance,
-		"message": message,
+		"chat_id":   chatId,
+		"session":   instance,
+		"message":   message,
 	}).Error("🚨 WAHA DEBUG: Complete payload prepared")
 
 	// Create request
@@ -505,7 +505,7 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 	// Set headers as per WAHA API documentation
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Api-Key", apiKey)  // API key for authentication
+	req.Header.Set("X-Api-Key", apiKey) // API key for authentication
 
 	// 🚨 DEBUG: Log request headers (with masked API key)
 	headersCopy := make(map[string]string)
@@ -517,9 +517,9 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 		}
 	}
 	logrus.WithFields(logrus.Fields{
-		"method": "POST",
-		"url": apiURL,
-		"headers": headersCopy,
+		"method":         "POST",
+		"url":            apiURL,
+		"headers":        headersCopy,
 		"content_length": len(jsonData),
 	}).Error("🚨 WAHA DEBUG: Request headers and details")
 
@@ -538,20 +538,20 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 	}
 
 	duration := time.Since(startTime)
-	
+
 	// 🚨 DEBUG: Log complete response details
 	responseHeaders := make(map[string]string)
 	for key, values := range resp.Header {
 		responseHeaders[key] = strings.Join(values, ", ")
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"status_code": resp.StatusCode,
-		"response_body": string(body),
+		"status_code":      resp.StatusCode,
+		"response_body":    string(body),
 		"response_headers": responseHeaders,
-		"duration": duration,
-		"instance": instance,
-		"success": resp.StatusCode >= 200 && resp.StatusCode < 300,
+		"duration":         duration,
+		"instance":         instance,
+		"success":          resp.StatusCode >= 200 && resp.StatusCode < 300,
 	}).Error("🚨 WAHA DEBUG: Complete response received")
 
 	// Check for success (200-299 status codes)
@@ -559,13 +559,13 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 		// 🚨 DEBUG: Log error details for 401 Unauthorized
 		if resp.StatusCode == 401 {
 			logrus.WithFields(logrus.Fields{
-				"error_type": "UNAUTHORIZED",
+				"error_type":       "UNAUTHORIZED",
 				"api_key_provided": len(apiKey) > 0,
-				"api_key_length": len(apiKey),
-				"api_key_masked": maskedAPIKey,
-				"instance": instance,
-				"endpoint": apiURL,
-				"response_body": string(body),
+				"api_key_length":   len(apiKey),
+				"api_key_masked":   maskedAPIKey,
+				"instance":         instance,
+				"endpoint":         apiURL,
+				"response_body":    string(body),
 			}).Error("🚨 WAHA DEBUG: 401 UNAUTHORIZED ERROR - API Key Issue")
 		}
 		return fmt.Errorf("WAHA API error: status %d, body: %s", resp.StatusCode, string(body))
@@ -573,17 +573,15 @@ func (ps *ProviderService) sendWahaMessage(deviceSettings *models.DeviceSettings
 
 	// 🚨 DEBUG: Log successful send
 	logrus.WithFields(logrus.Fields{
-		"phone_number": phoneNumber,
-		"duration": duration,
-		"device_id": deviceSettings.Instance.String,
-		"status_code": resp.StatusCode,
+		"phone_number":  phoneNumber,
+		"duration":      duration,
+		"device_id":     deviceSettings.Instance.String,
+		"status_code":   resp.StatusCode,
 		"response_body": string(body),
 	}).Error("🚨 WAHA DEBUG: ✅ Message sent successfully")
 
 	return nil
 }
-
-
 
 // sendWahaMediaMessage sends media message (image/video/audio) via WAHA API
 // Handles video, audio, and image files with appropriate API endpoints matching PHP logic exactly
@@ -607,14 +605,14 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		"(", "",
 		")", "",
 	).Replace(phoneNumber)
-	
+
 	// Format chatId for WAHA
 	chatId := number + "@c.us"
-	
+
 	// Initialize variables for API endpoint and payload
 	var apiURL string
 	var payload map[string]interface{}
-	
+
 	// Check file type based on extension (matching PHP logic exactly)
 	if strings.Contains(mediaURL, ".mp4") {
 		// VIDEO - use sendVideo endpoint
@@ -648,7 +646,7 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 		parsedURL, _ := url.Parse(mediaURL)
 		path := parsedURL.Path
 		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
-		
+
 		// Mimetype map (matching PHP exactly)
 		mimeMap := map[string]string{
 			"jpg":  "image/jpeg",
@@ -659,7 +657,7 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 			"bmp":  "image/bmp",
 			"svg":  "image/svg+xml",
 		}
-		
+
 		// Step 1: Try using extension
 		mimetype := ""
 		if ext != "" {
@@ -667,7 +665,7 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 				mimetype = mime
 			}
 		}
-		
+
 		// Step 2: If no extension match, try detecting from HTTP headers
 		if mimetype == "" {
 			// Try HEAD request to get Content-Type
@@ -685,12 +683,12 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 				}
 			}
 		}
-		
+
 		// Step 3: Fallback to default
 		if mimetype == "" {
 			mimetype = "image/jpeg"
 		}
-		
+
 		// Use sendImage endpoint for images
 		apiURL = "https://waha-plus-production-705f.up.railway.app/api/sendImage"
 		payload = map[string]interface{}{
@@ -704,7 +702,7 @@ func (ps *ProviderService) sendWahaMediaMessage(deviceSettings *models.DeviceSet
 			"caption": nil,
 		}
 	}
-	
+
 	// Log the request details
 	logrus.WithFields(logrus.Fields{
 		"api_url":      apiURL,

@@ -53,7 +53,7 @@ type AIWhatsappRepository interface {
 
 	// Data table operations
 	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error)
-	
+
 	// Database access for transactions
 	GetDB() *sql.DB
 }
@@ -113,43 +113,43 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	var currentNodeIDValue, flowIDValue, lastNodeIDValue interface{}
 	var waitingForReplyValue interface{}
 	var flowReferenceValue, executionIDValue, executionStatusValue interface{}
-	
+
 	if ai.CurrentNodeID.Valid {
 		currentNodeIDValue = ai.CurrentNodeID.String
 	} else {
 		currentNodeIDValue = nil
 	}
-	
+
 	if ai.FlowID.Valid {
 		flowIDValue = ai.FlowID.String
 	} else {
 		flowIDValue = nil
 	}
-	
+
 	if ai.LastNodeID.Valid {
 		lastNodeIDValue = ai.LastNodeID.String
 	} else {
 		lastNodeIDValue = nil
 	}
-	
+
 	if ai.WaitingForReply.Valid {
 		waitingForReplyValue = ai.WaitingForReply.Int32
 	} else {
 		waitingForReplyValue = nil
 	}
-	
+
 	if ai.FlowReference.Valid {
 		flowReferenceValue = ai.FlowReference.String
 	} else {
 		flowReferenceValue = nil
 	}
-	
+
 	if ai.ExecutionID.Valid {
 		executionIDValue = ai.ExecutionID.String
 	} else {
 		executionIDValue = nil
 	}
-	
+
 	if ai.ExecutionStatus.Valid {
 		executionStatusValue = ai.ExecutionStatus.String
 	} else {
@@ -163,7 +163,7 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	} else {
 		prospectNameValue = "Sis" // Default value
 	}
-	
+
 	// Handle Stage as sql.NullString - MUST be NULL not empty string
 	var stageValue interface{}
 	if ai.Stage.Valid && ai.Stage.String != "" {
@@ -171,7 +171,7 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	} else {
 		stageValue = nil
 	}
-	
+
 	// Handle Intro properly - should be NULL if empty, not empty string
 	var introValue interface{}
 	if ai.Intro.Valid && ai.Intro.String != "" {
@@ -179,7 +179,7 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	} else {
 		introValue = nil
 	}
-	
+
 	// Handle other nullable fields - MUST be NULL not empty string
 	var balasValue interface{}
 	if ai.Balas.Valid && ai.Balas.String != "" {
@@ -187,14 +187,14 @@ func (r *aiWhatsappRepository) CreateAIWhatsapp(ai *models.AIWhatsapp) error {
 	} else {
 		balasValue = nil
 	}
-	
+
 	var keywordIklanValue interface{}
 	if ai.KeywordIklan.Valid && ai.KeywordIklan.String != "" {
 		keywordIklanValue = ai.KeywordIklan.String
 	} else {
 		keywordIklanValue = nil
 	}
-	
+
 	var marketerValue interface{}
 	if ai.Marketer.Valid && ai.Marketer.String != "" {
 		marketerValue = ai.Marketer.String
@@ -388,29 +388,29 @@ func (r *aiWhatsappRepository) UpdateProspectName(prospectNum, idDevice, prospec
 	} else {
 		nameValue = prospectName
 	}
-	
+
 	query := `UPDATE ai_whatsapp_nodepath SET prospect_name = ?, updated_at = ? WHERE prospect_num = ? AND id_device = ?`
 	now := time.Now()
-	
+
 	result, err := r.db.Exec(query, nameValue, now, prospectNum, idDevice)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
-			"prospect_num": prospectNum,
-			"id_device": idDevice,
+			"prospect_num":  prospectNum,
+			"id_device":     idDevice,
 			"prospect_name": prospectName,
 		}).Error("Failed to update prospect_name")
 		return fmt.Errorf("failed to update prospect_name: %w", err)
 	}
-	
+
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected > 0 {
 		logrus.WithFields(logrus.Fields{
-			"prospect_num": prospectNum,
-			"id_device": idDevice,
+			"prospect_num":  prospectNum,
+			"id_device":     idDevice,
 			"prospect_name": prospectName,
 		}).Info("Prospect name updated successfully")
 	}
-	
+
 	return nil
 }
 
@@ -522,10 +522,10 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"total_records": total,
+		"total_records":    total,
 		"returned_records": len(conversations),
-		"limit": limit,
-		"offset": offset,
+		"limit":            limit,
+		"offset":           offset,
 	}).Info("Successfully retrieved AI WhatsApp data")
 
 	return conversations, total, nil
@@ -535,11 +535,11 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID int) (map[string]interface{}, error) {
 	logrus.WithFields(logrus.Fields{
 		"startDate": startDate.Format("2006-01-02"),
-		"endDate": endDate.Format("2006-01-02"),
-		"idDevice": idDevice,
-		"userID": userID,
+		"endDate":   endDate.Format("2006-01-02"),
+		"idDevice":  idDevice,
+		"userID":    userID,
 	}).Info("GetAnalyticsData called")
-	
+
 	// First, let's get the user's devices
 	var userDevices []string
 	deviceQuery := `SELECT id_device FROM device_setting_nodepath WHERE user_id = ?`
@@ -553,11 +553,11 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			}
 		}
 		logrus.WithFields(logrus.Fields{
-			"userID": userID,
+			"userID":  userID,
 			"devices": userDevices,
 		}).Info("User devices found")
 	}
-	
+
 	// If no devices found for user, return empty data
 	if len(userDevices) == 0 {
 		logrus.WithField("userID", userID).Warn("No devices found for user")
@@ -580,7 +580,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			},
 		}, nil
 	}
-	
+
 	// Build query with IN clause for user's devices
 	placeholders := make([]string, len(userDevices))
 	args := []interface{}{}
@@ -589,7 +589,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		args = append(args, device)
 	}
 	args = append(args, startDate, endDate)
-	
+
 	// Base query using IN clause instead of JOIN
 	baseQuery := fmt.Sprintf(`
 		SELECT 
@@ -612,7 +612,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 
 	// Execute main analytics query
 	logrus.WithField("query", baseQuery).WithField("args", args).Info("Executing analytics query")
-	
+
 	var totalConversations, aiActive, humanTakeover, uniqueDevices, uniqueNiches, conversationsWithStage int
 	err = r.db.QueryRow(baseQuery, args...).Scan(
 		&totalConversations, &aiActive, &humanTakeover, &uniqueDevices, &uniqueNiches, &conversationsWithStage,
@@ -639,13 +639,13 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			},
 		}, nil
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
-		"totalConversations": totalConversations,
-		"aiActive": aiActive,
-		"humanTakeover": humanTakeover,
-		"uniqueDevices": uniqueDevices,
-		"uniqueNiches": uniqueNiches,
+		"totalConversations":     totalConversations,
+		"aiActive":               aiActive,
+		"humanTakeover":          humanTakeover,
+		"uniqueDevices":          uniqueDevices,
+		"uniqueNiches":           uniqueNiches,
 		"conversationsWithStage": conversationsWithStage,
 	}).Info("Analytics query results")
 
@@ -666,7 +666,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		dailyArgs = append(dailyArgs, device)
 	}
 	dailyArgs = append(dailyArgs, startDate, endDate)
-	
+
 	if idDevice != "" && idDevice != "all" {
 		dailyQuery += " AND id_device = ?"
 		dailyArgs = append(dailyArgs, idDevice)
@@ -681,7 +681,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		dailyData = []map[string]interface{}{}
 	} else {
 		defer dailyRows.Close()
-		
+
 		for dailyRows.Next() {
 			var date string
 			var conversations, aiConversations, humanConversations int
@@ -718,7 +718,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		stageArgs = append(stageArgs, device)
 	}
 	stageArgs = append(stageArgs, startDate, endDate)
-	
+
 	if idDevice != "" && idDevice != "all" {
 		stageQuery += " AND id_device = ?"
 		stageArgs = append(stageArgs, idDevice)
@@ -733,7 +733,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		stageDistribution = []map[string]interface{}{}
 	} else {
 		defer stageRows.Close()
-		
+
 		for stageRows.Next() {
 			var stage string
 			var count int
@@ -903,7 +903,7 @@ func (r *aiWhatsappRepository) GetConversationHistory(prospectNum string, limit 
 	for rows.Next() {
 		log := models.ConversationLog{}
 		err := rows.Scan(
-			&log.ID, &log.ProspectNum, &log.Message, 
+			&log.ID, &log.ProspectNum, &log.Message,
 			&log.Sender, &log.Stage, &log.CreatedAt,
 		)
 
@@ -938,7 +938,7 @@ func (r *aiWhatsappRepository) GetConversationLogsByStage(stage string) ([]model
 	for rows.Next() {
 		log := models.ConversationLog{}
 		err := rows.Scan(
-			&log.ID, &log.ProspectNum, &log.IDDevice, &log.Message, 
+			&log.ID, &log.ProspectNum, &log.IDDevice, &log.Message,
 			&log.Sender, &log.Stage, &log.CreatedAt,
 		)
 
@@ -988,25 +988,25 @@ func (r *aiWhatsappRepository) UpdateAIWhatsapp(ai *models.AIWhatsapp) error {
 	// Handle flow tracking fields as sql.NullString and sql.NullInt32
 	var currentNodeIDValue, flowIDValue, lastNodeIDValue interface{}
 	var waitingForReplyValue interface{}
-	
+
 	if ai.CurrentNodeID.Valid {
 		currentNodeIDValue = ai.CurrentNodeID.String
 	} else {
 		currentNodeIDValue = nil
 	}
-	
+
 	if ai.FlowID.Valid {
 		flowIDValue = ai.FlowID.String
 	} else {
 		flowIDValue = nil
 	}
-	
+
 	if ai.LastNodeID.Valid {
 		lastNodeIDValue = ai.LastNodeID.String
 	} else {
 		lastNodeIDValue = nil
 	}
-	
+
 	if ai.WaitingForReply.Valid {
 		waitingForReplyValue = ai.WaitingForReply.Int32
 	} else {
@@ -1044,33 +1044,33 @@ func (r *aiWhatsappRepository) UpdateFlowTrackingFields(prospectNum, idDevice st
 	var currentNodeIDValue, flowIDValue, lastNodeIDValue interface{}
 	var waitingForReplyValue interface{}
 	var executionStatusValue, executionIDValue interface{}
-	
+
 	if currentNodeID != "" {
 		currentNodeIDValue = currentNodeID
 	} else {
 		currentNodeIDValue = nil
 	}
-	
+
 	if flowID != "" {
 		flowIDValue = flowID
 	} else {
 		flowIDValue = nil
 	}
-	
+
 	if lastNodeID != "" {
 		lastNodeIDValue = lastNodeID
 	} else {
 		lastNodeIDValue = nil
 	}
-	
+
 	waitingForReplyValue = waitingForReply
-	
+
 	if executionStatus != "" {
 		executionStatusValue = executionStatus
 	} else {
 		executionStatusValue = nil
 	}
-	
+
 	if executionID != "" {
 		executionIDValue = executionID
 	} else {
@@ -1079,13 +1079,13 @@ func (r *aiWhatsappRepository) UpdateFlowTrackingFields(prospectNum, idDevice st
 
 	// Debug logging before update
 	logrus.WithFields(logrus.Fields{
-		"prospect_num": prospectNum,
-		"id_device": idDevice,
-		"flow_id_input": flowID,
-		"flow_id_value": flowIDValue,
-		"current_node_id": currentNodeID,
+		"prospect_num":     prospectNum,
+		"id_device":        idDevice,
+		"flow_id_input":    flowID,
+		"flow_id_value":    flowIDValue,
+		"current_node_id":  currentNodeID,
 		"execution_status": executionStatus,
-		"execution_id": executionID,
+		"execution_id":     executionID,
 	}).Info("DEBUG: About to update flow tracking fields")
 
 	result, err := r.db.Exec(query,
@@ -1106,11 +1106,11 @@ func (r *aiWhatsappRepository) UpdateFlowTrackingFields(prospectNum, idDevice st
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"prospect_num": prospectNum,
-		"id_device": idDevice,
-		"flow_id": flowID,
+		"prospect_num":    prospectNum,
+		"id_device":       idDevice,
+		"flow_id":         flowID,
 		"current_node_id": currentNodeID,
-		"rows_affected": rowsAffected,
+		"rows_affected":   rowsAffected,
 	}).Info("Flow tracking fields updated successfully")
 	return nil
 }
@@ -1141,24 +1141,24 @@ func (r *aiWhatsappRepository) UpdateWaitingStatus(executionID string, waitingVa
 
 	query := `UPDATE ai_whatsapp_nodepath SET waiting_for_reply = ?, updated_at = ? WHERE execution_id = ?`
 	now := time.Now()
-	
+
 	result, err := r.db.Exec(query, waitingValue, now, executionID)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
-			"execution_id": executionID,
+			"execution_id":  executionID,
 			"waiting_value": waitingValue,
 		}).Error("Failed to update waiting_for_reply status")
 		return fmt.Errorf("failed to update waiting_for_reply status: %w", err)
 	}
-	
+
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected > 0 {
 		logrus.WithFields(logrus.Fields{
-			"execution_id": executionID,
+			"execution_id":  executionID,
 			"waiting_value": waitingValue,
 		}).Info("Waiting status updated successfully")
 	}
-	
+
 	return nil
 }
 
@@ -1178,7 +1178,7 @@ func (r *aiWhatsappRepository) UpdateHumanTakeover(prospectNum string, human int
 
 	logrus.WithFields(logrus.Fields{
 		"prospect_num": prospectNum,
-		"human":       human,
+		"human":        human,
 	}).Info("Human takeover status updated")
 	return nil
 }
@@ -1213,7 +1213,7 @@ func (r *aiWhatsappRepository) UpdateConvCurrent(prospectNum string, convCurrent
 func (r *aiWhatsappRepository) UpdateConvLast(prospectNum string, convLast interface{}) error {
 	// Determine conv_last value - use NULL if empty, otherwise marshal to JSON
 	var convLastValue interface{}
-	
+
 	// Check if convLast is empty or nil
 	if convLast == nil {
 		convLastValue = nil // This will be stored as NULL in the database
@@ -1277,7 +1277,7 @@ func (r *aiWhatsappRepository) UpdateConvLast(prospectNum string, convLast inter
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"prospect_num": prospectNum,
+		"prospect_num":      prospectNum,
 		"conv_last_is_null": convLastValue == nil,
 	}).Info("Conv_last updated successfully")
 
@@ -1352,7 +1352,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 	} else {
 		stageValue = nil // ALWAYS NULL for empty stage - no exceptions
 	}
-	
+
 	return utils.WithTransaction(r.db, func(tx *sql.Tx) error {
 		// Check if record exists within transaction
 		var existingID *int
@@ -1439,10 +1439,10 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 				return fmt.Errorf("failed to update conversation history: %w", err)
 			}
 			logrus.WithFields(logrus.Fields{
-				"prospect_num": prospectNum,
-				"id_device": idDevice,
+				"prospect_num":    prospectNum,
+				"id_device":       idDevice,
 				"updating_fields": "conv_last, stage, updated_at ONLY",
-				"NOT_updating": "prospect_name, human, prospect_num",
+				"NOT_updating":    "prospect_name, human, prospect_num",
 			}).Info("Conversation history updated successfully")
 		} else {
 			// Create new record within transaction
@@ -1451,14 +1451,14 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 			if prospectName == "" {
 				prospectName = "Sis"
 			}
-			
+
 			logrus.WithFields(logrus.Fields{
-				"prospect_num": prospectNum,
-				"id_device": idDevice,
+				"prospect_num":  prospectNum,
+				"id_device":     idDevice,
 				"prospect_name": prospectName,
-				"creating_new": true,
+				"creating_new":  true,
 			}).Info("Creating new conversation record with initial prospect data")
-			
+
 			insertQuery := `
 				INSERT INTO ai_whatsapp_nodepath (
 					id_device, prospect_num, stage, conv_last, prospect_name, human, 
@@ -1471,7 +1471,7 @@ func (r *aiWhatsappRepository) SaveConversationHistory(prospectNum, idDevice, us
 			}
 			logrus.WithFields(logrus.Fields{
 				"prospect_num": prospectNum,
-				"id_device": idDevice,
+				"id_device":    idDevice,
 			}).Info("New conversation record created successfully")
 		}
 
@@ -1617,6 +1617,7 @@ func (r *aiWhatsappRepository) GetConversationsByDateRange(startDate, endDate ti
 
 	return conversations, nil
 }
+
 // UpdateHumanStatus updates the human status for a specific conversation by ID
 func (r *aiWhatsappRepository) UpdateHumanStatus(idProspect string, human int) error {
 	query := `
@@ -1624,20 +1625,20 @@ func (r *aiWhatsappRepository) UpdateHumanStatus(idProspect string, human int) e
 		SET human = ?, updated_at = NOW() 
 		WHERE id_prospect = ?
 	`
-	
+
 	_, err := r.db.Exec(query, human, idProspect)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"id_prospect": idProspect,
-			"human": human,
+			"human":       human,
 		}).Error("Failed to update human status")
 		return fmt.Errorf("failed to update human status: %w", err)
 	}
-	
+
 	logrus.WithFields(logrus.Fields{
 		"id_prospect": idProspect,
-		"human": human,
+		"human":       human,
 	}).Info("Successfully updated human status")
-	
+
 	return nil
 }

@@ -15,20 +15,20 @@ type WebSocketService struct {
 	// Connection management
 	connections map[string]*ConnectionInfo
 	connMutex   sync.RWMutex
-	
+
 	// Message broadcasting
 	broadcast chan *BroadcastMessage
-	
+
 	// Connection limits for performance
 	maxConnections int
 	currentConns   int
 	connCountMutex sync.RWMutex
-	
+
 	// Graceful shutdown support
 	ctx    context.Context
 	cancel context.CancelFunc
 	done   chan struct{}
-	
+
 	// Connection cleanup
 	cleanupTicker *time.Ticker
 }
@@ -61,7 +61,7 @@ type WebSocketMessage struct {
 // NewWebSocketService creates a new WebSocket service optimized for high concurrency
 func NewWebSocketService(maxConnections int) *WebSocketService {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	ws := &WebSocketService{
 		connections:    make(map[string]*ConnectionInfo),
 		broadcast:      make(chan *BroadcastMessage, 1000), // Buffered channel for performance
@@ -71,13 +71,13 @@ func NewWebSocketService(maxConnections int) *WebSocketService {
 		done:           make(chan struct{}),
 		cleanupTicker:  time.NewTicker(30 * time.Second), // Cleanup every 30 seconds
 	}
-	
+
 	// Start the broadcast handler
 	go ws.handleBroadcasts()
-	
+
 	// Start connection cleanup routine
 	go ws.cleanupStaleConnections()
-	
+
 	return ws
 }
 
@@ -87,14 +87,14 @@ func (ws *WebSocketService) HandleWebSocket(c *fiber.Ctx) error {
 	ws.connCountMutex.RLock()
 	currentConns := ws.currentConns
 	ws.connCountMutex.RUnlock()
-	
+
 	if currentConns >= ws.maxConnections {
 		logrus.Warn("WebSocket connection limit reached")
 		return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 			"error": "Too many connections",
 		})
 	}
-	
+
 	return websocket.New(func(conn *websocket.Conn) {
 		deviceID := c.Query("device_id")
 		if deviceID == "" {
@@ -102,13 +102,13 @@ func (ws *WebSocketService) HandleWebSocket(c *fiber.Ctx) error {
 			conn.Close()
 			return
 		}
-		
+
 		// Register connection
 		ws.registerConnection(deviceID, conn)
 		defer ws.unregisterConnection(deviceID)
-		
+
 		logrus.WithField("device_id", deviceID).Info("WebSocket connection established")
-		
+
 		// Handle incoming messages
 		for {
 			var msg WebSocketMessage
@@ -117,10 +117,10 @@ func (ws *WebSocketService) HandleWebSocket(c *fiber.Ctx) error {
 				logrus.WithError(err).Debug("WebSocket read error")
 				break
 			}
-			
+
 			msg.DeviceID = deviceID
 			msg.Timestamp = time.Now()
-			
+
 			// Process the message
 			ws.handleIncomingMessage(&msg)
 		}
@@ -131,7 +131,7 @@ func (ws *WebSocketService) HandleWebSocket(c *fiber.Ctx) error {
 func (ws *WebSocketService) registerConnection(deviceID string, conn *websocket.Conn) {
 	ws.connMutex.Lock()
 	defer ws.connMutex.Unlock()
-	
+
 	// Close existing connection if any
 	if existingConnInfo, exists := ws.connections[deviceID]; exists {
 		existingConnInfo.Conn.Close()
@@ -139,10 +139,10 @@ func (ws *WebSocketService) registerConnection(deviceID string, conn *websocket.
 			existingConnInfo.cancel()
 		}
 	}
-	
+
 	// Create connection context for graceful shutdown
 	connCtx, connCancel := context.WithCancel(ws.ctx)
-	
+
 	// Create connection info with metadata
 	connInfo := &ConnectionInfo{
 		Conn:      conn,
@@ -151,14 +151,14 @@ func (ws *WebSocketService) registerConnection(deviceID string, conn *websocket.
 		CreatedAt: time.Now(),
 		cancel:    connCancel,
 	}
-	
+
 	ws.connections[deviceID] = connInfo
-	
+
 	// Update connection count
 	ws.connCountMutex.Lock()
 	ws.currentConns++
 	ws.connCountMutex.Unlock()
-	
+
 	// Set up ping/pong handlers for this connection
 	conn.SetPongHandler(func(string) error {
 		ws.connMutex.Lock()
@@ -168,7 +168,7 @@ func (ws *WebSocketService) registerConnection(deviceID string, conn *websocket.
 		ws.connMutex.Unlock()
 		return nil
 	})
-	
+
 	// Start ping routine for this connection
 	go ws.pingConnection(deviceID, connCtx)
 }
@@ -177,25 +177,25 @@ func (ws *WebSocketService) registerConnection(deviceID string, conn *websocket.
 func (ws *WebSocketService) unregisterConnection(deviceID string) {
 	ws.connMutex.Lock()
 	defer ws.connMutex.Unlock()
-	
+
 	if connInfo, exists := ws.connections[deviceID]; exists {
 		// Cancel the connection context
 		if connInfo.cancel != nil {
 			connInfo.cancel()
 		}
-		
+
 		// Close the connection gracefully
 		connInfo.Conn.Close()
-		
+
 		delete(ws.connections, deviceID)
-		
+
 		// Update connection count
 		ws.connCountMutex.Lock()
 		if ws.currentConns > 0 {
 			ws.currentConns--
 		}
 		ws.connCountMutex.Unlock()
-		
+
 		logrus.WithField("device_id", deviceID).Info("WebSocket connection closed")
 	}
 }
@@ -233,7 +233,7 @@ func (ws *WebSocketService) BroadcastMessageBytes(deviceID string, message []byt
 func (ws *WebSocketService) handleBroadcasts() {
 	for msg := range ws.broadcast {
 		ws.connMutex.RLock()
-		
+
 		if len(msg.Targets) > 0 {
 			// Send to specific targets
 			for _, deviceID := range msg.Targets {
@@ -247,7 +247,7 @@ func (ws *WebSocketService) handleBroadcasts() {
 				ws.sendToConnection(connInfo, msg, deviceID)
 			}
 		}
-		
+
 		ws.connMutex.RUnlock()
 	}
 }
@@ -256,7 +256,7 @@ func (ws *WebSocketService) handleBroadcasts() {
 func (ws *WebSocketService) sendToConnection(connInfo *ConnectionInfo, msg *BroadcastMessage, deviceID string) {
 	// Set write deadline for performance
 	connInfo.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	
+
 	err := connInfo.Conn.WriteJSON(msg)
 	if err != nil {
 		logrus.WithError(err).WithField("device_id", deviceID).Error("Failed to send WebSocket message")
@@ -303,7 +303,7 @@ func (ws *WebSocketService) handleIncomingMessage(msg *WebSocketMessage) {
 		"device_id": msg.DeviceID,
 		"type":      msg.Type,
 	}).Debug("Received WebSocket message")
-	
+
 	// Handle different message types
 	switch msg.Type {
 	case "ping":
@@ -314,15 +314,15 @@ func (ws *WebSocketService) handleIncomingMessage(msg *WebSocketMessage) {
 			Data:     map[string]interface{}{"timestamp": time.Now()},
 			Targets:  []string{msg.DeviceID},
 		})
-		
+
 	case "status_update":
 		// Handle status updates
 		logrus.WithField("device_id", msg.DeviceID).Info("Device status updated")
-		
+
 	case "typing":
 		// Handle typing indicators
 		// Could broadcast to other relevant connections
-		
+
 	default:
 		logrus.WithField("type", msg.Type).Warn("Unknown WebSocket message type")
 	}
@@ -447,10 +447,10 @@ func (ws *WebSocketService) GetStats() map[string]interface{} {
 	ws.connCountMutex.RLock()
 	currentConns := ws.currentConns
 	ws.connCountMutex.RUnlock()
-	
+
 	return map[string]interface{}{
-		"current_connections": currentConns,
-		"max_connections":     ws.maxConnections,
+		"current_connections":  currentConns,
+		"max_connections":      ws.maxConnections,
 		"broadcast_queue_size": len(ws.broadcast),
 		"broadcast_queue_cap":  cap(ws.broadcast),
 	}

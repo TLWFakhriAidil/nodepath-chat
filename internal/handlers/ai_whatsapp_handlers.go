@@ -471,119 +471,86 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 		logrus.WithField("final_phone", finalPhone).Info("✅ WAHA: Phone re-extracted successfully")
 	}
 
-	// Handle isFromMe messages using user-specified logic
-	if extractedData.IsFromMe {
-		cleanText := strings.TrimSpace(extractedData.Message)
-
+	// WAHA Command Processing (matching PHP logic exactly)
+	cleanText := strings.TrimSpace(extractedData.Message)
+	
+	// Command 1: Text starts with '0' → extract phone, set text to "Teruskan"
+	if len(cleanText) > 0 && cleanText[0] == '0' {
+		extractedPhone := cleanText[1:]
 		logrus.WithFields(logrus.Fields{
-			"sender_phone": extractedData.SenderPhone,
-			"message":      truncateString(cleanText, 50),
-			"device_id":    deviceID,
-		}).Info("🔧 WAHA: Processing isFromMe message with user-specified logic")
-
-		// Check if message starts with '%' (percent command)
-		if len(cleanText) > 0 && cleanText[0] == '%' {
-			logrus.WithFields(logrus.Fields{
-				"device_id":    deviceID,
-				"sender_phone": extractedData.SenderPhone,
-			}).Info("🔧 WAHA: Processing % command - setting wa_nama='Sis', wa_text='Teruskan', checkPercent=1")
-
-			// Update extracted data for % command
-			extractedData.SenderName = "Sis"
-			extractedData.Message = "Teruskan"
-			checkPercent := 1
-
-			// Process through standardized flow with modified data
-			webhookData := map[string]interface{}{
-				"from":          extractedData.SenderPhone,
-				"message":       extractedData.Message,
-				"message_type":  "text",
-				"is_group":      extractedData.IsGroup,
-				"sender_name":   extractedData.SenderName,
-				"is_from_me":    extractedData.IsFromMe,
-				"check_percent": checkPercent,
+			"device_id":      deviceID,
+			"original_phone": extractedData.SenderPhone,
+			"extracted_phone": extractedPhone,
+		}).Info("🔧 WAHA: Processing 0 command - extract phone and set text to 'Teruskan'")
+		
+		extractedData.SenderPhone = extractedPhone
+		extractedData.Message = "Teruskan"
+		extractedData.SenderName = "Sis"
+		
+		// Process through standardized flow
+		webhookData := map[string]interface{}{
+			"from":         extractedData.SenderPhone,
+			"message":      extractedData.Message,
+			"message_type": "text",
+			"is_group":     extractedData.IsGroup,
+			"sender_name":  extractedData.SenderName,
+		}
+		
+		go func() {
+			if h.mainHandlers != nil {
+				h.mainHandlers.processWebhookMessage(webhookData, deviceID, "waha")
 			}
-
-			go func() {
-				if h.mainHandlers != nil {
-					err := h.mainHandlers.processWebhookMessage(webhookData, deviceID, "waha")
-					if err != nil {
-						logrus.WithError(err).WithFields(logrus.Fields{
-							"device_id":    deviceID,
-							"sender_phone": extractedData.SenderPhone,
-						}).Error("❌ WAHA: Failed to process % command")
-					} else {
-						logrus.WithFields(logrus.Fields{
-							"device_id":    deviceID,
-							"sender_phone": extractedData.SenderPhone,
-						}).Info("✅ WAHA: Successfully processed % command")
-					}
-				} else {
-					h.processIncomingMessage(extractedData.SenderPhone, extractedData.Message, deviceID, "waha", extractedData.SenderName)
-				}
-			}()
-
-			return c.JSON(fiber.Map{
-				"status":         "success",
-				"type":           "percent_command",
-				"extracted_data": extractedData,
-				"check_percent":  checkPercent,
-			})
-		}
-
-		// Check if message equals 'cmd' (human takeover command)
-		if cleanText == "cmd" {
-			logrus.WithFields(logrus.Fields{
-				"device_id":    deviceID,
-				"sender_phone": extractedData.SenderPhone,
-			}).Info("🔧 WAHA: Processing cmd command - setting human=1")
-
-			// Find AIWhatsapp record and set human = 1
-			go func() {
-				whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedData.SenderPhone, deviceID)
-				if err != nil {
-					logrus.WithError(err).WithFields(logrus.Fields{
-						"device_id":    deviceID,
-						"prospect_num": extractedData.SenderPhone,
-					}).Error("❌ WAHA: Failed to find AIWhatsapp record for cmd command")
-					return
-				}
-
-				if whats != nil {
-					whats.Human = 1
-					err = h.AIRepo.UpdateAIWhatsapp(whats)
-					if err != nil {
-						logrus.WithError(err).WithFields(logrus.Fields{
-							"device_id":    deviceID,
-							"prospect_num": extractedData.SenderPhone,
-						}).Error("❌ WAHA: Failed to update human=1 for cmd command")
-					} else {
-						logrus.WithFields(logrus.Fields{
-							"device_id":    deviceID,
-							"prospect_num": extractedData.SenderPhone,
-						}).Info("✅ WAHA: Successfully set human=1 for cmd command")
-					}
-				}
-			}()
-
-			return c.JSON(fiber.Map{
-				"status":  "success",
-				"type":    "cmd_command",
-				"message": "Human takeover activated",
-			})
-		}
-
-		// For any other isFromMe message, return empty (ignore)
-		logrus.WithFields(logrus.Fields{
-			"sender_phone": extractedData.SenderPhone,
-			"message":      truncateString(cleanText, 100),
-			"device_id":    deviceID,
-		}).Info("⏭️ WAHA: Ignoring other isFromMe message (not % or cmd)")
-
+		}()
+		
 		return c.JSON(fiber.Map{
-			"status":         "ignored",
-			"reason":         "isFromMe message (not % or cmd)",
-			"extracted_data": extractedData,
+			"status": "success",
+			"type":   "0_command",
+		})
+	}
+	
+	// Command 2: Text starts with '/' → extract phone, set human=1, return empty
+	if len(cleanText) > 0 && cleanText[0] == '/' {
+		extractedPhone := cleanText[1:]
+		logrus.WithFields(logrus.Fields{
+			"device_id":       deviceID,
+			"extracted_phone": extractedPhone,
+		}).Info("🔧 WAHA: Processing / command - set human=1")
+		
+		go func() {
+			whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedPhone, deviceID)
+			if err == nil && whats != nil {
+				whats.Human = 1
+				h.AIRepo.UpdateAIWhatsapp(whats)
+				logrus.Info("✅ WAHA: Successfully set human=1 for / command")
+			}
+		}()
+		
+		return c.JSON(fiber.Map{
+			"status": "success",
+			"type":   "slash_command",
+		})
+	}
+	
+	// Command 3: Text starts with '!' → extract phone, set human=null, return empty
+	if len(cleanText) > 0 && cleanText[0] == '!' {
+		extractedPhone := cleanText[1:]
+		logrus.WithFields(logrus.Fields{
+			"device_id":       deviceID,
+			"extracted_phone": extractedPhone,
+		}).Info("🔧 WAHA: Processing ! command - set human=null")
+		
+		go func() {
+			whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedPhone, deviceID)
+			if err == nil && whats != nil {
+				whats.Human = 0 // Set to 0 (null equivalent in Go)
+				h.AIRepo.UpdateAIWhatsapp(whats)
+				logrus.Info("✅ WAHA: Successfully set human=null for ! command")
+			}
+		}()
+		
+		return c.JSON(fiber.Map{
+			"status": "success",
+			"type":   "exclamation_command",
 		})
 	}
 

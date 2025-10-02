@@ -80,19 +80,19 @@ func main() {
 	} else {
 		logrus.Warn("Redis not available, services will run without caching")
 	}
-	
+
 	// Initialize repositories first (before services)
 	aiWhatsappRepo := repository.NewAIWhatsappRepository(db)
 	deviceSettingsRepo := repository.NewDeviceSettingsRepository(db)
 	wasapBotRepo := repository.NewWasapBotRepository(db)
 	logrus.Info("Repositories initialized successfully")
-	
+
 	flowService := services.NewFlowService(db, concreteRedisClient)
 	aiService := services.NewAIService(cfg, deviceSettingsRepo)
 	queueMonitor := services.NewQueueMonitor()
 	queueService := services.NewQueueService(redisClient, queueMonitor)
 	deviceSettingsService := services.NewDeviceSettingsService(db)
-	
+
 	// Initialize unified flow service for table routing
 	unifiedFlowService := services.NewUnifiedFlowService(flowService, aiWhatsappRepo, wasapBotRepo)
 	logrus.Info("Unified flow service initialized for table routing")

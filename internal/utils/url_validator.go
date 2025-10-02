@@ -38,7 +38,7 @@ func (v *URLValidator) ValidateMediaURL(url string) (bool, string, error) {
 
 	// Log validation attempt
 	logrus.WithFields(logrus.Fields{
-		"url": url,
+		"url":        url,
 		"url_length": len(url),
 	}).Info("🔍 URL_VALIDATOR: Validating media URL accessibility")
 
@@ -53,9 +53,9 @@ func (v *URLValidator) ValidateMediaURL(url string) (bool, string, error) {
 	// Check HTTP status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		logrus.WithFields(logrus.Fields{
-			"url": url,
+			"url":         url,
 			"status_code": resp.StatusCode,
-			"status": resp.Status,
+			"status":      resp.Status,
 		}).Warn("❌ URL_VALIDATOR: URL returned non-success status code")
 		return false, "", fmt.Errorf("URL returned status %d: %s", resp.StatusCode, resp.Status)
 	}
@@ -64,10 +64,10 @@ func (v *URLValidator) ValidateMediaURL(url string) (bool, string, error) {
 	mediaType := v.determineMediaType(url, resp.Header.Get("Content-Type"))
 
 	logrus.WithFields(logrus.Fields{
-		"url": url,
-		"status_code": resp.StatusCode,
+		"url":          url,
+		"status_code":  resp.StatusCode,
 		"content_type": resp.Header.Get("Content-Type"),
-		"media_type": mediaType,
+		"media_type":   mediaType,
 	}).Info("✅ URL_VALIDATOR: URL validation successful")
 
 	return true, mediaType, nil
@@ -91,25 +91,25 @@ func (v *URLValidator) determineMediaType(url, contentType string) string {
 
 	// Fallback to URL extension
 	url = strings.ToLower(url)
-	
+
 	// Image extensions
-	if strings.Contains(url, ".jpg") || strings.Contains(url, ".jpeg") || 
-	   strings.Contains(url, ".png") || strings.Contains(url, ".gif") || 
-	   strings.Contains(url, ".webp") || strings.Contains(url, ".bmp") {
+	if strings.Contains(url, ".jpg") || strings.Contains(url, ".jpeg") ||
+		strings.Contains(url, ".png") || strings.Contains(url, ".gif") ||
+		strings.Contains(url, ".webp") || strings.Contains(url, ".bmp") {
 		return "image"
 	}
 
 	// Video extensions
-	if strings.Contains(url, ".mp4") || strings.Contains(url, ".avi") || 
-	   strings.Contains(url, ".mov") || strings.Contains(url, ".wmv") || 
-	   strings.Contains(url, ".flv") || strings.Contains(url, ".webm") {
+	if strings.Contains(url, ".mp4") || strings.Contains(url, ".avi") ||
+		strings.Contains(url, ".mov") || strings.Contains(url, ".wmv") ||
+		strings.Contains(url, ".flv") || strings.Contains(url, ".webm") {
 		return "video"
 	}
 
 	// Audio extensions
-	if strings.Contains(url, ".mp3") || strings.Contains(url, ".wav") || 
-	   strings.Contains(url, ".ogg") || strings.Contains(url, ".m4a") || 
-	   strings.Contains(url, ".flac") || strings.Contains(url, ".aac") {
+	if strings.Contains(url, ".mp3") || strings.Contains(url, ".wav") ||
+		strings.Contains(url, ".ogg") || strings.Contains(url, ".m4a") ||
+		strings.Contains(url, ".flac") || strings.Contains(url, ".aac") {
 		return "audio"
 	}
 

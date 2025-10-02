@@ -26,22 +26,22 @@ import (
 type AICronService interface {
 	// Start the cron service
 	Start() error
-	
+
 	// Stop the cron service
 	Stop() error
-	
+
 	// Schedule follow-up message
 	ScheduleFollowUp(prospectNum string, delay time.Duration, message string) error
-	
+
 	// Process pending AI responses
 	ProcessPendingResponses() error
-	
+
 	// Clean up old conversation logs
 	CleanupOldLogs() error
-	
+
 	// Update conversation statistics
 	UpdateConversationStats() error
-	
+
 	// Check for inactive conversations
 	CheckInactiveConversations() error
 }
@@ -77,7 +77,7 @@ func NewAICronService(
 ) AICronService {
 	ctx, cancel := context.WithCancel(context.Background())
 	maxWorkers := 50 // Configurable worker pool size for 3000+ concurrent users
-	
+
 	return &aiCronService{
 		aiRepo:            aiRepo,
 		deviceRepo:        deviceRepo,
@@ -115,7 +115,7 @@ func (s *aiCronService) Start() error {
 	s.isRunning = true
 
 	logrus.WithFields(logrus.Fields{
-		"max_workers": s.maxWorkers,
+		"max_workers":        s.maxWorkers,
 		"monitoring_enabled": true,
 	}).Info("AI cron service started with performance monitoring")
 	return nil
@@ -269,7 +269,7 @@ func (s *aiCronService) ScheduleFollowUp(prospectNum string, delay time.Duration
 
 	// Schedule new follow-up job
 	scheduledTime := time.Now().Add(delay)
-	cronExpr := fmt.Sprintf("%d %d %d %d %d *", 
+	cronExpr := fmt.Sprintf("%d %d %d %d %d *",
 		scheduledTime.Second(),
 		scheduledTime.Minute(),
 		scheduledTime.Hour(),
@@ -412,7 +412,7 @@ func (s *aiCronService) ProcessPendingResponses() error {
 				errorCount++
 				s.queueMonitor.RecordError()
 				logrus.WithError(err).WithFields(logrus.Fields{
-					"prospect_num": conversation.ProspectNum,
+					"prospect_num":    conversation.ProspectNum,
 					"processing_time": processingTime,
 				}).Error("Failed to process conversation")
 			} else {
@@ -432,11 +432,11 @@ func (s *aiCronService) ProcessPendingResponses() error {
 
 	totalProcessingTime := time.Since(startTime)
 	logrus.WithFields(logrus.Fields{
-		"processed_count": processedCount,
-		"error_count": errorCount,
-		"total_conversations": len(conversations),
-		"total_processing_time": totalProcessingTime,
-		"worker_utilization": utilization,
+		"processed_count":           processedCount,
+		"error_count":               errorCount,
+		"total_conversations":       len(conversations),
+		"total_processing_time":     totalProcessingTime,
+		"worker_utilization":        utilization,
 		"avg_time_per_conversation": totalProcessingTime / time.Duration(len(conversations)),
 	}).Info("Completed processing pending AI responses")
 
@@ -587,10 +587,10 @@ func (s *aiCronService) sendTextMessage(to, message string, deviceSettings *mode
 func (s *aiCronService) sendChatMessage(to, reply, fileURL string, deviceSettings *models.DeviceSettings, provider string) error {
 	// Console log for tracing media URL in chat message
 	logrus.WithFields(logrus.Fields{
-		"to": to,
-		"file_url": fileURL,
-		"provider": provider,
-		"device_id": deviceSettings.IDDevice,
+		"to":              to,
+		"file_url":        fileURL,
+		"provider":        provider,
+		"device_id":       deviceSettings.IDDevice,
 		"file_url_length": len(fileURL),
 	}).Info("🔍 AI CRON: MEDIA URL RECEIVED FOR TRACING")
 
@@ -631,19 +631,37 @@ func (s *aiCronService) getFileType(fileURL string) string {
 
 	// Console log for tracing file type determination
 	logrus.WithFields(logrus.Fields{
-		"file_url": fileURL,
+		"file_url":        fileURL,
 		"determined_type": fileType,
 		"url_extensions_found": func() []string {
 			extensions := []string{}
-			if strings.Contains(fileURL, ".jpg") { extensions = append(extensions, ".jpg") }
-			if strings.Contains(fileURL, ".jpeg") { extensions = append(extensions, ".jpeg") }
-			if strings.Contains(fileURL, ".png") { extensions = append(extensions, ".png") }
-			if strings.Contains(fileURL, ".mp4") { extensions = append(extensions, ".mp4") }
-			if strings.Contains(fileURL, ".avi") { extensions = append(extensions, ".avi") }
-			if strings.Contains(fileURL, ".mp3") { extensions = append(extensions, ".mp3") }
-			if strings.Contains(fileURL, ".wav") { extensions = append(extensions, ".wav") }
-			if strings.Contains(fileURL, ".pdf") { extensions = append(extensions, ".pdf") }
-			if strings.Contains(fileURL, ".doc") { extensions = append(extensions, ".doc") }
+			if strings.Contains(fileURL, ".jpg") {
+				extensions = append(extensions, ".jpg")
+			}
+			if strings.Contains(fileURL, ".jpeg") {
+				extensions = append(extensions, ".jpeg")
+			}
+			if strings.Contains(fileURL, ".png") {
+				extensions = append(extensions, ".png")
+			}
+			if strings.Contains(fileURL, ".mp4") {
+				extensions = append(extensions, ".mp4")
+			}
+			if strings.Contains(fileURL, ".avi") {
+				extensions = append(extensions, ".avi")
+			}
+			if strings.Contains(fileURL, ".mp3") {
+				extensions = append(extensions, ".mp3")
+			}
+			if strings.Contains(fileURL, ".wav") {
+				extensions = append(extensions, ".wav")
+			}
+			if strings.Contains(fileURL, ".pdf") {
+				extensions = append(extensions, ".pdf")
+			}
+			if strings.Contains(fileURL, ".doc") {
+				extensions = append(extensions, ".doc")
+			}
 			return extensions
 		}(),
 	}).Info("🔍 AI CRON: FILE TYPE DETERMINED FOR TRACING")
@@ -654,8 +672,8 @@ func (s *aiCronService) getFileType(fileURL string) string {
 // sendWablasTextMessage sends text message via Wablas provider
 func (s *aiCronService) sendWablasTextMessage(to, message string, deviceSettings *models.DeviceSettings) error {
 	logrus.WithFields(logrus.Fields{
-		"to": to,
-		"provider": "wablas",
+		"to":        to,
+		"provider":  "wablas",
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending text message via Wablas")
 
@@ -673,8 +691,8 @@ func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSetti
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"to": to,
-		"provider": "whacenter",
+		"to":        to,
+		"provider":  "whacenter",
 		"device_id": deviceSettings.Instance.String, // ✅ Use instance
 	}).Debug("Sending text message via Whacenter")
 
@@ -684,9 +702,9 @@ func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSetti
 	// Prepare request payload - Use instance for device_id as per Whacenter API requirements
 	payload := map[string]interface{}{
 		"device_id": deviceSettings.Instance.String, // ✅ Use instance
-		"number": to,
-		"message": message,
-		"type": "text",
+		"number":    to,
+		"message":   message,
+		"type":      "text",
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -724,8 +742,8 @@ func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSetti
 
 	// Log response details
 	logFields := logrus.Fields{
-		"to": to,
-		"status_code": resp.StatusCode,
+		"to":            to,
+		"status_code":   resp.StatusCode,
 		"response_body": string(respBody),
 	}
 
@@ -740,8 +758,6 @@ func (s *aiCronService) sendWhacenterTextMessage(to, message string, deviceSetti
 	}
 }
 
-
-
 // sendWablasMultimediaMessage sends multimedia message via Wablas provider
 func (s *aiCronService) sendWablasMultimediaMessage(to, fileURL, fileType string, deviceSettings *models.DeviceSettings) error {
 	if !deviceSettings.Instance.Valid {
@@ -750,9 +766,9 @@ func (s *aiCronService) sendWablasMultimediaMessage(to, fileURL, fileType string
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"to": to,
+		"to":        to,
 		"file_type": fileType,
-		"provider": "wablas",
+		"provider":  "wablas",
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending multimedia message via Wablas")
 
@@ -774,9 +790,9 @@ func (s *aiCronService) sendWablasMultimediaMessage(to, fileURL, fileType string
 
 	// Prepare form data
 	data := url.Values{}
-	data.Set("phone", to)           // recipient number
-	data.Set(fieldName, fileURL)    // media file URL
-	data.Set("message", "")         // empty message field for media
+	data.Set("phone", to)        // recipient number
+	data.Set(fieldName, fileURL) // media file URL
+	data.Set("message", "")      // empty message field for media
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
@@ -807,9 +823,9 @@ func (s *aiCronService) sendWablasMultimediaMessage(to, fileURL, fileType string
 
 	// Log response details
 	logFields := logrus.Fields{
-		"to":          to,
-		"file_type":   fileType,
-		"status_code": resp.StatusCode,
+		"to":            to,
+		"file_type":     fileType,
+		"status_code":   resp.StatusCode,
 		"response_body": string(respBody),
 	}
 
@@ -832,9 +848,9 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, fileURL, fileType str
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"to": to,
+		"to":        to,
 		"file_type": fileType,
-		"provider": "whacenter",
+		"provider":  "whacenter",
 		"device_id": deviceSettings.Instance.String, // ✅ Use instance
 	}).Debug("Sending multimedia message via Whacenter")
 
@@ -854,10 +870,10 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, fileURL, fileType str
 	// Prepare form data exactly as specified by user PHP code
 	data := url.Values{}
 	data.Set("device_id", deviceSettings.Instance.String) // device_id from instance
-	data.Set("number", to)                               // recipient number
-	data.Set("file", fileURL)                           // media file URL
-	data.Set("message", "")                             // empty message field for media
-	
+	data.Set("number", to)                                // recipient number
+	data.Set("file", fileURL)                             // media file URL
+	data.Set("message", "")                               // empty message field for media
+
 	// Add type parameter for video and audio only (as per PHP code)
 	if mediaType != "" && mediaType != "image" {
 		data.Set("type", mediaType)
@@ -891,9 +907,9 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, fileURL, fileType str
 
 	// Log response details
 	logFields := logrus.Fields{
-		"to":          to,
-		"file_type":   fileType,
-		"status_code": resp.StatusCode,
+		"to":            to,
+		"file_type":     fileType,
+		"status_code":   resp.StatusCode,
 		"response_body": string(respBody),
 	}
 
@@ -912,8 +928,8 @@ func (s *aiCronService) sendWhacenterMultimediaMessage(to, fileURL, fileType str
 // Based on WAHA API specification: /api/sendText endpoint
 func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *models.DeviceSettings) error {
 	logrus.WithFields(logrus.Fields{
-		"to": to,
-		"provider": "waha",
+		"to":        to,
+		"provider":  "waha",
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending text message via WAHA")
 
@@ -950,7 +966,7 @@ func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *
 		apiBaseURL = "https://" + apiBaseURL
 	}
 	url := fmt.Sprintf("%s/api/sendText", strings.TrimSuffix(apiBaseURL, "/"))
-	
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
@@ -979,8 +995,8 @@ func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *
 
 	// Log response details
 	logFields := logrus.Fields{
-		"to":          to,
-		"status_code": resp.StatusCode,
+		"to":            to,
+		"status_code":   resp.StatusCode,
 		"response_body": string(respBody),
 	}
 
@@ -998,23 +1014,23 @@ func (s *aiCronService) sendWahaTextMessage(to, message string, deviceSettings *
 // sendWahaMultimediaMessage sends multimedia message via WAHA provider - EXACTLY matching PHP implementation
 func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, deviceSettings *models.DeviceSettings) error {
 	logrus.WithFields(logrus.Fields{
-		"to": to,
-		"file_url": fileURL,
-		"provider": "waha",
+		"to":        to,
+		"file_url":  fileURL,
+		"provider":  "waha",
 		"device_id": deviceSettings.IDDevice,
 	}).Debug("Sending multimedia message via WAHA")
 
 	// Fixed API key as per PHP code
 	apiKey := "dckr_pat_vxeqEu_CqRi5O3CBHnD7FxhnBz0"
-	
+
 	// Prepare variables matching PHP
 	session := deviceSettings.Instance.String
 	number := regexp.MustCompile(`[^0-9]`).ReplaceAllString(to, "")
 	chatId := number + "@c.us"
-	
+
 	var url string
 	var data map[string]interface{}
-	
+
 	// Check file type and prepare request - EXACTLY as PHP
 	if strings.Contains(fileURL, ".mp4") {
 		// Video file
@@ -1051,7 +1067,7 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, d
 		if ext != "" && ext[0] == '.' {
 			ext = ext[1:] // Remove leading dot
 		}
-		
+
 		// Mimetype map matching PHP
 		mimeMap := map[string]string{
 			"jpg":  "image/jpeg",
@@ -1062,7 +1078,7 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, d
 			"bmp":  "image/bmp",
 			"svg":  "image/svg+xml",
 		}
-		
+
 		// Step 1: Try to use extension
 		mimetype := ""
 		if ext != "" {
@@ -1070,7 +1086,7 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, d
 				mimetype = mime
 			}
 		}
-		
+
 		// Step 2: Try to detect from headers (simplified for Go)
 		if mimetype == "" {
 			// Try to get content type from URL
@@ -1085,12 +1101,12 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, d
 				}
 			}
 		}
-		
+
 		// Step 3: Fallback default
 		if mimetype == "" {
 			mimetype = "image/jpeg"
 		}
-		
+
 		url = "https://waha-plus-production-705f.up.railway.app/api/sendImage"
 		data = map[string]interface{}{
 			"session": session,
@@ -1103,25 +1119,25 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, d
 			"caption": caption,
 		}
 	}
-	
+
 	// Marshal the data
 	jsonPayload, err := json.Marshal(data)
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to marshal payload")
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
-	
+
 	// Create HTTP request
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to create request")
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers exactly as PHP
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Api-Key", apiKey)
-	
+
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -1130,14 +1146,14 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, d
 		return fmt.Errorf("failed to send multimedia message: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Read response
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logrus.WithError(err).Error("❌ WAHA: Failed to read response body")
 		return fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	// Log response
 	logFields := logrus.Fields{
 		"to":            to,
@@ -1146,7 +1162,7 @@ func (s *aiCronService) sendWahaMultimediaMessage(to, fileURL, caption string, d
 		"url":           url,
 		"file_url":      fileURL,
 	}
-	
+
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		logFields["status"] = "success"
 		logrus.WithFields(logFields).Info("📤 WAHA: Multimedia message sent successfully")

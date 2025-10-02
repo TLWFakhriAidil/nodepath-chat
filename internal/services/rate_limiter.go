@@ -17,11 +17,11 @@ type RateLimiterConfig struct {
 
 // TokenBucket implements a token bucket rate limiter
 type TokenBucket struct {
-	capacity     int           // Maximum tokens in bucket
-	tokens       int           // Current tokens available
-	refillRate   int           // Tokens added per minute
-	lastRefill   time.Time     // Last time bucket was refilled
-	mutex        sync.RWMutex  // Mutex for thread safety
+	capacity   int          // Maximum tokens in bucket
+	tokens     int          // Current tokens available
+	refillRate int          // Tokens added per minute
+	lastRefill time.Time    // Last time bucket was refilled
+	mutex      sync.RWMutex // Mutex for thread safety
 }
 
 // APIRateLimiter manages rate limiting for different API providers
@@ -30,16 +30,16 @@ type APIRateLimiter struct {
 	openRouterLimiter *TokenBucket
 	openAILimiter     *TokenBucket
 	// Global rate limiter for all APIs
-	globalLimiter     *TokenBucket
+	globalLimiter *TokenBucket
 	// Per-device rate limiters
-	deviceLimiters    map[string]*TokenBucket
-	deviceMutex       sync.RWMutex
+	deviceLimiters map[string]*TokenBucket
+	deviceMutex    sync.RWMutex
 	// Configuration
-	config            *RateLimiterConfig
+	config *RateLimiterConfig
 	// Metrics
-	totalRequests     int64
-	rejectedRequests  int64
-	metricsMutex      sync.RWMutex
+	totalRequests    int64
+	rejectedRequests int64
+	metricsMutex     sync.RWMutex
 }
 
 // NewTokenBucket creates a new token bucket with specified capacity and refill rate
@@ -58,11 +58,11 @@ func NewAPIRateLimiter(config *RateLimiterConfig) *APIRateLimiter {
 		// OpenRouter: More generous limits (60 RPM)
 		openRouterLimiter: NewTokenBucket(60, 60),
 		// OpenAI: More conservative limits (40 RPM)
-		openAILimiter:     NewTokenBucket(40, 40),
+		openAILimiter: NewTokenBucket(40, 40),
 		// Global limiter: Overall system protection (100 RPM)
-		globalLimiter:     NewTokenBucket(100, 100),
-		deviceLimiters:    make(map[string]*TokenBucket),
-		config:            config,
+		globalLimiter:  NewTokenBucket(100, 100),
+		deviceLimiters: make(map[string]*TokenBucket),
+		config:         config,
 	}
 }
 
@@ -152,13 +152,13 @@ func (rl *APIRateLimiter) CheckRateLimit(provider, deviceID string) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"provider":              provider,
-		"device_id":             deviceID,
-		"global_tokens":         rl.globalLimiter.GetAvailableTokens(),
-		"provider_tokens":       providerLimiter.GetAvailableTokens(),
-		"device_tokens":         deviceLimiter.GetAvailableTokens(),
-		"total_requests":        rl.totalRequests,
-		"rejected_requests":     rl.rejectedRequests,
+		"provider":          provider,
+		"device_id":         deviceID,
+		"global_tokens":     rl.globalLimiter.GetAvailableTokens(),
+		"provider_tokens":   providerLimiter.GetAvailableTokens(),
+		"device_tokens":     deviceLimiter.GetAvailableTokens(),
+		"total_requests":    rl.totalRequests,
+		"rejected_requests": rl.rejectedRequests,
 	}).Debug("Rate limit check passed")
 
 	return nil
@@ -208,13 +208,13 @@ func (rl *APIRateLimiter) GetMetrics() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_requests":        rl.totalRequests,
-		"rejected_requests":     rl.rejectedRequests,
-		"rejection_rate":        rejectionRate,
-		"global_tokens":         rl.globalLimiter.GetAvailableTokens(),
-		"openrouter_tokens":     rl.openRouterLimiter.GetAvailableTokens(),
-		"openai_tokens":         rl.openAILimiter.GetAvailableTokens(),
-		"active_devices":        len(rl.deviceLimiters),
+		"total_requests":    rl.totalRequests,
+		"rejected_requests": rl.rejectedRequests,
+		"rejection_rate":    rejectionRate,
+		"global_tokens":     rl.globalLimiter.GetAvailableTokens(),
+		"openrouter_tokens": rl.openRouterLimiter.GetAvailableTokens(),
+		"openai_tokens":     rl.openAILimiter.GetAvailableTokens(),
+		"active_devices":    len(rl.deviceLimiters),
 	}
 }
 
@@ -236,7 +236,7 @@ func (rl *APIRateLimiter) CleanupInactiveDevices() {
 
 	if cleanedCount > 0 {
 		logrus.WithFields(logrus.Fields{
-			"cleaned_devices": cleanedCount,
+			"cleaned_devices":   cleanedCount,
 			"remaining_devices": len(rl.deviceLimiters),
 		}).Info("Cleaned up inactive device rate limiters")
 	}

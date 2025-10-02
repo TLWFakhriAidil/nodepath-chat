@@ -359,7 +359,7 @@ func (h *HealthService) testAPIEndpoint(ctx context.Context, url, name string) b
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"api": name,
+			"api":   name,
 			"error": err.Error(),
 		}).Debug("Failed to create API health check request")
 		return false
@@ -368,7 +368,7 @@ func (h *HealthService) testAPIEndpoint(ctx context.Context, url, name string) b
 	resp, err := client.Do(req)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"api": name,
+			"api":   name,
 			"error": err.Error(),
 		}).Debug("API health check failed")
 		return false

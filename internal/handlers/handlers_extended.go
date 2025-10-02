@@ -213,13 +213,13 @@ func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
 	if !ok {
 		return h.errorResponse(c, 401, "Authentication required")
 	}
-	
+
 	// Analytics data filtered by user's devices
 	overview := map[string]interface{}{
-		"total_flows":      0,
+		"total_flows":       0,
 		"active_executions": 0,
-		"total_messages":   0,
-		"success_rate":     0.0,
+		"total_messages":    0,
+		"success_rate":      0.0,
 		"avg_response_time": 0.0,
 	}
 
@@ -244,14 +244,14 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	if !ok {
 		return h.errorResponse(c, 401, "Authentication required")
 	}
-	
+
 	// Verify that the flow belongs to user's devices
 	userFlows, err := h.flowService.GetFlowsByUserDevices(userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get user flows")
 		return h.errorResponse(c, 500, "Failed to verify flow ownership")
 	}
-	
+
 	// Check if the requested flow belongs to the user
 	flowExists := false
 	for _, flow := range userFlows {
@@ -260,11 +260,11 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 			break
 		}
 	}
-	
+
 	if !flowExists {
 		return h.errorResponse(c, 403, "Access denied: Flow not found or not owned by user")
 	}
-	
+
 	// Get executions for the flow using AI WhatsApp repository
 	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userID)
 	if err != nil {
@@ -274,10 +274,10 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 
 	// Calculate statistics
 	stats := map[string]interface{}{
-		"total_executions": len(executions),
-		"active_executions": 0,
+		"total_executions":     len(executions),
+		"active_executions":    0,
 		"completed_executions": 0,
-		"failed_executions": 0,
+		"failed_executions":    0,
 	}
 
 	for _, execution := range executions {
@@ -299,7 +299,7 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 // buildResponseFromParts constructs the final response string from AI response parts
 func (h *Handlers) buildResponseFromParts(parts []models.AIResponsePart) string {
 	var response strings.Builder
-	
+
 	for i, part := range parts {
 		switch part.Type {
 		case "text":
@@ -315,7 +315,7 @@ func (h *Handlers) buildResponseFromParts(parts []models.AIResponsePart) string 
 			response.WriteString(part.URL)
 		}
 	}
-	
+
 	return response.String()
 }
 

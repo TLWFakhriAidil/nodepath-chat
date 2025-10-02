@@ -125,7 +125,7 @@ func (h *HealthHandlers) HandleHealthMetrics(c *fiber.Ctx) error {
 
 	// Create metrics in a format suitable for monitoring systems
 	metrics := fiber.Map{
-		"system_health_status": health.Status,
+		"system_health_status":  health.Status,
 		"system_uptime_seconds": health.Uptime.Seconds(),
 		"system_version":        health.Version,
 		"timestamp":             health.Timestamp.Unix(),
