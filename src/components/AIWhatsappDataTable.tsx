@@ -88,7 +88,7 @@ interface AIWhatsappDataResponse {
  * AI WhatsApp Data Table component with device-based filtering
  * Automatically filters conversations by user's configured devices
  */
-const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) => {
+const AIWhatsappDataTable = ({ selectedDevice, selectedStage }: { selectedDevice?: string; selectedStage?: string }) => {
   const { has_devices, device_ids } = useDevice();
   const [conversations, setConversations] = useState<AIWhatsappConversation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -103,7 +103,6 @@ const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) =>
   
   // Filter state
   const [deviceFilter, setDeviceFilter] = useState(selectedDevice || 'all');
-  const [stageFilter, setStageFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Update deviceFilter when selectedDevice prop changes
@@ -111,9 +110,8 @@ const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) =>
     setDeviceFilter(selectedDevice || 'all');
   }, [selectedDevice]);
   
-  // Available devices and stages for filters (filtered by user's devices)
+  // Available devices for filters (filtered by user's devices)
   const [availableDevices, setAvailableDevices] = useState<string[]>([]);
-  const [availableStages, setAvailableStages] = useState<string[]>([]);
   
   // Dialog state for human/AI toggle
   const [showHumanDialog, setShowHumanDialog] = useState(false);
@@ -136,7 +134,7 @@ const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) =>
         page: currentPage.toString(),
         limit: pageSize.toString(),
         ...(deviceFilter && deviceFilter !== 'all' && { device_id: deviceFilter }),
-        ...(stageFilter && stageFilter !== 'all' && { stage: stageFilter }),
+        ...(selectedStage && { stage: selectedStage }),
         ...(searchTerm && { search: searchTerm })
       });
       
@@ -164,12 +162,10 @@ const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) =>
         setTotalPages(data.pagination?.total_pages || 1);
         setTotalRecords(data.pagination?.total_records || 0);
         
-        // Extract unique devices and stages from the data (already filtered by user's devices)
+        // Extract unique devices from the data (already filtered by user's devices)
         const devices = Array.from(new Set(data.data?.map(c => c.id_device).filter(Boolean) || []));
-        const stages = Array.from(new Set(data.data?.map(c => c.stage || 'Welcome Message').filter(Boolean) || []));
         
         setAvailableDevices(devices);
-        setAvailableStages(stages);
       } else {
         throw new Error('Failed to fetch data');
       }
@@ -189,7 +185,7 @@ const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) =>
     } else if (!has_devices) {
       setShowDeviceRequiredPopup(true);
     }
-  }, [currentPage, pageSize, deviceFilter, stageFilter, searchTerm, has_devices, device_ids]);
+  }, [currentPage, pageSize, deviceFilter, selectedStage, searchTerm, has_devices, device_ids]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -455,17 +451,6 @@ const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) =>
                 </SelectContent>
               </Select>
             )}
-            <Select value={stageFilter} onValueChange={setStageFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Stages" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Stages</SelectItem>
-                {availableStages.map(stage => (
-                  <SelectItem key={stage} value={stage}>{stage}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           {/* Data Table */}
