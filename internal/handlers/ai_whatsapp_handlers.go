@@ -248,6 +248,19 @@ func (h *AIWhatsappHandlers) HandleWablasWebhook(c *fiber.Ctx) error {
 		"message":   req.Message,
 	}).Info("Received Wablas webhook")
 
+	// Validate phone number length (matching PHP: if strlen($wa_no) > 13 return)
+	if len(req.Phone) > 13 {
+		logrus.WithFields(logrus.Fields{
+			"device_id":    deviceID,
+			"phone":        req.Phone,
+			"phone_length": len(req.Phone),
+		}).Warn("⚠️ WABLAS: Phone number length exceeds 13 characters - terminating")
+		return c.JSON(fiber.Map{
+			"status": "ignored",
+			"reason": "phone number length > 13",
+		})
+	}
+
 	// Process the message asynchronously
 	go h.processIncomingMessage(req.Phone, req.Message, deviceID, "wablas", req.Phone)
 
@@ -272,6 +285,19 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 		"number":    req.Number,
 		"text":      req.Text,
 	}).Info("Received Whacenter webhook")
+
+	// Validate phone number length (matching PHP: if strlen($wa_no) > 13 return)
+	if len(req.Number) > 13 {
+		logrus.WithFields(logrus.Fields{
+			"device_id":    deviceID,
+			"number":       req.Number,
+			"phone_length": len(req.Number),
+		}).Warn("⚠️ WHACENTER: Phone number length exceeds 13 characters - terminating")
+		return c.JSON(fiber.Map{
+			"status": "ignored",
+			"reason": "phone number length > 13",
+		})
+	}
 
 	// Process the message asynchronously
 	go h.processIncomingMessage(req.Number, req.Text, deviceID, "whacenter", req.Number)
@@ -358,18 +384,91 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 		}).Info("🔧 WAHA: Phone number cleaned - stripped @c.us suffix")
 	}
 
-	// Validate phone number length (matching PHP: if strlen($wa_no) > 13)
+	// SECOND PASS: Validate phone number length and re-extract if needed (matching PHP: if strlen($wa_no) > 13)
 	if len(extractedData.SenderPhone) > 13 {
 		logrus.WithFields(logrus.Fields{
 			"device_id":    deviceID,
 			"sender_phone": extractedData.SenderPhone,
 			"phone_length": len(extractedData.SenderPhone),
-		}).Warn("⚠️ WAHA: Phone number length exceeds 13 characters - skipping")
-		return c.JSON(fiber.Map{
-			"status": "ignored",
-			"reason": "phone number length > 13",
-			"phone":  extractedData.SenderPhone,
-		})
+			"raw_phone":    extractedData.RawPhone,
+		}).Warn("⚠️ WAHA: Phone number length exceeds 13 - attempting re-extraction from raw")
+
+		// Re-extract phone using suffix logic (matching PHP second pass)
+		idNoWaha := extractedData.RawPhone
+		var finalPhone string
+		
+		if strings.HasSuffix(idNoWaha, "@c.us") {
+			// Normal contact - extract number before @
+			finalPhone = strings.Split(idNoWaha, "@")[0]
+			logrus.WithField("from", finalPhone).Info("🔍 WAHA: Re-extracted from @c.us")
+		} else if strings.HasSuffix(idNoWaha, "@g.us") {
+			// Group - skip processing
+			logrus.Info("🔍 WAHA: Detected @g.us group - terminating")
+			return c.JSON(fiber.Map{
+				"status": "ignored",
+				"reason": "group message (@g.us)",
+			})
+		} else if strings.HasSuffix(idNoWaha, "@lid") {
+			// LID mapping - try SenderAlt or RecipientAlt
+			logrus.Info("🔍 WAHA: Detected @lid - attempting LID mapping")
+			
+			var payload map[string]interface{}
+			var rawPayload map[string]interface{}
+			json.Unmarshal(body, &rawPayload)
+			if payloadData, ok := rawPayload["payload"].(map[string]interface{}); ok {
+				payload = payloadData
+			} else {
+				payload = rawPayload
+			}
+			
+			if _dataObj, ok := payload["_data"].(map[string]interface{}); ok {
+				if infoObj, ok := _dataObj["Info"].(map[string]interface{}); ok {
+					senderAlt := strings.TrimSpace(getStringValue(infoObj["SenderAlt"]))
+					recipientAlt := strings.TrimSpace(getStringValue(infoObj["RecipientAlt"]))
+					
+					logrus.WithFields(logrus.Fields{
+						"senderAlt":    senderAlt,
+						"recipientAlt": recipientAlt,
+					}).Info("🔍 WAHA: LID mapping alternatives")
+
+					// Try both alternatives
+					for _, alt := range []string{senderAlt, recipientAlt} {
+						if alt == "" {
+							continue
+						}
+						if strings.HasSuffix(alt, "@c.us") {
+							finalPhone = strings.Split(alt, "@")[0]
+							logrus.WithField("from", finalPhone).Info("🔍 WAHA: LID mapped via @c.us")
+							break
+						} else if strings.HasSuffix(alt, "@s.whatsapp.net") {
+							finalPhone = strings.Split(alt, "@")[0]
+							logrus.WithField("from", finalPhone).Info("🔍 WAHA: LID mapped via @s.whatsapp.net")
+							break
+						}
+					}
+				}
+			}
+			
+			if finalPhone == "" {
+				logrus.Warn("🔍 WAHA: LID mapping failed - terminating")
+				return c.JSON(fiber.Map{
+					"status": "ignored",
+					"reason": "LID mapping failed",
+				})
+			}
+		} else {
+			// Unknown format - terminate
+			logrus.Warn("⚠️ WAHA: Unknown phone format after validation - terminating")
+			return c.JSON(fiber.Map{
+				"status": "ignored",
+				"reason": "unknown phone format",
+				"phone":  idNoWaha,
+			})
+		}
+
+		// Update extracted phone with the re-extracted value
+		extractedData.SenderPhone = finalPhone
+		logrus.WithField("final_phone", finalPhone).Info("✅ WAHA: Phone re-extracted successfully")
 	}
 
 	// Handle isFromMe messages using user-specified logic
@@ -563,6 +662,7 @@ func (h *AIWhatsappHandlers) extractWahaFields(payload map[string]interface{}) (
 // WahaWebhookData represents the standardized extracted data from WAHA webhook
 type WahaWebhookData struct {
 	SenderPhone string `json:"sender_phone"`
+	RawPhone    string `json:"raw_phone"` // Keep original for second pass
 	SenderName  string `json:"sender_name"`
 	Message     string `json:"message"`
 	IsFromMe    bool   `json:"is_from_me"`
@@ -612,6 +712,7 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 	}
 
 	// $wa_no_raw = $payload['from'] or $payload['_data']['from'] ?? null
+	// FIRST PASS: Extract RAW phone (with suffix intact)
 	var idNoWaha string
 	if fromVal, ok := dataPayload["from"].(string); ok {
 		idNoWaha = fromVal
@@ -621,57 +722,9 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 		logrus.WithField("extraction_method", "payload_from").Info("🔍 WAHA: Sender phone extracted from payload.from")
 	}
 
-	// Process phone number based on suffix (matching PHP logic)
-	if strings.HasSuffix(idNoWaha, "@c.us") {
-		// Normal contact - extract number before @
-		result.SenderPhone = strings.Split(idNoWaha, "@")[0]
-		logrus.WithField("from", result.SenderPhone).Info("🔍 WAHA: Extracted normal contact (@c.us)")
-	} else if strings.HasSuffix(idNoWaha, "@g.us") {
-		// Group - skip processing
-		result.SenderPhone = ""
-		result.IsGroup = true
-		logrus.Info("🔍 WAHA: Detected group (@g.us) - skipping")
-		return result
-	} else if strings.HasSuffix(idNoWaha, "@lid") {
-		// LID mapping - try SenderAlt or RecipientAlt
-		logrus.Info("🔍 WAHA: Detected @lid - attempting LID mapping")
-		if _dataObj, ok := payload["_data"].(map[string]interface{}); ok {
-			if infoObj, ok := _dataObj["Info"].(map[string]interface{}); ok {
-				senderAlt := strings.TrimSpace(getStringValue(infoObj["SenderAlt"]))
-				recipientAlt := strings.TrimSpace(getStringValue(infoObj["RecipientAlt"]))
-				
-				logrus.WithFields(logrus.Fields{
-					"senderAlt":    senderAlt,
-					"recipientAlt": recipientAlt,
-				}).Info("🔍 WAHA: LID mapping alternatives")
-
-				// Try both alternatives
-				for _, alt := range []string{senderAlt, recipientAlt} {
-					if alt == "" {
-						continue
-					}
-					if strings.HasSuffix(alt, "@c.us") {
-						result.SenderPhone = strings.Split(alt, "@")[0]
-						logrus.WithField("from", result.SenderPhone).Info("🔍 WAHA: LID mapped via @c.us")
-						break
-					} else if strings.HasSuffix(alt, "@s.whatsapp.net") {
-						result.SenderPhone = strings.Split(alt, "@")[0]
-						logrus.WithField("from", result.SenderPhone).Info("🔍 WAHA: LID mapped via @s.whatsapp.net")
-						break
-					}
-				}
-			}
-		}
-		// If no valid mapping found, phone will be empty
-		if result.SenderPhone == "" {
-			logrus.Warn("🔍 WAHA: LID mapping failed - no valid alternative found")
-			return result
-		}
-	} else {
-		// Unknown format - use as-is
-		result.SenderPhone = idNoWaha
-		logrus.WithField("from", result.SenderPhone).Info("🔍 WAHA: Using raw phone number (unknown format)")
-	}
+	// Store raw phone without processing (matching PHP: first get raw value)
+	result.SenderPhone = idNoWaha
+	result.RawPhone = idNoWaha // Keep original for second pass validation
 
 	// $wa_nama = $payload['_data']['Info']['PushName'] ?? 'Sis'
 	if _dataObj, ok := payload["_data"].(map[string]interface{}); ok {
