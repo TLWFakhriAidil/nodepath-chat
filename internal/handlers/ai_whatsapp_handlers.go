@@ -404,6 +404,29 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 			"type":   "slash_command",
 		})
 	}
+	
+	// Command 3: Text starts with '?' → extract phone, set human=null, return empty
+	if len(cleanText) > 0 && cleanText[0] == '?' {
+		extractedPhone := cleanText[1:]
+		logrus.WithFields(logrus.Fields{
+			"device_id":       deviceID,
+			"extracted_phone": extractedPhone,
+		}).Info("🔧 WHACENTER: Processing ? command - set human=null")
+		
+		go func() {
+			whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedPhone, deviceID)
+			if err == nil && whats != nil {
+				whats.Human = 0 // Set to 0 (null equivalent in Go)
+				h.AIRepo.UpdateAIWhatsapp(whats)
+				logrus.Info("✅ WHACENTER: Successfully set human=null for ? command")
+			}
+		}()
+		
+		return c.JSON(fiber.Map{
+			"status": "success",
+			"type":   "question_command",
+		})
+	}
 
 	// Validate phone number length (matching PHP: if strlen($wa_no) > 13 return)
 	if len(phoneNumber) > 13 {
