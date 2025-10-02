@@ -358,6 +358,20 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 		}).Info("🔧 WAHA: Phone number cleaned - stripped @c.us suffix")
 	}
 
+	// Validate phone number length (matching PHP: if strlen($wa_no) > 13)
+	if len(extractedData.SenderPhone) > 13 {
+		logrus.WithFields(logrus.Fields{
+			"device_id":    deviceID,
+			"sender_phone": extractedData.SenderPhone,
+			"phone_length": len(extractedData.SenderPhone),
+		}).Warn("⚠️ WAHA: Phone number length exceeds 13 characters - skipping")
+		return c.JSON(fiber.Map{
+			"status": "ignored",
+			"reason": "phone number length > 13",
+			"phone":  extractedData.SenderPhone,
+		})
+	}
+
 	// Handle isFromMe messages using user-specified logic
 	if extractedData.IsFromMe {
 		cleanText := strings.TrimSpace(extractedData.Message)
