@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useDevice } from '@/contexts/DeviceContext';
 import DeviceRequiredPopup from '@/components/DeviceRequiredPopup';
+import Swal from 'sweetalert2';
 import {
   Table,
   TableBody,
@@ -246,7 +247,18 @@ const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) =>
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this conversation?')) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to delete this conversation?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) {
       return;
     }
 
@@ -262,9 +274,11 @@ const AIWhatsappDataTable = ({ selectedDevice }: { selectedDevice?: string }) =>
 
       // Refresh data after deletion
       fetchAIWhatsappData();
+      
+      Swal.fire('Deleted!', 'The conversation has been deleted.', 'success');
     } catch (err) {
       console.error('Error deleting conversation:', err);
-      alert('Failed to delete conversation');
+      Swal.fire('Error!', 'Failed to delete conversation', 'error');
     }
   };
 

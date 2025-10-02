@@ -13,6 +13,7 @@ import { Smartphone, Settings, Save, X, Link, Copy, Plus, Edit, Trash2, Eye } fr
 import WablasStatusModal from '@/components/WablasStatusModal';
 import WhacenterStatusModal from '@/components/WhacenterStatusModal';
 import WahaStatusModal from '@/components/WahaStatusModal';
+import Swal from 'sweetalert2';
 
 interface DeviceSettings {
   id: string;
@@ -377,7 +378,18 @@ const DeviceSettings: React.FC = () => {
   };
 
   const handleDeleteDevice = async (deviceId: string) => {
-    if (!confirm('Are you sure you want to delete this device?')) return;
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to delete this device?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) return;
     
     try {
       const response = await fetch(`/api/device-settings/${deviceId}`, {
@@ -387,12 +399,14 @@ const DeviceSettings: React.FC = () => {
       if (response.ok) {
         toast.success('Device deleted successfully!');
         loadDeviceSettings();
+        Swal.fire('Deleted!', 'The device has been deleted.', 'success');
       } else {
         throw new Error('Failed to delete device');
       }
     } catch (error) {
       console.error('Error deleting device:', error);
       toast.error('Failed to delete device');
+      Swal.fire('Error!', 'Failed to delete device', 'error');
     }
   };
 

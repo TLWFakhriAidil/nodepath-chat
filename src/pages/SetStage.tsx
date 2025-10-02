@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Trash2, Plus, RefreshCw, Edit } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDevice } from '@/contexts/DeviceContext';
+import Swal from 'sweetalert2';
 
 interface StageSetValue {
   stageSetValue_id: number;
@@ -232,7 +233,18 @@ export default function SetStage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this stage value?')) return;
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to delete this stage value?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) return;
     
     try {
       const response = await fetch(`/api/stage-values/${id}`, {
@@ -246,6 +258,7 @@ export default function SetStage() {
           description: "Stage value deleted successfully",
         });
         fetchStageValues();
+        Swal.fire('Deleted!', 'The stage value has been deleted.', 'success');
       } else {
         throw new Error('Failed to delete stage value');
       }
@@ -256,6 +269,7 @@ export default function SetStage() {
         description: "Failed to delete stage value",
         variant: "destructive"
       });
+      Swal.fire('Error!', 'Failed to delete stage value', 'error');
     }
   };
 

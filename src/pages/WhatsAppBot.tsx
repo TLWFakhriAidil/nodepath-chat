@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { useDevice } from '@/contexts/DeviceContext';
 import DeviceRequiredPopup from '@/components/DeviceRequiredPopup';
 import { cn } from '@/lib/utils';
+import Swal from 'sweetalert2';
 import { 
   MessageSquare, 
   Users, 
@@ -305,7 +306,18 @@ const WhatsAppBot = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this record?')) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to delete this record?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) {
       return;
     }
     
@@ -318,11 +330,14 @@ const WhatsAppBot = () => {
       if (response.ok) {
         // Refresh data after deletion
         fetchWasapBotData();
+        Swal.fire('Deleted!', 'The record has been deleted.', 'success');
       } else {
         console.error('Failed to delete record');
+        Swal.fire('Error!', 'Failed to delete record', 'error');
       }
     } catch (error) {
       console.error('Error deleting record:', error);
+      Swal.fire('Error!', 'An error occurred while deleting the record', 'error');
     }
   };
 

@@ -13,6 +13,7 @@ import { Lead } from '@/types/leads'
 import { useLeads } from '@/hooks/useLeads'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
+import Swal from 'sweetalert2'
 
 interface LeadTableProps {
   data: Lead[]
@@ -79,12 +80,25 @@ export const LeadTable = ({ data, loading, onRefresh }: LeadTableProps) => {
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this lead?')) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to delete this lead?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
       try {
         await deleteLead(id)
         onRefresh()
+        Swal.fire('Deleted!', 'The lead has been deleted.', 'success');
       } catch (error) {
         // Error is handled in the hook
+        Swal.fire('Error!', 'Failed to delete lead', 'error');
       }
     }
   }
