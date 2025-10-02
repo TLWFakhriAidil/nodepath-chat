@@ -607,34 +607,11 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 	}
 
 	// $wa_nama = $payload['_data']['Info']['PushName'] ?? 'Sis'
-	// First check payload._data.Info.PushName (PHP format with capital letters)
 	if _dataObj, ok := payload["_data"].(map[string]interface{}); ok {
 		if infoObj, ok := _dataObj["Info"].(map[string]interface{}); ok {
 			if pushNameVal, ok := infoObj["PushName"].(string); ok {
 				result.SenderName = pushNameVal
 				logrus.WithField("extraction_method", "payload._data.Info.PushName").Info("🔍 WAHA: Sender name extracted from payload._data.Info.PushName")
-			}
-		}
-	}
-	
-	// Fallback: check data.info.pushName (lowercase)
-	if result.SenderName == "" {
-		if infoObj, ok := dataPayload["info"].(map[string]interface{}); ok {
-			if pushNameVal, ok := infoObj["pushName"].(string); ok {
-				result.SenderName = pushNameVal
-				logrus.WithField("extraction_method", "data_info_pushname").Info("🔍 WAHA: Sender name extracted from data.info.pushName")
-			}
-		}
-	}
-	
-	// Fallback: check payload.media.Info.PushName
-	if result.SenderName == "" {
-		if mediaObj, ok := payload["media"].(map[string]interface{}); ok {
-			if infoObj, ok := mediaObj["Info"].(map[string]interface{}); ok {
-				if pushNameVal, ok := infoObj["PushName"].(string); ok {
-					result.SenderName = pushNameVal
-					logrus.WithField("extraction_method", "payload_media_info_pushname").Info("🔍 WAHA: Sender name extracted from payload.media.Info.PushName")
-				}
 			}
 		}
 	}
