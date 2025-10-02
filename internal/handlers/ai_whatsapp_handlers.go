@@ -128,10 +128,11 @@ type WhatsappWebhookRequest struct {
 
 // WablasWebhookRequest represents incoming Wablas webhook data
 type WablasWebhookRequest struct {
-	Phone   string `json:"phone"`
-	Message string `json:"message"`
-	Device  string `json:"device"`
-	Time    string `json:"time"`
+	Phone    string `json:"phone"`
+	Message  string `json:"message"`
+	Device   string `json:"device"`
+	Time     string `json:"time"`
+	IsFromMe bool   `json:"isFromMe"`
 }
 
 // WhacenterWebhookRequest represents incoming Whacenter webhook data
@@ -243,10 +244,87 @@ func (h *AIWhatsappHandlers) HandleWablasWebhook(c *fiber.Ctx) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"device_id": deviceID,
-		"phone":     req.Phone,
-		"message":   req.Message,
+		"device_id":  deviceID,
+		"phone":      req.Phone,
+		"message":    req.Message,
+		"is_from_me": req.IsFromMe,
 	}).Info("Received Wablas webhook")
+
+	// WABLAS Command Processing (only when isFromMe=true, matching PHP logic)
+	if req.IsFromMe {
+		cleanText := strings.TrimSpace(req.Message)
+		
+		// Command 1: Text starts with '%' → set text to "Teruskan", name to "Sis"
+		if len(cleanText) > 0 && cleanText[0] == '%' {
+			logrus.WithFields(logrus.Fields{
+				"device_id": deviceID,
+				"phone":     req.Phone,
+			}).Info("🔧 WABLAS: Processing % command - set text to 'Teruskan'")
+			
+			// Update message and continue processing
+			req.Message = "Teruskan"
+			senderName := "Sis"
+			
+			// Process through standardized flow
+			go h.processIncomingMessage(req.Phone, req.Message, deviceID, "wablas", senderName)
+			
+			return c.JSON(fiber.Map{
+				"status": "success",
+				"type":   "percent_command",
+			})
+		}
+		
+		// Command 2: Text equals 'cmd' → set human=1, return empty
+		if cleanText == "cmd" {
+			logrus.WithFields(logrus.Fields{
+				"device_id": deviceID,
+				"phone":     req.Phone,
+			}).Info("🔧 WABLAS: Processing cmd command - set human=1")
+			
+			go func() {
+				whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(req.Phone, deviceID)
+				if err == nil && whats != nil {
+					whats.Human = 1
+					h.AIRepo.UpdateAIWhatsapp(whats)
+					logrus.Info("✅ WABLAS: Successfully set human=1 for cmd command")
+				}
+			}()
+			
+			return c.JSON(fiber.Map{
+				"status": "success",
+				"type":   "cmd_command",
+			})
+		}
+		
+		// Command 3: Text equals 'dmc' → set human=null, return empty
+		if cleanText == "dmc" {
+			logrus.WithFields(logrus.Fields{
+				"device_id": deviceID,
+				"phone":     req.Phone,
+			}).Info("🔧 WABLAS: Processing dmc command - set human=null")
+			
+			go func() {
+				whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(req.Phone, deviceID)
+				if err == nil && whats != nil {
+					whats.Human = 0 // Set to 0 (null equivalent in Go)
+					h.AIRepo.UpdateAIWhatsapp(whats)
+					logrus.Info("✅ WABLAS: Successfully set human=null for dmc command")
+				}
+			}()
+			
+			return c.JSON(fiber.Map{
+				"status": "success",
+				"type":   "dmc_command",
+			})
+		}
+		
+		// Other isFromMe messages → ignore
+		logrus.Info("⏭️ WABLAS: Ignoring other isFromMe message (not %, cmd, or dmc)")
+		return c.JSON(fiber.Map{
+			"status": "ignored",
+			"reason": "isFromMe message (not %, cmd, or dmc)",
+		})
+	}
 
 	// Validate phone number length (matching PHP: if strlen($wa_no) > 13 return)
 	if len(req.Phone) > 13 {
@@ -286,12 +364,53 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 		"text":      req.Text,
 	}).Info("Received Whacenter webhook")
 
+	// WHACENTER Command Processing (matching PHP logic)
+	cleanText := strings.TrimSpace(req.Text)
+	phoneNumber := req.Number
+	message := req.Text
+	senderName := "Sis"
+	
+	// Command 1: Text starts with '#' → extract phone, set text to "Teruskan"
+	if len(cleanText) > 0 && cleanText[0] == '#' {
+		phoneNumber = cleanText[1:]
+		message = "Teruskan"
+		senderName = "Sis"
+		
+		logrus.WithFields(logrus.Fields{
+			"device_id":       deviceID,
+			"extracted_phone": phoneNumber,
+		}).Info("🔧 WHACENTER: Processing # command - extract phone and set text to 'Teruskan'")
+	}
+	
+	// Command 2: Text starts with '/' → extract phone, set human=1, return empty
+	if len(cleanText) > 0 && cleanText[0] == '/' {
+		extractedPhone := cleanText[1:]
+		logrus.WithFields(logrus.Fields{
+			"device_id":       deviceID,
+			"extracted_phone": extractedPhone,
+		}).Info("🔧 WHACENTER: Processing / command - set human=1")
+		
+		go func() {
+			whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedPhone, deviceID)
+			if err == nil && whats != nil {
+				whats.Human = 1
+				h.AIRepo.UpdateAIWhatsapp(whats)
+				logrus.Info("✅ WHACENTER: Successfully set human=1 for / command")
+			}
+		}()
+		
+		return c.JSON(fiber.Map{
+			"status": "success",
+			"type":   "slash_command",
+		})
+	}
+
 	// Validate phone number length (matching PHP: if strlen($wa_no) > 13 return)
-	if len(req.Number) > 13 {
+	if len(phoneNumber) > 13 {
 		logrus.WithFields(logrus.Fields{
 			"device_id":    deviceID,
-			"number":       req.Number,
-			"phone_length": len(req.Number),
+			"number":       phoneNumber,
+			"phone_length": len(phoneNumber),
 		}).Warn("⚠️ WHACENTER: Phone number length exceeds 13 characters - terminating")
 		return c.JSON(fiber.Map{
 			"status": "ignored",
@@ -300,7 +419,7 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 	}
 
 	// Process the message asynchronously
-	go h.processIncomingMessage(req.Number, req.Text, deviceID, "whacenter", req.Number)
+	go h.processIncomingMessage(phoneNumber, message, deviceID, "whacenter", senderName)
 
 	return h.successResponse(c, map[string]string{"status": "received"})
 }
