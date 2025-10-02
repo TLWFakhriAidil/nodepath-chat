@@ -88,19 +88,20 @@ func parseMySQLURI(uri string) (*DatabaseConfig, error) {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	flowService           *services.FlowService
-	aiService             *services.AIService
-	queueService          *services.QueueService
-	whatsappService       *whatsapp.Service
-	deviceSettingsService *services.DeviceSettingsService
-	websocketService      *services.WebSocketService
-	mediaService          *services.MediaService
-	mediaDetectionService *services.MediaDetectionService
-	healthService         *services.HealthService
-	aiWhatsappHandlers    *AIWhatsappHandlers
-	authHandlers          *AuthHandlers
-	wasapBotHandlers      *WasapBotHandlers
-	db                    *sql.DB // Add database field
+	flowService            *services.FlowService
+	aiService              *services.AIService
+	queueService           *services.QueueService
+	whatsappService        *whatsapp.Service
+	deviceSettingsService  *services.DeviceSettingsService
+	websocketService       *services.WebSocketService
+	mediaService           *services.MediaService
+	mediaDetectionService  *services.MediaDetectionService
+	healthService          *services.HealthService
+	aiWhatsappHandlers     *AIWhatsappHandlers
+	authHandlers           *AuthHandlers
+	wasapBotHandlers       *WasapBotHandlers
+	executionProcessRepo   repository.ExecutionProcessRepository
+	db                     *sql.DB // Add database field
 }
 
 // NewHandlers creates a new handlers instance
@@ -120,6 +121,7 @@ func NewHandlers(
 	aiRepo := repository.NewAIWhatsappRepository(db)
 	deviceRepo := repository.NewDeviceSettingsRepository(db)
 	wasapBotRepo := repository.NewWasapBotRepository(db)
+	executionProcessRepo := repository.NewExecutionProcessRepository(db)
 
 	// Initialize media detection service
 	mediaDetectionService := services.NewMediaDetectionService()
@@ -150,6 +152,7 @@ func NewHandlers(
 		aiWhatsappHandlers:    aiWhatsappHandlers,
 		authHandlers:          authHandlers,
 		wasapBotHandlers:      wasapBotHandlers,
+		executionProcessRepo:  executionProcessRepo,
 		db:                    db, // Store the database
 	}
 

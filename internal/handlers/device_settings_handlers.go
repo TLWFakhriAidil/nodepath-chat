@@ -1499,9 +1499,67 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 		"processing_start_time": startTime,
 	}).Info("🔄 WEBHOOK: Processing webhook message for AI integration with monitoring")
 
-	// Extract message data based on provider
+	// Extract message data based on provider to get from/prospect number
 	var from, message, messageType, senderName string
 	var isGroup bool
+
+	// PRE-EXTRACTION: Get 'from' field early for execution lock
+	if fromVal, ok := webhookData[" from"].(string); ok {
+		from = fromVal
+	} else if phoneVal, ok := webhookData["phone"].(string); ok {
+		from = phoneVal
+	}
+
+	// EXECUTION LOCK: Prevent duplicate parallel processing (matching PHP ZChatInput logic)
+	if from != "" && h.executionProcessRepo != nil {
+		// 1. Create new execution record
+		idExecutionCurrent, err := h.executionProcessRepo.CreateExecution(idDevice, from)
+		if err != nil {
+			logrus.WithError(err).Error("🔒 EXECUTION LOCK: Failed to create execution record")
+			return fmt.Errorf("failed to create execution record: %w", err)
+		}
+
+		// 2. Get oldest execution record for this device+prospect
+		oldestExecution, err := h.executionProcessRepo.GetOldestExecution(idDevice, from)
+		if err != nil {
+			logrus.WithError(err).Error("🔒 EXECUTION LOCK: Failed to get oldest execution")
+			// Clean up current execution on error
+			h.executionProcessRepo.DeleteExecutions(idDevice, from)
+			return fmt.Errorf("failed to get oldest execution: %w", err)
+		}
+
+		// 3. Check if current execution is the oldest (duplicate/parallel check)
+		if oldestExecution != nil && idExecutionCurrent != oldestExecution.IDChatInput {
+			logrus.WithFields(logrus.Fields{
+				"id_device":            idDevice,
+				"id_prospect":          from,
+				"id_execution_current": idExecutionCurrent,
+				"id_execution_oldest":  oldestExecution.IDChatInput,
+			}).Warn("🔒 EXECUTION LOCK: Duplicate/parallel execution detected - terminating this process")
+
+			// This is NOT the first/oldest process → terminate immediately
+			return nil
+		}
+
+		// 4. Defer cleanup: Delete all execution records after processing completes
+		defer func() {
+			err := h.executionProcessRepo.DeleteExecutions(idDevice, from)
+			if err != nil {
+				logrus.WithError(err).Error("🔒 EXECUTION LOCK: Failed to clean up execution records")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"id_device":   idDevice,
+					"id_prospect": from,
+				}).Info("🔒 EXECUTION LOCK: Cleaned up execution records after processing")
+			}
+		}()
+
+		logrus.WithFields(logrus.Fields{
+			"id_device":    idDevice,
+			"id_prospect":  from,
+			"id_execution": idExecutionCurrent,
+		}).Info("🔒 EXECUTION LOCK: This is the oldest execution - proceeding with processing")
+	}
 
 	// Debug log to check provider value
 	logrus.WithFields(logrus.Fields{
