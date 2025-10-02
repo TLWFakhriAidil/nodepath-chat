@@ -598,12 +598,65 @@ func (h *AIWhatsappHandlers) extractWahaWebhookData(webhookPayload map[string]in
 	}
 
 	// $wa_no_raw = $payload['from'] or $payload['_data']['from'] ?? null
+	var idNoWaha string
 	if fromVal, ok := dataPayload["from"].(string); ok {
-		result.SenderPhone = fromVal
+		idNoWaha = fromVal
 		logrus.WithField("extraction_method", "data_from").Info("🔍 WAHA: Sender phone extracted from data.from")
 	} else if fromVal, ok := payload["from"].(string); ok {
-		result.SenderPhone = fromVal
+		idNoWaha = fromVal
 		logrus.WithField("extraction_method", "payload_from").Info("🔍 WAHA: Sender phone extracted from payload.from")
+	}
+
+	// Process phone number based on suffix (matching PHP logic)
+	if strings.HasSuffix(idNoWaha, "@c.us") {
+		// Normal contact - extract number before @
+		result.SenderPhone = strings.Split(idNoWaha, "@")[0]
+		logrus.WithField("from", result.SenderPhone).Info("🔍 WAHA: Extracted normal contact (@c.us)")
+	} else if strings.HasSuffix(idNoWaha, "@g.us") {
+		// Group - skip processing
+		result.SenderPhone = ""
+		result.IsGroup = true
+		logrus.Info("🔍 WAHA: Detected group (@g.us) - skipping")
+		return result
+	} else if strings.HasSuffix(idNoWaha, "@lid") {
+		// LID mapping - try SenderAlt or RecipientAlt
+		logrus.Info("🔍 WAHA: Detected @lid - attempting LID mapping")
+		if _dataObj, ok := payload["_data"].(map[string]interface{}); ok {
+			if infoObj, ok := _dataObj["Info"].(map[string]interface{}); ok {
+				senderAlt := strings.TrimSpace(getStringValue(infoObj["SenderAlt"]))
+				recipientAlt := strings.TrimSpace(getStringValue(infoObj["RecipientAlt"]))
+				
+				logrus.WithFields(logrus.Fields{
+					"senderAlt":    senderAlt,
+					"recipientAlt": recipientAlt,
+				}).Info("🔍 WAHA: LID mapping alternatives")
+
+				// Try both alternatives
+				for _, alt := range []string{senderAlt, recipientAlt} {
+					if alt == "" {
+						continue
+					}
+					if strings.HasSuffix(alt, "@c.us") {
+						result.SenderPhone = strings.Split(alt, "@")[0]
+						logrus.WithField("from", result.SenderPhone).Info("🔍 WAHA: LID mapped via @c.us")
+						break
+					} else if strings.HasSuffix(alt, "@s.whatsapp.net") {
+						result.SenderPhone = strings.Split(alt, "@")[0]
+						logrus.WithField("from", result.SenderPhone).Info("🔍 WAHA: LID mapped via @s.whatsapp.net")
+						break
+					}
+				}
+			}
+		}
+		// If no valid mapping found, phone will be empty
+		if result.SenderPhone == "" {
+			logrus.Warn("🔍 WAHA: LID mapping failed - no valid alternative found")
+			return result
+		}
+	} else {
+		// Unknown format - use as-is
+		result.SenderPhone = idNoWaha
+		logrus.WithField("from", result.SenderPhone).Info("🔍 WAHA: Using raw phone number (unknown format)")
 	}
 
 	// $wa_nama = $payload['_data']['Info']['PushName'] ?? 'Sis'
@@ -1455,6 +1508,17 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// getStringValue safely extracts string value from interface{}
+func getStringValue(val interface{}) string {
+	if val == nil {
+		return ""
+	}
+	if s, ok := val.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // DebugWahaWebhook is a special debug endpoint for production WAHA webhook debugging
