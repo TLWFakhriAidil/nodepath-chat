@@ -296,6 +296,64 @@ const Analytics = () => {
       alert('Failed to update status');
     }
   };
+
+  const handleExport = () => {
+    if (filteredConversations.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Prepare CSV headers
+    const headers = ['No', 'Created At', 'ID Device', 'Phone Number', 'Prospect Name', 'Niche', 'Status', 'Stage', 'Keyword Iklan', 'Marketer'];
+    
+    // Prepare CSV rows from filtered data
+    const csvData = filteredConversations.map((conv, index) => {
+      return [
+        index + 1,
+        conv.created_at ? format(new Date(conv.created_at), 'dd-MM-yyyy HH:mm:ss') : '',
+        conv.id_device || '',
+        conv.prospect_num || '',
+        conv.prospect_name || '',
+        conv.niche || '',
+        conv.human === 1 ? 'Human' : 'AI',
+        conv.stage || 'Welcome Message',
+        conv.keywordiklan || '',
+        conv.marketer || ''
+      ];
+    });
+
+    // Convert to CSV string
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => {
+        // Escape quotes and wrap in quotes if contains comma
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Generate filename with current date
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const filename = `chatbot_ai_export_${dateStr}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log(`Exported ${filteredConversations.length} records to ${filename}`);
+  };
   
   const renderConversationHistory = (convLast: any) => {
     if (!convLast) return '-';
@@ -424,7 +482,7 @@ const Analytics = () => {
             </DropdownMenuContent>
           </DropdownMenu>
           
-          <Button className="bg-blue-600 hover:bg-blue-700" size="sm">
+          <Button className="bg-blue-600 hover:bg-blue-700" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
