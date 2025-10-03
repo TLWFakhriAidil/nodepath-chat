@@ -138,9 +138,17 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage, dateRange }: {
         page: currentPage.toString(),
         limit: pageSize.toString(),
         ...(deviceFilter && deviceFilter !== 'all' && { device_id: deviceFilter }),
-        ...(selectedStage && { stage: selectedStage }),
         ...(searchTerm && { search: searchTerm })
       });
+      
+      // Special case: "Welcome Message" means NULL/empty stage in database
+      if (selectedStage) {
+        if (selectedStage === 'Welcome Message') {
+          params.append('stage', 'WELCOME_MESSAGE_NULL');
+        } else {
+          params.append('stage', selectedStage);
+        }
+      }
       
       // Add date range filters
       if (dateRange?.from) {

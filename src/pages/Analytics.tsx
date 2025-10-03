@@ -98,8 +98,13 @@ const Analytics = () => {
       }
       
       // Add stage filter if selected
+      // Special case: "Welcome Message" means NULL/empty stage in database
       if (selectedStage) {
-        params.append('stage', selectedStage);
+        if (selectedStage === 'Welcome Message') {
+          params.append('stage', 'WELCOME_MESSAGE_NULL');
+        } else {
+          params.append('stage', selectedStage);
+        }
       }
       
       const apiUrl = `/api/ai-whatsapp/ai/analytics?${params.toString()}`;
