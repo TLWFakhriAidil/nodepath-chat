@@ -146,33 +146,18 @@ const WhatsAppBot = () => {
       setLoading(true);
       setError(null);
       
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({
+        page: '1',
+        limit: '10000' // Get all records for client-side filtering
+      });
       
-      // Add device filter
+      // Only send device_ids for initial fetch
       if (device_ids && device_ids.length > 0) {
         params.append('deviceIds', device_ids.join(','));
       }
       
-      if (searchTerm) {
-        params.append('search', searchTerm);
-      }
-      
-      if (selectedStatus !== '' && selectedStatus !== 'all') {
-        params.append('status', selectedStatus);
-      }
-      
-      if (selectedStage !== '' && selectedStage !== 'all') {
-        params.append('stage', selectedStage);
-      }
-      
-      // Add date filters using dateRange (filters by date_start column)
-      if (dateRange?.from) {
-        params.append('dateFrom', format(dateRange.from, 'yyyy-MM-dd'));
-      }
-      
-      if (dateRange?.to) {
-        params.append('dateTo', format(dateRange.to, 'yyyy-MM-dd'));
-      }
+      // NOTE: Date, stage, status, and search filtering done client-side (see filteredData below)
+      // Backend doesn't handle these filters correctly
       
       const apiUrl = `/api/wasapbot/data?${params.toString()}`;
       console.log('WhatsAppBot: Making API call to:', apiUrl);
@@ -234,16 +219,8 @@ const WhatsAppBot = () => {
     }
   }, []); // Only run once on mount
 
-  // Separate effect for filter changes (with debounce)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (has_devices) {
-        fetchWasapBotData();
-      }
-    }, 500); // Debounce 500ms
-    
-    return () => clearTimeout(timer);
-  }, [searchTerm, selectedStatus, selectedStage, dateRange]);
+  // NOTE: Filters are now client-side only (no refetch needed)
+  // Date, stage, status, device, and search are all filtered in filteredData below
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -347,17 +324,56 @@ const WhatsAppBot = () => {
     }
   };
 
-  // Filter data based on search term
+  // Client-side filtering for ALL filters (date, device, stage, status, search)
   const filteredData = wasapBotData.filter(record => {
-    if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      record.nama?.toLowerCase().includes(searchLower) ||
-      record.prospect_num?.toLowerCase().includes(searchLower) ||
-      record.no_fon?.toLowerCase().includes(searchLower) ||
-      record.alamat?.toLowerCase().includes(searchLower) ||
-      record.peringkat_sekolah?.toLowerCase().includes(searchLower)
-    );
+    // Date filtering (by date_start column)
+    if (dateRange?.from && dateRange?.to && record.date_start) {
+      const recordDate = new Date(record.date_start);
+      const startDate = new Date(dateRange.from);
+      const endDate = new Date(dateRange.to);
+      
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      
+      if (recordDate < startDate || recordDate > endDate) {
+        return false;
+      }
+    }
+    
+    // Device filtering
+    if (selectedDevice && record.id_device !== selectedDevice) {
+      return false;
+    }
+    
+    // Stage filtering
+    if (selectedStage) {
+      const recordStage = (!record.stage || record.stage === '') ? 'No Stage' : record.stage;
+      if (recordStage !== selectedStage) {
+        return false;
+      }
+    }
+    
+    // Status filtering
+    if (selectedStatus && selectedStatus !== 'all' && record.status !== selectedStatus) {
+      return false;
+    }
+    
+    // Search filtering
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const matches = (
+        record.nama?.toLowerCase().includes(searchLower) ||
+        record.prospect_num?.toLowerCase().includes(searchLower) ||
+        record.no_fon?.toLowerCase().includes(searchLower) ||
+        record.alamat?.toLowerCase().includes(searchLower) ||
+        record.peringkat_sekolah?.toLowerCase().includes(searchLower)
+      );
+      if (!matches) {
+        return false;
+      }
+    }
+    
+    return true;
   });
 
   if (!has_devices) {
@@ -388,8 +404,10 @@ const WhatsAppBot = () => {
       <div>
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">WhatsApp Bot</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+              WhatsApp Bot
+            </h1>
+            <p className="text-slate-600 dark:text-slate-400">
               Manage and monitor WasapBot Exama flow conversations
             </p>
           </div>
