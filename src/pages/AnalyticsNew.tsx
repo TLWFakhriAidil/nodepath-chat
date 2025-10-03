@@ -127,14 +127,8 @@ const Analytics = () => {
         params.append('user_device_ids', device_ids.join(','));
       }
       
-      // Handle Welcome Message (NULL stage)
-      if (selectedStage) {
-        if (selectedStage === 'Welcome Message') {
-          params.append('stage', 'WELCOME_MESSAGE_NULL');
-        } else {
-          params.append('stage', selectedStage);
-        }
-      }
+      // NOTE: Stage filtering is done client-side (see filteredConversations below)
+      // Do NOT send stage parameter to backend as it doesn't handle it correctly
       
       if (searchTerm) {
         params.append('search', searchTerm);
@@ -162,7 +156,7 @@ const Analytics = () => {
     if (has_devices) {
       fetchAllData();
     }
-  }, [dateRange, selectedDevice, selectedStage, searchTerm, has_devices, device_ids]);
+  }, [dateRange, selectedDevice, searchTerm, has_devices, device_ids]); // Note: selectedStage removed - it's client-side only
   
   // Client-side filtering (since backend doesn't filter properly)
   const filteredConversations = allConversations.filter(conv => {
@@ -209,15 +203,20 @@ const Analytics = () => {
     conversationsWithStages: filteredConversations.filter(c => c.stage && c.stage !== '').length,
   };
   
-  // Calculate stage distribution from filtered data
+  // Get available stages from ALL conversations (not filtered) for dropdown
+  const allStages = allConversations.reduce((acc, conv) => {
+    const stage = conv.stage || 'Welcome Message';
+    acc[stage] = (acc[stage] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const availableStages = Object.keys(allStages);
+  
+  // Calculate stage distribution from filtered data (for chart display)
   const stageDistribution = filteredConversations.reduce((acc, conv) => {
     const stage = conv.stage || 'Welcome Message';
     acc[stage] = (acc[stage] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
-  
-  // Get available stages
-  const availableStages = Object.keys(stageDistribution);
   
   // Calculate daily breakdown from filtered data
   const dailyBreakdown = filteredConversations.reduce((acc, conv) => {
