@@ -164,18 +164,33 @@ const Analytics = () => {
     }
   }, [dateRange, selectedDevice, selectedStage, searchTerm, has_devices, device_ids]);
   
-  // Calculate statistics from allConversations
+  // Client-side date filtering (since backend doesn't filter properly)
+  const filteredConversations = allConversations.filter(conv => {
+    if (!dateRange?.from || !dateRange?.to) return true;
+    
+    const convDate = new Date(conv.created_at);
+    const startDate = new Date(dateRange.from);
+    const endDate = new Date(dateRange.to);
+    
+    // Set time to start/end of day for accurate comparison
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+    
+    return convDate >= startDate && convDate <= endDate;
+  });
+  
+  // Calculate statistics from filteredConversations (not allConversations)
   const stats = {
-    totalConversations: allConversations.length,
-    aiActiveConversations: allConversations.filter(c => c.human === 0).length,
-    humanTakeovers: allConversations.filter(c => c.human === 1).length,
-    uniqueDevices: new Set(allConversations.map(c => c.id_device)).size,
-    uniqueNiches: new Set(allConversations.map(c => c.niche).filter(Boolean)).size,
-    conversationsWithStages: allConversations.filter(c => c.stage && c.stage !== '').length,
+    totalConversations: filteredConversations.length,
+    aiActiveConversations: filteredConversations.filter(c => c.human === 0).length,
+    humanTakeovers: filteredConversations.filter(c => c.human === 1).length,
+    uniqueDevices: new Set(filteredConversations.map(c => c.id_device)).size,
+    uniqueNiches: new Set(filteredConversations.map(c => c.niche).filter(Boolean)).size,
+    conversationsWithStages: filteredConversations.filter(c => c.stage && c.stage !== '').length,
   };
   
-  // Calculate stage distribution
-  const stageDistribution = allConversations.reduce((acc, conv) => {
+  // Calculate stage distribution from filtered data
+  const stageDistribution = filteredConversations.reduce((acc, conv) => {
     const stage = conv.stage || 'Welcome Message';
     acc[stage] = (acc[stage] || 0) + 1;
     return acc;
@@ -184,8 +199,8 @@ const Analytics = () => {
   // Get available stages
   const availableStages = Object.keys(stageDistribution);
   
-  // Calculate daily breakdown
-  const dailyBreakdown = allConversations.reduce((acc, conv) => {
+  // Calculate daily breakdown from filtered data
+  const dailyBreakdown = filteredConversations.reduce((acc, conv) => {
     const date = format(new Date(conv.created_at), 'yyyy-MM-dd');
     acc[date] = (acc[date] || 0) + 1;
     return acc;
@@ -195,11 +210,11 @@ const Analytics = () => {
     .map(([date, conversations]) => ({ date, conversations }))
     .sort((a, b) => a.date.localeCompare(b.date));
   
-  // Paginate conversations for table
+  // Paginate filtered conversations for table
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedConversations = allConversations.slice(startIndex, endIndex);
-  const totalPages = Math.ceil(allConversations.length / pageSize);
+  const paginatedConversations = filteredConversations.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(filteredConversations.length / pageSize);
   
   const handleRefresh = () => {
     fetchAllData();
@@ -659,14 +674,14 @@ const Analytics = () => {
                 </div>
               </div>
               <div className="text-sm text-muted-foreground mt-2">
-                Showing {startIndex + 1} to {Math.min(endIndex, allConversations.length)} of {allConversations.length} conversations
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredConversations.length)} of {filteredConversations.length} conversations
               </div>
             </CardHeader>
             <CardContent>
-              {allConversations.length === 0 ? (
+              {filteredConversations.length === 0 ? (
                 <div className="text-center py-12">
                   <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">No conversations found</p>
+                  <p className="text-muted-foreground">No conversations found for selected filters</p>
                 </div>
               ) : (
                 <>
