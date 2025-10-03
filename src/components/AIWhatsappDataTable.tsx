@@ -476,6 +476,7 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage }: { selectedDevice
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12">No</TableHead>
+                      <TableHead>Created_at</TableHead>
                       <TableHead>ID Device</TableHead>
                       <TableHead>Phone Number</TableHead>
                       <TableHead>Prospect Name</TableHead>
@@ -485,7 +486,6 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage }: { selectedDevice
                       <TableHead>Conversation History</TableHead>
                       <TableHead>Keyword Iklan</TableHead>
                       <TableHead>Marketer</TableHead>
-                      <TableHead>Updated</TableHead>
                       <TableHead className="text-center">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -493,6 +493,9 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage }: { selectedDevice
                     {conversations.map((conv, index) => (
                       <TableRow key={conv.id_prospect}>
                         <TableCell>{(currentPage - 1) * pageSize + index + 1}</TableCell>
+                        <TableCell>
+                          {conv.created_at ? format(new Date(conv.created_at), 'dd-MM-yyyy') : '-'}
+                        </TableCell>
                         <TableCell>{conv.id_device || '-'}</TableCell>
                         <TableCell>{conv.prospect_num || '-'}</TableCell>
                         <TableCell>{conv.prospect_name || 'Sis'}</TableCell>
@@ -524,9 +527,6 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage }: { selectedDevice
                         <TableCell>{renderConversationHistory(conv.conv_last)}</TableCell>
                         <TableCell>{conv.keywordiklan || '-'}</TableCell>
                         <TableCell>{conv.marketer || '-'}</TableCell>
-                        <TableCell>
-                          {conv.updated_at ? format(new Date(conv.updated_at), 'dd/MM HH:mm') : '-'}
-                        </TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"

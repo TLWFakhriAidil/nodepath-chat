@@ -6,6 +6,7 @@ import { useDevice } from '@/contexts/DeviceContext';
 import DeviceRequiredPopup from '@/components/DeviceRequiredPopup';
 import { cn } from '@/lib/utils';
 import Swal from 'sweetalert2';
+import { format } from 'date-fns';
 import { 
   MessageSquare, 
   Users, 
@@ -602,6 +603,7 @@ const WhatsAppBot = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>No</TableHead>
+                    <TableHead>Created_at</TableHead>
                     <TableHead>ID Device</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Prospect Number</TableHead>
@@ -628,6 +630,9 @@ const WhatsAppBot = () => {
                     filteredData.map((record, index) => (
                       <TableRow key={record.id_prospect}>
                         <TableCell>{index + 1}</TableCell>
+                        <TableCell>
+                          {record.date_start ? format(new Date(record.date_start), 'dd-MM-yyyy') : '-'}
+                        </TableCell>
                         <TableCell>{record.id_device || '-'}</TableCell>
                         <TableCell>{record.nama || '-'}</TableCell>
                         <TableCell>{record.prospect_num || '-'}</TableCell>
