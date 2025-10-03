@@ -164,19 +164,39 @@ const Analytics = () => {
     }
   }, [dateRange, selectedDevice, selectedStage, searchTerm, has_devices, device_ids]);
   
-  // Client-side date filtering (since backend doesn't filter properly)
+  // Client-side filtering (since backend doesn't filter properly)
   const filteredConversations = allConversations.filter(conv => {
-    if (!dateRange?.from || !dateRange?.to) return true;
+    // Date filtering
+    if (dateRange?.from && dateRange?.to) {
+      const convDate = new Date(conv.created_at);
+      const startDate = new Date(dateRange.from);
+      const endDate = new Date(dateRange.to);
+      
+      // Set time to start/end of day for accurate comparison
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      
+      if (convDate < startDate || convDate > endDate) {
+        return false;
+      }
+    }
     
-    const convDate = new Date(conv.created_at);
-    const startDate = new Date(dateRange.from);
-    const endDate = new Date(dateRange.to);
+    // Stage filtering (including Welcome Message for NULL/empty stages)
+    if (selectedStage) {
+      if (selectedStage === 'Welcome Message') {
+        // Filter for records where stage is null, empty, or 'Welcome Message'
+        if (conv.stage && conv.stage !== '' && conv.stage !== 'Welcome Message') {
+          return false;
+        }
+      } else {
+        // Filter for specific stage
+        if (conv.stage !== selectedStage) {
+          return false;
+        }
+      }
+    }
     
-    // Set time to start/end of day for accurate comparison
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-    
-    return convDate >= startDate && convDate <= endDate;
+    return true;
   });
   
   // Calculate statistics from filteredConversations (not allConversations)
