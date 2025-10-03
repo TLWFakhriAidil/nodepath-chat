@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { DatePickerWithRange } from '@/components/ui/date-picker';
 import { useDevice } from '@/contexts/DeviceContext';
 import DeviceRequiredPopup from '@/components/DeviceRequiredPopup';
 import { cn } from '@/lib/utils';
 import Swal from 'sweetalert2';
 import { format } from 'date-fns';
+import { DateRange } from 'react-day-picker';
 import { 
   MessageSquare, 
   Users, 
@@ -23,8 +26,15 @@ import {
   Phone,
   CreditCard,
   Calendar,
-  Layers
+  Layers,
+  Filter
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -33,14 +43,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 // WasapBot data interface
 interface WasapBotRecord {
@@ -100,17 +102,20 @@ const WhatsAppBot = () => {
   const { has_devices, device_ids } = useDevice();
   const [refreshing, setRefreshing] = useState(false);
   const [wasapBotData, setWasapBotData] = useState<WasapBotRecord[]>([]);
+  const [allData, setAllData] = useState<WasapBotRecord[]>([]); // All fetched data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [selectedStage, setSelectedStage] = useState<string>('');
   const [showDeviceRequiredPopup, setShowDeviceRequiredPopup] = useState(false);
   
-  // Date filter state - default to current month
-  const { startDate: defaultStartDate, endDate: defaultEndDate } = getCurrentMonthDateRange();
-  const [dateFrom, setDateFrom] = useState(defaultStartDate);
-  const [dateTo, setDateTo] = useState(defaultEndDate);
+  // Date filter state using DateRange (matches Chatbot-AI)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: new Date()
+  });
 
   // Statistics
   const [stats, setStats] = useState({
@@ -160,13 +165,13 @@ const WhatsAppBot = () => {
         params.append('stage', selectedStage);
       }
       
-      // Add date filters
-      if (dateFrom) {
-        params.append('dateFrom', dateFrom);
+      // Add date filters using dateRange (filters by date_start column)
+      if (dateRange?.from) {
+        params.append('dateFrom', format(dateRange.from, 'yyyy-MM-dd'));
       }
       
-      if (dateTo) {
-        params.append('dateTo', dateTo);
+      if (dateRange?.to) {
+        params.append('dateTo', format(dateRange.to, 'yyyy-MM-dd'));
       }
       
       const apiUrl = `/api/wasapbot/data?${params.toString()}`;
@@ -238,7 +243,7 @@ const WhatsAppBot = () => {
     }, 500); // Debounce 500ms
     
     return () => clearTimeout(timer);
-  }, [searchTerm, selectedStatus, selectedStage, dateFrom, dateTo]);
+  }, [searchTerm, selectedStatus, selectedStage, dateRange]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -390,96 +395,75 @@ const WhatsAppBot = () => {
           </div>
         </div>
 
-        {/* Filters Bar - Single Line */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Search Input */}
-              <Input
-                placeholder="Search by name, phone, address..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full md:w-64"
-              />
-              
-              {/* Status Filter */}
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Prospek">Prospek</SelectItem>
-                  <SelectItem value="Customer">Customer</SelectItem>
-                  <SelectItem value="Lead">Lead</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              {/* Stage Filter */}
-              <Select value={selectedStage} onValueChange={setSelectedStage}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="No Stage">No Stage</SelectItem>
-                  {Object.keys(stageStats).filter(stage => stage !== 'No Stage').map(stage => (
-                    <SelectItem key={stage} value={stage}>{stage}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              {/* Date From */}
-              <div className="relative">
-                <div className="flex items-center gap-2 border rounded-md px-3 py-1 bg-background">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="bg-transparent border-0 outline-none text-sm w-32 cursor-pointer"
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-              </div>
-              
-              {/* Date To */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">to</span>
-                <div className="flex items-center gap-2 border rounded-md px-3 py-1 bg-background">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="bg-transparent border-0 outline-none text-sm w-32 cursor-pointer"
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-              </div>
-              
-              {/* Spacer to push buttons to the right */}
-              <div className="flex-1"></div>
-              
-              {/* Action Buttons */}
-              <Button 
-                variant="outline" 
-                onClick={handleExport}
-                disabled={loading}
-                size="sm"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-              <Button 
-                onClick={handleRefresh}
-                disabled={loading || refreshing}
-                size="sm"
-              >
-                <RefreshCw className={cn("w-4 h-4 mr-2", refreshing && "animate-spin")} />
-                Refresh
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Filters Bar - Matches Chatbot-AI Layout */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Input
+              placeholder="Search conversations..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64"
+            />
+            
+            <DatePickerWithRange
+              from={dateRange?.from}
+              to={dateRange?.to}
+              onSelect={setDateRange}
+              className="w-auto"
+            />
+            
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading || refreshing}>
+              <RefreshCw className={cn("w-4 h-4 mr-2", refreshing && "animate-spin")} />
+              Refresh
+            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Filter className="w-4 h-4 mr-2" />
+                  {selectedDevice ? `Device: ${selectedDevice}` : 'All Devices'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setSelectedDevice('')}>
+                  All Devices
+                </DropdownMenuItem>
+                {device_ids && device_ids.map((deviceId) => (
+                  <DropdownMenuItem key={deviceId} onClick={() => setSelectedDevice(deviceId)}>
+                    {deviceId}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Filter className="w-4 h-4 mr-2" />
+                  {selectedStage ? `Stage: ${selectedStage}` : 'All Stages'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setSelectedStage('')}>
+                  All Stages
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStage('No Stage')}>
+                  No Stage
+                </DropdownMenuItem>
+                {Object.keys(stageStats).filter(stage => stage !== 'No Stage').map((stage) => (
+                  <DropdownMenuItem key={stage} onClick={() => setSelectedStage(stage)}>
+                    {stage}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            <Button className="bg-blue-600 hover:bg-blue-700" size="sm" onClick={handleExport}>
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Statistics Cards - Fixed boxes first */}
