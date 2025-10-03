@@ -130,7 +130,7 @@ const Analytics = () => {
       // Handle Welcome Message (NULL stage)
       if (selectedStage) {
         if (selectedStage === 'Welcome Message') {
-          params.append('stage', 'WELCOME_MESSAGE_NULL');
+          params.append('stage', null);
         } else {
           params.append('stage', selectedStage);
         }
