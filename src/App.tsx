@@ -22,7 +22,7 @@ import {
 import Dashboard from './pages/Dashboard';
 import FlowBuilder from './pages/FlowBuilder';
 import FlowManager from './pages/FlowManager';
-import Analytics from './pages/Analytics';
+import Analytics from './pages/AnalyticsNew';
 import DeviceSettings from './pages/DeviceSettings';
 import SetStage from './pages/SetStage';
 import WhatsAppBot from './pages/WhatsAppBot';
