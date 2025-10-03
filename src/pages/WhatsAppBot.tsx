@@ -175,33 +175,8 @@ const WhatsAppBot = () => {
       const data = await response.json();
       console.log('WhatsAppBot: Received data:', data);
       
-      // Set the data
+      // Set the data (stats will be calculated from filteredData, not here)
       setWasapBotData(data.records || []);
-      
-      // Calculate statistics with date filtering applied
-      const records = data.records || [];
-      
-      // Calculate fixed statistics
-      const fixedStats = {
-        totalProspects: records.length,
-        activeFlows: records.filter((r: WasapBotRecord) => r.current_node_id && r.current_node_id !== 'end').length,
-        completed: records.filter((r: WasapBotRecord) => r.current_node_id === 'end').length,
-        packages: records.filter((r: WasapBotRecord) => r.pakej && r.pakej !== '').length,
-        addresses: records.filter((r: WasapBotRecord) => r.alamat && r.alamat !== '').length,
-        names: records.filter((r: WasapBotRecord) => r.nama && r.nama !== '').length,
-        noPhone: records.filter((r: WasapBotRecord) => r.no_fon && r.no_fon !== '').length,
-        payments: records.filter((r: WasapBotRecord) => r.cara_bayaran && r.cara_bayaran !== '').length
-      };
-      
-      setStats(fixedStats);
-      
-      // Calculate dynamic stage statistics
-      const stages: Record<string, number> = {};
-      records.forEach((record: WasapBotRecord) => {
-        const stage = (!record.stage || record.stage === '') ? 'No Stage' : record.stage;
-        stages[stage] = (stages[stage] || 0) + 1;
-      });
-      setStageStats(stages);
       
     } catch (err) {
       console.error('WhatsAppBot: Error fetching data:', err);
@@ -376,6 +351,32 @@ const WhatsAppBot = () => {
     return true;
   });
 
+  // Calculate statistics from filtered data (not raw data)
+  const calculatedStats = {
+    totalProspects: filteredData.length,
+    activeFlows: filteredData.filter((r) => r.current_node_id && r.current_node_id !== 'end').length,
+    completed: filteredData.filter((r) => r.current_node_id === 'end').length,
+    packages: filteredData.filter((r) => r.pakej && r.pakej !== '').length,
+    addresses: filteredData.filter((r) => r.alamat && r.alamat !== '').length,
+    names: filteredData.filter((r) => r.nama && r.nama !== '').length,
+    noPhone: filteredData.filter((r) => r.no_fon && r.no_fon !== '').length,
+    payments: filteredData.filter((r) => r.cara_bayaran && r.cara_bayaran !== '').length
+  };
+
+  // Get all available stages from ALL data (for dropdown)
+  const allAvailableStages: Record<string, number> = {};
+  wasapBotData.forEach((record) => {
+    const stage = (!record.stage || record.stage === '') ? 'No Stage' : record.stage;
+    allAvailableStages[stage] = (allAvailableStages[stage] || 0) + 1;
+  });
+
+  // Calculate dynamic stage statistics from filtered data (for display)
+  const calculatedStageStats: Record<string, number> = {};
+  filteredData.forEach((record) => {
+    const stage = (!record.stage || record.stage === '') ? 'No Stage' : record.stage;
+    calculatedStageStats[stage] = (calculatedStageStats[stage] || 0) + 1;
+  });
+
   if (!has_devices) {
     return (
       <div className="space-y-6">
@@ -468,7 +469,7 @@ const WhatsAppBot = () => {
                 <DropdownMenuItem onClick={() => setSelectedStage('No Stage')}>
                   No Stage
                 </DropdownMenuItem>
-                {Object.keys(stageStats).filter(stage => stage !== 'No Stage').map((stage) => (
+                {Object.keys(allAvailableStages).filter(stage => stage !== 'No Stage').map((stage) => (
                   <DropdownMenuItem key={stage} onClick={() => setSelectedStage(stage)}>
                     {stage}
                   </DropdownMenuItem>
@@ -491,7 +492,7 @@ const WhatsAppBot = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Prospects</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProspects}</div>
+            <div className="text-2xl font-bold">{calculatedStats.totalProspects}</div>
           </CardContent>
         </Card>
 
@@ -500,7 +501,7 @@ const WhatsAppBot = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Active Flows</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.activeFlows}</div>
+            <div className="text-2xl font-bold text-green-600">{calculatedStats.activeFlows}</div>
           </CardContent>
         </Card>
 
@@ -509,7 +510,7 @@ const WhatsAppBot = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Complete</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
+            <div className="text-2xl font-bold text-blue-600">{calculatedStats.completed}</div>
           </CardContent>
         </Card>
 
@@ -518,7 +519,7 @@ const WhatsAppBot = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Package</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.packages}</div>
+            <div className="text-2xl font-bold">{calculatedStats.packages}</div>
           </CardContent>
         </Card>
 
@@ -527,7 +528,7 @@ const WhatsAppBot = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Address</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.addresses}</div>
+            <div className="text-2xl font-bold">{calculatedStats.addresses}</div>
           </CardContent>
         </Card>
 
@@ -536,7 +537,7 @@ const WhatsAppBot = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Name</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.names}</div>
+            <div className="text-2xl font-bold">{calculatedStats.names}</div>
           </CardContent>
         </Card>
 
@@ -545,7 +546,7 @@ const WhatsAppBot = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">No Phone</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.noPhone}</div>
+            <div className="text-2xl font-bold">{calculatedStats.noPhone}</div>
           </CardContent>
         </Card>
 
@@ -554,15 +555,15 @@ const WhatsAppBot = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Payment</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.payments}</div>
+            <div className="text-2xl font-bold">{calculatedStats.payments}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Dynamic Stage Statistics Cards */}
-      {Object.keys(stageStats).length > 0 && (
+      {Object.keys(calculatedStageStats).length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {Object.entries(stageStats).map(([stage, count]) => (
+          {Object.entries(calculatedStageStats).map(([stage, count]) => (
             <Card key={stage} className="border-dashed">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
