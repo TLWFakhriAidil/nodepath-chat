@@ -88,7 +88,11 @@ interface AIWhatsappDataResponse {
  * AI WhatsApp Data Table component with device-based filtering
  * Automatically filters conversations by user's configured devices
  */
-const AIWhatsappDataTable = ({ selectedDevice, selectedStage }: { selectedDevice?: string; selectedStage?: string }) => {
+const AIWhatsappDataTable = ({ selectedDevice, selectedStage, dateRange }: { 
+  selectedDevice?: string; 
+  selectedStage?: string;
+  dateRange?: { from?: Date; to?: Date };
+}) => {
   const { has_devices, device_ids } = useDevice();
   const [conversations, setConversations] = useState<AIWhatsappConversation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,6 +142,14 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage }: { selectedDevice
         ...(searchTerm && { search: searchTerm })
       });
       
+      // Add date range filters
+      if (dateRange?.from) {
+        params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+      }
+      if (dateRange?.to) {
+        params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+      }
+      
       // Add user's device IDs to filter the data
       if (device_ids && device_ids.length > 0) {
         params.append('user_device_ids', device_ids.join(','));
@@ -185,7 +197,7 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage }: { selectedDevice
     } else if (!has_devices) {
       setShowDeviceRequiredPopup(true);
     }
-  }, [currentPage, pageSize, deviceFilter, selectedStage, searchTerm, has_devices, device_ids]);
+  }, [currentPage, pageSize, deviceFilter, selectedStage, searchTerm, dateRange, has_devices, device_ids]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {

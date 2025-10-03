@@ -136,38 +136,18 @@ const Analytics = () => {
     }
   };
   
-  // Fetch available stages
-  const fetchAvailableStages = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (device_ids && device_ids.length > 0) {
-        params.append('deviceIds', device_ids.join(','));
-      }
-      
-      const response = await fetch(`/api/ai-whatsapp/ai/ai-whatsapp/stages?${params}`, {
-        credentials: 'include',
-      });
-      
-      if (response.ok) {
-        const stages = await response.json();
-        setAvailableStages(stages);
-      }
-    } catch (err) {
-      console.error('Error fetching available stages:', err);
+  // Update available stages from analytics data
+  useEffect(() => {
+    if (analyticsData?.stageDistribution) {
+      const stages = Object.keys(analyticsData.stageDistribution).filter(Boolean);
+      setAvailableStages(stages);
     }
-  };
+  }, [analyticsData]);
   
   // Load data on component mount and when filters change
   useEffect(() => {
     fetchAnalyticsData();
   }, [dateRange, selectedDevice, selectedStage]);
-  
-  // Fetch available stages on mount
-  useEffect(() => {
-    if (has_devices) {
-      fetchAvailableStages();
-    }
-  }, [has_devices, device_ids]);
 
   // Listen for refresh events from AIWhatsappDataTable
   useEffect(() => {
@@ -673,7 +653,11 @@ const Analytics = () => {
       
       {/* AI WhatsApp Data Table */}
       <div className="mt-8">
-        <AIWhatsappDataTable selectedDevice={selectedDevice} selectedStage={selectedStage} />
+        <AIWhatsappDataTable 
+          selectedDevice={selectedDevice} 
+          selectedStage={selectedStage}
+          dateRange={dateRange}
+        />
       </div>
       
       {/* Device Required Popup */}
