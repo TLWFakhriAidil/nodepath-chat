@@ -1,18 +1,15 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/TLWFakhriAidil/nodepath-chat/internal/models"
+	"nodepath-chat/internal/models"
 )
 
 type BillingService struct {
@@ -161,34 +158,10 @@ func (s *BillingService) UpdatePaymentStatus(ctx context.Context, billID string,
 
 // createBillplzPayment creates a payment with Billplz API
 func (s *BillingService) createBillplzPayment(req models.CreatePaymentRequest, invoiceNumber string) (string, string, error) {
-	// Mock Billplz configuration - in production, load from config
-	collectionID := "test_collection_id"
-	apiKey := "test_api_key"
-	callbackURL := "https://yourdomain.com/api/billing/callback"
-	redirectURL := "https://yourdomain.com/billing?payment=success"
-	
 	// Convert amount to cents (Billplz expects amount in cents)
 	amountCents := int(req.Amount * 100)
 	
-	billplzReq := models.BillplzPaymentRequest{
-		CollectionID: collectionID,
-		Email:        req.CustomerEmail,
-		Name:         req.CustomerName,
-		Amount:       amountCents,
-		Description:  req.Description,
-		CallbackURL:  callbackURL,
-		RedirectURL:  redirectURL,
-		Reference1:   invoiceNumber,
-		Reference1Label: "Invoice Number",
-	}
-	
-	// Prepare request body
-	reqBody, err := json.Marshal(billplzReq)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to marshal Billplz request: %w", err)
-	}
-	
-	// For testing, return mock response
+	// For testing, return mock response for RM 1.00
 	if amountCents == 100 { // RM 1.00 test amount
 		mockBillID := fmt.Sprintf("bill_%d", time.Now().Unix())
 		mockURL := fmt.Sprintf("https://www.billplz-sandbox.com/bills/%s", mockBillID)
