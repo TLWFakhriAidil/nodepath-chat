@@ -25,9 +25,13 @@ func (h *ProfileHandlers) GetProfile(c *fiber.Ctx) error {
 		})
 	}
 
+	// First, try the query with new columns (after migration)
 	query := `
-		SELECT id, email, full_name, gmail, phone, status, expired, 
-		       is_active, created_at, updated_at, last_login
+		SELECT id, email, full_name, 
+		       COALESCE(gmail, '') as gmail, 
+		       COALESCE(phone, '') as phone, 
+		       COALESCE(status, 'active') as status, 
+		       expired, is_active, created_at, updated_at, last_login
 		FROM user_nodepath 
 		WHERE id = ?
 	`
@@ -38,16 +42,38 @@ func (h *ProfileHandlers) GetProfile(c *fiber.Ctx) error {
 		&user.Status, &user.Expired, &user.IsActive, &user.CreatedAt,
 		&user.UpdatedAt, &user.LastLogin,
 	)
+	
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "User not found",
+		// If columns don't exist, fall back to basic query
+		fallbackQuery := `
+			SELECT id, email, full_name, is_active, created_at, updated_at, last_login
+			FROM user_nodepath 
+			WHERE id = ?
+		`
+		
+		err = h.db.QueryRow(fallbackQuery, userID).Scan(
+			&user.ID, &user.Email, &user.FullName, &user.IsActive, 
+			&user.CreatedAt, &user.UpdatedAt, &user.LastLogin,
+		)
+		
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "User not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to retrieve profile",
+				"details": err.Error(),
 			})
 		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to retrieve profile",
-			"details": err.Error(),
-		})
+		
+		// Set default values for missing fields
+		emptyString := ""
+		user.Gmail = &emptyString
+		user.Phone = &emptyString
+		user.Status = "active"
+		user.Expired = nil
 	}
 
 	return c.JSON(fiber.Map{
@@ -132,14 +158,21 @@ func (h *ProfileHandlers) GetUserStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	query := `SELECT status FROM user_nodepath WHERE id = ?`
+	// Try to get status, fallback if column doesn't exist
+	query := `SELECT COALESCE(status, 'active') as status FROM user_nodepath WHERE id = ?`
 	
 	var status string
 	err := h.db.QueryRow(query, userID).Scan(&status)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to get user status",
-		})
+		// If status column doesn't exist, assume user is active
+		if err.Error() == "no such column: status" {
+			status = "active"
+		} else {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to get user status",
+				"details": err.Error(),
+			})
+		}
 	}
 
 	return c.JSON(fiber.Map{

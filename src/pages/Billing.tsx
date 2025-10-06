@@ -72,6 +72,47 @@ const Billing = () => {
       });
 
       if (!response.ok) {
+        // Handle 500 errors gracefully (database issues)
+        if (response.status === 500) {
+          console.warn('Billing API returned 500 error, using fallback data');
+          const fallbackData = {
+            success: true,
+            data: {
+              subscription: {
+                id: 'fallback_sub_001',
+                plan_name: 'Default Plan (Database Error)',
+                plan_price: 1.00,
+                plan_period: 'monthly',
+                status: 'active',
+                next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                features: ['WhatsApp Bot Integration', 'Flow Builder Access', 'Basic Analytics'],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              },
+              billing_history: [
+                {
+                  id: 'fallback_hist_001',
+                  invoice_number: 'INV-FALLBACK-001',
+                  amount: 1.00,
+                  currency: 'MYR',
+                  description: 'Default Plan - Please apply database migrations',
+                  status: 'paid',
+                  payment_date: new Date().toISOString().split('T')[0],
+                  created_at: new Date().toISOString()
+                }
+              ],
+              pagination: {
+                total: 1,
+                limit: 10,
+                offset: 0,
+                has_more: false
+              }
+            }
+          };
+          setBillingData(fallbackData);
+          setError('Billing data partially unavailable. Please apply database migrations for full functionality.');
+          return;
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 

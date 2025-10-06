@@ -81,7 +81,35 @@ const Profile: React.FC = () => {
           navigate('/login');
           return;
         }
-        throw new Error('Failed to fetch profile');
+        
+        // Handle 500 errors gracefully
+        if (response.status === 500) {
+          console.warn('Profile API returned 500 error, using fallback data');
+          // Set default user data when API fails
+          const fallbackUser: User = {
+            id: '1',
+            email: 'user@example.com',
+            full_name: 'User',
+            gmail: '',
+            phone: '',
+            status: 'active',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          setUser(fallbackUser);
+          setFormData({
+            full_name: fallbackUser.full_name,
+            gmail: fallbackUser.gmail || '',
+            phone: fallbackUser.phone || '',
+            password: '',
+            new_password: '',
+          });
+          setError('Profile data unavailable. Please apply database migrations to access all features.');
+          return;
+        }
+        
+        throw new Error(`HTTP ${response.status}: Failed to fetch profile`);
       }
 
       const data = await response.json();
@@ -94,8 +122,12 @@ const Profile: React.FC = () => {
           password: '',
           new_password: '',
         });
+        setError(null); // Clear any previous errors
+      } else {
+        throw new Error('Invalid response format');
       }
     } catch (err) {
+      console.error('Profile fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load profile');
     } finally {
       setLoading(false);

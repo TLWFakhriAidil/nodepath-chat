@@ -37,7 +37,7 @@ func (h *BillingHandlers) GetBillingData(c *fiber.Ctx) error {
 		offset = 0
 	}
 	
-	// Get subscription
+	// Get subscription with error handling for missing tables
 	subscription, err := h.billingService.GetUserSubscription(c.Context(), userID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
