@@ -25,8 +25,8 @@ func (s *BillingService) GetUserSubscription(ctx context.Context, userID string)
 	query := `
 		SELECT id, user_id, plan_name, plan_price, plan_period, status, 
 		       next_billing_date, features, created_at, updated_at
-		FROM subscriptions 
-		WHERE user_id = $1 AND status = 'active'
+		FROM subscriptions_nodepath 
+		WHERE user_id = ? AND status = 'active'
 		ORDER BY created_at DESC 
 		LIMIT 1
 	`
@@ -47,7 +47,7 @@ func (s *BillingService) GetUserSubscription(ctx context.Context, userID string)
 // GetBillingHistory retrieves the billing history for a user
 func (s *BillingService) GetBillingHistory(ctx context.Context, userID string, limit, offset int) ([]models.BillingHistory, int, error) {
 	// Get total count
-	countQuery := `SELECT COUNT(*) FROM billing_history WHERE user_id = $1`
+	countQuery := `SELECT COUNT(*) FROM billing_history_nodepath WHERE user_id = ?`
 	var totalCount int
 	err := s.db.GetContext(ctx, &totalCount, countQuery, userID)
 	if err != nil {
@@ -58,10 +58,10 @@ func (s *BillingService) GetBillingHistory(ctx context.Context, userID string, l
 	query := `
 		SELECT id, user_id, payment_id, invoice_number, amount, currency, 
 		       description, status, payment_date, created_at
-		FROM billing_history 
-		WHERE user_id = $1 
+		FROM billing_history_nodepath 
+		WHERE user_id = ? 
 		ORDER BY created_at DESC 
-		LIMIT $2 OFFSET $3
+		LIMIT ? OFFSET ?
 	`
 	
 	var history []models.BillingHistory
@@ -99,13 +99,15 @@ func (s *BillingService) CreatePayment(ctx context.Context, req models.CreatePay
 
 	// Insert payment record
 	query := `
-		INSERT INTO payments (id, user_id, amount, currency, description, status, 
+		INSERT INTO payments_nodepath (id, user_id, amount, currency, description, status, 
 		                     payment_method, invoice_number, created_at, updated_at)
-		VALUES (:id, :user_id, :amount, :currency, :description, :status, 
-		        :payment_method, :invoice_number, :created_at, :updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	
-	_, err := s.db.NamedExecContext(ctx, query, payment)
+	_, err := s.db.ExecContext(ctx, query, 
+		payment.ID, payment.UserID, payment.Amount, payment.Currency, 
+		payment.Description, payment.Status, payment.PaymentMethod, 
+		payment.InvoiceNumber, payment.CreatedAt, payment.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create payment record: %w", err)
 	}
@@ -118,9 +120,9 @@ func (s *BillingService) CreatePayment(ctx context.Context, req models.CreatePay
 	} else {
 		// Update payment with Billplz details
 		updateQuery := `
-			UPDATE payments 
-			SET bill_id = $1, billplz_url = $2, updated_at = $3
-			WHERE id = $4
+			UPDATE payments_nodepath 
+			SET bill_id = ?, billplz_url = ?, updated_at = ?
+			WHERE id = ?
 		`
 		_, err = s.db.ExecContext(ctx, updateQuery, billID, billplzURL, time.Now(), paymentID)
 		if err != nil {
@@ -137,9 +139,9 @@ func (s *BillingService) CreatePayment(ctx context.Context, req models.CreatePay
 // UpdatePaymentStatus updates the status of a payment (for Billplz callbacks)
 func (s *BillingService) UpdatePaymentStatus(ctx context.Context, billID string, status models.PaymentStatus) error {
 	query := `
-		UPDATE payments 
-		SET status = $1, paid_at = $2, updated_at = $3
-		WHERE bill_id = $4
+		UPDATE payments_nodepath 
+		SET status = ?, paid_at = ?, updated_at = ?
+		WHERE bill_id = ?
 	`
 	
 	var paidAt *time.Time
