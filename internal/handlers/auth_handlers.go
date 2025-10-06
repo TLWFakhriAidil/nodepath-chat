@@ -20,11 +20,96 @@ type AuthHandlers struct {
 	db *sql.DB
 }
 
+// autoMigrate creates or updates the user_nodepath and user_sessions_nodepath tables
+func (ah *AuthHandlers) autoMigrate() error {
+	// Create user_nodepath table if not exists
+	createUserTable := `
+		CREATE TABLE IF NOT EXISTS user_nodepath (
+			id CHAR(36) PRIMARY KEY,
+			email VARCHAR(255) UNIQUE NOT NULL,
+			full_name VARCHAR(255) NOT NULL,
+			password VARCHAR(255) NOT NULL,
+			is_active TINYINT(1) DEFAULT 1,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			last_login TIMESTAMP NULL,
+			status VARCHAR(255) DEFAULT 'Trial',
+			expired VARCHAR(255) NULL
+		)
+	`
+	
+	if _, err := ah.db.Exec(createUserTable); err != nil {
+		logrus.WithError(err).Error("Failed to create user_nodepath table")
+		return err
+	}
+	
+	// Create user_sessions_nodepath table if not exists
+	createSessionTable := `
+		CREATE TABLE IF NOT EXISTS user_sessions_nodepath (
+			id CHAR(36) PRIMARY KEY,
+			user_id CHAR(36) NOT NULL,
+			token VARCHAR(255) UNIQUE NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			INDEX idx_token (token),
+			INDEX idx_user_id (user_id),
+			INDEX idx_expires_at (expires_at)
+		)
+	`
+	
+	if _, err := ah.db.Exec(createSessionTable); err != nil {
+		logrus.WithError(err).Error("Failed to create user_sessions_nodepath table")
+		return err
+	}
+	
+	// Check and add missing columns to user_nodepath
+	columns := []struct {
+		name string
+		definition string
+	}{
+		{"status", "ALTER TABLE user_nodepath ADD COLUMN status VARCHAR(255) DEFAULT 'Trial'"},
+		{"expired", "ALTER TABLE user_nodepath ADD COLUMN expired VARCHAR(255) NULL"},
+	}
+	
+	for _, col := range columns {
+		var count int
+		err := ah.db.QueryRow(`
+			SELECT COUNT(*) 
+			FROM INFORMATION_SCHEMA.COLUMNS 
+			WHERE TABLE_NAME = 'user_nodepath' 
+			AND COLUMN_NAME = ?
+		`, col.name).Scan(&count)
+		
+		if err != nil {
+			logrus.WithError(err).Errorf("Failed to check column %s in user_nodepath", col.name)
+			continue
+		}
+		
+		if count == 0 {
+			if _, err := ah.db.Exec(col.definition); err != nil {
+				logrus.WithError(err).Errorf("Failed to add column %s to user_nodepath", col.name)
+			} else {
+				logrus.Infof("Added column %s to user_nodepath", col.name)
+			}
+		}
+	}
+	
+	logrus.Info("Auth tables migration completed successfully")
+	return nil
+}
+
 // NewAuthHandlers creates a new instance of AuthHandlers
 func NewAuthHandlers(db *sql.DB) *AuthHandlers {
-	return &AuthHandlers{
+	ah := &AuthHandlers{
 		db: db,
 	}
+	// Run auto-migration for user_nodepath and user_sessions_nodepath tables
+	if db != nil {
+		if err := ah.autoMigrate(); err != nil {
+			logrus.WithError(err).Error("Failed to auto-migrate auth tables")
+		}
+	}
+	return ah
 }
 
 // RegisterRequest represents the registration request payload
@@ -76,9 +161,9 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check if user already exists
+	// Check if user already exists in user_nodepath table
 	var existingUserID string
-	err := ah.db.QueryRow("SELECT id FROM users WHERE email = ?", req.Email).Scan(&existingUserID)
+	err := ah.db.QueryRow("SELECT id FROM user_nodepath WHERE email = ?", req.Email).Scan(&existingUserID)
 	if err == nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 			"success": false,
@@ -104,28 +189,33 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 
 	// Generate UUID for user
 	userID := generateUUID()
+	
+	// Calculate expired date (current date + 7 days)
+	expiredDate := time.Now().Add(7 * 24 * time.Hour).Format("2006-01-02 15:04:05")
 
-	// Insert new user
+	// Insert new user into user_nodepath table with status='Trial' and expired=now+7days
 	_, err = ah.db.Exec(
-		"INSERT INTO users (id, email, full_name, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, NOW(), NOW())",
-		userID, req.Email, req.FullName, string(hashedPassword),
+		`INSERT INTO user_nodepath 
+		(id, email, full_name, password, is_active, created_at, updated_at, status, expired) 
+		VALUES (?, ?, ?, ?, 1, NOW(), NOW(), 'Trial', ?)`,
+		userID, req.Email, req.FullName, string(hashedPassword), expiredDate,
 	)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create user")
+		logrus.WithError(err).Error("Failed to create user in user_nodepath")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Failed to create user",
 		})
 	}
 
-	// Fetch the created user
+	// Fetch the created user from user_nodepath
 	var user models.User
 	err = ah.db.QueryRow(
-		"SELECT id, email, full_name, is_active, created_at, updated_at, last_login FROM users WHERE id = ?",
+		"SELECT id, email, full_name, is_active, created_at, updated_at, last_login FROM user_nodepath WHERE id = ?",
 		userID,
 	).Scan(&user.ID, &user.Email, &user.FullName, &user.IsActive, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to fetch created user")
+		logrus.WithError(err).Error("Failed to fetch created user from user_nodepath")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Failed to create user",
@@ -213,11 +303,11 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 		})
 	}
 
-	// Fetch user from database
+	// Fetch user from user_nodepath table
 	var user models.User
 	var hashedPassword string
 	err := ah.db.QueryRow(
-		"SELECT id, email, full_name, password_hash, is_active, created_at, updated_at, last_login FROM users WHERE email = ? AND is_active = 1",
+		"SELECT id, email, full_name, password, is_active, created_at, updated_at, last_login FROM user_nodepath WHERE email = ? AND is_active = 1",
 		req.Email,
 	).Scan(&user.ID, &user.Email, &user.FullName, &hashedPassword, &user.IsActive, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin)
 	if err == sql.ErrNoRows {
@@ -226,7 +316,7 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 			"error":   "Invalid email or password",
 		})
 	} else if err != nil {
-		logrus.WithError(err).Error("Failed to fetch user")
+		logrus.WithError(err).Error("Failed to fetch user from user_nodepath")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Internal server error",
@@ -242,10 +332,10 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 		})
 	}
 
-	// Update last_login timestamp
-	_, err = ah.db.Exec("UPDATE users SET last_login = NOW() WHERE id = ?", user.ID)
+	// Update last_login timestamp in user_nodepath
+	_, err = ah.db.Exec("UPDATE user_nodepath SET last_login = NOW() WHERE id = ?", user.ID)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to update last_login")
+		logrus.WithError(err).Error("Failed to update last_login in user_nodepath")
 		// Don't fail the login for this error, just log it
 	}
 
@@ -353,14 +443,14 @@ func (ah *AuthHandlers) GetCurrentUser(c *fiber.Ctx) error {
 		})
 	}
 
-	// Fetch user from database
+	// Fetch user from user_nodepath table
 	var user models.User
 	err := ah.db.QueryRow(
-		"SELECT id, email, full_name, is_active, created_at, updated_at, last_login FROM users WHERE id = ?",
+		"SELECT id, email, full_name, is_active, created_at, updated_at, last_login FROM user_nodepath WHERE id = ?",
 		userID,
 	).Scan(&user.ID, &user.Email, &user.FullName, &user.IsActive, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to fetch current user")
+		logrus.WithError(err).Error("Failed to fetch current user from user_nodepath")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Failed to fetch user data",
@@ -390,27 +480,27 @@ func generateUUID() string {
 	return hex.EncodeToString(bytes)
 }
 
-// storeSession stores a session token with user ID in database
+// storeSession stores a session token with user ID in user_sessions_nodepath table
 func (ah *AuthHandlers) storeSession(token string, userID string, ipAddress, userAgent string) error {
 	// Set expiration time to 24 hours from now
 	expiresAt := time.Now().Add(24 * time.Hour)
 	// Generate UUID for session ID
 	sessionID := generateUUID()
 	_, err := ah.db.Exec(`
-		INSERT INTO user_sessions (id, user_id, token, expires_at) 
-		VALUES (?, ?, ?, ?)
+		INSERT INTO user_sessions_nodepath (id, user_id, token, expires_at, created_at) 
+		VALUES (?, ?, ?, ?, NOW())
 	`, sessionID, userID, token, expiresAt)
 
 	return err
 }
 
-// getSession retrieves user ID from session token in database
+// getSession retrieves user ID from session token in user_sessions_nodepath table
 func (ah *AuthHandlers) getSession(token string) (string, bool) {
 	var userID string
 	var expiresAt time.Time
 
 	err := ah.db.QueryRow(`
-		SELECT user_id, expires_at FROM user_sessions 
+		SELECT user_id, expires_at FROM user_sessions_nodepath 
 		WHERE token = ? AND expires_at > NOW()
 	`, token).Scan(&userID, &expiresAt)
 
@@ -421,15 +511,15 @@ func (ah *AuthHandlers) getSession(token string) (string, bool) {
 	return userID, true
 }
 
-// removeSession removes a session token from database
+// removeSession removes a session token from user_sessions_nodepath table
 func (ah *AuthHandlers) removeSession(token string) error {
-	_, err := ah.db.Exec(`DELETE FROM user_sessions WHERE token = ?`, token)
+	_, err := ah.db.Exec(`DELETE FROM user_sessions_nodepath WHERE token = ?`, token)
 	return err
 }
 
-// cleanupExpiredSessions removes expired sessions from database
+// cleanupExpiredSessions removes expired sessions from user_sessions_nodepath table
 func (ah *AuthHandlers) cleanupExpiredSessions() error {
-	_, err := ah.db.Exec(`DELETE FROM user_sessions WHERE expires_at < NOW()`)
+	_, err := ah.db.Exec(`DELETE FROM user_sessions_nodepath WHERE expires_at < NOW()`)
 	return err
 }
 
