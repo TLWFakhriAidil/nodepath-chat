@@ -232,10 +232,12 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	// Store session in database
-	err = ah.storeSession(token, user.ID, c.IP(), c.Get("User-Agent"))
+	// Store session in database with client information
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	err = ah.storeSession(token, user.ID, ipAddress, userAgent)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to store session")
+		logrus.WithError(err).Error("Failed to store session in user_sessions_nodepath")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Failed to create session",
@@ -251,18 +253,6 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 		Secure:   false, // Set to true in production with HTTPS
 		SameSite: "Lax",
 	})
-
-	// Store session in database with client information
-	ipAddress := c.IP()
-	userAgent := c.Get("User-Agent")
-	err = ah.storeSession(token, user.ID, ipAddress, userAgent)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to store session")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"success": false,
-			"error":   "Failed to create session",
-		})
-	}
 
 	logrus.WithField("user_id", user.ID).Info("User registered successfully")
 
@@ -364,7 +354,7 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 	userAgent := c.Get("User-Agent")
 	err = ah.storeSession(token, user.ID, ipAddress, userAgent)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to store session")
+		logrus.WithError(err).Error("Failed to store session in user_sessions_nodepath")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Failed to create session",
