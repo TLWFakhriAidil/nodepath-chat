@@ -17,7 +17,8 @@ import {
   HelpCircle,
   Zap,
   List,
-  Smartphone
+  Smartphone,
+  CreditCard
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -82,6 +83,13 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       icon: Smartphone,
       current: location.pathname === '/device-settings',
       requiresDevice: false // Device settings is always accessible
+    },
+    {
+      name: 'Billing',
+      href: '/billing',
+      icon: CreditCard,
+      current: location.pathname === '/billing',
+      requiresDevice: false // Billing is always accessible
     }
   ];
 
