@@ -15,6 +15,7 @@ import (
 	"nodepath-chat/internal/whatsapp"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 )
 
@@ -100,6 +101,7 @@ type Handlers struct {
 	aiWhatsappHandlers     *AIWhatsappHandlers
 	authHandlers           *AuthHandlers
 	wasapBotHandlers       *WasapBotHandlers
+	billingHandlers        *BillingHandlers
 	executionProcessRepo   repository.ExecutionProcessRepository
 	db                     *sql.DB // Add database field
 }
@@ -138,6 +140,15 @@ func NewHandlers(
 	// Initialize authentication handlers
 	authHandlers := NewAuthHandlers(db)
 
+	// Initialize billing service and handlers
+	var billingHandlers *BillingHandlers
+	if db != nil {
+		// Convert sql.DB to sqlx.DB
+		sqlxDB := sqlx.NewDb(db, "mysql")
+		billingService := services.NewBillingService(sqlxDB)
+		billingHandlers = NewBillingHandlers(billingService)
+	}
+
 	// Create main handlers instance
 	mainHandlers := &Handlers{
 		flowService:           flowService,
@@ -152,6 +163,7 @@ func NewHandlers(
 		aiWhatsappHandlers:    aiWhatsappHandlers,
 		authHandlers:          authHandlers,
 		wasapBotHandlers:      wasapBotHandlers,
+		billingHandlers:       billingHandlers,
 		executionProcessRepo:  executionProcessRepo,
 		db:                    db, // Store the database
 	}
@@ -260,6 +272,18 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 
 	// Authentication routes
 	h.authHandlers.SetupAuthRoutes(api)
+
+	// Billing routes (protected with authentication)
+	if h.billingHandlers != nil {
+		billing := api.Group("/billing")
+		billing.Use(h.authHandlers.AuthMiddleware())
+		billing.Get("/", h.billingHandlers.GetBillingData)
+		billing.Get("/subscription", h.billingHandlers.GetSubscription)
+		billing.Get("/history", h.billingHandlers.GetBillingHistoryOnly)
+		billing.Post("/payment", h.billingHandlers.CreatePayment)
+		billing.Post("/test-payment", h.billingHandlers.TestPayment)
+		billing.Post("/callback", h.billingHandlers.BillplzCallback) // Billplz callback (no auth required)
+	}
 
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")
