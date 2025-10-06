@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { LogOut, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,12 +12,58 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+interface SystemStatus {
+  status: string;
+  system_online: boolean;
+}
+
+interface TopBarProps {
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+}
+
 /**
  * TopBar component that displays the application header with user information and logout functionality
  * Integrates with the authentication context to provide user management features
  */
-export const TopBar: React.FC = () => {
+const TopBar: React.FC<TopBarProps> = ({ sidebarOpen, setSidebarOpen }) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [systemStatus, setSystemStatus] = useState<SystemStatus>({ status: 'active', system_online: true });
+
+  /**
+   * Fetch user system status
+   */
+  const fetchSystemStatus = async () => {
+    try {
+      const response = await fetch('/api/profile/status', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSystemStatus({
+            status: data.status,
+            system_online: data.system_online
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch system status:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchSystemStatus();
+    // Refresh status every 30 seconds
+    const interval = setInterval(fetchSystemStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   /**
    * Handle user logout
@@ -28,6 +75,13 @@ export const TopBar: React.FC = () => {
     } catch (error) {
       console.error('Logout failed:', error);
     }
+  };
+
+  /**
+   * Handle profile navigation
+   */
+  const handleProfileClick = () => {
+    navigate('/profile');
   };
 
   return (
@@ -46,8 +100,10 @@ export const TopBar: React.FC = () => {
         
         <div className="flex items-center space-x-4">
           <div className="hidden md:flex items-center space-x-2 bg-slate-100/50 dark:bg-slate-800/50 rounded-lg px-3 py-1.5">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-sm text-slate-600 dark:text-slate-300">System Online</span>
+            <div className={`w-2 h-2 rounded-full ${systemStatus.system_online ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-sm text-slate-600 dark:text-slate-300">
+              System {systemStatus.system_online ? 'Online' : 'Offline'}
+            </span>
           </div>
           
           {/* User dropdown menu */}
@@ -73,7 +129,7 @@ export const TopBar: React.FC = () => {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem className="cursor-pointer" onClick={handleProfileClick}>
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>

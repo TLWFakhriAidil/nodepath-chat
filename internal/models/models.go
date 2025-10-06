@@ -49,10 +49,23 @@ type User struct {
 	Email     string     `json:"email" db:"email"`
 	FullName  string     `json:"full_name" db:"full_name"`
 	Password  string     `json:"-" db:"password"` // Don't include password in JSON responses
+	Gmail     *string    `json:"gmail" db:"gmail"`
+	Phone     *string    `json:"phone" db:"phone"`
+	Status    string     `json:"status" db:"status"`
+	Expired   *time.Time `json:"expired" db:"expired"`
 	IsActive  bool       `json:"is_active" db:"is_active"`
 	CreatedAt time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
 	LastLogin *time.Time `json:"last_login" db:"last_login"`
+}
+
+// UserProfileUpdate represents the payload for updating user profile
+type UserProfileUpdate struct {
+	FullName    string  `json:"full_name"`
+	Gmail       *string `json:"gmail"`
+	Phone       *string `json:"phone"`
+	Password    *string `json:"password,omitempty"` // Optional password update
+	NewPassword *string `json:"new_password,omitempty"`
 }
 
 // DeviceSetting represents device configuration linked to a user

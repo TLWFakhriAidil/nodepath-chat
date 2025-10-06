@@ -102,6 +102,7 @@ type Handlers struct {
 	authHandlers           *AuthHandlers
 	wasapBotHandlers       *WasapBotHandlers
 	billingHandlers        *BillingHandlers
+	profileHandlers        *ProfileHandlers
 	executionProcessRepo   repository.ExecutionProcessRepository
 	db                     *sql.DB // Add database field
 }
@@ -283,6 +284,15 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 		billing.Post("/payment", h.billingHandlers.CreatePayment)
 		billing.Post("/test-payment", h.billingHandlers.TestPayment)
 		billing.Post("/callback", h.billingHandlers.BillplzCallback) // Billplz callback (no auth required)
+	}
+
+	// Profile routes (protected with authentication)
+	if h.profileHandlers != nil {
+		profile := api.Group("/profile")
+		profile.Use(h.authHandlers.AuthMiddleware())
+		profile.Get("/", h.profileHandlers.GetProfile)
+		profile.Put("/", h.profileHandlers.UpdateProfile)
+		profile.Get("/status", h.profileHandlers.GetUserStatus)
 	}
 
 	// Webhook routes for receiving messages from providers
