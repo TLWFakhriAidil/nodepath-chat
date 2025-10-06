@@ -22,6 +22,7 @@ import (
 	"nodepath-chat/internal/config"
 	"nodepath-chat/internal/database"
 	"nodepath-chat/internal/handlers"
+	"nodepath-chat/internal/migration"
 	"nodepath-chat/internal/repository"
 	"nodepath-chat/internal/services"
 	"nodepath-chat/internal/whatsapp"
@@ -54,11 +55,17 @@ func main() {
 		} else {
 			logrus.Info("Database initialized successfully")
 
-			// Run migrations
-			if err := database.RunMigrations(db); err != nil {
-				logrus.WithError(err).Warn("Failed to run migrations, continuing anyway")
+			// Run automatic migrations
+			migrator := migration.NewMigrator(db)
+			if err := migrator.RunMigrations(); err != nil {
+				logrus.WithError(err).Warn("Failed to run automatic migrations, continuing anyway")
 			} else {
-				logrus.Info("Database migrations completed")
+				logrus.Info("✅ Automatic database migrations completed successfully")
+				
+				// Verify migration
+				if err := migrator.VerifyMigration(); err != nil {
+					logrus.WithError(err).Warn("Migration verification failed")
+				}
 			}
 		}
 	}
