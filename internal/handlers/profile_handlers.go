@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"net/http"
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
