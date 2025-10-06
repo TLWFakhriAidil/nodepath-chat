@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,52 +10,113 @@ import {
   Download,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
+
+// Types for billing data
+interface Subscription {
+  id: string;
+  plan_name: string;
+  plan_price: number;
+  plan_period: string;
+  status: string;
+  next_billing_date: string;
+  features: string[];
+}
+
+interface BillingHistoryItem {
+  id: string;
+  invoice_number: string;
+  amount: number;
+  currency: string;
+  description: string;
+  status: string;
+  payment_date: string | null;
+  created_at: string;
+}
+
+interface BillingData {
+  subscription: Subscription;
+  billing_history: BillingHistoryItem[];
+  total_count: number;
+}
 
 /**
  * Billing page component
- * Displays current subscription and billing history with real integration
+ * Displays current subscription and billing history with real API integration
  */
 const Billing = () => {
-  // Real subscription data for testing
-  const currentPlan = {
-    name: 'Test Plan',
-    price: 'RM 1.00',
-    period: 'monthly',
-    status: 'active',
-    nextBilling: '2025-11-06',
-    features: [
-      'WhatsApp Bot Integration',
-      'Flow Builder Access',
-      'Basic Analytics',
-      'Standard Support'
-    ]
+  const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [testingPayment, setTestingPayment] = useState(false);
+
+  // Fetch billing data from API
+  useEffect(() => {
+    fetchBillingData();
+  }, []);
+
+  const fetchBillingData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch('/api/billing/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // Add authentication header if needed
+          // 'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setBillingData(data);
+    } catch (err) {
+      console.error('Failed to fetch billing data:', err);
+      setError('Failed to load billing data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const paymentHistory = [
-    {
-      id: 'inv_001',
-      date: '2025-10-06',
-      amount: 'RM 1.00',
-      status: 'paid',
-      description: 'Test Plan - Monthly subscription'
-    },
-    {
-      id: 'inv_002', 
-      date: '2025-09-06',
-      amount: 'RM 1.00',
-      status: 'paid',
-      description: 'Test Plan - Monthly subscription'
-    },
-    {
-      id: 'inv_003',
-      date: '2025-08-06',
-      amount: 'RM 1.00',
-      status: 'paid',
-      description: 'Test Plan - Monthly subscription'
+  // Test payment function
+  const handleTestPayment = async () => {
+    try {
+      setTestingPayment(true);
+      
+      const response = await fetch('/api/billing/test-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Add authentication header if needed
+          // 'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Show success message
+      alert(`Test payment created successfully! Payment ID: ${result.payment?.id}`);
+      
+      // Refresh billing data
+      fetchBillingData();
+    } catch (err) {
+      console.error('Failed to create test payment:', err);
+      alert('Failed to create test payment. Please try again.');
+    } finally {
+      setTestingPayment(false);
     }
-  ];
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -85,6 +146,85 @@ const Billing = () => {
     );
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 space-y-6">
+        <div className="flex flex-col space-y-2">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Billing & Subscription
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Manage your subscription and view billing history
+          </p>
+        </div>
+        
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span>Loading billing data...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 space-y-6">
+        <div className="flex flex-col space-y-2">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Billing & Subscription
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Manage your subscription and view billing history
+          </p>
+        </div>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2 text-red-600">
+              <AlertCircle className="w-5 h-5" />
+              <span>{error}</span>
+            </div>
+            <Button 
+              onClick={fetchBillingData} 
+              className="mt-4"
+              variant="outline"
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // No data state
+  if (!billingData) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 space-y-6">
+        <div className="flex flex-col space-y-2">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Billing & Subscription
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Manage your subscription and view billing history
+          </p>
+        </div>
+        
+        <Card>
+          <CardContent className="p-6">
+            <p>No billing data available.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const { subscription, billing_history } = billingData;
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Header */}
@@ -111,12 +251,12 @@ const Billing = () => {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold">{currentPlan.name}</h3>
+              <h3 className="text-lg font-semibold">{subscription.plan_name}</h3>
               <p className="text-gray-600 dark:text-gray-400">
-                {currentPlan.price} / {currentPlan.period}
+                RM {subscription.plan_price.toFixed(2)} / {subscription.plan_period}
               </p>
             </div>
-            {getStatusBadge(currentPlan.status)}
+            {getStatusBadge(subscription.status)}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -126,7 +266,9 @@ const Billing = () => {
               </p>
               <div className="flex items-center space-x-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
-                <span className="text-sm">{currentPlan.nextBilling}</span>
+                <span className="text-sm">
+                  {new Date(subscription.next_billing_date).toLocaleDateString()}
+                </span>
               </div>
             </div>
             
@@ -136,7 +278,7 @@ const Billing = () => {
               </p>
               <div className="flex items-center space-x-2">
                 <DollarSign className="w-4 h-4 text-gray-400" />
-                <span className="text-sm">{currentPlan.price}</span>
+                <span className="text-sm">RM {subscription.plan_price.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -146,7 +288,7 @@ const Billing = () => {
               Plan features
             </p>
             <ul className="space-y-1">
-              {currentPlan.features.map((feature, index) => (
+              {subscription.features.map((feature, index) => (
                 <li key={index} className="flex items-center space-x-2 text-sm">
                   <CheckCircle className="w-3 h-3 text-green-500" />
                   <span>{feature}</span>
@@ -162,6 +304,20 @@ const Billing = () => {
             <Button variant="outline">
               Cancel Subscription
             </Button>
+            <Button 
+              onClick={handleTestPayment}
+              disabled={testingPayment}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {testingPayment ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                'Test RM 1.00 Payment'
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -176,32 +332,40 @@ const Billing = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {paymentHistory.map((payment) => (
-              <div key={payment.id}>
-                <div className="flex items-center justify-between py-3">
-                  <div className="flex items-center space-x-4">
-                    {getStatusIcon(payment.status)}
-                    <div>
-                      <p className="text-sm font-medium">{payment.description}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Invoice #{payment.id} • {payment.date}
-                      </p>
+            {billing_history.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 dark:text-gray-400">No billing history available.</p>
+              </div>
+            ) : (
+              billing_history.map((payment, index) => (
+                <div key={payment.id}>
+                  <div className="flex items-center justify-between py-3">
+                    <div className="flex items-center space-x-4">
+                      {getStatusIcon(payment.status)}
+                      <div>
+                        <p className="text-sm font-medium">{payment.description}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Invoice #{payment.invoice_number} • {new Date(payment.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm font-medium">
+                        {payment.currency} {payment.amount.toFixed(2)}
+                      </span>
+                      {getStatusBadge(payment.status)}
+                      <Button variant="ghost" size="sm">
+                        <Download className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm font-medium">{payment.amount}</span>
-                    {getStatusBadge(payment.status)}
-                    <Button variant="ghost" size="sm">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  {index !== billing_history.length - 1 && (
+                    <Separator />
+                  )}
                 </div>
-                {payment.id !== paymentHistory[paymentHistory.length - 1].id && (
-                  <Separator />
-                )}
-              </div>
-            ))}
+              ))
+            )}
           </div>
           
           <div className="pt-4">
@@ -211,8 +375,6 @@ const Billing = () => {
           </div>
         </CardContent>
       </Card>
-
-
     </div>
   );
 };
