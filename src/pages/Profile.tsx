@@ -252,12 +252,10 @@ const Profile: React.FC = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  value={user.email}
-                  disabled
-                  className="bg-gray-50"
-                />
+                <div className="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-md">
+                  <Mail className="h-4 w-4 text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-700 select-text">{user.email}</span>
+                </div>
                 <p className="text-sm text-gray-500">Email cannot be changed</p>
               </div>
 
