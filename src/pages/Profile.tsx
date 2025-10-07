@@ -183,15 +183,15 @@ const Profile: React.FC = () => {
 
   if (loading) {
     return (
-      <div className=\"flex items-center justify-center h-96\">
-        <div className=\"animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500\"></div>
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className=\"flex items-center justify-center h-96\">
+      <div className="flex items-center justify-center h-96">
         <Alert>
           <AlertDescription>Failed to load profile data. Please try refreshing the page.</AlertDescription>
         </Alert>
@@ -200,18 +200,219 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div className=\"container mx-auto p-6 max-w-4xl\">
-      <div className=\"space-y-6\">
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="space-y-6">
         {/* Header */}
-        <div className=\"flex items-center justify-between\">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className=\"text-2xl font-bold\">Profile</h1>
-            <p className=\"text-gray-600\">Manage your account settings and preferences</p>
+            <h1 className="text-2xl font-bold">Profile</h1>
+            <p className="text-gray-600">Manage your account settings and preferences</p>
           </div>
           {!isEditing && (
-            <Button onClick={() => setIsEditing(true)} className=\"flex items-center gap-2\">
-              <User className=\"h-4 w-4\" />
+            <Button onClick={() => setIsEditing(true)} className="flex items-center gap-2">
+              <User className="h-4 w-4" />
               Edit Profile
             </Button>
           )}
-        </div>\n\n        {/* Alert */}\n        {alert && (\n          <Alert className={alert.type === 'error' ? 'border-red-500 bg-red-50' : 'border-green-500 bg-green-50'}>\n            <AlertDescription className={alert.type === 'error' ? 'text-red-700' : 'text-green-700'}>\n              {alert.message}\n            </AlertDescription>\n          </Alert>\n        )}\n\n        <div className=\"grid gap-6 md:grid-cols-2\">\n          {/* Profile Information */}\n          <Card>\n            <CardHeader>\n              <CardTitle className=\"flex items-center gap-2\">\n                <User className=\"h-5 w-5\" />\n                Profile Information\n              </CardTitle>\n              <CardDescription>\n                Your personal information and contact details\n              </CardDescription>\n            </CardHeader>\n            <CardContent className=\"space-y-4\">\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"full_name\">Full Name</Label>\n                <Input\n                  id=\"full_name\"\n                  name=\"full_name\"\n                  value={formData.full_name}\n                  onChange={handleInputChange}\n                  disabled={!isEditing}\n                  placeholder=\"Enter your full name\"\n                />\n              </div>\n\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"email\">Email</Label>\n                <Input\n                  id=\"email\"\n                  value={user.email}\n                  disabled\n                  className=\"bg-gray-50\"\n                />\n                <p className=\"text-sm text-gray-500\">Email cannot be changed</p>\n              </div>\n\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"gmail\">Gmail (Optional)</Label>\n                <Input\n                  id=\"gmail\"\n                  name=\"gmail\"\n                  type=\"email\"\n                  value={formData.gmail}\n                  onChange={handleInputChange}\n                  disabled={!isEditing}\n                  placeholder=\"Enter your Gmail address\"\n                />\n              </div>\n\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"phone\">Phone Number (Optional)</Label>\n                <Input\n                  id=\"phone\"\n                  name=\"phone\"\n                  value={formData.phone}\n                  onChange={handleInputChange}\n                  disabled={!isEditing}\n                  placeholder=\"Enter your phone number\"\n                />\n              </div>\n            </CardContent>\n          </Card>\n\n          {/* Account Status */}\n          <Card>\n            <CardHeader>\n              <CardTitle className=\"flex items-center gap-2\">\n                <Shield className=\"h-5 w-5\" />\n                Account Status\n              </CardTitle>\n              <CardDescription>\n                Your account information and status\n              </CardDescription>\n            </CardHeader>\n            <CardContent className=\"space-y-4\">\n              <div className=\"flex items-center justify-between\">\n                <span className=\"text-sm font-medium\">Status:</span>\n                <Badge className={getStatusColor(user.status)}>\n                  {user.status}\n                </Badge>\n              </div>\n\n              {user.expired && (\n                <div className=\"flex items-center justify-between\">\n                  <span className=\"text-sm font-medium\">Expires:</span>\n                  <span className=\"text-sm text-gray-600\">{formatDate(user.expired)}</span>\n                </div>\n              )}\n\n              <div className=\"flex items-center justify-between\">\n                <span className=\"text-sm font-medium\">Member Since:</span>\n                <span className=\"text-sm text-gray-600\">{formatDate(user.created_at)}</span>\n              </div>\n\n              {user.last_login && (\n                <div className=\"flex items-center justify-between\">\n                  <span className=\"text-sm font-medium\">Last Login:</span>\n                  <span className=\"text-sm text-gray-600\">{formatDate(user.last_login)}</span>\n                </div>\n              )}\n\n              <div className=\"flex items-center justify-between\">\n                <span className=\"text-sm font-medium\">Account ID:</span>\n                <span className=\"text-sm text-gray-600 font-mono\">{user.id.substring(0, 8)}...</span>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n\n        {/* Password Change Section */}\n        {isEditing && (\n          <Card>\n            <CardHeader>\n              <CardTitle className=\"flex items-center gap-2\">\n                <Shield className=\"h-5 w-5\" />\n                Change Password\n              </CardTitle>\n              <CardDescription>\n                Update your account password (optional)\n              </CardDescription>\n            </CardHeader>\n            <CardContent>\n              <div className=\"space-y-4\">\n                <Button\n                  type=\"button\"\n                  variant=\"outline\"\n                  onClick={() => setShowPasswordFields(!showPasswordFields)}\n                  className=\"flex items-center gap-2\"\n                >\n                  {showPasswordFields ? (\n                    <>\n                      <EyeOff className=\"h-4 w-4\" />\n                      Hide Password Fields\n                    </>\n                  ) : (\n                    <>\n                      <Eye className=\"h-4 w-4\" />\n                      Change Password\n                    </>\n                  )}\n                </Button>\n\n                {showPasswordFields && (\n                  <div className=\"grid gap-4 md:grid-cols-2\">\n                    <div className=\"space-y-2\">\n                      <Label htmlFor=\"password\">Current Password</Label>\n                      <Input\n                        id=\"password\"\n                        name=\"password\"\n                        type=\"password\"\n                        value={formData.password}\n                        onChange={handleInputChange}\n                        placeholder=\"Enter current password\"\n                      />\n                    </div>\n                    <div className=\"space-y-2\">\n                      <Label htmlFor=\"new_password\">New Password</Label>\n                      <Input\n                        id=\"new_password\"\n                        name=\"new_password\"\n                        type=\"password\"\n                        value={formData.new_password}\n                        onChange={handleInputChange}\n                        placeholder=\"Enter new password\"\n                      />\n                    </div>\n                  </div>\n                )}\n              </div>\n            </CardContent>\n          </Card>\n        )}\n\n        {/* Action Buttons */}\n        {isEditing && (\n          <div className=\"flex justify-end gap-3\">\n            <Button variant=\"outline\" onClick={handleCancel}>\n              Cancel\n            </Button>\n            <Button onClick={handleSave} disabled={saving} className=\"flex items-center gap-2\">\n              <Save className=\"h-4 w-4\" />\n              {saving ? 'Saving...' : 'Save Changes'}\n            </Button>\n          </div>\n        )}\n      </div>\n    </div>\n  );\n};\n\nexport default Profile;"
+        </div>
+
+        {/* Alert */}
+        {alert && (
+          <Alert className={alert.type === 'error' ? 'border-red-500 bg-red-50' : 'border-green-500 bg-green-50'}>
+            <AlertDescription className={alert.type === 'error' ? 'text-red-700' : 'text-green-700'}>
+              {alert.message}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Profile Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Profile Information
+              </CardTitle>
+              <CardDescription>
+                Your personal information and contact details
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="full_name">Full Name</Label>
+                <Input
+                  id="full_name"
+                  name="full_name"
+                  value={formData.full_name}
+                  onChange={handleInputChange}
+                  disabled={!isEditing}
+                  placeholder="Enter your full name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  value={user.email}
+                  disabled
+                  className="bg-gray-50"
+                />
+                <p className="text-sm text-gray-500">Email cannot be changed</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="gmail">Gmail (Optional)</Label>
+                <Input
+                  id="gmail"
+                  name="gmail"
+                  type="email"
+                  value={formData.gmail}
+                  onChange={handleInputChange}
+                  disabled={!isEditing}
+                  placeholder="Enter your Gmail address"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number (Optional)</Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  disabled={!isEditing}
+                  placeholder="Enter your phone number"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Account Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Account Status
+              </CardTitle>
+              <CardDescription>
+                Your account information and status
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Status:</span>
+                <Badge className={getStatusColor(user.status)}>
+                  {user.status}
+                </Badge>
+              </div>
+
+              {user.expired && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Expires:</span>
+                  <span className="text-sm text-gray-600">{formatDate(user.expired)}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Member Since:</span>
+                <span className="text-sm text-gray-600">{formatDate(user.created_at)}</span>
+              </div>
+
+              {user.last_login && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Last Login:</span>
+                  <span className="text-sm text-gray-600">{formatDate(user.last_login)}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Account ID:</span>
+                <span className="text-sm text-gray-600 font-mono">{user.id.substring(0, 8)}...</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Password Change Section */}
+        {isEditing && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Change Password
+              </CardTitle>
+              <CardDescription>
+                Update your account password (optional)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowPasswordFields(!showPasswordFields)}
+                  className="flex items-center gap-2"
+                >
+                  {showPasswordFields ? (
+                    <>
+                      <EyeOff className="h-4 w-4" />
+                      Hide Password Fields
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4" />
+                      Change Password
+                    </>
+                  )}
+                </Button>
+
+                {showPasswordFields && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Current Password</Label>
+                      <Input
+                        id="password"
+                        name="password"
+                        type="password"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                        placeholder="Enter current password"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new_password">New Password</Label>
+                      <Input
+                        id="new_password"
+                        name="new_password"
+                        type="password"
+                        value={formData.new_password}
+                        onChange={handleInputChange}
+                        placeholder="Enter new password"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Action Buttons */}
+        {isEditing && (
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving} className="flex items-center gap-2">
+              <Save className="h-4 w-4" />
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Profile;
