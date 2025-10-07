@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +46,11 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
     flows: 2,
     messages: 5
   });
+
+  // ALERT TEST - This will definitely show if new code is running
+  React.useEffect(() => {
+    alert('🚨 NEW CODE IS RUNNING! Sidebar component loaded at ' + new Date().toLocaleTimeString());
+  }, []);
 
   // Navigation items with device access requirements
   const navigation = [
