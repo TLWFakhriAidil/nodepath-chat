@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import SimpleSystemStatus from '@/components/SimpleSystemStatus';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -47,9 +48,30 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
     messages: 5
   });
 
-  // ALERT TEST - This will definitely show if new code is running
+  // SIMPLE CLEAN TEST - No dependencies, just pure JavaScript
   React.useEffect(() => {
-    alert('🚨 NEW CODE IS RUNNING! Sidebar component loaded at ' + new Date().toLocaleTimeString());
+    console.log('🚨 SIDEBAR LOADED - NEW CODE ACTIVE!');
+    
+    // Simple system status check
+    const checkStatus = async () => {
+      try {
+        const response = await fetch('/api/profile/status');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Profile status API response:', data);
+          
+          if (data.success && data.data && data.data.status === 'Trial') {
+            console.log('✅ User is Trial - Should show System Online (Trial)');
+          }
+        } else {
+          console.log('❌ Profile status API failed:', response.status);
+        }
+      } catch (error) {
+        console.log('❌ Profile status error:', error);
+      }
+    };
+    
+    checkStatus();
   }, []);
 
   // Navigation items with device access requirements
@@ -210,19 +232,9 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
 
             <Separator className="my-4 mx-3" />
             
-            {/* Status */}
+            {/* Status - CLEAN SIMPLE VERSION */}
             <div className="px-3">
-              <div className="bg-red-500 border border-red-600 rounded-lg p-3">
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 rounded-full bg-white animate-bounce" />
-                  <span className="text-sm font-bold text-white">
-                    🚨 DEPLOYMENT TEST - NEW CODE ACTIVE 🚨
-                  </span>
-                </div>
-                <p className="text-sm mt-1 text-white font-bold">
-                  If you see this, the deployment is working!
-                </p>
-              </div>
+              <SimpleSystemStatus />
             </div>
           </>
         )}
