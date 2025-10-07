@@ -29,6 +29,8 @@ func (ah *AuthHandlers) autoMigrate() error {
 			email VARCHAR(255) UNIQUE NOT NULL,
 			full_name VARCHAR(255) NOT NULL,
 			password VARCHAR(255) NOT NULL,
+			gmail VARCHAR(255) DEFAULT NULL,
+			phone VARCHAR(20) DEFAULT NULL,
 			is_active TINYINT(1) DEFAULT 1,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -69,6 +71,8 @@ func (ah *AuthHandlers) autoMigrate() error {
 	}{
 		{"status", "ALTER TABLE user_nodepath ADD COLUMN status VARCHAR(255) DEFAULT 'Trial'"},
 		{"expired", "ALTER TABLE user_nodepath ADD COLUMN expired VARCHAR(255) NULL"},
+		{"gmail", "ALTER TABLE user_nodepath ADD COLUMN gmail VARCHAR(255) DEFAULT NULL"},
+		{"phone", "ALTER TABLE user_nodepath ADD COLUMN phone VARCHAR(20) DEFAULT NULL"},
 	}
 	
 	for _, col := range columns {

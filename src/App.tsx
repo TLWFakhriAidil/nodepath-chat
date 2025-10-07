@@ -28,7 +28,6 @@ import Analytics from './pages/AnalyticsNew';
 import DeviceSettings from './pages/DeviceSettings';
 import SetStage from './pages/SetStage';
 import WhatsAppBot from './pages/WhatsAppBot';
-import Billing from './pages/Billing';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -52,7 +51,6 @@ function AppContent() {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home, current: true, requiresDevice: false },
     { name: 'Device Settings', href: '/device-settings', icon: Smartphone, current: false, requiresDevice: false },
-    { name: 'Billing', href: '/billing', icon: CreditCard, current: false, requiresDevice: false },
     { name: 'Profile', href: '/profile', icon: User, current: false, requiresDevice: false },
     { name: 'Set Stage', href: '/set-stage', icon: Zap, current: false, requiresDevice: true },
     { name: 'Flow Builder', href: '/flow-builder', icon: Workflow, current: false, requiresDevice: true },
@@ -144,7 +142,7 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/device-settings" element={<DeviceSettings />} />
-            <Route path="/billing" element={<Billing />} />
+
             <Route path="/profile" element={<Profile />} />
             <Route path="/set-stage" element={<SetStage />} />
             <Route path="/flow-builder" element={
