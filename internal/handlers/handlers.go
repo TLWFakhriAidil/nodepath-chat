@@ -100,6 +100,7 @@ type Handlers struct {
 	aiWhatsappHandlers     *AIWhatsappHandlers
 	authHandlers           *AuthHandlers
 	wasapBotHandlers       *WasapBotHandlers
+	profileHandlers        *ProfileHandlers
 	executionProcessRepo   repository.ExecutionProcessRepository
 	db                     *sql.DB // Add database field
 }
@@ -138,7 +139,11 @@ func NewHandlers(
 	// Initialize authentication handlers
 	authHandlers := NewAuthHandlers(db)
 
-
+	// Initialize profile handlers
+	var profileHandlers *ProfileHandlers
+	if db != nil {
+		profileHandlers = NewProfileHandlers(db)
+	}
 
 	// Create main handlers instance
 	mainHandlers := &Handlers{
@@ -154,6 +159,7 @@ func NewHandlers(
 		aiWhatsappHandlers:    aiWhatsappHandlers,
 		authHandlers:          authHandlers,
 		wasapBotHandlers:      wasapBotHandlers,
+		profileHandlers:       profileHandlers,
 		executionProcessRepo:  executionProcessRepo,
 		db:                    db, // Store the database
 	}
@@ -263,7 +269,14 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Authentication routes
 	h.authHandlers.SetupAuthRoutes(api)
 
-
+	// Profile routes (protected with authentication)
+	if h.profileHandlers != nil {
+		profile := api.Group("/profile")
+		profile.Use(h.authHandlers.AuthMiddleware())
+		profile.Get("/", h.profileHandlers.GetProfile)
+		profile.Put("/", h.profileHandlers.UpdateProfile)
+		profile.Get("/status", h.profileHandlers.GetUserStatus)
+	}
 
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")
