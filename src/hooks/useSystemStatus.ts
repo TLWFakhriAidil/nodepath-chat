@@ -20,8 +20,8 @@ export const useSystemStatus = (): SystemStatus => {
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({
     isOnline: true,
     userType: 'trial',
-    displayText: 'System Online (Trial)',
-    statusColor: 'green'
+    displayText: 'System Online (Trial) - Hook Active',
+    statusColor: 'yellow'
   });
 
   const checkSystemStatus = async () => {
