@@ -346,11 +346,16 @@ func main() {
 	})
 	app.Static("/static", "./static") // Keep for backward compatibility
 
-	// Add middleware to force no-cache on all static files
+	// Add middleware to force no-cache and prevent 304 responses on all static files
 	app.Use("/assets/*", func(c *fiber.Ctx) error {
 		c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		c.Set("Pragma", "no-cache")
 		c.Set("Expires", "0")
+		c.Set("Last-Modified", time.Now().Format(http.TimeFormat))
+		c.Set("ETag", fmt.Sprintf("\"%d\"", time.Now().Unix()))
+		// Remove any conditional headers to prevent 304
+		c.Request().Header.Del("If-Modified-Since")
+		c.Request().Header.Del("If-None-Match")
 		return c.Next()
 	})
 
