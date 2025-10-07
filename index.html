@@ -16,6 +16,16 @@
   </head>
   <body>
     <div id="root"></div>
+    
+    <!-- BASIC JAVASCRIPT TEST -->
+    <script>
+      console.log('🚨 BASIC JS TEST: HTML loaded at', new Date().toLocaleTimeString());
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚨 DOM READY: Basic JavaScript is working!');
+        document.title = '🔥 JS WORKS - ' + document.title;
+      });
+    </script>
+    
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
