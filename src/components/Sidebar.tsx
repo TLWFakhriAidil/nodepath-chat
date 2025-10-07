@@ -207,15 +207,15 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
             
             {/* Status */}
             <div className="px-3">
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 border rounded-lg p-3">
+              <div className="bg-red-500 border border-red-600 rounded-lg p-3">
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                  <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
-                    System Online (Trial) - FIXED
+                  <div className="w-4 h-4 rounded-full bg-white animate-bounce" />
+                  <span className="text-sm font-bold text-white">
+                    🚨 DEPLOYMENT TEST - NEW CODE ACTIVE 🚨
                   </span>
                 </div>
-                <p className="text-xs mt-1 text-yellow-600 dark:text-yellow-500">
-                  All services running
+                <p className="text-sm mt-1 text-white font-bold">
+                  If you see this, the deployment is working!
                 </p>
               </div>
             </div>
