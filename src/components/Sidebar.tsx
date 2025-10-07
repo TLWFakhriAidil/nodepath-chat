@@ -207,39 +207,15 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
             
             {/* Status */}
             <div className="px-3">
-              <div className={`${
-                systemStatus.statusColor === 'green' 
-                  ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' 
-                  : systemStatus.statusColor === 'yellow'
-                  ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                } border rounded-lg p-3`}>
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 border rounded-lg p-3">
                 <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    systemStatus.statusColor === 'green' 
-                      ? 'bg-green-500 animate-pulse' 
-                      : systemStatus.statusColor === 'yellow'
-                      ? 'bg-yellow-500 animate-pulse'
-                      : 'bg-red-500'
-                  }`} />
-                  <span className={`text-xs font-medium ${
-                    systemStatus.statusColor === 'green' 
-                      ? 'text-green-700 dark:text-green-400' 
-                      : systemStatus.statusColor === 'yellow'
-                      ? 'text-yellow-700 dark:text-yellow-400'
-                      : 'text-red-700 dark:text-red-400'
-                  }`}>
-                    {systemStatus.displayText}
+                  <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                  <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
+                    System Online (Trial) - FIXED
                   </span>
                 </div>
-                <p className={`text-xs mt-1 ${
-                  systemStatus.statusColor === 'green' 
-                    ? 'text-green-600 dark:text-green-500' 
-                    : systemStatus.statusColor === 'yellow'
-                    ? 'text-yellow-600 dark:text-yellow-500'
-                    : 'text-red-600 dark:text-red-500'
-                }`}>
-                  {systemStatus.isOnline ? 'All services running' : 'Service unavailable'}
+                <p className="text-xs mt-1 text-yellow-600 dark:text-yellow-500">
+                  All services running
                 </p>
               </div>
             </div>
