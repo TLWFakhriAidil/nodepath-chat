@@ -198,6 +198,15 @@ func main() {
 		}))
 	}
 
+	// Test endpoint to verify server version
+	app.Get("/api/version", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"version": "2025-10-07T03:05:00Z-CACHE-FIX",
+			"message": "🚨 NEW SERVER CODE IS RUNNING! Cache fix applied.",
+			"timestamp": time.Now().Unix(),
+		})
+	})
+
 	// Health check endpoint with performance metrics and database status
 	app.Get("/healthz", func(c *fiber.Ctx) error {
 		// Check database connectivity
@@ -329,9 +338,20 @@ func main() {
 	api := app.Group("/api")
 	handlers.SetupRoutes(api)
 
-	// Static files for React app (after API routes)
-	app.Static("/", "./dist")
+	// Static files for React app (after API routes) with aggressive no-cache headers
+	app.Static("/", "./dist", fiber.Static{
+		CacheDuration: 0, // No cache
+		MaxAge:        0, // No browser cache
+	})
 	app.Static("/static", "./static") // Keep for backward compatibility
+
+	// Add middleware to force no-cache on all static files
+	app.Use("/assets/*", func(c *fiber.Ctx) error {
+		c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Set("Pragma", "no-cache")
+		c.Set("Expires", "0")
+		return c.Next()
+	})
 
 	// Catch-all route for React Router (SPA)
 	app.Get("/*", func(c *fiber.Ctx) error {
