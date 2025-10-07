@@ -16,7 +16,6 @@ import {
   Home,
   Zap,
   Smartphone,
-  CreditCard,
   User
 } from 'lucide-react';
 
@@ -142,7 +141,6 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/device-settings" element={<DeviceSettings />} />
-
             <Route path="/profile" element={<Profile />} />
             <Route path="/set-stage" element={<SetStage />} />
             <Route path="/flow-builder" element={

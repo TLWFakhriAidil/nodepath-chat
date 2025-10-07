@@ -17,8 +17,7 @@ import {
   HelpCircle,
   Zap,
   List,
-  Smartphone,
-  CreditCard
+  Smartphone
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -83,8 +82,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       icon: Smartphone,
       current: location.pathname === '/device-settings',
       requiresDevice: false // Device settings is always accessible
-    },
-
+    }
   ];
 
   // Filter navigation based on device ownership

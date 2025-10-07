@@ -52,7 +52,7 @@ type User struct {
 	Gmail     *string    `json:"gmail" db:"gmail"`
 	Phone     *string    `json:"phone" db:"phone"`
 	Status    string     `json:"status" db:"status"`
-	Expired   *time.Time `json:"expired" db:"expired"`
+	Expired   *string    `json:"expired" db:"expired"`
 	IsActive  bool       `json:"is_active" db:"is_active"`
 	CreatedAt time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`

@@ -269,8 +269,6 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	// Authentication routes
 	h.authHandlers.SetupAuthRoutes(api)
 
-
-
 	// Profile routes (protected with authentication)
 	if h.profileHandlers != nil {
 		profile := api.Group("/profile")
