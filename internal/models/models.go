@@ -49,23 +49,10 @@ type User struct {
 	Email     string     `json:"email" db:"email"`
 	FullName  string     `json:"full_name" db:"full_name"`
 	Password  string     `json:"-" db:"password"` // Don't include password in JSON responses
-	Gmail     *string    `json:"gmail" db:"gmail"`
-	Phone     *string    `json:"phone" db:"phone"`
-	Status    string     `json:"status" db:"status"`
-	Expired   *time.Time `json:"expired" db:"expired"`
 	IsActive  bool       `json:"is_active" db:"is_active"`
 	CreatedAt time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
 	LastLogin *time.Time `json:"last_login" db:"last_login"`
-}
-
-// UserProfileUpdate represents the payload for updating user profile
-type UserProfileUpdate struct {
-	FullName    string  `json:"full_name"`
-	Gmail       *string `json:"gmail"`
-	Phone       *string `json:"phone"`
-	Password    *string `json:"password,omitempty"` // Optional password update
-	NewPassword *string `json:"new_password,omitempty"`
 }
 
 // DeviceSetting represents device configuration linked to a user
@@ -245,111 +232,4 @@ type ConversationLog struct {
 	CreatedAt   time.Time      `json:"created_at" db:"created_at"`
 }
 
-// ========================================
-// BILLING AND SUBSCRIPTION MODELS
-// ========================================
 
-// SubscriptionStatus represents the status of a subscription
-type SubscriptionStatus string
-
-const (
-	SubscriptionStatusActive    SubscriptionStatus = "active"
-	SubscriptionStatusCancelled SubscriptionStatus = "cancelled"
-	SubscriptionStatusSuspended SubscriptionStatus = "suspended"
-	SubscriptionStatusPending   SubscriptionStatus = "pending"
-)
-
-// PaymentStatus represents the status of a payment
-type PaymentStatus string
-
-const (
-	PaymentStatusPending   PaymentStatus = "pending"
-	PaymentStatusPaid      PaymentStatus = "paid"
-	PaymentStatusFailed    PaymentStatus = "failed"
-	PaymentStatusCancelled PaymentStatus = "cancelled"
-)
-
-// Subscription represents a user subscription
-type Subscription struct {
-	ID              string              `json:"id" db:"id"`
-	UserID          string              `json:"user_id" db:"user_id"`
-	PlanName        string              `json:"plan_name" db:"plan_name"`
-	PlanPrice       float64             `json:"plan_price" db:"plan_price"`
-	PlanPeriod      string              `json:"plan_period" db:"plan_period"`
-	Status          SubscriptionStatus  `json:"status" db:"status"`
-	NextBillingDate time.Time           `json:"next_billing_date" db:"next_billing_date"`
-	Features        *json.RawMessage    `json:"features" db:"features"`
-	CreatedAt       time.Time           `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time           `json:"updated_at" db:"updated_at"`
-}
-
-// Payment represents a payment record
-type Payment struct {
-	ID             string        `json:"id" db:"id"`
-	SubscriptionID sql.NullString `json:"subscription_id" db:"subscription_id"`
-	UserID         string        `json:"user_id" db:"user_id"`
-	BillID         sql.NullString `json:"bill_id" db:"bill_id"`
-	InvoiceNumber  string        `json:"invoice_number" db:"invoice_number"`
-	Amount         float64       `json:"amount" db:"amount"`
-	Currency       string        `json:"currency" db:"currency"`
-	Description    sql.NullString `json:"description" db:"description"`
-	Status         PaymentStatus `json:"status" db:"status"`
-	PaymentMethod  string        `json:"payment_method" db:"payment_method"`
-	BillplzURL     sql.NullString `json:"billplz_url" db:"billplz_url"`
-	PaidAt         *time.Time    `json:"paid_at" db:"paid_at"`
-	CreatedAt      time.Time     `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at" db:"updated_at"`
-}
-
-// BillingHistory represents a billing history record for display
-type BillingHistory struct {
-	ID            string         `json:"id" db:"id"`
-	UserID        string         `json:"user_id" db:"user_id"`
-	PaymentID     sql.NullString `json:"payment_id" db:"payment_id"`
-	InvoiceNumber string         `json:"invoice_number" db:"invoice_number"`
-	Amount        float64        `json:"amount" db:"amount"`
-	Currency      string         `json:"currency" db:"currency"`
-	Description   string         `json:"description" db:"description"`
-	Status        PaymentStatus  `json:"status" db:"status"`
-	PaymentDate   *time.Time     `json:"payment_date" db:"payment_date"`
-	CreatedAt     time.Time      `json:"created_at" db:"created_at"`
-}
-
-// BillplzPaymentRequest represents a request to create a Billplz payment
-type BillplzPaymentRequest struct {
-	CollectionID string  `json:"collection_id"`
-	Email        string  `json:"email"`
-	Name         string  `json:"name"`
-	Amount       int     `json:"amount"` // Amount in cents
-	Description  string  `json:"description"`
-	CallbackURL  string  `json:"callback_url"`
-	RedirectURL  string  `json:"redirect_url"`
-	Reference1   string  `json:"reference_1"`
-	Reference1Label string `json:"reference_1_label"`
-}
-
-// BillplzPaymentResponse represents a response from Billplz API
-type BillplzPaymentResponse struct {
-	ID    string `json:"id"`
-	URL   string `json:"url"`
-	Error *struct {
-		Type    string `json:"type"`
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
-}
-
-// CreatePaymentRequest represents a request to create a new payment
-type CreatePaymentRequest struct {
-	UserID        string  `json:"user_id"`
-	Amount        float64 `json:"amount"`
-	Description   string  `json:"description"`
-	CustomerEmail string  `json:"customer_email"`
-	CustomerName  string  `json:"customer_name"`
-}
-
-// BillingResponse represents the response for billing data
-type BillingResponse struct {
-	Subscription    *Subscription     `json:"subscription"`
-	BillingHistory  []BillingHistory  `json:"billing_history"`
-	TotalCount      int               `json:"total_count"`
-}
