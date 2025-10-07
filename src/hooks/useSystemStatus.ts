@@ -67,26 +67,29 @@ export const useSystemStatus = (): SystemStatus => {
   };
 
   const determineSystemStatus = (user: User): SystemStatus => {
-    const currentDate = new Date();
-    
     // Check if user has expired date and if it's passed
     if (user.expired) {
-      const expiredDate = new Date(user.expired);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Set to beginning of day for comparison
-      
-      if (expiredDate <= today) {
-        return {
-          isOnline: false,
-          userType: 'expired',
-          displayText: 'System Offline (Expired)',
-          statusColor: 'red'
-        };
+      try {
+        // Parse the expired date - handle format "2025-10-13 08:27:12"
+        const expiredDate = new Date(user.expired);
+        const now = new Date();
+        
+        // Check if the date is valid and if current time has passed expiration
+        if (!isNaN(expiredDate.getTime()) && now > expiredDate) {
+          return {
+            isOnline: false,
+            userType: 'expired',
+            displayText: 'System Offline (Expired)',
+            statusColor: 'red'
+          };
+        }
+      } catch (error) {
+        console.error('Error parsing expired date:', error);
       }
     }
 
     // If not expired, check user status
-    const userStatus = user.status.toLowerCase();
+    const userStatus = user.status?.toLowerCase() || '';
     
     if (userStatus === 'pro') {
       return {
