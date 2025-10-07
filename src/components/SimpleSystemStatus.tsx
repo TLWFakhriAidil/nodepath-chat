@@ -136,12 +136,9 @@ const SimpleSystemStatus: React.FC = () => {
       <div className="flex items-center space-x-2">
         <div className={`w-2 h-2 rounded-full ${colors.dot} ${status.isLoading ? 'animate-pulse' : status.color !== 'red' ? 'animate-pulse' : ''}`} />
         <span className={`text-xs font-medium ${colors.text}`}>
-          {status.text}
+          {status.isLoading ? 'Checking status...' : status.color === 'red' ? 'Service unavailable' : 'All services running'}
         </span>
       </div>
-      <p className={`text-xs mt-1 ${colors.subtext}`}>
-        {status.isLoading ? 'Checking status...' : status.color === 'red' ? 'Service unavailable' : 'All services running'}
-      </p>
     </div>
   );
 };

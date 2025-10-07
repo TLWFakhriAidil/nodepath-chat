@@ -172,7 +172,7 @@ const TopBar: React.FC<TopBarProps> = ({ sidebarOpen, setSidebarOpen }) => {
               systemStatus.color === 'yellow' ? 'bg-yellow-500 animate-pulse' :
               'bg-red-500'
             }`} />
-            <span className="text-sm text-slate-600 dark:text-slate-300">
+            <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
               {systemStatus.text}
             </span>
           </div>
