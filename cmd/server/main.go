@@ -339,14 +339,7 @@ func main() {
 	api := app.Group("/api")
 	handlers.SetupRoutes(api)
 
-	// Static files for React app (after API routes) with aggressive no-cache headers
-	app.Static("/", "./dist", fiber.Static{
-		CacheDuration: 0, // No cache
-		MaxAge:        0, // No browser cache
-	})
-	app.Static("/static", "./static") // Keep for backward compatibility
-
-	// Add middleware to force no-cache and prevent 304 responses on all static files
+	// Add middleware to force no-cache and prevent 304 responses - MUST BE BEFORE STATIC SERVING
 	app.Use("/assets/*", func(c *fiber.Ctx) error {
 		c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		c.Set("Pragma", "no-cache")
@@ -358,6 +351,13 @@ func main() {
 		c.Request().Header.Del("If-None-Match")
 		return c.Next()
 	})
+
+	// Static files for React app (after API routes and middleware) with aggressive no-cache headers
+	app.Static("/", "./dist", fiber.Static{
+		CacheDuration: 0, // No cache
+		MaxAge:        0, // No browser cache
+	})
+	app.Static("/static", "./static") // Keep for backward compatibility
 
 	// Catch-all route for React Router (SPA) with aggressive cache busting
 	app.Get("/*", func(c *fiber.Ctx) error {
