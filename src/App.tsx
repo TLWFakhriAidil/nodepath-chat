@@ -35,7 +35,7 @@ import { DeviceProvider, useDevice } from './contexts/DeviceContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import TopBar from './components/TopBar';
 import DeviceRequiredWrapper from './components/DeviceRequiredWrapper';
-import SimpleSystemStatus from './components/SimpleSystemStatus';
+
 
 const queryClient = new QueryClient();
 
@@ -121,12 +121,7 @@ function AppContent() {
           })}
         </nav>
         
-        {/* System Status - ADD TO ACTUAL SIDEBAR */}
-        <div className="mt-8 px-4">
-          <div className="border-t border-slate-200/50 dark:border-slate-700/50 pt-4">
-            <SimpleSystemStatus />
-          </div>
-        </div>
+
       </div>
 
       {/* Mobile sidebar overlay */}

@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import SimpleSystemStatus from '@/components/SimpleSystemStatus';
+
 
 interface SidebarProps {
   collapsed: boolean;
@@ -230,12 +230,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               </div>
             </div>
 
-            <Separator className="my-4 mx-3" />
-            
-            {/* Status - CLEAN SIMPLE VERSION */}
-            <div className="px-3">
-              <SimpleSystemStatus />
-            </div>
+
           </>
         )}
       </div>
