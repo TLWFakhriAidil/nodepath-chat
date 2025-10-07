@@ -26,23 +26,30 @@ export const useSystemStatus = (): SystemStatus => {
 
   const checkSystemStatus = async () => {
     try {
+      console.log('🔍 Attempting to fetch /api/profile/...');
+      
       // Fetch user profile to get status and expiration
       const response = await fetch('/api/profile/', {
         credentials: 'include',
       });
 
+      console.log('📡 API Response status:', response.status);
+      console.log('📡 API Response headers:', response.headers);
+
       if (!response.ok) {
+        console.error('❌ API call failed with status:', response.status);
         // If can't fetch profile, default to offline
         setSystemStatus({
           isOnline: false,
           userType: 'expired',
-          displayText: 'System Offline (Connection Error)',
+          displayText: `System Offline (API Error ${response.status})`,
           statusColor: 'red'
         });
         return;
       }
 
       const result = await response.json();
+      console.log('📋 API Response data:', result);
       if (result.success && result.data) {
         const user: User = result.data;
         const status = determineSystemStatus(user);
