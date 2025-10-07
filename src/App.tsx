@@ -35,6 +35,7 @@ import { DeviceProvider, useDevice } from './contexts/DeviceContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import TopBar from './components/TopBar';
 import DeviceRequiredWrapper from './components/DeviceRequiredWrapper';
+import SimpleSystemStatus from './components/SimpleSystemStatus';
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,10 @@ const queryClient = new QueryClient();
 function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { has_devices } = useDevice();
+  
+  // DEBUG: App component is rendering
+  console.log('🎯 APP CONTENT: AppContent component rendered');
+  console.log('🎯 APP CONTENT: has_devices =', has_devices);
 
   // Navigation items with device restrictions
   const navigation = [
@@ -115,6 +120,13 @@ function AppContent() {
             );
           })}
         </nav>
+        
+        {/* System Status - ADD TO ACTUAL SIDEBAR */}
+        <div className="mt-8 px-4">
+          <div className="border-t border-slate-200/50 dark:border-slate-700/50 pt-4">
+            <SimpleSystemStatus />
+          </div>
+        </div>
       </div>
 
       {/* Mobile sidebar overlay */}
