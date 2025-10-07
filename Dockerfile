@@ -20,6 +20,12 @@ COPY postcss.config.js ./
 COPY components.json ./
 COPY eslint.config.js ./
 
+# Copy build timestamp for cache invalidation
+COPY BUILD_TIMESTAMP ./
+
+# Clean any existing build and node cache
+RUN rm -rf dist/ node_modules/.vite node_modules/.cache
+
 # Build the React application
 RUN npm run build
 
