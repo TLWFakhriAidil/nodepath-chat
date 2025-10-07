@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -353,8 +354,14 @@ func main() {
 		return c.Next()
 	})
 
-	// Catch-all route for React Router (SPA)
+	// Catch-all route for React Router (SPA) with aggressive cache busting
 	app.Get("/*", func(c *fiber.Ctx) error {
+		// Add aggressive no-cache headers to HTML
+		c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Set("Pragma", "no-cache") 
+		c.Set("Expires", "0")
+		c.Set("Last-Modified", time.Now().Format(http.TimeFormat))
+		c.Set("ETag", fmt.Sprintf("\"%d\"", time.Now().Unix()))
 		return c.SendFile("./dist/index.html")
 	})
 
