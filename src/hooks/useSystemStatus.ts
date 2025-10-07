@@ -67,6 +67,8 @@ export const useSystemStatus = (): SystemStatus => {
   };
 
   const determineSystemStatus = (user: User): SystemStatus => {
+    console.log('🔍 Debug user data:', user); // Debug log
+    
     // Check if user has expired date and if it's passed
     if (user.expired) {
       try {
@@ -74,8 +76,13 @@ export const useSystemStatus = (): SystemStatus => {
         const expiredDate = new Date(user.expired);
         const now = new Date();
         
+        console.log('📅 Expired date:', expiredDate);
+        console.log('📅 Current time:', now);
+        console.log('⏰ Is expired?', now > expiredDate);
+        
         // Check if the date is valid and if current time has passed expiration
         if (!isNaN(expiredDate.getTime()) && now > expiredDate) {
+          console.log('❌ User is expired');
           return {
             isOnline: false,
             userType: 'expired',
@@ -90,8 +97,10 @@ export const useSystemStatus = (): SystemStatus => {
 
     // If not expired, check user status
     const userStatus = user.status?.toLowerCase() || '';
+    console.log('👤 User status:', userStatus);
     
     if (userStatus === 'pro') {
+      console.log('✅ User is Pro');
       return {
         isOnline: true,
         userType: 'pro',
@@ -99,6 +108,7 @@ export const useSystemStatus = (): SystemStatus => {
         statusColor: 'green'
       };
     } else if (userStatus === 'trial') {
+      console.log('✅ User is Trial');
       return {
         isOnline: true,
         userType: 'trial',
@@ -106,6 +116,7 @@ export const useSystemStatus = (): SystemStatus => {
         statusColor: 'yellow'
       };
     } else {
+      console.log('❌ User status unrecognized or inactive');
       // Any other status (like 'expired', 'inactive', etc.)
       return {
         isOnline: false,
