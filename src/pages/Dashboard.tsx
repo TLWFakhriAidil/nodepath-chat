@@ -29,6 +29,7 @@ import { useDevice } from '@/contexts/DeviceContext';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { device_ids } = useDevice();
   const [flows, setFlows] = useState<ChatbotFlow[]>([]);
   const [stats, setStats] = useState({
     totalFlows: 0,
@@ -36,6 +37,15 @@ const Dashboard = () => {
     totalMessages: 0,
     responseTime: '1.2s'
   });
+
+  // Chart state
+  const [chartData, setChartData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: new Date()
+  });
+  const [deviceFilter, setDeviceFilter] = useState<string>('all');
 
   useEffect(() => {
     const loadFlows = async () => {
@@ -50,6 +60,37 @@ const Dashboard = () => {
     };
     loadFlows();
   }, []);
+
+  // Fetch chart data
+  useEffect(() => {
+    const fetchChartData = async () => {
+      if (!dateRange?.from || !dateRange?.to) return;
+      
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          dateFrom: format(dateRange.from, 'yyyy-MM-dd'),
+          dateTo: format(dateRange.to, 'yyyy-MM-dd'),
+          deviceFilter: deviceFilter
+        });
+
+        const response = await fetch(`/api/dashboard/chart-data?${params}`, {
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setChartData(data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch chart data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChartData();
+  }, [dateRange, deviceFilter]);
 
   const quickActions = [
     {
@@ -160,7 +201,251 @@ const Dashboard = () => {
         })}
       </div>
 
-      {/* TODO: Add Combined Chart and Filters Here */}
+      {/* Dashboard Charts with Filters */}
+      <div className="space-y-6">
+        {/* Filters */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Analytics Overview</CardTitle>
+            <CardDescription>
+              View combined data from AI WhatsApp and WasapBot databases
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4">
+              <div className="flex-1 min-w-[250px]">
+                <label className="text-sm font-medium mb-2 block">Date Range</label>
+                <DatePickerWithRange
+                  from={dateRange?.from}
+                  to={dateRange?.to}
+                  onSelect={setDateRange}
+                />
+              </div>
+              <div className="min-w-[200px]">
+                <label className="text-sm font-medium mb-2 block">Device Filter</label>
+                <Select value={deviceFilter} onValueChange={setDeviceFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Devices" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Devices</SelectItem>
+                    {device_ids && device_ids.map((deviceId) => (
+                      <SelectItem key={deviceId} value={deviceId}>
+                        {deviceId}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Combined Line Chart */}
+        {loading ? (
+          <Card>
+            <CardContent className="flex items-center justify-center h-96">
+              <div className="text-center">
+                <Activity className="w-8 h-8 animate-spin mx-auto mb-4" />
+                <p className="text-muted-foreground">Loading chart data...</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : chartData ? (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Combined Analytics</CardTitle>
+                <CardDescription>
+                  Combined data from both AI WhatsApp and WasapBot
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={[
+                      { 
+                        name: 'Total', 
+                        'AI WhatsApp': chartData.ai_whatsapp?.total_conversations || 0,
+                        'WasapBot': chartData.wasapbot?.total_prospects || 0
+                      }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="AI WhatsApp" 
+                        stroke="#3b82f6" 
+                        strokeWidth={2}
+                        dot={{ fill: '#3b82f6', r: 6 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="WasapBot" 
+                        stroke="#10b981" 
+                        strokeWidth={2}
+                        dot={{ fill: '#10b981', r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+                      <span className="font-semibold">AI WhatsApp</span>
+                    </div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {chartData.ai_whatsapp?.total_conversations || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Total Conversations</div>
+                  </div>
+                  <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-3 h-3 bg-green-600 rounded-full"></div>
+                      <span className="font-semibold">WasapBot</span>
+                    </div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {chartData.wasapbot?.total_prospects || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Total Prospects</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Separate Side-by-Side Charts */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* AI WhatsApp Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+                    AI WhatsApp Analytics
+                  </CardTitle>
+                  <CardDescription>
+                    Data from ai_whatsapp_nodepath database
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Total Conversations</span>
+                      <span className="text-lg font-bold text-blue-600">
+                        {chartData.ai_whatsapp?.total_conversations || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">AI Status</span>
+                      <span className="text-lg font-bold">
+                        {chartData.ai_whatsapp?.ai_count || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Human Status</span>
+                      <span className="text-lg font-bold">
+                        {chartData.ai_whatsapp?.human_count || 0}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-48 mt-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={[
+                        { name: 'AI', value: chartData.ai_whatsapp?.ai_count || 0 },
+                        { name: 'Human', value: chartData.ai_whatsapp?.human_count || 0 },
+                        { name: 'Total', value: chartData.ai_whatsapp?.total_conversations || 0 }
+                      ]}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Line 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke="#3b82f6" 
+                          strokeWidth={2}
+                          dot={{ fill: '#3b82f6', r: 4 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* WasapBot Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-600 rounded-full"></div>
+                    WasapBot Analytics
+                  </CardTitle>
+                  <CardDescription>
+                    Data from wasapBot_nodepath database
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Total Prospects</span>
+                      <span className="text-lg font-bold text-green-600">
+                        {chartData.wasapbot?.total_prospects || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Active Executions</span>
+                      <span className="text-lg font-bold">
+                        {chartData.wasapbot?.active_executions || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Completed</span>
+                      <span className="text-lg font-bold">
+                        {chartData.wasapbot?.completed_executions || 0}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-48 mt-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={[
+                        { name: 'Active', value: chartData.wasapbot?.active_executions || 0 },
+                        { name: 'Completed', value: chartData.wasapbot?.completed_executions || 0 },
+                        { name: 'Total', value: chartData.wasapbot?.total_prospects || 0 }
+                      ]}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Line 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke="#10b981" 
+                          strokeWidth={2}
+                          dot={{ fill: '#10b981', r: 4 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        ) : (
+          <Card>
+            <CardContent className="flex items-center justify-center h-96">
+              <div className="text-center">
+                <BarChart3 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Data Available</h3>
+                <p className="text-muted-foreground">
+                  Select a date range and device filter to view analytics
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Recent Flows */}
       <div>
