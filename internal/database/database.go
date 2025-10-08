@@ -91,7 +91,12 @@ func RunMigrations(db *sql.DB) error {
 
 	// Convert user_id column from INT to CHAR(36) in orders_nodepath
 	if err := convertUserIDToChar36(db); err != nil {
-		logrus.WithError(err).Warn("Failed to convert user_id column, continuing...")
+		logrus.WithError(err).Warn("Failed to convert user_id column in orders_nodepath, continuing...")
+	}
+
+	// Convert user_id column from INT to CHAR(36) in device_setting_nodepath
+	if err := convertDeviceUserIDToChar36(db); err != nil {
+		logrus.WithError(err).Warn("Failed to convert user_id column in device_setting_nodepath, continuing...")
 	}
 
 	logrus.Info("Database migrations completed successfully")
@@ -127,9 +132,10 @@ CREATE TABLE IF NOT EXISTS device_setting_nodepath (
     id_device VARCHAR(255),
     id_erp VARCHAR(255),
     id_admin VARCHAR(255),
-    user_id INT,
+    user_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
@@ -490,5 +496,49 @@ func convertUserIDToChar36(db *sql.DB) error {
 	}
 
 	logrus.Info("Successfully converted user_id column from INT to CHAR(36) in orders_nodepath")
+	return nil
+}
+
+// convertDeviceUserIDToChar36 converts user_id column from INT to CHAR(36) in device_setting_nodepath table
+func convertDeviceUserIDToChar36(db *sql.DB) error {
+	// Check current data type of user_id column
+	var dataType string
+	err := db.QueryRow(`
+		SELECT DATA_TYPE 
+		FROM INFORMATION_SCHEMA.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = 'device_setting_nodepath' 
+		AND COLUMN_NAME = 'user_id'
+	`).Scan(&dataType)
+
+	if err != nil {
+		return fmt.Errorf("failed to check user_id column type: %w", err)
+	}
+
+	// If already CHAR, skip
+	if dataType == "char" {
+		logrus.Info("user_id column is already CHAR(36) in device_setting_nodepath")
+		return nil
+	}
+
+	// Convert INT to CHAR(36) - first set existing data to NULL since INT can't convert to UUID
+	_, err = db.Exec("UPDATE device_setting_nodepath SET user_id = NULL WHERE user_id IS NOT NULL")
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to clear user_id values before conversion in device_setting_nodepath")
+	}
+
+	// Alter column type
+	_, err = db.Exec("ALTER TABLE device_setting_nodepath MODIFY COLUMN user_id CHAR(36)")
+	if err != nil {
+		return fmt.Errorf("failed to convert user_id to CHAR(36) in device_setting_nodepath: %w", err)
+	}
+
+	// Add index if it doesn't exist
+	_, err = db.Exec("ALTER TABLE device_setting_nodepath ADD INDEX IF NOT EXISTS idx_user_id (user_id)")
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to add index to user_id column")
+	}
+
+	logrus.Info("Successfully converted user_id column from INT to CHAR(36) in device_setting_nodepath")
 	return nil
 }

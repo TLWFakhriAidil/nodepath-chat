@@ -75,8 +75,60 @@ func (s *DeviceSettingsService) GetAll() ([]*models.DeviceSettings, error) {
 	return settings, nil
 }
 
-// GetByUserID retrieves device settings for a specific user
+// GetByUserID retrieves device settings for a specific user (deprecated - use GetByUserIDString)
 func (s *DeviceSettingsService) GetByUserID(userID int) ([]*models.DeviceSettings, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+
+	query := `
+		SELECT id, device_id, api_key_option, webhook_id, provider, phone_number, api_key, 
+		       id_device, id_erp, id_admin, instance, created_at, updated_at, user_id
+		FROM device_setting_nodepath
+		WHERE user_id = ?
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query device settings for user: %w", err)
+	}
+	defer rows.Close()
+
+	var settings []*models.DeviceSettings
+	for rows.Next() {
+		setting := &models.DeviceSettings{}
+		err := rows.Scan(
+			&setting.ID,
+			&setting.DeviceID,
+			&setting.APIKeyOption,
+			&setting.WebhookID,
+			&setting.Provider,
+			&setting.PhoneNumber,
+			&setting.APIKey,
+			&setting.IDDevice,
+			&setting.IDERP,
+			&setting.IDAdmin,
+			&setting.Instance,
+			&setting.CreatedAt,
+			&setting.UpdatedAt,
+			&setting.UserID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan device setting: %w", err)
+		}
+		settings = append(settings, setting)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating device settings: %w", err)
+	}
+
+	return settings, nil
+}
+
+// GetByUserIDString retrieves device settings for a specific user by UUID string
+func (s *DeviceSettingsService) GetByUserIDString(userID string) ([]*models.DeviceSettings, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("database not available")
 	}
@@ -250,8 +302,7 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			}
 
 			// Convert strings to sql.NullString for nullable fields
-			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
-			var userID sql.NullInt32
+			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance, userID sql.NullString
 
 			if req.DeviceID != "" {
 				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -277,8 +328,8 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.Instance != "" {
 				instance = sql.NullString{String: req.Instance, Valid: true}
 			}
-			if req.UserID != nil && *req.UserID != 0 {
-				userID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
+			if req.UserID != "" {
+				userID = sql.NullString{String: req.UserID, Valid: true}
 			}
 
 			updateQuery := `
@@ -323,8 +374,7 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			}
 
 			// Convert strings to sql.NullString for nullable fields
-			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
-			var userID sql.NullInt32
+			var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance, userID sql.NullString
 
 			if req.DeviceID != "" {
 				deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -350,8 +400,8 @@ func (s *DeviceSettingsService) Upsert(req *models.CreateDeviceSettingsRequest) 
 			if req.Instance != "" {
 				instance = sql.NullString{String: req.Instance, Valid: true}
 			}
-			if req.UserID != nil && *req.UserID != 0 {
-				userID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
+			if req.UserID != "" {
+				userID = sql.NullString{String: req.UserID, Valid: true}
 			}
 
 			insertQuery := `
@@ -415,8 +465,7 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 	}
 
 	// Convert strings to sql.NullString for nullable fields
-	var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance sql.NullString
-	var userID sql.NullInt32
+	var deviceID, webhookID, phoneNumber, apiKey, idDevice, idERP, idAdmin, instance, userID sql.NullString
 
 	if req.DeviceID != "" {
 		deviceID = sql.NullString{String: req.DeviceID, Valid: true}
@@ -442,8 +491,8 @@ func (s *DeviceSettingsService) Create(req *models.CreateDeviceSettingsRequest) 
 	if req.Instance != "" {
 		instance = sql.NullString{String: req.Instance, Valid: true}
 	}
-	if req.UserID != nil && *req.UserID != 0 {
-		userID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
+	if req.UserID != "" {
+		userID = sql.NullString{String: req.UserID, Valid: true}
 	}
 
 	query := `
@@ -523,8 +572,8 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 	if req.Instance != "" {
 		existing.Instance = sql.NullString{String: req.Instance, Valid: true}
 	}
-	if req.UserID != nil && *req.UserID != 0 {
-		existing.UserID = sql.NullInt32{Int32: int32(*req.UserID), Valid: true}
+	if req.UserID != "" {
+		existing.UserID = sql.NullString{String: req.UserID, Valid: true}
 	}
 
 	existing.UpdatedAt = time.Now()

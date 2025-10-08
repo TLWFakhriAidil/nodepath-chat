@@ -1555,7 +1555,7 @@ func (h *AIWhatsappHandlers) DeleteAIWhatsappData(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from authentication context
-	userID, ok := c.Locals("userID").(int)
+	userIDStr, ok := c.Locals("user_id").(string)
 	if !ok {
 		logrus.Error("User ID not found in context")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -1591,7 +1591,7 @@ func (h *AIWhatsappHandlers) DeleteAIWhatsappData(c *fiber.Ctx) error {
 		})
 	}
 
-	if !deviceSettings.UserID.Valid || int(deviceSettings.UserID.Int32) != userID {
+	if !deviceSettings.UserID.Valid || deviceSettings.UserID.String != userIDStr {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"success": false,
 			"message": "Access denied: record belongs to different user",
@@ -1610,7 +1610,7 @@ func (h *AIWhatsappHandlers) DeleteAIWhatsappData(c *fiber.Ctx) error {
 
 	logrus.WithFields(logrus.Fields{
 		"id_prospect": id,
-		"user_id":     userID,
+		"user_id":     userIDStr,
 		"id_device":   record.IDDevice,
 	}).Info("AI WhatsApp record deleted successfully")
 

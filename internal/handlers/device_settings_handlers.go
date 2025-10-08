@@ -31,17 +31,17 @@ func min(a, b int) int {
 
 // GetDeviceSettings retrieves device settings for the authenticated user
 func (h *Handlers) GetDeviceSettings(c *fiber.Ctx) error {
-	// Get user ID from context (set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
-	if !ok {
+	// Get user ID from context (set by AuthMiddleware) - use string UUID
+	userIDStr, ok := c.Locals("user_id").(string)
+	if !ok || userIDStr == "" {
 		logrus.Error("User ID not found in context")
 		return h.errorResponse(c, 401, "Authentication required")
 	}
 
 	// Get device settings filtered by user ID
-	settings, err := h.deviceSettingsService.GetByUserID(userID)
+	settings, err := h.deviceSettingsService.GetByUserIDString(userIDStr)
 	if err != nil {
-		logrus.WithError(err).WithField("userID", userID).Error("Failed to get device settings")
+		logrus.WithError(err).WithField("userID", userIDStr).Error("Failed to get device settings")
 		return h.errorResponse(c, 500, "Failed to retrieve device settings")
 	}
 
@@ -55,9 +55,9 @@ func (h *Handlers) GetDeviceSettingsById(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Device setting ID is required")
 	}
 
-	// Get user ID from context (set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
-	if !ok {
+	// Get user ID from context (set by AuthMiddleware) - use string UUID
+	userIDStr, ok := c.Locals("user_id").(string)
+	if !ok || userIDStr == "" {
 		logrus.Error("User ID not found in context")
 		return h.errorResponse(c, 401, "Authentication required")
 	}
@@ -72,10 +72,10 @@ func (h *Handlers) GetDeviceSettingsById(c *fiber.Ctx) error {
 	}
 
 	// Check if the device setting belongs to the authenticated user
-	if setting.UserID.Valid && int(setting.UserID.Int32) != userID {
+	if setting.UserID.Valid && setting.UserID.String != userIDStr {
 		logrus.WithFields(logrus.Fields{
-			"userID":        userID,
-			"settingUserID": setting.UserID.Int32,
+			"userID":        userIDStr,
+			"settingUserID": setting.UserID.String,
 			"settingID":     id,
 		}).Warn("User attempted to access device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only access your own device settings")
@@ -109,9 +109,9 @@ func (h *Handlers) CreateDeviceSettings(c *fiber.Ctx) error {
 		return h.errorResponse(c, 400, "Invalid request body")
 	}
 
-	// Get user ID from context (set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
-	if !ok {
+	// Get user ID from context (set by AuthMiddleware) - use string UUID
+	userIDStr, ok := c.Locals("user_id").(string)
+	if !ok || userIDStr == "" {
 		logrus.Error("User ID not found in context")
 		return h.errorResponse(c, 401, "Authentication required")
 	}
@@ -134,11 +134,11 @@ func (h *Handlers) CreateDeviceSettings(c *fiber.Ctx) error {
 
 	// DeviceID is optional - it will be generated later if not provided
 	// Automatically set the user ID from the authenticated user
-	req.UserID = &userID
+	req.UserID = userIDStr
 
 	setting, err := h.deviceSettingsService.Create(&req)
 	if err != nil {
-		logrus.WithError(err).WithField("userID", userID).Error("Failed to create device setting")
+		logrus.WithError(err).WithField("userID", userIDStr).Error("Failed to create device setting")
 		return h.errorResponse(c, 500, "Failed to create device setting")
 	}
 
@@ -153,7 +153,7 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from context (set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
+	userIDStr, ok := c.Locals("user_id").(string)
 	if !ok {
 		logrus.Error("User ID not found in context")
 		return h.errorResponse(c, 401, "Authentication required")
@@ -170,10 +170,10 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 	}
 
 	// Check ownership
-	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int32) != userID {
+	if existingSetting.UserID.Valid && existingSetting.UserID.String != userIDStr {
 		logrus.WithFields(logrus.Fields{
-			"userID":        userID,
-			"settingUserID": existingSetting.UserID.Int32,
+			"userID":        userIDStr,
+			"settingUserID": existingSetting.UserID.String,
 			"settingID":     id,
 		}).Warn("User attempted to update device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only update your own device settings")
@@ -191,7 +191,7 @@ func (h *Handlers) UpdateDeviceSettings(c *fiber.Ctx) error {
 
 	setting, err := h.deviceSettingsService.Update(id, &req)
 	if err != nil {
-		logrus.WithError(err).WithField("userID", userID).Error("Failed to update device setting")
+		logrus.WithError(err).WithField("userID", userIDStr).Error("Failed to update device setting")
 		if err.Error() == "device setting not found" {
 			return h.errorResponse(c, 404, "Device setting not found")
 		}
@@ -209,7 +209,7 @@ func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from context (set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
+	userIDStr, ok := c.Locals("user_id").(string)
 	if !ok {
 		logrus.Error("User ID not found in context")
 		return h.errorResponse(c, 401, "Authentication required")
@@ -226,10 +226,10 @@ func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 	}
 
 	// Check ownership
-	if existingSetting.UserID.Valid && int(existingSetting.UserID.Int32) != userID {
+	if existingSetting.UserID.Valid && existingSetting.UserID.String != userIDStr {
 		logrus.WithFields(logrus.Fields{
-			"userID":        userID,
-			"settingUserID": existingSetting.UserID.Int32,
+			"userID":        userIDStr,
+			"settingUserID": existingSetting.UserID.String,
 			"settingID":     id,
 		}).Warn("User attempted to delete device setting they don't own")
 		return h.errorResponse(c, 403, "Access denied: You can only delete your own device settings")
@@ -237,7 +237,7 @@ func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 
 	err = h.deviceSettingsService.Delete(id)
 	if err != nil {
-		logrus.WithError(err).WithField("userID", userID).Error("Failed to delete device setting")
+		logrus.WithError(err).WithField("userID", userIDStr).Error("Failed to delete device setting")
 		if err.Error() == "device setting not found" {
 			return h.errorResponse(c, 404, "Device setting not found")
 		}
@@ -250,15 +250,15 @@ func (h *Handlers) DeleteDeviceSettings(c *fiber.Ctx) error {
 // GetDeviceIDs retrieves device IDs for dropdown selection for the authenticated user
 func (h *Handlers) GetDeviceIDs(c *fiber.Ctx) error {
 	// Get user ID from context (set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
+	userIDStr, ok := c.Locals("user_id").(string)
 	if !ok {
 		logrus.Error("User ID not found in context")
 		return h.errorResponse(c, 401, "Authentication required")
 	}
 
-	settings, err := h.deviceSettingsService.GetByUserID(userID)
+	settings, err := h.deviceSettingsService.GetByUserIDString(userIDStr)
 	if err != nil {
-		logrus.WithError(err).WithField("userID", userID).Error("Failed to get device settings")
+		logrus.WithError(err).WithField("userID", userIDStr).Error("Failed to get device settings")
 		return h.errorResponse(c, 500, "Failed to retrieve device settings")
 	}
 
@@ -288,7 +288,7 @@ func (h *Handlers) GetDeviceIDs(c *fiber.Ctx) error {
 // GenerateWhacenterDevice generates a device using Whacenter API
 func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 	// Get user ID from context
-	userID := c.Locals("userID").(int)
+	userIDStr := c.Locals("user_id").(string)
 
 	var req struct {
 		models.CreateDeviceSettingsRequest
@@ -514,7 +514,7 @@ func (h *Handlers) GenerateWhacenterDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - Whacenter mapping: webhook_id stores webhook_url, instance stores device_id, device_id should be null
 	createReq := &models.CreateDeviceSettingsRequest{
-		UserID: &userID, // Set user ID from context
+		UserID: userIDStr, // Set user ID from context
 		// DeviceID is intentionally left empty (null) for Whacenter devices
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    productionWebhookURL, // Store webhook URL
@@ -634,7 +634,7 @@ func (h *Handlers) processWebhookAsync(idDevice, instance string, body []byte) {
 // GenerateWablasDevice generates a device using Wablas API
 func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 	// Get user ID from context
-	userID := c.Locals("userID").(int)
+	userIDStr := c.Locals("user_id").(string)
 
 	var req struct {
 		models.CreateDeviceSettingsRequest
@@ -875,7 +875,7 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - Wablas mapping: device_id stores device_id, webhook_id stores webhook_url, instance stores api_key
 	createReq := &models.CreateDeviceSettingsRequest{
-		UserID:       &userID,  // Set user ID from context
+		UserID: userIDStr,  // Set user ID from context
 		DeviceID:     deviceID, // Store device_id
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    productionWebhookURL, // Store webhook URL
@@ -1936,7 +1936,7 @@ func (h *Handlers) processAIConversation(from, message, idDevice, provider, send
 // GenerateWahaDevice generates a device using WAHA API with session management
 func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 	// Get user ID from context
-	userID := c.Locals("userID").(int)
+	userIDStr := c.Locals("user_id").(string)
 
 	var req struct {
 		models.CreateDeviceSettingsRequest
@@ -2125,7 +2125,7 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - WAHA mapping: instance stores session_name, webhook_id stores webhook_url
 	createReq := &models.CreateDeviceSettingsRequest{
-		UserID:       &userID, // Set user ID from context
+		UserID: userIDStr, // Set user ID from context
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    webhook, // Store webhook URL
 		Provider:     "waha",
