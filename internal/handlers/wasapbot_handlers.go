@@ -23,7 +23,7 @@ func NewWasapBotHandlers(wasapBotRepo repository.WasapBotRepository) *WasapBotHa
 // GetWasapBotData retrieves WasapBot data with filters
 func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 	// Get user ID from context
-	userIDInterface := c.Locals("userID")
+	userIDInterface := c.Locals("user_id")
 	if userIDInterface == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "User not authenticated",
@@ -89,7 +89,7 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 // GetWasapBotStats retrieves WasapBot statistics
 func (h *WasapBotHandlers) GetWasapBotStats(c *fiber.Ctx) error {
 	// Get user ID from context
-	userIDInterface := c.Locals("userID")
+	userIDInterface := c.Locals("user_id")
 	if userIDInterface == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "User not authenticated",
@@ -131,7 +131,7 @@ func (h *WasapBotHandlers) GetWasapBotStats(c *fiber.Ctx) error {
 // DeleteWasapBotRecord deletes a WasapBot record
 func (h *WasapBotHandlers) DeleteWasapBotRecord(c *fiber.Ctx) error {
 	// Get user ID from context
-	userIDInterface := c.Locals("userID")
+	userIDInterface := c.Locals("user_id")
 	if userIDInterface == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "User not authenticated",

@@ -368,8 +368,7 @@ func (ah *AuthHandlers) Login(c *fiber.Ctx) error {
 	logrus.WithField("user_id", user.ID).Info("User logged in successfully")
 
 	// Check if user has devices for redirect logic
-	userIDInt := convertUUIDToInt(user.ID)
-	deviceCount, deviceIDs, err := ah.CheckUserDevices(userIDInt)
+	deviceCount, deviceIDs, err := ah.CheckUserDevices(user.ID)
 	if err != nil {
 		logrus.WithError(err).WithField("user_id", user.ID).Error("Failed to check user devices after login")
 		// Don't fail login, just log the error
@@ -545,13 +544,8 @@ func (ah *AuthHandlers) AuthMiddleware() fiber.Handler {
 			})
 		}
 
-		// Convert UUID string to integer for device handlers compatibility
-		// This creates a consistent integer mapping from the UUID
-		userIDInt := convertUUIDToInt(userID)
-
-		// Set user ID in context with the key expected by device handlers
-		c.Locals("userID", userIDInt)
-		c.Locals("user_id", userID) // Keep the string version for backward compatibility
+		// Set user ID in context as string UUID (CHAR(36) format)
+		c.Locals("user_id", userID) // Primary key for all handlers
 		return c.Next()
 	}
 }
@@ -560,8 +554,8 @@ func (ah *AuthHandlers) AuthMiddleware() fiber.Handler {
 func (ah *AuthHandlers) DeviceRequiredMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get user ID from context (should be set by AuthMiddleware)
-		userID, ok := c.Locals("userID").(int)
-		if !ok {
+		userIDStr, ok := c.Locals("user_id").(string)
+		if !ok || userIDStr == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"success": false,
 				"error":   "Authentication required",
@@ -573,9 +567,9 @@ func (ah *AuthHandlers) DeviceRequiredMiddleware() fiber.Handler {
 		err := ah.db.QueryRow(`
 			SELECT COUNT(*) FROM device_setting_nodepath 
 			WHERE user_id = ?
-		`, userID).Scan(&count)
+		`, userIDStr).Scan(&count)
 		if err != nil {
-			logrus.WithError(err).WithField("userID", userID).Error("Failed to check user device count")
+			logrus.WithError(err).WithField("userID", userIDStr).Error("Failed to check user device count")
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"success": false,
 				"error":   "Internal server error",
@@ -597,7 +591,7 @@ func (ah *AuthHandlers) DeviceRequiredMiddleware() fiber.Handler {
 }
 
 // CheckUserDevices returns device count and device IDs for a user
-func (ah *AuthHandlers) CheckUserDevices(userID int) (int, []string, error) {
+func (ah *AuthHandlers) CheckUserDevices(userID string) (int, []string, error) {
 	// Check if database connection is available
 	if ah.db == nil {
 		return 0, nil, fmt.Errorf("database connection is not available")
@@ -635,8 +629,8 @@ func (ah *AuthHandlers) CheckUserDevices(userID int) (int, []string, error) {
 // GetDeviceStatus returns the device status for the authenticated user
 func (ah *AuthHandlers) GetDeviceStatus(c *fiber.Ctx) error {
 	// Get user ID from context
-	userID, ok := c.Locals("userID").(int)
-	if !ok {
+	userIDStr, ok := c.Locals("user_id").(string)
+	if !ok || userIDStr == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"success": false,
 			"error":   "Authentication required",
@@ -644,9 +638,9 @@ func (ah *AuthHandlers) GetDeviceStatus(c *fiber.Ctx) error {
 	}
 
 	// Check user devices
-	count, deviceIDs, err := ah.CheckUserDevices(userID)
+	count, deviceIDs, err := ah.CheckUserDevices(userIDStr)
 	if err != nil {
-		logrus.WithError(err).WithField("userID", userID).Error("Failed to check user devices")
+		logrus.WithError(err).WithField("userID", userIDStr).Error("Failed to check user devices")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Internal server error",
