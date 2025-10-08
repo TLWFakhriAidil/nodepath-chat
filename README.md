@@ -50,9 +50,13 @@ internal/
 ├── database/database.go        # Database connection & pooling
 ├── handlers/                   # HTTP request handlers
 │   ├── handlers.go            # Main handler setup
+│   ├── handlers_extended.go   # Extended API handlers
 │   ├── auth_handlers.go       # Authentication endpoints
+│   ├── profile_handlers.go    # User profile management
 │   ├── device_settings_handlers.go # Device management
 │   ├── ai_whatsapp_handlers.go # AI conversation APIs
+│   ├── stage_set_value_handlers.go # Stage value operations
+│   ├── stage_values_handlers.go # Stage value retrieval
 │   ├── health_handlers.go     # Health check endpoints
 │   ├── wasapbot_handlers.go   # WasapBot flow handlers
 │   └── waha_support.go        # WAHA provider support
@@ -60,23 +64,35 @@ internal/
 │   ├── models.go              # Core models
 │   ├── ai_settings.go         # AI configuration models
 │   ├── device_settings.go     # Device models
+│   ├── execution_process.go   # Flow execution tracking
+│   ├── stage_set_value.go     # Stage value models
 │   └── wasapbot.go           # WasapBot models
 ├── repository/                 # Data access layer
 │   ├── ai_whatsapp_repository.go
 │   ├── device_settings_repository.go
-│   └── wasapbot_repository.go
+│   ├── wasapbot_repository.go
+│   └── execution_process_repository.go
 ├── services/                   # Business logic layer
 │   ├── ai_service.go          # AI integration service
 │   ├── ai_whatsapp_service.go # AI conversation management
+│   ├── ai_whatsapp_compat.go  # Backward compatibility layer
+│   ├── ai_response_processor.go # AI response parsing
+│   ├── ai_response_php_processor.go # PHP-style processing
 │   ├── ai_cron_service.go     # Scheduled AI processing
 │   ├── flow_service.go        # Flow execution engine
 │   ├── device_settings_service.go # Device management
 │   ├── provider_service.go    # WhatsApp provider integration
 │   ├── media_service.go       # Media file handling
+│   ├── media_detection_service.go # Media URL detection
 │   ├── redis_service.go       # Redis operations
 │   ├── health_service.go      # System health monitoring
 │   ├── websocket_service.go   # Real-time communication
-│   └── unified_flow_service.go # Unified flow processing
+│   ├── unified_flow_service.go # Unified flow processing
+│   ├── queue_monitor.go       # Queue monitoring
+│   ├── rate_limiter.go        # Rate limiting service
+│   ├── stage_set_value_service.go # Stage value management
+│   ├── condition_evaluation_fix.go # Condition logic fixes
+│   └── condition_fix.go       # Additional condition fixes
 ├── utils/                      # Utility functions
 │   ├── url_validator.go       # URL validation utilities
 │   └── transaction.go         # Database transaction helpers
@@ -95,7 +111,19 @@ src/
 │   ├── FlowSelector.tsx       # Flow selection component
 │   ├── Sidebar.tsx            # Navigation sidebar
 │   ├── TopBar.tsx             # Top navigation bar
+│   ├── ProtectedRoute.tsx     # Auth guard component
+│   ├── DeviceRequiredWrapper.tsx # Device check wrapper
+│   ├── DeviceRequiredPopup.tsx # Device prompt modal
+│   ├── DeviceStatusPopup.tsx  # Device status display
 │   ├── WahaStatusModal.tsx    # WAHA device status modal
+│   ├── WablasStatusModal.tsx  # Wablas device status modal
+│   ├── WhacenterStatusModal.tsx # Whacenter device status modal
+│   ├── AIWhatsappDataTable.tsx # AI conversation table
+│   ├── LeadChart.tsx          # Lead analytics charts
+│   ├── LeadDashboard.tsx      # Lead dashboard
+│   ├── LeadTable.tsx          # Lead data table
+│   ├── SimpleSystemStatus.tsx # System status widget
+│   ├── MySQLAPIExample.tsx    # MySQL API examples
 │   ├── nodes/                 # Flow node components
 │   └── ui/                    # shadcn/ui components
 ├── contexts/                   # React context providers
@@ -111,14 +139,19 @@ src/
 │   ├── mysqlStorage.ts        # MySQL storage operations
 │   └── utils.ts               # Common utilities
 ├── pages/                      # Application pages
-│   ├── Index.tsx              # Main dashboard
+│   ├── Dashboard.tsx          # Main dashboard
 │   ├── Login.tsx              # Authentication page
 │   ├── Register.tsx           # User registration
+│   ├── Profile.tsx            # User profile management
 │   ├── FlowBuilder.tsx        # Flow builder page
 │   ├── FlowManager.tsx        # Flow management page
 │   ├── DeviceSettings.tsx     # Device configuration
+│   ├── SetStage.tsx           # Manual stage setting
 │   ├── Analytics.tsx          # Analytics dashboard
-│   └── WhatsAppBot.tsx        # WhatsApp bot interface
+│   ├── AnalyticsNew.tsx       # Updated analytics
+│   ├── LeadAnalytics.tsx      # Lead analytics
+│   ├── WhatsAppBot.tsx        # WhatsApp bot interface
+│   └── NotFound.tsx           # 404 error page
 └── types/                      # TypeScript type definitions
     ├── chatbot.ts             # Chatbot flow types
     └── leads.ts               # Lead management types
@@ -193,6 +226,9 @@ CREATE TABLE device_setting_nodepath (
 │   ├── POST /login            # User login
 │   ├── POST /register         # User registration
 │   └── POST /logout           # User logout
+├── profile/                    # Profile Management
+│   ├── GET /                  # Get user profile
+│   └── PUT /                  # Update user profile
 ├── flows/                      # Flow management
 │   ├── GET /                  # Get all flows
 │   ├── POST /                 # Create new flow
@@ -209,12 +245,29 @@ CREATE TABLE device_setting_nodepath (
 │   ├── GET /                  # Get conversations
 │   ├── POST /                 # Create conversation
 │   ├── PUT /:id               # Update conversation
-│   └── DELETE /:id            # Delete conversation
+│   ├── DELETE /:id            # Delete conversation
+│   └── GET /analytics         # Get analytics data
+├── stage-values/              # Stage Management
+│   └── GET /                  # Get stage values
+├── stage-set-value/           # Stage Operations
+│   └── POST /                 # Set stage value
+├── wasapbot/                  # WasapBot Integration
+│   ├── GET /                  # Get WasapBot data
+│   └── GET /analytics         # WasapBot analytics
 ├── webhooks/                   # Webhook handlers
 │   └── POST /:id_device/:instance # Generic webhook
-└── health/                     # Health monitoring
-    └── GET /                   # Health check
+├── health/                     # Health monitoring
+│   └── GET /                   # Health check
+└── version/                    # System info
+    └── GET /                   # Get server version
 ```
+
+### **Additional Endpoints**
+- `GET /healthz` - Health check with database & Redis status
+- `WS /ws` - WebSocket connection for real-time updates
+- `POST /media/upload` - Media file upload
+- `GET /media/:filename` - Serve media files
+- `GET /media/thumbnails/:filename` - Serve thumbnails
 
 ---
 
@@ -284,6 +337,7 @@ Incoming Webhook → Device Settings → Flow Engine → AI Processing → Respo
 - **condition**: Conditional branching
 - **stage**: Stage management nodes
 - **user_reply**: User input handling
+- **waiting_reply_times**: Waiting reply timing node
 - **ai_prompt**: AI response generation
 - **advanced_ai_prompt**: Advanced AI with JSON parsing
 - **manual**: Manual intervention nodes
@@ -299,6 +353,122 @@ Incoming Webhook → Device Settings → Flow Engine → AI Processing → Respo
 
 ---
 
+## 🔄 **Data Flow Architecture**
+
+### **WhatsApp Message Processing Flow**
+```
+Incoming WhatsApp Message
+  ↓
+Webhook Handler (/api/webhooks/:device/:instance)
+  ↓
+WhatsApp Service (whatsapp_service.go)
+  ├─ Parse webhook format (Wablas/Whacenter/WAHA)
+  ├─ Extract phone_number, message, sender_name
+  └─ Validate device configuration
+  ↓
+Unified Flow Service (unified_flow_service.go)
+  ├─ Check ai_whatsapp_nodepath OR wasapBot_nodepath
+  ├─ Route based on niche/instance
+  └─ Get or create execution
+  ↓
+Flow Service (flow_service.go)
+  ├─ Load flow definition from chatbot_flows_nodepath
+  ├─ Get current_node_id from execution
+  └─ Execute node based on type:
+      ├─ start → Initialize flow
+      ├─ message → Send text via Provider
+      ├─ image/audio/video → Send media
+      ├─ delay → Queue delayed message
+      ├─ condition → Evaluate & branch
+      ├─ stage → Update stage field
+      ├─ user_reply → Wait (waiting_for_reply=1)
+      ├─ ai_prompt → Call AI Service
+      └─ manual → Human takeover (human=1)
+  ↓
+[If AI Node]
+  ↓
+AI Service (ai_service.go)
+  ├─ Build OpenRouter/OpenAI request
+  ├─ Messages: [system, assistant, user]
+  ├─ Temperature: 0.67, top_p: 1
+  └─ Parse AI response JSON:
+      {
+        "Stage": "Problem Identification",
+        "Response": [
+          {"type": "text", "content": "..."},
+          {"type": "image", "content": "URL"}
+        ]
+      }
+  ↓
+Provider Service (provider_service.go)
+  ├─ Select provider (Wablas/Whacenter/WAHA)
+  ├─ Format message per provider API
+  ├─ Handle media URLs
+  └─ Send via HTTP API
+  ↓
+Update Database
+  ├─ current_node_id → next node
+  ├─ last_node_id → previous node
+  ├─ conv_last → current message
+  ├─ stage → from AI response
+  └─ waiting_for_reply → 0 (continue) or 1 (wait)
+  ↓
+WebSocket Service (websocket_service.go)
+  └─ Broadcast update to connected clients
+  ↓
+Frontend Real-time Update (React)
+```
+
+### **Flow Execution State Machine**
+```
+START NODE
+  ↓
+[Flow Active]
+  ├─ Message Node → Send & Continue
+  ├─ Media Node → Send & Continue  
+  ├─ Delay Node → Queue & Wait
+  ├─ Condition Node → Evaluate & Branch
+  ├─ Stage Node → Update Stage & Continue
+  ├─ User Reply Node → Wait (waiting_for_reply=1)
+  ├─ AI Prompt Node → Call AI & Send Response
+  └─ Manual Node → Human Takeover (human=1)
+  ↓
+[End Condition]
+  ├─ Flow Completed (execution_status=completed)
+  ├─ Human Takeover (human=1)
+  └─ Flow Failed (execution_status=failed)
+```
+
+### **Authentication Flow**
+```
+User Login Request
+  ↓
+POST /api/auth/login
+  ↓
+Auth Handler (auth_handlers.go)
+  ├─ Validate email/password
+  ├─ Hash comparison (bcrypt)
+  └─ Check is_active status
+  ↓
+Session Creation
+  ├─ Generate UUID session ID
+  ├─ Generate JWT token
+  ├─ Store in user_sessions table
+  └─ Set expiration (24 hours)
+  ↓
+Return Response
+  ├─ JWT token
+  ├─ User details
+  └─ has_devices flag
+  ↓
+Frontend Storage
+  ├─ Store token in localStorage
+  ├─ Set Authorization header
+  └─ Update AuthContext
+```
+
+---
+
 ## 🚀 **Deployment**
 
 ### **Railway Platform Configuration**
@@ -310,15 +480,45 @@ Incoming Webhook → Device Settings → Flow Engine → AI Processing → Respo
 
 ### **Environment Variables**
 ```bash
-# Database Connection
-MYSQL_URI=mysql://admin_aqil:admin_aqil@157.245.206.124:3306/admin_railway
-
-# Server Configuration
+# Application Configuration
 PORT=8080
 APP_ENV=production
 
-# Redis (Optional)
-REDIS_URL=redis://default:password@host:6379
+# Database Connection
+MYSQL_URI=mysql://user:password@host:port/database
+
+# Frontend Database Config (Auto-populated from MYSQL_URI in Railway)
+VITE_DB_HOST=localhost
+VITE_DB_NAME=admin_railway
+VITE_DB_USER=root
+VITE_DB_PASSWORD=
+VITE_DB_PORT=3306
+
+# Redis Configuration
+REDIS_URL=redis://localhost:6379
+REDIS_CLUSTER_ADDRS=redis-node1:6379,redis-node2:6379,redis-node3:6379
+
+# WhatsApp Settings
+WHATSAPP_STORAGE_PATH=./whatsapp_sessions
+WHATSAPP_SESSION_DIR=./whatsapp_sessions
+WHATSAPP_MAX_DEVICES=10
+
+# AI Configuration
+OPENROUTER_DEFAULT_KEY=your-openrouter-key
+OPENROUTER_TIMEOUT=15
+OPENROUTER_MAX_RETRIES=2
+
+# Security Settings
+JWT_SECRET=your-jwt-secret
+SESSION_SECRET=your-session-secret
+
+# Performance Settings
+MAX_CONCURRENT_USERS=5000
+WEBSOCKET_ENABLED=true
+
+# CDN Settings (Optional)
+CDN_ENABLED=false
+CDN_BASE_URL=https://your-cdn-domain.com
 ```
 
 ### **Local Development**
