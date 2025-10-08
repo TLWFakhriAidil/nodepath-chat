@@ -14,7 +14,7 @@ type Order struct {
 	URL          *string   `json:"url" db:"url"` // Billplz payment URL
 	Product      string    `json:"product" db:"product"`
 	Method       string    `json:"method" db:"method"` // billplz only
-	UserID       *int      `json:"user_id" db:"user_id"`
+	UserID       *string   `json:"user_id" db:"user_id"` // CHAR(36) UUID from user_nodepath
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }

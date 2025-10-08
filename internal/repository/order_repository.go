@@ -17,7 +17,7 @@ type OrderRepository interface {
 	GetOrderByBillID(billID string) (*models.Order, error)
 	UpdateOrderStatus(billID string, status string) error
 	UpdateOrderBillInfo(orderID int, billID string, url string) error
-	GetOrdersByUserID(userID int, limit int, offset int) ([]models.Order, int, error)
+	GetOrdersByUserID(userID string, limit int, offset int) ([]models.Order, int, error)
 	GetAllOrders(limit int, offset int) ([]models.Order, int, error)
 }
 
@@ -172,7 +172,7 @@ func (r *orderRepository) UpdateOrderBillInfo(orderID int, billID string, url st
 }
 
 // GetOrdersByUserID retrieves orders for a specific user
-func (r *orderRepository) GetOrdersByUserID(userID int, limit int, offset int) ([]models.Order, int, error) {
+func (r *orderRepository) GetOrdersByUserID(userID string, limit int, offset int) ([]models.Order, int, error) {
 	// Get total count
 	var totalCount int
 	countQuery := `SELECT COUNT(*) FROM orders_nodepath WHERE user_id = ?`

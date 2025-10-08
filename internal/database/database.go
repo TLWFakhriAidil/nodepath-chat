@@ -89,6 +89,11 @@ func RunMigrations(db *sql.DB) error {
 		logrus.WithError(err).Warn("Failed to drop deprecated billing columns, continuing...")
 	}
 
+	// Convert user_id column from INT to CHAR(36) in orders_nodepath
+	if err := convertUserIDToChar36(db); err != nil {
+		logrus.WithError(err).Warn("Failed to convert user_id column, continuing...")
+	}
+
 	logrus.Info("Database migrations completed successfully")
 	return nil
 }
@@ -261,7 +266,7 @@ CREATE TABLE IF NOT EXISTS orders_nodepath (
     url TEXT COLLATE utf8mb4_unicode_ci COMMENT 'Billplz payment URL',
     product VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL,
     method VARCHAR(50) COLLATE utf8mb4_unicode_ci DEFAULT 'billplz',
-    user_id INT,
+    user_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_bill_id (bill_id),
@@ -447,5 +452,43 @@ func dropDeprecatedBillingColumns(db *sql.DB) error {
 			logrus.WithField("column", col).Debug("Deprecated billing column does not exist in orders_nodepath")
 		}
 	}
+	return nil
+}
+
+// convertUserIDToChar36 converts user_id column from INT to CHAR(36) in orders_nodepath table
+func convertUserIDToChar36(db *sql.DB) error {
+	// Check current data type of user_id column
+	var dataType string
+	err := db.QueryRow(`
+		SELECT DATA_TYPE 
+		FROM INFORMATION_SCHEMA.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = 'orders_nodepath' 
+		AND COLUMN_NAME = 'user_id'
+	`).Scan(&dataType)
+
+	if err != nil {
+		return fmt.Errorf("failed to check user_id column type: %w", err)
+	}
+
+	// If already CHAR, skip
+	if dataType == "char" {
+		logrus.Info("user_id column is already CHAR(36) in orders_nodepath")
+		return nil
+	}
+
+	// Convert INT to CHAR(36) - first set existing data to NULL or empty since INT can't convert to UUID
+	_, err = db.Exec("UPDATE orders_nodepath SET user_id = NULL WHERE user_id IS NOT NULL")
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to clear user_id values before conversion")
+	}
+
+	// Alter column type
+	_, err = db.Exec("ALTER TABLE orders_nodepath MODIFY COLUMN user_id CHAR(36)")
+	if err != nil {
+		return fmt.Errorf("failed to convert user_id to CHAR(36): %w", err)
+	}
+
+	logrus.Info("Successfully converted user_id column from INT to CHAR(36) in orders_nodepath")
 	return nil
 }
