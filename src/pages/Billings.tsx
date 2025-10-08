@@ -48,16 +48,9 @@ export default function Billings() {
 
   const fetchUserProfile = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoadingProfile(false);
-        return;
-      }
-
+      // Backend uses cookie-based auth (session_token), no need for Authorization header
       const response = await fetch('/api/profile/', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include' // Important: send cookies with request
       });
 
       if (response.ok) {
@@ -77,16 +70,9 @@ export default function Billings() {
 
   const fetchOrders = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoadingOrders(false);
-        return;
-      }
-
+      // Backend uses cookie-based auth (session_token), no need for Authorization header
       const response = await fetch('/api/billing/orders?limit=50&offset=0', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include' // Important: send cookies with request
       });
 
       if (response.ok) {
@@ -117,24 +103,13 @@ export default function Billings() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        await Swal.fire({
-          icon: 'error',
-          title: 'Not Logged In',
-          text: 'Please login first to upgrade your package.',
-          confirmButtonColor: '#3085d6',
-        });
-        setLoading(false);
-        return;
-      }
-
+      // Backend uses cookie-based auth (session_token), send credentials with request
       const response = await fetch('/api/billing/create-order', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
+        credentials: 'include', // Important: send cookies with request
         body: JSON.stringify({
           amount: 1.00,
           product: 'Pro Plan - Monthly Subscription'
