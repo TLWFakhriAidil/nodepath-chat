@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strings"
+	"time"
 
 	"nodepath-chat/internal/models"
 
@@ -313,3 +314,79 @@ func (h *Handlers) buildResponseFromParts(parts []models.AIResponsePart) string 
 }
 
 // Remaining test chat processing functions removed
+
+// GetDashboardChartData returns combined chart data from both AI WhatsApp and WasapBot databases
+func (h *Handlers) GetDashboardChartData(c *fiber.Ctx) error {
+	// Get user ID from context
+	userID, ok := c.Locals("user_id").(string)
+	if !ok || userID == "" {
+		return h.errorResponse(c, 401, "Authentication required")
+	}
+
+	// Get query parameters
+	dateFromStr := c.Query("dateFrom") // format: YYYY-MM-DD
+	dateToStr := c.Query("dateTo")     // format: YYYY-MM-DD
+	deviceFilter := c.Query("deviceFilter", "all")
+
+	// Parse dates
+	var startDate, endDate time.Time
+	var parseErr error
+	
+	if dateFromStr != "" {
+		startDate, parseErr = time.Parse("2006-01-02", dateFromStr)
+		if parseErr != nil {
+			logrus.WithError(parseErr).Warn("Failed to parse dateFrom, using current month start")
+			now := time.Now()
+			startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		}
+	} else {
+		// Default to first day of current month
+		now := time.Now()
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	}
+	
+	if dateToStr != "" {
+		endDate, parseErr = time.Parse("2006-01-02", dateToStr)
+		if parseErr != nil {
+			logrus.WithError(parseErr).Warn("Failed to parse dateTo, using today")
+			endDate = time.Now()
+		}
+	} else {
+		// Default to today
+		endDate = time.Now()
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"user_id":       userID,
+		"startDate":     startDate.Format("2006-01-02"),
+		"endDate":       endDate.Format("2006-01-02"),
+		"deviceFilter":  deviceFilter,
+	}).Info("Getting dashboard chart data")
+
+	// Get AI WhatsApp stats
+	aiStats, err := h.aiWhatsappHandlers.AIRepo.GetAnalyticsData(startDate, endDate, deviceFilter, userID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get AI WhatsApp stats")
+		// Continue with empty stats rather than failing
+		aiStats = map[string]interface{}{"total_conversations": 0}
+	}
+
+	// Get WasapBot stats (this method takes string dates)
+	wasapBotStats, err := h.wasapBotHandlers.GetRepo().GetWasapBotStatsWithDates(deviceFilter, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), userID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get WasapBot stats")
+		// Continue with empty stats rather than failing
+		wasapBotStats = map[string]interface{}{"total_prospects": 0}
+	}
+
+	// Combine the stats
+	response := map[string]interface{}{
+		"ai_whatsapp":  aiStats,
+		"wasapbot":     wasapBotStats,
+		"dateFrom":     startDate.Format("2006-01-02"),
+		"dateTo":       endDate.Format("2006-01-02"),
+		"deviceFilter": deviceFilter,
+	}
+
+	return h.successResponse(c, response)
+}
