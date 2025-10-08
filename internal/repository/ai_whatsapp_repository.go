@@ -49,10 +49,10 @@ type AIWhatsappRepository interface {
 	GetConversationStats(idDevice string) (map[string]int, error)
 	GetActiveConversationCount() (int, error)
 	GetConversationsByDateRange(startDate, endDate time.Time) ([]models.AIWhatsapp, error)
-	GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID int) (map[string]interface{}, error)
+	GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID string) (map[string]interface{}, error)
 
 	// Data table operations
-	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error)
+	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID string) ([]models.AIWhatsapp, int, error)
 
 	// Database access for transactions
 	GetDB() *sql.DB
@@ -415,7 +415,7 @@ func (r *aiWhatsappRepository) UpdateProspectName(prospectNum, idDevice, prospec
 }
 
 // GetAllAIWhatsappData retrieves all AI WhatsApp conversation records with pagination and filtering
-func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID int) ([]models.AIWhatsapp, int, error) {
+func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID string) ([]models.AIWhatsapp, int, error) {
 	// Build base query with JOIN to filter by user
 	baseQuery := `
 		SELECT a.id_prospect, a.id_device, a.prospect_num, a.prospect_name, a.stage, a.date_order, a.conv_last, 
@@ -532,7 +532,7 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 }
 
 // GetAnalyticsData retrieves analytics data from ai_whatsapp_nodepath table with date filtering
-func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID int) (map[string]interface{}, error) {
+func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID string) (map[string]interface{}, error) {
 	logrus.WithFields(logrus.Fields{
 		"startDate": startDate.Format("2006-01-02"),
 		"endDate":   endDate.Format("2006-01-02"),

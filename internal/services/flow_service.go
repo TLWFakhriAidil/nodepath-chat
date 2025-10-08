@@ -173,6 +173,81 @@ func (s *FlowService) GetAllFlows() ([]*models.ChatbotFlow, error) {
 }
 
 // GetFlowsByUserDevices retrieves flows filtered by user's device IDs from device_setting_nodepath
+// GetFlowsByUserDevicesString gets flows by user devices using string UUID user_id
+func (s *FlowService) GetFlowsByUserDevicesString(userID string) ([]*models.ChatbotFlow, error) {
+	if s.db == nil {
+		logrus.Warn("Database not available, returning empty flows list for user devices (fallback mode)")
+		return []*models.ChatbotFlow{}, nil // Return empty list in fallback mode
+	}
+
+	// First get all device IDs for this user
+	deviceQuery := `SELECT id_device FROM device_setting_nodepath WHERE user_id = ?`
+	deviceRows, err := s.db.Query(deviceQuery, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user devices: %w", err)
+	}
+	defer deviceRows.Close()
+
+	var deviceIDs []string
+	for deviceRows.Next() {
+		var deviceID string
+		err := deviceRows.Scan(&deviceID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan device ID: %w", err)
+		}
+		deviceIDs = append(deviceIDs, deviceID)
+	}
+
+	// If user has no devices, return empty list
+	if len(deviceIDs) == 0 {
+		return []*models.ChatbotFlow{}, nil
+	}
+
+	// Build query with IN clause for device filtering
+	placeholders := strings.Repeat("?,", len(deviceIDs))
+	placeholders = placeholders[:len(placeholders)-1] // Remove trailing comma
+
+	query := fmt.Sprintf(`
+		SELECT id, name, niche, id_device,
+		       nodes, edges, created_at, updated_at
+		FROM chatbot_flows_nodepath 
+		WHERE id_device IN (%s)
+		ORDER BY created_at DESC
+	`, placeholders)
+
+	// Convert deviceIDs to interface{} slice for query
+	args := make([]interface{}, len(deviceIDs))
+	for i, deviceID := range deviceIDs {
+		args[i] = deviceID
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flows for user devices: %w", err)
+	}
+	defer rows.Close()
+
+	var flows []*models.ChatbotFlow
+	for rows.Next() {
+		var flow models.ChatbotFlow
+		err := rows.Scan(
+			&flow.ID, &flow.Name, &flow.Niche, &flow.IdDevice, &flow.Nodes, &flow.Edges,
+			&flow.CreatedAt, &flow.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan flow: %w", err)
+		}
+		flows = append(flows, &flow)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating flow rows: %w", err)
+	}
+
+	return flows, nil
+}
+
+// GetFlowsByUserDevices gets flows by user devices using int user_id (deprecated, use GetFlowsByUserDevicesString)
 func (s *FlowService) GetFlowsByUserDevices(userID int) ([]*models.ChatbotFlow, error) {
 	if s.db == nil {
 		logrus.Warn("Database not available, returning empty flows list for user devices (fallback mode)")
