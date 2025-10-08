@@ -263,15 +263,21 @@ const Dashboard = () => {
               <CardContent>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={[
-                      { 
-                        name: 'Total', 
-                        'AI WhatsApp': chartData.ai_whatsapp?.total_conversations || 0,
-                        'WasapBot': chartData.wasapbot?.total_prospects || 0
-                      }
-                    ]}>
+                    <LineChart data={
+                      chartData.ai_whatsapp?.daily_data?.length > 0 
+                        ? chartData.ai_whatsapp.daily_data.map((day: any) => ({
+                            date: format(new Date(day.date), 'MMM dd'),
+                            'AI WhatsApp': day.conversations || 0,
+                            'WasapBot': 0 // WasapBot doesn't have daily data in current API
+                          }))
+                        : [{ 
+                            date: 'Today', 
+                            'AI WhatsApp': chartData.ai_whatsapp?.summary?.total_conversations || 0,
+                            'WasapBot': chartData.wasapbot?.totalProspects || 0
+                          }]
+                    }>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
+                      <XAxis dataKey="date" />
                       <YAxis />
                       <Tooltip />
                       <Legend />
@@ -299,7 +305,7 @@ const Dashboard = () => {
                       <span className="font-semibold">AI WhatsApp</span>
                     </div>
                     <div className="text-2xl font-bold text-blue-600">
-                      {chartData.ai_whatsapp?.total_conversations || 0}
+                      {chartData.ai_whatsapp?.summary?.total_conversations || 0}
                     </div>
                     <div className="text-sm text-muted-foreground">Total Conversations</div>
                   </div>
@@ -309,7 +315,7 @@ const Dashboard = () => {
                       <span className="font-semibold">WasapBot</span>
                     </div>
                     <div className="text-2xl font-bold text-green-600">
-                      {chartData.wasapbot?.total_prospects || 0}
+                      {chartData.wasapbot?.totalProspects || 0}
                     </div>
                     <div className="text-sm text-muted-foreground">Total Prospects</div>
                   </div>
@@ -335,28 +341,28 @@ const Dashboard = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Total Conversations</span>
                       <span className="text-lg font-bold text-blue-600">
-                        {chartData.ai_whatsapp?.total_conversations || 0}
+                        {chartData.ai_whatsapp?.summary?.total_conversations || 0}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">AI Status</span>
+                      <span className="text-sm text-muted-foreground">AI Active</span>
                       <span className="text-lg font-bold">
-                        {chartData.ai_whatsapp?.ai_count || 0}
+                        {chartData.ai_whatsapp?.summary?.ai_active || 0}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Human Status</span>
+                      <span className="text-sm text-muted-foreground">Human Takeover</span>
                       <span className="text-lg font-bold">
-                        {chartData.ai_whatsapp?.human_count || 0}
+                        {chartData.ai_whatsapp?.summary?.human_takeover || 0}
                       </span>
                     </div>
                   </div>
                   <div className="h-48 mt-4">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={[
-                        { name: 'AI', value: chartData.ai_whatsapp?.ai_count || 0 },
-                        { name: 'Human', value: chartData.ai_whatsapp?.human_count || 0 },
-                        { name: 'Total', value: chartData.ai_whatsapp?.total_conversations || 0 }
+                        { name: 'AI', value: chartData.ai_whatsapp?.summary?.ai_active || 0 },
+                        { name: 'Human', value: chartData.ai_whatsapp?.summary?.human_takeover || 0 },
+                        { name: 'Total', value: chartData.ai_whatsapp?.summary?.total_conversations || 0 }
                       ]}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
@@ -391,28 +397,28 @@ const Dashboard = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Total Prospects</span>
                       <span className="text-lg font-bold text-green-600">
-                        {chartData.wasapbot?.total_prospects || 0}
+                        {chartData.wasapbot?.totalProspects || 0}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Active Executions</span>
                       <span className="text-lg font-bold">
-                        {chartData.wasapbot?.active_executions || 0}
+                        {chartData.wasapbot?.activeExecutions || 0}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Completed</span>
                       <span className="text-lg font-bold">
-                        {chartData.wasapbot?.completed_executions || 0}
+                        {chartData.wasapbot?.completedExecutions || 0}
                       </span>
                     </div>
                   </div>
                   <div className="h-48 mt-4">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={[
-                        { name: 'Active', value: chartData.wasapbot?.active_executions || 0 },
-                        { name: 'Completed', value: chartData.wasapbot?.completed_executions || 0 },
-                        { name: 'Total', value: chartData.wasapbot?.total_prospects || 0 }
+                        { name: 'Active', value: chartData.wasapbot?.activeExecutions || 0 },
+                        { name: 'Completed', value: chartData.wasapbot?.completedExecutions || 0 },
+                        { name: 'Total', value: chartData.wasapbot?.totalProspects || 0 }
                       ]}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
