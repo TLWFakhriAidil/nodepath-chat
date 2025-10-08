@@ -30,7 +30,7 @@ func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := userIDInterface.(int)
+	userID := userIDInterface.(string)
 
 	// Get query parameters
 	deviceIDs := c.Query("deviceIds")
@@ -96,7 +96,7 @@ func (h *WasapBotHandlers) GetWasapBotStats(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := userIDInterface.(int)
+	userID := userIDInterface.(string)
 
 	// Get device IDs from query
 	deviceIDs := c.Query("deviceIds")

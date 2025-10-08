@@ -22,10 +22,10 @@ type WasapBotRepository interface {
 	UpdateCurrentNode(executionID, nodeID string) error
 	UpdateWaitingStatus(executionID string, waitingValue int) error
 	SaveConversationHistory(prospectNum, deviceID, userMessage, botResponse, stage, nama string) error
-	GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error)
-	GetAllWasapBotDataWithDates(limit, offset int, deviceFilter, stageFilter, statusFilter, search, dateFrom, dateTo string, userID int) ([]map[string]interface{}, int, error)
-	GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error)
-	GetWasapBotStatsWithDates(deviceFilter, dateFrom, dateTo string, userID int) (map[string]interface{}, error)
+	GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID string) ([]map[string]interface{}, int, error)
+	GetAllWasapBotDataWithDates(limit, offset int, deviceFilter, stageFilter, statusFilter, search, dateFrom, dateTo string, userID string) ([]map[string]interface{}, int, error)
+	GetWasapBotStats(deviceFilter string, userID string) (map[string]interface{}, error)
+	GetWasapBotStatsWithDates(deviceFilter, dateFrom, dateTo string, userID string) (map[string]interface{}, error)
 	Delete(idProspect int) error
 }
 
@@ -344,7 +344,7 @@ func (r *wasapBotRepository) UpdateWaitingStatus(executionID string, waitingValu
 }
 
 // GetAllWasapBotData retrieves all WasapBot data with filters
-func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID int) ([]map[string]interface{}, int, error) {
+func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter, stageFilter, statusFilter, search string, userID string) ([]map[string]interface{}, int, error) {
 	// Log incoming parameters
 	logrus.WithFields(logrus.Fields{
 		"limit":        limit,
@@ -519,7 +519,7 @@ func (r *wasapBotRepository) GetAllWasapBotData(limit, offset int, deviceFilter,
 }
 
 // GetWasapBotStats retrieves WasapBot statistics
-func (r *wasapBotRepository) GetWasapBotStats(deviceFilter string, userID int) (map[string]interface{}, error) {
+func (r *wasapBotRepository) GetWasapBotStats(deviceFilter string, userID string) (map[string]interface{}, error) {
 	stats := map[string]interface{}{
 		"totalProspects":      0,
 		"activeExecutions":    0,
@@ -606,7 +606,7 @@ func (r *wasapBotRepository) Delete(idProspect int) error {
 }
 
 // GetAllWasapBotDataWithDates retrieves all WasapBot data with filters including date range
-func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, deviceFilter, stageFilter, statusFilter, search, dateFrom, dateTo string, userID int) ([]map[string]interface{}, int, error) {
+func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, deviceFilter, stageFilter, statusFilter, search, dateFrom, dateTo string, userID string) ([]map[string]interface{}, int, error) {
 	// Log incoming parameters
 	logrus.WithFields(logrus.Fields{
 		"limit":        limit,
@@ -794,7 +794,7 @@ func (r *wasapBotRepository) GetAllWasapBotDataWithDates(limit, offset int, devi
 }
 
 // GetWasapBotStatsWithDates retrieves WasapBot statistics with date filtering
-func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, dateTo string, userID int) (map[string]interface{}, error) {
+func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, dateTo string, userID string) (map[string]interface{}, error) {
 	stats := map[string]interface{}{
 		"totalProspects":      0,
 		"activeExecutions":    0,

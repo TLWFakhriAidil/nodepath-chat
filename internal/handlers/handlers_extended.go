@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"strconv"
 	"strings"
 
 	"nodepath-chat/internal/models"
@@ -18,18 +17,12 @@ func (h *Handlers) GetExecutions(c *fiber.Ctx) error {
 
 	if flowReference != "" {
 		// Use AI WhatsApp repository to get executions
-		// Get userID from context
-		userID, ok := c.Locals("user_id").(string)
-		if !ok {
+		// Get user ID from context as string UUID
+		userIDStr, ok := c.Locals("user_id").(string)
+		if !ok || userIDStr == "" {
 			return h.errorResponse(c, 401, "Authentication required")
 		}
-		userIDInt := 0
-		if userID != "" {
-			if id, err := strconv.Atoi(userID); err == nil {
-				userIDInt = id
-			}
-		}
-		executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userIDInt)
+		executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userIDStr)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to get executions by flow")
 			return h.errorResponse(c, 500, "Failed to retrieve executions")
@@ -224,7 +217,7 @@ func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
 	}
 
 	// Get actual flow count filtered by user's devices
-	flows, err := h.flowService.GetFlowsByUserDevices(convertUUIDToInt(userID))
+	flows, err := h.flowService.GetFlowsByUserDevicesString(userID)
 	if err == nil {
 		overview["total_flows"] = len(flows)
 	}
@@ -246,7 +239,7 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	}
 
 	// Verify that the flow belongs to user's devices
-	userFlows, err := h.flowService.GetFlowsByUserDevices(convertUUIDToInt(userID))
+	userFlows, err := h.flowService.GetFlowsByUserDevicesString(userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get user flows")
 		return h.errorResponse(c, 500, "Failed to verify flow ownership")
@@ -266,7 +259,7 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	}
 
 	// Get executions for the flow using AI WhatsApp repository
-	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, convertUUIDToInt(userID))
+	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userID)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow executions")
 		return h.errorResponse(c, 500, "Failed to get flow statistics")
