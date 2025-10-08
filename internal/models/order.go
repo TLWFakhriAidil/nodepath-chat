@@ -6,38 +6,23 @@ import (
 
 // Order represents a billing order in the system
 type Order struct {
-	ID             int       `json:"id" db:"id"`
-	CustomerEmail  string    `json:"customer_email" db:"customer_email"`
-	CustomerName   string    `json:"customer_name" db:"customer_name"`
-	BillingPhone   string    `json:"billing_phone" db:"billing_phone"`
-	BillingAddress *string   `json:"billing_address" db:"billing_address"`
-	BillingCity    *string   `json:"billing_city" db:"billing_city"`
-	BillingState   *string   `json:"billing_state" db:"billing_state"`
-	BillingPostcode *string  `json:"billing_postcode" db:"billing_postcode"`
-	Amount         float64   `json:"amount" db:"amount"` // Amount in RM
-	CollectionID   *string   `json:"collection_id" db:"collection_id"`
-	Status         string    `json:"status" db:"status"` // Pending, Processing, Success, Failed
-	BillID         *string   `json:"bill_id" db:"bill_id"`
-	URL            *string   `json:"url" db:"url"` // Billplz payment URL
-	Product        string    `json:"product" db:"product"`
-	Method         string    `json:"method" db:"method"` // billplz or cod
-	UserID         *int      `json:"user_id" db:"user_id"`
-	CreatedAt      time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at" db:"updated_at"`
+	ID           int       `json:"id" db:"id"`
+	Amount       float64   `json:"amount" db:"amount"` // Amount in RM
+	CollectionID *string   `json:"collection_id" db:"collection_id"`
+	Status       string    `json:"status" db:"status"` // Pending, Processing, Success, Failed
+	BillID       *string   `json:"bill_id" db:"bill_id"`
+	URL          *string   `json:"url" db:"url"` // Billplz payment URL
+	Product      string    `json:"product" db:"product"`
+	Method       string    `json:"method" db:"method"` // billplz only
+	UserID       *int      `json:"user_id" db:"user_id"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // CreateOrderRequest represents the request to create a new order
 type CreateOrderRequest struct {
-	CustomerEmail   string  `json:"customer_email" binding:"required,email"`
-	CustomerName    string  `json:"customer_name" binding:"required"`
-	BillingPhone    string  `json:"billing_phone" binding:"required"`
-	BillingAddress  *string `json:"billing_address"`
-	BillingCity     *string `json:"billing_city"`
-	BillingState    *string `json:"billing_state"`
-	BillingPostcode *string `json:"billing_postcode"`
-	Amount          float64 `json:"amount" binding:"required"` // Amount in RM
-	Product         string  `json:"product" binding:"required"`
-	Method          string  `json:"method" binding:"required"` // billplz or cod
+	Amount  float64 `json:"amount" binding:"required"` // Amount in RM
+	Product string  `json:"product" binding:"required"`
 }
 
 // BillplzCreateBillRequest represents request to Billplz API
