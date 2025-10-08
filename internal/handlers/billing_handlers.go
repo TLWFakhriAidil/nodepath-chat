@@ -94,13 +94,14 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 	}
 
 	// For Billplz payment, create bill
-	// Use Railway public domain if available, otherwise BASE_URL, otherwise localhost
-	baseURL := os.Getenv("RAILWAY_PUBLIC_DOMAIN")
-	if baseURL != "" {
-		baseURL = "https://" + baseURL
-	} else {
-		baseURL = os.Getenv("BASE_URL")
-		if baseURL == "" {
+	// Priority: BASE_URL (set in Railway) > RAILWAY_PUBLIC_DOMAIN > localhost
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		// Try Railway public domain
+		domain := os.Getenv("RAILWAY_PUBLIC_DOMAIN")
+		if domain != "" {
+			baseURL = "https://" + domain
+		} else {
 			baseURL = "http://localhost:8080" // Default for local development
 		}
 	}
