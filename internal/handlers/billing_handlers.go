@@ -94,9 +94,16 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 	}
 
 	// For Billplz payment, create bill
+	// Priority: BASE_URL (set in Railway) > RAILWAY_PUBLIC_DOMAIN > localhost
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
-		baseURL = "http://localhost:8080" // Default for local development
+		// Try Railway public domain
+		domain := os.Getenv("RAILWAY_PUBLIC_DOMAIN")
+		if domain != "" {
+			baseURL = "https://" + domain
+		} else {
+			baseURL = "http://localhost:8080" // Default for local development
+		}
 	}
 
 	billReq := models.BillplzCreateBillRequest{
@@ -175,6 +182,7 @@ func (h *BillingHandlers) BillplzCallback(c *fiber.Ctx) error {
 
 	// Check if payment was successful
 	if callback.Paid == "true" {
+		// Update order status to Success
 		err := h.orderRepo.UpdateOrderStatus(callback.ID, "Success")
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update order status")
@@ -184,6 +192,25 @@ func (h *BillingHandlers) BillplzCallback(c *fiber.Ctx) error {
 			// For GET redirect, still redirect to billings page
 		} else {
 			logrus.WithField("bill_id", callback.ID).Info("Payment successful, order updated")
+
+			// Update user subscription in user_nodepath
+			// Get order to find user_id
+			order, err := h.orderRepo.GetOrderByBillID(callback.ID)
+			if err == nil && order != nil && order.UserID != nil {
+				// Update user status to "Pro" and set expired date to now + 1 month
+				updateQuery := `
+					UPDATE user_nodepath 
+					SET status = 'Pro', 
+					    expired = DATE_ADD(NOW(), INTERVAL 1 MONTH)
+					WHERE id = ?
+				`
+				_, err = h.db.Exec(updateQuery, *order.UserID)
+				if err != nil {
+					logrus.WithError(err).WithField("user_id", *order.UserID).Error("Failed to update user subscription")
+				} else {
+					logrus.WithField("user_id", *order.UserID).Info("User subscription updated to Pro for 1 month")
+				}
+			}
 		}
 	} else {
 		// Payment not successful
