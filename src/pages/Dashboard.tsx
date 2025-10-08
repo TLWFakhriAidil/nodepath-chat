@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DatePickerWithRange } from '@/components/ui/date-picker';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Bot, 
   Workflow, 
@@ -20,6 +22,10 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { getFlows } from '@/lib/localStorage';
 import { ChatbotFlow } from '@/types/chatbot';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { format } from 'date-fns';
+import { DateRange } from 'react-day-picker';
+import { useDevice } from '@/contexts/DeviceContext';
 
 const Dashboard = () => {
   const navigate = useNavigate();

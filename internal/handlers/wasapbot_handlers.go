@@ -20,6 +20,11 @@ func NewWasapBotHandlers(wasapBotRepo repository.WasapBotRepository) *WasapBotHa
 	}
 }
 
+// GetRepo returns the wasapbot repository for use by other handlers
+func (h *WasapBotHandlers) GetRepo() repository.WasapBotRepository {
+	return h.wasapBotRepo
+}
+
 // GetWasapBotData retrieves WasapBot data with filters
 func (h *WasapBotHandlers) GetWasapBotData(c *fiber.Ctx) error {
 	// Get user ID from context

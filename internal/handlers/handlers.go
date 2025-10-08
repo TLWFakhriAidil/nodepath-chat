@@ -223,6 +223,11 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	analytics.Get("/overview", h.GetAnalyticsOverview)
 	analytics.Get("/flows/:id/stats", h.GetFlowStats)
 
+	// Dashboard routes - protected with authentication
+	dashboard := api.Group("/dashboard")
+	dashboard.Use(h.authHandlers.AuthMiddleware())
+	dashboard.Get("/chart-data", h.GetDashboardChartData)
+
 	// Health check routes for system monitoring
 	health := api.Group("/health")
 	health.Get("/", h.HandleHealthCheck)
