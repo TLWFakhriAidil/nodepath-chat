@@ -101,6 +101,7 @@ type Handlers struct {
 	authHandlers           *AuthHandlers
 	wasapBotHandlers       *WasapBotHandlers
 	profileHandlers        *ProfileHandlers
+	billingHandlers        *BillingHandlers
 	executionProcessRepo   repository.ExecutionProcessRepository
 	db                     *sql.DB // Add database field
 }
@@ -145,6 +146,11 @@ func NewHandlers(
 		profileHandlers = NewProfileHandlers(db)
 	}
 
+	// Initialize billing handlers
+	orderRepo := repository.NewOrderRepository(db)
+	billplzService := services.NewBillplzService()
+	billingHandlers := NewBillingHandlers(orderRepo, billplzService)
+
 	// Create main handlers instance
 	mainHandlers := &Handlers{
 		flowService:           flowService,
@@ -160,6 +166,7 @@ func NewHandlers(
 		authHandlers:          authHandlers,
 		wasapBotHandlers:      wasapBotHandlers,
 		profileHandlers:       profileHandlers,
+		billingHandlers:       billingHandlers,
 		executionProcessRepo:  executionProcessRepo,
 		db:                    db, // Store the database
 	}
@@ -277,6 +284,16 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 		profile.Put("/", h.profileHandlers.UpdateProfile)
 		profile.Get("/status", h.profileHandlers.GetUserStatus)
 	}
+
+	// Billing routes
+	billing := api.Group("/billing")
+	billing.Post("/create-order", h.billingHandlers.CreateOrder) // Public endpoint for order creation
+	billing.Post("/callback", h.billingHandlers.BillplzCallback) // Billplz callback endpoint
+	billing.Get("/orders/:id", h.billingHandlers.GetOrder)       // Get specific order
+	// Protected billing routes
+	billing.Use(h.authHandlers.AuthMiddleware())
+	billing.Get("/orders", h.billingHandlers.GetOrders)         // Get user's orders
+	billing.Get("/all-orders", h.billingHandlers.GetAllOrders)  // Admin: Get all orders
 
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")

@@ -55,6 +55,7 @@ func RunMigrations(db *sql.DB) error {
 		createAIWhatsappTable,
 		createWasapBotTable,
 		createConversationLogTable,
+		createOrdersTable,
 	}
 
 	for i, migration := range migrations {
@@ -241,6 +242,35 @@ CREATE TABLE IF NOT EXISTS conversation_log_nodepath (
     INDEX idx_sender (sender),
     INDEX idx_created_at (created_at),
     INDEX idx_stage (stage)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
+// Orders table for Billplz payment integration
+const createOrdersTable = `
+CREATE TABLE IF NOT EXISTS orders_nodepath (
+    id INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    customer_email VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+    customer_name VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+    billing_phone VARCHAR(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+    billing_address TEXT COLLATE utf8mb4_unicode_ci,
+    billing_city VARCHAR(100) COLLATE utf8mb4_unicode_ci,
+    billing_state VARCHAR(100) COLLATE utf8mb4_unicode_ci,
+    billing_postcode VARCHAR(20) COLLATE utf8mb4_unicode_ci,
+    amount DECIMAL(10,2) NOT NULL COMMENT 'Amount in RM',
+    collection_id VARCHAR(255) COLLATE utf8mb4_unicode_ci,
+    status ENUM('Pending', 'Processing', 'Success', 'Failed') DEFAULT 'Pending',
+    bill_id VARCHAR(255) COLLATE utf8mb4_unicode_ci,
+    url TEXT COLLATE utf8mb4_unicode_ci COMMENT 'Billplz payment URL',
+    product VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+    method ENUM('billplz', 'cod') DEFAULT 'billplz',
+    user_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_bill_id (bill_id),
+    INDEX idx_customer_email (customer_email),
+    INDEX idx_billing_phone (billing_phone),
+    INDEX idx_status (status),
+    INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
