@@ -337,6 +337,15 @@ export default function Billings() {
                           Pay Now
                         </Button>
                       )}
+                      {order.url && order.status === 'Success' && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => window.open(order.url, '_blank')}
+                        >
+                          Invoice
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

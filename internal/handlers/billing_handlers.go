@@ -72,10 +72,11 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		})
 	}
 
-	// Create order in database
+	// Create order in database with collection_id set
+	collectionID := h.billplzService.GetCollectionID()
 	order := &models.Order{
 		Amount:       req.Amount,
-		CollectionID: nil,
+		CollectionID: &collectionID,
 		Status:       "Processing",
 		BillID:       nil,
 		URL:          nil,
@@ -106,8 +107,8 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		Description:     req.Product,
 		CallbackURL:     fmt.Sprintf("%s/api/billing/callback", baseURL),
 		RedirectURL:     fmt.Sprintf("%s/billings?order_id=%d", baseURL, orderID),
-		Reference1:      strconv.Itoa(orderID),
-		Reference1Label: "Order ID",
+		Reference1:      req.Product,     // Show product name instead of order ID
+		Reference1Label: "Package",       // Label as "Package" instead of "Order ID"
 	}
 
 	billResp, err := h.billplzService.CreateBill(billReq)
@@ -124,10 +125,6 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		logrus.WithError(err).Error("Failed to update order with bill info")
 		// Don't fail the request, bill is already created
 	}
-
-	// Update collection ID in order
-	collectionID := billResp.CollectionID
-	order.CollectionID = &collectionID
 
 	return c.JSON(fiber.Map{
 		"order_id":       orderID,
