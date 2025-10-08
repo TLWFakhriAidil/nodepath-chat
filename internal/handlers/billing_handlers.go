@@ -39,25 +39,18 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get user ID from context (required)
-	userIDStr, ok := c.Locals("user_id").(string)
-	if !ok || userIDStr == "" {
+	// Get user ID from context (required) - CHAR(36) UUID string
+	userID, ok := c.Locals("user_id").(string)
+	if !ok || userID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Authentication required",
-		})
-	}
-
-	userID, err := strconv.Atoi(userIDStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid user ID",
 		})
 	}
 
 	// Check user profile for gmail, phone, and full_name from user_nodepath table
 	var gmail, phone, fullName sql.NullString
 	query := `SELECT gmail, phone, full_name FROM user_nodepath WHERE id = ?`
-	err = h.db.QueryRow(query, userID).Scan(&gmail, &phone, &fullName)
+	err := h.db.QueryRow(query, userID).Scan(&gmail, &phone, &fullName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -216,18 +209,11 @@ func (h *BillingHandlers) GetOrders(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
 
-	// Get user ID from context
-	userIDStr, ok := c.Locals("user_id").(string)
-	if !ok || userIDStr == "" {
+	// Get user ID from context - CHAR(36) UUID string
+	userID, ok := c.Locals("user_id").(string)
+	if !ok || userID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Unauthorized",
-		})
-	}
-
-	userID, err := strconv.Atoi(userIDStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid user ID",
 		})
 	}
 
