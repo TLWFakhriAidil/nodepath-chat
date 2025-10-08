@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
@@ -17,13 +18,15 @@ import (
 type BillingHandlers struct {
 	orderRepo      repository.OrderRepository
 	billplzService *services.BillplzService
+	db             *sql.DB
 }
 
 // NewBillingHandlers creates a new billing handlers instance
-func NewBillingHandlers(orderRepo repository.OrderRepository, billplzService *services.BillplzService) *BillingHandlers {
+func NewBillingHandlers(orderRepo repository.OrderRepository, billplzService *services.BillplzService, db *sql.DB) *BillingHandlers {
 	return &BillingHandlers{
 		orderRepo:      orderRepo,
 		billplzService: billplzService,
+		db:             db,
 	}
 }
 
@@ -36,44 +39,64 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		})
 	}
 
-	// Validate payment method
-	if req.Method != "billplz" && req.Method != "cod" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid payment method. Must be 'billplz' or 'cod'",
+	// Get user ID from context (required)
+	userIDStr, ok := c.Locals("user_id").(string)
+	if !ok || userIDStr == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Authentication required",
 		})
 	}
 
-	// Get user ID from context (if authenticated)
-	var userID *int
-	if userIDVal, ok := c.Locals("user_id").(string); ok && userIDVal != "" {
-		if uid, err := strconv.Atoi(userIDVal); err == nil {
-			userID = &uid
-		}
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid user ID",
+		})
 	}
 
-	// Set status based on payment method
-	status := "Pending"
-	if req.Method == "billplz" {
-		status = "Processing"
+	// Check user profile for gmail and phone from user_nodepath table
+	var gmail, phone sql.NullString
+	query := `SELECT gmail, phone FROM user_nodepath WHERE id = ?`
+	err = h.db.QueryRow(query, userID).Scan(&gmail, &phone)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "profile_incomplete",
+				"message": "Profile not found. Please complete your profile first.",
+			})
+		}
+		logrus.WithError(err).Error("Failed to check user profile")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to check profile",
+		})
+	}
+
+	// Check if gmail or phone is null
+	if !gmail.Valid || gmail.String == "" || !phone.Valid || phone.String == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "profile_incomplete",
+			"message": "Please update your profile with both email and phone number before upgrading.",
+		})
+	}
+
+	// Get user's full name from user_nodepath
+	var fullName string
+	nameQuery := `SELECT full_name FROM user_nodepath WHERE id = ?`
+	err = h.db.QueryRow(nameQuery, userID).Scan(&fullName)
+	if err != nil || fullName == "" {
+		fullName = gmail.String // Fallback to email if name not found
 	}
 
 	// Create order in database
 	order := &models.Order{
-		CustomerEmail:   req.CustomerEmail,
-		CustomerName:    req.CustomerName,
-		BillingPhone:    req.BillingPhone,
-		BillingAddress:  req.BillingAddress,
-		BillingCity:     req.BillingCity,
-		BillingState:    req.BillingState,
-		BillingPostcode: req.BillingPostcode,
-		Amount:          req.Amount,
-		CollectionID:    nil,
-		Status:          status,
-		BillID:          nil,
-		URL:             nil,
-		Product:         req.Product,
-		Method:          req.Method,
-		UserID:          userID,
+		Amount:       req.Amount,
+		CollectionID: nil,
+		Status:       "Processing",
+		BillID:       nil,
+		URL:          nil,
+		Product:      req.Product,
+		Method:       "billplz",
+		UserID:       &userID,
 	}
 
 	orderID, err := h.orderRepo.CreateOrder(order)
@@ -81,16 +104,6 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		logrus.WithError(err).Error("Failed to create order")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to create order",
-		})
-	}
-
-	// If COD, just return order ID
-	if req.Method == "cod" {
-		return c.JSON(fiber.Map{
-			"order_id":      orderID,
-			"payment_method": "cod",
-			"status":        "Success",
-			"message":       "Order created successfully. Payment on delivery.",
 		})
 	}
 
@@ -102,12 +115,12 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 
 	billReq := models.BillplzCreateBillRequest{
 		CollectionID:    h.billplzService.GetCollectionID(),
-		Email:           req.CustomerEmail,
-		Name:            req.CustomerName,
+		Email:           gmail.String,
+		Name:            fullName,
 		Amount:          h.billplzService.ConvertRMToSen(req.Amount), // Convert RM to sen
 		Description:     req.Product,
 		CallbackURL:     fmt.Sprintf("%s/api/billing/callback", baseURL),
-		RedirectURL:     fmt.Sprintf("%s/billing/thank-you?order_id=%d", baseURL, orderID),
+		RedirectURL:     fmt.Sprintf("%s/billings?order_id=%d", baseURL, orderID),
 		Reference1:      strconv.Itoa(orderID),
 		Reference1Label: "order_id",
 	}

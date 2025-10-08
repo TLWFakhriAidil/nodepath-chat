@@ -40,17 +40,14 @@ func (r *orderRepository) CreateOrder(order *models.Order) (int, error) {
 
 	query := `
 		INSERT INTO orders_nodepath (
-			customer_email, customer_name, billing_phone, billing_address, 
-			billing_city, billing_state, billing_postcode, amount, 
-			collection_id, status, bill_id, product, method, user_id,
+			amount, collection_id, status, bill_id, url, product, method, user_id,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := r.db.Exec(query,
-		order.CustomerEmail, order.CustomerName, order.BillingPhone, order.BillingAddress,
-		order.BillingCity, order.BillingState, order.BillingPostcode, order.Amount,
-		order.CollectionID, order.Status, order.BillID, order.Product, order.Method, order.UserID,
+		order.Amount, order.CollectionID, order.Status, order.BillID, order.URL,
+		order.Product, order.Method, order.UserID,
 		order.CreatedAt, order.UpdatedAt,
 	)
 
@@ -64,10 +61,9 @@ func (r *orderRepository) CreateOrder(order *models.Order) (int, error) {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"order_id":       orderID,
-		"customer_email": order.CustomerEmail,
-		"amount":         order.Amount,
-		"method":         order.Method,
+		"order_id": orderID,
+		"amount":   order.Amount,
+		"method":   order.Method,
 	}).Info("Order created successfully")
 
 	return int(orderID), nil
@@ -76,9 +72,7 @@ func (r *orderRepository) CreateOrder(order *models.Order) (int, error) {
 // GetOrderByID retrieves an order by ID
 func (r *orderRepository) GetOrderByID(id int) (*models.Order, error) {
 	query := `
-		SELECT id, customer_email, customer_name, billing_phone, billing_address,
-		       billing_city, billing_state, billing_postcode, amount,
-		       collection_id, status, bill_id, url, product, method, user_id,
+		SELECT id, amount, collection_id, status, bill_id, url, product, method, user_id,
 		       created_at, updated_at
 		FROM orders_nodepath
 		WHERE id = ?
@@ -86,10 +80,8 @@ func (r *orderRepository) GetOrderByID(id int) (*models.Order, error) {
 
 	var order models.Order
 	err := r.db.QueryRow(query, id).Scan(
-		&order.ID, &order.CustomerEmail, &order.CustomerName, &order.BillingPhone, &order.BillingAddress,
-		&order.BillingCity, &order.BillingState, &order.BillingPostcode, &order.Amount,
-		&order.CollectionID, &order.Status, &order.BillID, &order.URL, &order.Product, &order.Method, &order.UserID,
-		&order.CreatedAt, &order.UpdatedAt,
+		&order.ID, &order.Amount, &order.CollectionID, &order.Status, &order.BillID, &order.URL,
+		&order.Product, &order.Method, &order.UserID, &order.CreatedAt, &order.UpdatedAt,
 	)
 
 	if err != nil {
@@ -105,9 +97,7 @@ func (r *orderRepository) GetOrderByID(id int) (*models.Order, error) {
 // GetOrderByBillID retrieves an order by Billplz bill ID
 func (r *orderRepository) GetOrderByBillID(billID string) (*models.Order, error) {
 	query := `
-		SELECT id, customer_email, customer_name, billing_phone, billing_address,
-		       billing_city, billing_state, billing_postcode, amount,
-		       collection_id, status, bill_id, url, product, method, user_id,
+		SELECT id, amount, collection_id, status, bill_id, url, product, method, user_id,
 		       created_at, updated_at
 		FROM orders_nodepath
 		WHERE bill_id = ?
@@ -115,10 +105,8 @@ func (r *orderRepository) GetOrderByBillID(billID string) (*models.Order, error)
 
 	var order models.Order
 	err := r.db.QueryRow(query, billID).Scan(
-		&order.ID, &order.CustomerEmail, &order.CustomerName, &order.BillingPhone, &order.BillingAddress,
-		&order.BillingCity, &order.BillingState, &order.BillingPostcode, &order.Amount,
-		&order.CollectionID, &order.Status, &order.BillID, &order.URL, &order.Product, &order.Method, &order.UserID,
-		&order.CreatedAt, &order.UpdatedAt,
+		&order.ID, &order.Amount, &order.CollectionID, &order.Status, &order.BillID, &order.URL,
+		&order.Product, &order.Method, &order.UserID, &order.CreatedAt, &order.UpdatedAt,
 	)
 
 	if err != nil {
@@ -195,9 +183,7 @@ func (r *orderRepository) GetOrdersByUserID(userID int, limit int, offset int) (
 
 	// Get orders
 	query := `
-		SELECT id, customer_email, customer_name, billing_phone, billing_address,
-		       billing_city, billing_state, billing_postcode, amount,
-		       collection_id, status, bill_id, url, product, method, user_id,
+		SELECT id, amount, collection_id, status, bill_id, url, product, method, user_id,
 		       created_at, updated_at
 		FROM orders_nodepath
 		WHERE user_id = ?
@@ -215,10 +201,8 @@ func (r *orderRepository) GetOrdersByUserID(userID int, limit int, offset int) (
 	for rows.Next() {
 		var order models.Order
 		err := rows.Scan(
-			&order.ID, &order.CustomerEmail, &order.CustomerName, &order.BillingPhone, &order.BillingAddress,
-			&order.BillingCity, &order.BillingState, &order.BillingPostcode, &order.Amount,
-			&order.CollectionID, &order.Status, &order.BillID, &order.URL, &order.Product, &order.Method, &order.UserID,
-			&order.CreatedAt, &order.UpdatedAt,
+			&order.ID, &order.Amount, &order.CollectionID, &order.Status, &order.BillID, &order.URL,
+			&order.Product, &order.Method, &order.UserID, &order.CreatedAt, &order.UpdatedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan order: %w", err)
@@ -241,9 +225,7 @@ func (r *orderRepository) GetAllOrders(limit int, offset int) ([]models.Order, i
 
 	// Get orders
 	query := `
-		SELECT id, customer_email, customer_name, billing_phone, billing_address,
-		       billing_city, billing_state, billing_postcode, amount,
-		       collection_id, status, bill_id, url, product, method, user_id,
+		SELECT id, amount, collection_id, status, bill_id, url, product, method, user_id,
 		       created_at, updated_at
 		FROM orders_nodepath
 		ORDER BY created_at DESC
@@ -260,10 +242,8 @@ func (r *orderRepository) GetAllOrders(limit int, offset int) ([]models.Order, i
 	for rows.Next() {
 		var order models.Order
 		err := rows.Scan(
-			&order.ID, &order.CustomerEmail, &order.CustomerName, &order.BillingPhone, &order.BillingAddress,
-			&order.BillingCity, &order.BillingState, &order.BillingPostcode, &order.Amount,
-			&order.CollectionID, &order.Status, &order.BillID, &order.URL, &order.Product, &order.Method, &order.UserID,
-			&order.CreatedAt, &order.UpdatedAt,
+			&order.ID, &order.Amount, &order.CollectionID, &order.Status, &order.BillID, &order.URL,
+			&order.Product, &order.Method, &order.UserID, &order.CreatedAt, &order.UpdatedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan order: %w", err)

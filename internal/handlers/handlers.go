@@ -149,7 +149,7 @@ func NewHandlers(
 	// Initialize billing handlers
 	orderRepo := repository.NewOrderRepository(db)
 	billplzService := services.NewBillplzService()
-	billingHandlers := NewBillingHandlers(orderRepo, billplzService)
+	billingHandlers := NewBillingHandlers(orderRepo, billplzService, db)
 
 	// Create main handlers instance
 	mainHandlers := &Handlers{
@@ -287,11 +287,11 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 
 	// Billing routes
 	billing := api.Group("/billing")
-	billing.Post("/create-order", h.billingHandlers.CreateOrder) // Public endpoint for order creation
-	billing.Post("/callback", h.billingHandlers.BillplzCallback) // Billplz callback endpoint
-	billing.Get("/orders/:id", h.billingHandlers.GetOrder)       // Get specific order
+	billing.Post("/callback", h.billingHandlers.BillplzCallback) // Billplz callback endpoint (public)
 	// Protected billing routes
 	billing.Use(h.authHandlers.AuthMiddleware())
+	billing.Post("/create-order", h.billingHandlers.CreateOrder) // Create order (protected)
+	billing.Get("/orders/:id", h.billingHandlers.GetOrder)       // Get specific order
 	billing.Get("/orders", h.billingHandlers.GetOrders)         // Get user's orders
 	billing.Get("/all-orders", h.billingHandlers.GetAllOrders)  // Admin: Get all orders
 
