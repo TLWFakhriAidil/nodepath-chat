@@ -21,8 +21,8 @@ type StageSetValue struct {
 // GetAllStageValues gets all stage values for authenticated user's devices
 func (h *Handlers) GetAllStageValues(c *fiber.Ctx) error {
 	// Get user ID from auth context
-	userID := c.Locals("userID")
-	if userID == nil {
+	userIDStr := c.Locals("user_id")
+	if userIDStr == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "User not authenticated",
 		})
@@ -40,7 +40,7 @@ func (h *Handlers) GetAllStageValues(c *fiber.Ctx) error {
 	deviceQuery := `
 		SELECT id_device FROM device_setting_nodepath WHERE user_id = ?
 	`
-	deviceRows, err := h.db.Query(deviceQuery, userID)
+	deviceRows, err := h.db.Query(deviceQuery, userIDStr)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to fetch user devices")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -118,8 +118,8 @@ func (h *Handlers) GetAllStageValues(c *fiber.Ctx) error {
 // CreateStageValue creates a new stage value configuration
 func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 	// Get user ID from auth context
-	userID := c.Locals("userID")
-	if userID == nil {
+	userIDStr := c.Locals("user_id")
+	if userIDStr == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "User not authenticated",
 		})
@@ -148,7 +148,7 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 	// If no device ID provided, get first device for user
 	if req.IDDevice == "" {
 		var firstDevice string
-		err := h.db.QueryRow("SELECT id_device FROM device_setting_nodepath WHERE user_id = ? LIMIT 1", userID).Scan(&firstDevice)
+		err := h.db.QueryRow("SELECT id_device FROM device_setting_nodepath WHERE user_id = ? LIMIT 1", userIDStr).Scan(&firstDevice)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "No device found for user",
@@ -166,7 +166,7 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 
 	// Verify user owns the device
 	var count int
-	err := h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", req.IDDevice, userID).Scan(&count)
+	err := h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", req.IDDevice, userIDStr).Scan(&count)
 	if err != nil || count == 0 {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "You don't have permission to modify this device",
@@ -236,8 +236,8 @@ func (h *Handlers) CreateStageValue(c *fiber.Ctx) error {
 // UpdateStageValue updates an existing stage value configuration
 func (h *Handlers) UpdateStageValue(c *fiber.Ctx) error {
 	// Get user ID from auth context
-	userID := c.Locals("userID")
-	if userID == nil {
+	userIDStr := c.Locals("user_id")
+	if userIDStr == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "User not authenticated",
 		})
@@ -294,7 +294,7 @@ func (h *Handlers) UpdateStageValue(c *fiber.Ctx) error {
 
 	// Verify user owns the device
 	var count int
-	err = h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", deviceID, userID).Scan(&count)
+	err = h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", deviceID, userIDStr).Scan(&count)
 	if err != nil || count == 0 {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "You don't have permission to modify this stage value",
@@ -330,8 +330,8 @@ func (h *Handlers) UpdateStageValue(c *fiber.Ctx) error {
 // DeleteStageValue deletes a stage value configuration
 func (h *Handlers) DeleteStageValue(c *fiber.Ctx) error {
 	// Get user ID from auth context
-	userID := c.Locals("userID")
-	if userID == nil {
+	userIDStr := c.Locals("user_id")
+	if userIDStr == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "User not authenticated",
 		})
@@ -375,7 +375,7 @@ func (h *Handlers) DeleteStageValue(c *fiber.Ctx) error {
 
 	// Verify user owns the device
 	var count int
-	err = h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", deviceID, userID).Scan(&count)
+	err = h.db.QueryRow("SELECT COUNT(*) FROM device_setting_nodepath WHERE id_device = ? AND user_id = ?", deviceID, userIDStr).Scan(&count)
 	if err != nil || count == 0 {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "You don't have permission to delete this stage value",

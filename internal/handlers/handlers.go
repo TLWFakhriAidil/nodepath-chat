@@ -340,13 +340,13 @@ func (h *Handlers) errorResponse(c *fiber.Ctx, statusCode int, message string) e
 // GetFlows returns flows filtered by authenticated user's devices
 func (h *Handlers) GetFlows(c *fiber.Ctx) error {
 	// Get user ID from authentication context (integer version set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
+	userID, ok := c.Locals("user_id").(string)
 	if !ok {
 		return h.errorResponse(c, 401, "Authentication required")
 	}
 
 	// Get flows filtered by user's devices
-	flows, err := h.flowService.GetFlowsByUserDevices(userID)
+	flows, err := h.flowService.GetFlowsByUserDevices(convertUUIDToInt(userID))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flows for user devices")
 		return h.errorResponse(c, 500, "Failed to retrieve flows")

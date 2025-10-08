@@ -209,7 +209,7 @@ func (h *Handlers) GetSupportedModels(c *fiber.Ctx) error {
 // GetAnalyticsOverview returns analytics overview
 func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
 	// Get user ID from authentication context (integer version set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
+	userID, ok := c.Locals("user_id").(string)
 	if !ok {
 		return h.errorResponse(c, 401, "Authentication required")
 	}
@@ -224,7 +224,7 @@ func (h *Handlers) GetAnalyticsOverview(c *fiber.Ctx) error {
 	}
 
 	// Get actual flow count filtered by user's devices
-	flows, err := h.flowService.GetFlowsByUserDevices(userID)
+	flows, err := h.flowService.GetFlowsByUserDevices(convertUUIDToInt(userID))
 	if err == nil {
 		overview["total_flows"] = len(flows)
 	}
@@ -240,13 +240,13 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	}
 
 	// Get userID from context (integer version set by AuthMiddleware)
-	userID, ok := c.Locals("userID").(int)
+	userID, ok := c.Locals("user_id").(string)
 	if !ok {
 		return h.errorResponse(c, 401, "Authentication required")
 	}
 
 	// Verify that the flow belongs to user's devices
-	userFlows, err := h.flowService.GetFlowsByUserDevices(userID)
+	userFlows, err := h.flowService.GetFlowsByUserDevices(convertUUIDToInt(userID))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get user flows")
 		return h.errorResponse(c, 500, "Failed to verify flow ownership")
@@ -266,7 +266,7 @@ func (h *Handlers) GetFlowStats(c *fiber.Ctx) error {
 	}
 
 	// Get executions for the flow using AI WhatsApp repository
-	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, userID)
+	executions, _, err := h.aiWhatsappHandlers.AIRepo.GetAllAIWhatsappData(100, 0, "", "", flowReference, convertUUIDToInt(userID))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get flow executions")
 		return h.errorResponse(c, 500, "Failed to get flow statistics")
