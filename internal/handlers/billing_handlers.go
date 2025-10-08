@@ -54,7 +54,7 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "profile_incomplete",
+				"error":   "profile_incomplete",
 				"message": "Profile not found. Please complete your profile first.",
 			})
 		}
@@ -67,7 +67,7 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 	// Check if gmail, phone, or full_name is null or empty
 	if !gmail.Valid || gmail.String == "" || !phone.Valid || phone.String == "" || !fullName.Valid || fullName.String == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "profile_incomplete",
+			"error":   "profile_incomplete",
 			"message": "Please update your profile with email, phone number, and full name before upgrading.",
 		})
 	}
@@ -143,7 +143,7 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 // Supports both POST (webhook) and GET (redirect) callbacks
 func (h *BillingHandlers) BillplzCallback(c *fiber.Ctx) error {
 	var callback models.BillplzCallbackData
-	
+
 	// Try to parse as POST body first (webhook callback)
 	if c.Method() == "POST" {
 		if err := c.BodyParser(&callback); err != nil {
@@ -201,7 +201,7 @@ func (h *BillingHandlers) BillplzCallback(c *fiber.Ctx) error {
 	if c.Method() == "POST" {
 		return c.SendString("OK")
 	}
-	
+
 	// For GET redirect, redirect to billings page
 	orderID := c.Query("order_id")
 	if orderID != "" {
