@@ -120,9 +120,11 @@ export default function Billings() {
 
       if (response.ok) {
         if (data.payment_url) {
-          toast.success('Order created! Redirecting to payment...');
-          // Redirect to Billplz payment page
-          window.location.href = data.payment_url;
+          toast.success('Order created! Opening payment page...');
+          // Open Billplz payment page in new tab
+          window.open(data.payment_url, '_blank');
+          // Refresh orders list
+          fetchOrders();
         } else {
           toast.success('Order created successfully!');
           fetchOrders(); // Refresh orders list

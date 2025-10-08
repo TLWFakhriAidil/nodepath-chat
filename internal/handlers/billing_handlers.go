@@ -107,7 +107,7 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		CallbackURL:     fmt.Sprintf("%s/api/billing/callback", baseURL),
 		RedirectURL:     fmt.Sprintf("%s/billings?order_id=%d", baseURL, orderID),
 		Reference1:      strconv.Itoa(orderID),
-		Reference1Label: "order_id",
+		Reference1Label: "Order ID",
 	}
 
 	billResp, err := h.billplzService.CreateBill(billReq)
@@ -140,17 +140,40 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 }
 
 // BillplzCallback handles payment callback from Billplz
+// Supports both POST (webhook) and GET (redirect) callbacks
 func (h *BillingHandlers) BillplzCallback(c *fiber.Ctx) error {
 	var callback models.BillplzCallbackData
-	if err := c.BodyParser(&callback); err != nil {
-		logrus.WithError(err).Error("Failed to parse callback data")
-		return c.SendStatus(fiber.StatusBadRequest)
+	
+	// Try to parse as POST body first (webhook callback)
+	if c.Method() == "POST" {
+		if err := c.BodyParser(&callback); err != nil {
+			logrus.WithError(err).Error("Failed to parse POST callback data")
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
+	} else {
+		// Parse as GET query params (redirect callback)
+		callback.ID = c.Query("billplz[id]")
+		callback.CollectionID = c.Query("billplz[collection_id]")
+		callback.Paid = c.Query("billplz[paid]")
+		callback.State = c.Query("billplz[state]")
+		callback.Amount = c.Query("billplz[amount]")
+		callback.PaidAmount = c.Query("billplz[paid_amount]")
+		callback.DueAt = c.Query("billplz[due_at]")
+		callback.Email = c.Query("billplz[email]")
+		callback.Mobile = c.Query("billplz[mobile]")
+		callback.Name = c.Query("billplz[name]")
+		callback.URL = c.Query("billplz[url]")
+		callback.PaidAt = c.Query("billplz[paid_at]")
+		callback.Reference1Label = c.Query("billplz[reference_1_label]")
+		callback.Reference1 = c.Query("billplz[reference_1]")
+		callback.Description = c.Query("billplz[description]")
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"bill_id": callback.ID,
 		"paid":    callback.Paid,
 		"amount":  callback.Amount,
+		"method":  c.Method(),
 	}).Info("Received Billplz callback")
 
 	// Check if payment was successful
@@ -158,22 +181,33 @@ func (h *BillingHandlers) BillplzCallback(c *fiber.Ctx) error {
 		err := h.orderRepo.UpdateOrderStatus(callback.ID, "Success")
 		if err != nil {
 			logrus.WithError(err).Error("Failed to update order status")
-			return c.SendStatus(fiber.StatusInternalServerError)
+			if c.Method() == "POST" {
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+			// For GET redirect, still redirect to billings page
+		} else {
+			logrus.WithField("bill_id", callback.ID).Info("Payment successful, order updated")
 		}
-
-		logrus.WithField("bill_id", callback.ID).Info("Payment successful, order updated")
 	} else {
 		// Payment not successful
 		err := h.orderRepo.UpdateOrderStatus(callback.ID, "Failed")
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to update order status to Failed")
 		}
-
 		logrus.WithField("bill_id", callback.ID).Warn("Payment not successful")
 	}
 
-	// Respond to Billplz
-	return c.SendString("OK")
+	// For POST webhook, respond with OK
+	if c.Method() == "POST" {
+		return c.SendString("OK")
+	}
+	
+	// For GET redirect, redirect to billings page
+	orderID := c.Query("order_id")
+	if orderID != "" {
+		return c.Redirect("/billings?order_id=" + orderID)
+	}
+	return c.Redirect("/billings")
 }
 
 // GetOrder retrieves order details
