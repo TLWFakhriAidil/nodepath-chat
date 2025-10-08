@@ -117,44 +117,6 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8">
-      {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 rounded-2xl p-8 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-black/10" />
-        <div className="relative z-10">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">Welcome back!</h1>
-              <p className="text-blue-100 text-lg">
-                Ready to build amazing conversational experiences?
-              </p>
-            </div>
-            <div className="hidden md:block">
-              <Bot className="w-24 h-24 text-white/20" />
-            </div>
-          </div>
-          
-          <div className="mt-6 flex flex-wrap gap-4">
-            <Button 
-              onClick={() => navigate('/flow-builder')}
-              className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              size="lg"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Flow
-            </Button>
-            <Button 
-              onClick={() => navigate('/analytics')}
-              variant="outline"
-              className="border-white/30 text-white hover:bg-white/10"
-              size="lg"
-            >
-              <BarChart3 className="w-4 h-4 mr-2" />
-              View Analytics
-            </Button>
-          </div>
-        </div>
-      </div>
-
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat, index) => {
@@ -192,34 +154,7 @@ const Dashboard = () => {
         })}
       </div>
 
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {quickActions.map((action, index) => {
-            const Icon = action.icon;
-            return (
-              <Card 
-                key={index} 
-                className="group cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl border-0 overflow-hidden"
-                onClick={action.action}
-              >
-                <CardContent className="p-0">
-                  <div className={`${action.color} p-6 ${action.textColor}`}>
-                    <Icon className="w-8 h-8 mb-4" />
-                    <h3 className="font-semibold text-lg mb-2">{action.title}</h3>
-                    <p className="text-sm opacity-90 mb-4">{action.description}</p>
-                    <div className="flex items-center text-sm font-medium">
-                      Get Started
-                      <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
+      {/* TODO: Add Combined Chart and Filters Here */}
 
       {/* Recent Flows */}
       <div>

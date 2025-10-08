@@ -220,7 +220,12 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage, dateRange }: {
   const handleExport = () => {
     // Export filtered data to CSV
     if (conversations.length === 0) {
-      alert('No data to export');
+      Swal.fire({
+        icon: 'info',
+        title: 'No Data',
+        text: 'No data to export',
+        confirmButtonColor: '#3b82f6'
+      });
       return;
     }
 

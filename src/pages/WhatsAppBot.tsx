@@ -205,7 +205,12 @@ const WhatsAppBot = () => {
   const handleExport = () => {
     // Export only filtered data that's visible in the table
     if (filteredData.length === 0) {
-      alert('No data to export');
+      Swal.fire({
+        icon: 'info',
+        title: 'No Data',
+        text: 'No data to export',
+        confirmButtonColor: '#3b82f6'
+      });
       return;
     }
 
