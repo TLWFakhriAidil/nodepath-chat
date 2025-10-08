@@ -18,15 +18,62 @@ interface Order {
   created_at: string;
 }
 
+interface UserProfile {
+  id: number;
+  email: string;
+  full_name: string;
+  gmail: string;
+  phone: string;
+  status: string;
+  expired: string;
+  is_active: boolean;
+}
+
 export default function Billings() {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  // Fetch user profile
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
 
   // Fetch user's orders
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoadingProfile(false);
+        return;
+      }
+
+      const response = await fetch('/api/profile/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          setUserProfile(result.data);
+        }
+      } else {
+        console.error('Failed to fetch profile:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -55,13 +102,29 @@ export default function Billings() {
     }
   };
 
+  const getDaysRemaining = () => {
+    if (!userProfile || !userProfile.expired) return 0;
+    
+    const expiredDate = new Date(userProfile.expired);
+    const today = new Date();
+    const diffTime = expiredDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return Math.max(0, diffDays);
+  };
+
   const handleUpgradeClick = async () => {
     setLoading(true);
 
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('Please login first');
+        await Swal.fire({
+          icon: 'error',
+          title: 'Not Logged In',
+          text: 'Please login first to upgrade your package.',
+          confirmButtonColor: '#3085d6',
+        });
         setLoading(false);
         return;
       }
@@ -92,15 +155,19 @@ export default function Billings() {
       } else {
         // Check if profile is incomplete
         if (data.error === 'profile_incomplete') {
-          await Swal.fire({
+          const result = await Swal.fire({
             icon: 'warning',
             title: 'Profile Incomplete',
-            text: data.message || 'Please update your profile with both email and phone number before upgrading.',
+            html: data.message || 'Please update your profile with email, phone number, and full name before upgrading.',
             confirmButtonText: 'Go to Profile',
             confirmButtonColor: '#3085d6',
+            showCancelButton: true,
+            cancelButtonText: 'Cancel'
           });
-          // Redirect to profile page
-          window.location.href = '/profile';
+          
+          if (result.isConfirmed) {
+            window.location.href = '/profile';
+          }
         } else {
           toast.error(data.error || 'Failed to create order');
         }
@@ -142,6 +209,15 @@ export default function Billings() {
     );
   };
 
+  const getStatusBadgeVariant = (status: string) => {
+    if (status === 'Trial' || status === 'Free Trial') {
+      return 'outline';
+    } else if (status === 'Active' || status === 'Premium') {
+      return 'default';
+    }
+    return 'secondary';
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -153,18 +229,32 @@ export default function Billings() {
         </p>
       </div>
 
-      {/* Current Status Section */}
+      {/* Current Status Section - Dynamic */}
       <Card>
         <CardHeader>
           <CardTitle>Current Status</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-blue-600 border-blue-600">
-              Free Trial
-            </Badge>
-            <span className="text-sm text-muted-foreground">6 days remaining</span>
-          </div>
+          {loadingProfile ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Loading status...</span>
+            </div>
+          ) : userProfile ? (
+            <div className="flex items-center gap-2">
+              <Badge 
+                variant={getStatusBadgeVariant(userProfile.status)} 
+                className="text-blue-600 border-blue-600"
+              >
+                {userProfile.status}
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                {getDaysRemaining()} days remaining
+              </span>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">Unable to load status</div>
+          )}
         </CardContent>
       </Card>
 

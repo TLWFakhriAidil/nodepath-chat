@@ -84,6 +84,11 @@ func RunMigrations(db *sql.DB) error {
 		logrus.WithError(err).Warn("Failed to update provider values, continuing...")
 	}
 
+	// Drop deprecated billing columns from orders_nodepath
+	if err := dropDeprecatedBillingColumns(db); err != nil {
+		logrus.WithError(err).Warn("Failed to drop deprecated billing columns, continuing...")
+	}
+
 	logrus.Info("Database migrations completed successfully")
 	return nil
 }
@@ -401,5 +406,46 @@ func addMissingColumnsToDeviceSettingsTable(db *sql.DB) error {
 		}
 	}
 
+	return nil
+}
+
+// dropDeprecatedBillingColumns drops deprecated billing columns from orders_nodepath table
+func dropDeprecatedBillingColumns(db *sql.DB) error {
+	columns := []string{
+		"customer_email",
+		"customer_name",
+		"billing_phone",
+		"billing_address",
+		"billing_city",
+		"billing_state",
+		"billing_postcode",
+	}
+
+	for _, col := range columns {
+		// Check if column exists
+		var count int
+		err := db.QueryRow(`
+			SELECT COUNT(*) 
+			FROM INFORMATION_SCHEMA.COLUMNS 
+			WHERE TABLE_SCHEMA = DATABASE() 
+			AND TABLE_NAME = 'orders_nodepath' 
+			AND COLUMN_NAME = ?
+		`, col).Scan(&count)
+
+		if err != nil {
+			return fmt.Errorf("failed to check column %s: %w", col, err)
+		}
+
+		if count > 0 {
+			// Column exists, drop it
+			query := fmt.Sprintf("ALTER TABLE orders_nodepath DROP COLUMN %s", col)
+			if _, err := db.Exec(query); err != nil {
+				return fmt.Errorf("failed to drop column %s: %w", col, err)
+			}
+			logrus.WithField("column", col).Info("Dropped deprecated billing column from orders_nodepath")
+		} else {
+			logrus.WithField("column", col).Debug("Deprecated billing column does not exist in orders_nodepath")
+		}
+	}
 	return nil
 }

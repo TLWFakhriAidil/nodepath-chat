@@ -54,10 +54,10 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check user profile for gmail and phone from user_nodepath table
-	var gmail, phone sql.NullString
-	query := `SELECT gmail, phone FROM user_nodepath WHERE id = ?`
-	err = h.db.QueryRow(query, userID).Scan(&gmail, &phone)
+	// Check user profile for gmail, phone, and full_name from user_nodepath table
+	var gmail, phone, fullName sql.NullString
+	query := `SELECT gmail, phone, full_name FROM user_nodepath WHERE id = ?`
+	err = h.db.QueryRow(query, userID).Scan(&gmail, &phone, &fullName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -71,20 +71,12 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check if gmail or phone is null
-	if !gmail.Valid || gmail.String == "" || !phone.Valid || phone.String == "" {
+	// Check if gmail, phone, or full_name is null or empty
+	if !gmail.Valid || gmail.String == "" || !phone.Valid || phone.String == "" || !fullName.Valid || fullName.String == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "profile_incomplete",
-			"message": "Please update your profile with both email and phone number before upgrading.",
+			"message": "Please update your profile with email, phone number, and full name before upgrading.",
 		})
-	}
-
-	// Get user's full name from user_nodepath
-	var fullName string
-	nameQuery := `SELECT full_name FROM user_nodepath WHERE id = ?`
-	err = h.db.QueryRow(nameQuery, userID).Scan(&fullName)
-	if err != nil || fullName == "" {
-		fullName = gmail.String // Fallback to email if name not found
 	}
 
 	// Create order in database
@@ -116,7 +108,7 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 	billReq := models.BillplzCreateBillRequest{
 		CollectionID:    h.billplzService.GetCollectionID(),
 		Email:           gmail.String,
-		Name:            fullName,
+		Name:            fullName.String,
 		Amount:          h.billplzService.ConvertRMToSen(req.Amount), // Convert RM to sen
 		Description:     req.Product,
 		CallbackURL:     fmt.Sprintf("%s/api/billing/callback", baseURL),
