@@ -100,14 +100,15 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 	}
 
 	billReq := models.BillplzCreateBillRequest{
-		CollectionID: h.billplzService.GetCollectionID(),
-		Email:        gmail.String,
-		Name:         fullName.String,
-		Amount:       h.billplzService.ConvertRMToSen(req.Amount), // Convert RM to sen
-		Description:  req.Product,
-		CallbackURL:  fmt.Sprintf("%s/api/billing/callback", baseURL),
-		RedirectURL:  fmt.Sprintf("%s/billings?order_id=%d", baseURL, orderID),
-		// Don't send Reference1/Reference1Label to avoid showing "Order ID" on invoice
+		CollectionID:    h.billplzService.GetCollectionID(),
+		Email:           gmail.String,
+		Name:            fullName.String,
+		Amount:          h.billplzService.ConvertRMToSen(req.Amount), // Convert RM to sen
+		Description:     req.Product,
+		CallbackURL:     fmt.Sprintf("%s/api/billing/callback", baseURL),
+		RedirectURL:     fmt.Sprintf("%s/billings?order_id=%d", baseURL, orderID),
+		Reference1:      req.Product,     // Show product name instead of order ID
+		Reference1Label: "Package",       // Label as "Package" instead of "Order ID"
 	}
 
 	billResp, err := h.billplzService.CreateBill(billReq)
