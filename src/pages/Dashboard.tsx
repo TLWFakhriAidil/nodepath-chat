@@ -22,7 +22,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { getFlows } from '@/lib/localStorage';
 import { ChatbotFlow } from '@/types/chatbot';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { useDevice } from '@/contexts/DeviceContext';
@@ -268,7 +268,7 @@ const Dashboard = () => {
                         ? chartData.ai_whatsapp.daily_data.map((day: any) => ({
                             date: format(new Date(day.date), 'MMM dd'),
                             'AI WhatsApp': day.conversations || 0,
-                            'WasapBot': 0 // WasapBot doesn't have daily data in current API
+                            'WasapBot': chartData.wasapbot?.totalProspects || 0 // Show as flat line
                           }))
                         : [{ 
                             date: 'Today', 
@@ -330,10 +330,10 @@ const Dashboard = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
-                    AI WhatsApp Analytics
+                    AI WhatsApp Stage Distribution
                   </CardTitle>
                   <CardDescription>
-                    Data from ai_whatsapp_nodepath database
+                    Conversation stages from ai_whatsapp_nodepath
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -357,25 +357,31 @@ const Dashboard = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="h-48 mt-4">
+                  <div className="h-64 mt-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={[
-                        { name: 'AI', value: chartData.ai_whatsapp?.summary?.ai_active || 0 },
-                        { name: 'Human', value: chartData.ai_whatsapp?.summary?.human_takeover || 0 },
-                        { name: 'Total', value: chartData.ai_whatsapp?.summary?.total_conversations || 0 }
-                      ]}>
+                      <BarChart data={
+                        chartData.ai_whatsapp?.stage_distribution?.map((stage: any) => ({
+                          stage: stage.stage,
+                          count: stage.count
+                        })) || []
+                      }>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
+                        <XAxis 
+                          dataKey="stage" 
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                          interval={0}
+                          tick={{ fontSize: 11 }}
+                        />
                         <YAxis />
                         <Tooltip />
-                        <Line 
-                          type="monotone" 
-                          dataKey="value" 
-                          stroke="#3b82f6" 
-                          strokeWidth={2}
-                          dot={{ fill: '#3b82f6', r: 4 }}
+                        <Bar 
+                          dataKey="count" 
+                          fill="#3b82f6"
+                          radius={[8, 8, 0, 0]}
                         />
-                      </LineChart>
+                      </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </CardContent>
@@ -386,10 +392,10 @@ const Dashboard = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-                    WasapBot Analytics
+                    WasapBot Stage Breakdown
                   </CardTitle>
                   <CardDescription>
-                    Data from wasapBot_nodepath database
+                    Prospect stages from wasapBot_nodepath
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -413,25 +419,33 @@ const Dashboard = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="h-48 mt-4">
+                  <div className="h-64 mt-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={[
-                        { name: 'Active', value: chartData.wasapbot?.activeExecutions || 0 },
-                        { name: 'Completed', value: chartData.wasapbot?.completedExecutions || 0 },
-                        { name: 'Total', value: chartData.wasapbot?.totalProspects || 0 }
-                      ]}>
+                      <BarChart data={
+                        chartData.wasapbot?.stageBreakdown 
+                          ? Object.entries(chartData.wasapbot.stageBreakdown).map(([stage, count]) => ({
+                              stage,
+                              count: count as number
+                            }))
+                          : []
+                      }>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
+                        <XAxis 
+                          dataKey="stage"
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                          interval={0}
+                          tick={{ fontSize: 11 }}
+                        />
                         <YAxis />
                         <Tooltip />
-                        <Line 
-                          type="monotone" 
-                          dataKey="value" 
-                          stroke="#10b981" 
-                          strokeWidth={2}
-                          dot={{ fill: '#10b981', r: 4 }}
+                        <Bar 
+                          dataKey="count" 
+                          fill="#10b981"
+                          radius={[8, 8, 0, 0]}
                         />
-                      </LineChart>
+                      </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </CardContent>
