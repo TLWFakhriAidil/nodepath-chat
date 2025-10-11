@@ -909,7 +909,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 	// Get daily data (prospects per day)
 	dailyQuery := `
 		SELECT 
-			DATE(date_start) as date,
+			DATE_FORMAT(DATE(date_start), '%Y-%m-%d') as date,
 			COUNT(DISTINCT prospect_num) as prospects
 		FROM wasapBot_nodepath 
 		WHERE ` + baseWhere + `
@@ -925,8 +925,9 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 			var date string
 			var prospects int
 			if err := dailyRows.Scan(&date, &prospects); err == nil {
+				// Ensure clean YYYY-MM-DD format before appending time
 				dailyData = append(dailyData, map[string]interface{}{
-					"date":      date + "T00:00:00Z", // Format as ISO 8601
+					"date":      date + "T00:00:00Z", // Format as ISO 8601 (date is now clean YYYY-MM-DD)
 					"prospects": prospects,
 				})
 			}
