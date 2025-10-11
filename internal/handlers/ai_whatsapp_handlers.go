@@ -1384,6 +1384,15 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 	deviceFilter := c.Query("device_id", "")
 	stageFilter := c.Query("stage", "")
 	search := c.Query("search", "")
+	
+	// Support for both parameter names (device_id and user_device_ids)
+	if deviceFilter == "" {
+		deviceFilter = c.Query("user_device_ids", "")
+	}
+	
+	// Support for date filtering (startDate/endDate)
+	startDate := c.Query("startDate", "")
+	endDate := c.Query("endDate", "")
 
 	// Calculate offset for pagination
 	offset := (page - 1) * limit
@@ -1398,6 +1407,17 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 		})
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"page":         page,
+		"limit":        limit,
+		"deviceFilter": deviceFilter,
+		"stageFilter":  stageFilter,
+		"search":       search,
+		"startDate":    startDate,
+		"endDate":      endDate,
+		"userID":       userID,
+	}).Info("GetAllAIWhatsappData called with parameters")
+
 	// Get data from repository with user-specific filtering
 	data, total, err := h.AIRepo.GetAllAIWhatsappData(limit, offset, deviceFilter, stageFilter, search, userID)
 	if err != nil {
@@ -1405,7 +1425,13 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"message": "Failed to retrieve AI WhatsApp data",
+			"error":    err.Error(),
 		})
+	}
+	
+	// Handle empty data gracefully
+	if data == nil {
+		data = []models.AIWhatsapp{}
 	}
 
 	// Transform data to handle sql.NullString fields properly

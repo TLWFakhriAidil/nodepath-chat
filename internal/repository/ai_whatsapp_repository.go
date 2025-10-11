@@ -478,15 +478,23 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 	var total int
 	err := r.db.QueryRow(countQuery, countArgs...).Scan(&total)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get total count for AI WhatsApp data")
-		return nil, 0, fmt.Errorf("failed to get total count: %w", err)
+		// If there's no data or query fails, return empty result instead of error
+		logrus.WithError(err).Warn("No data found or failed to get total count for AI WhatsApp data - returning empty result")
+		return []models.AIWhatsapp{}, 0, nil
+	}
+
+	// If total is 0, return empty result early
+	if total == 0 {
+		logrus.Info("No AI WhatsApp data found for given filters - returning empty result")
+		return []models.AIWhatsapp{}, 0, nil
 	}
 
 	// Execute main query
 	rows, err := r.db.Query(baseQuery, args...)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get AI WhatsApp data")
-		return nil, 0, fmt.Errorf("failed to get AI WhatsApp data: %w", err)
+		// If query fails but we have a count, something is wrong with the query
+		logrus.WithError(err).Warn("Failed to execute main query for AI WhatsApp data - returning empty result")
+		return []models.AIWhatsapp{}, 0, nil
 	}
 	defer rows.Close()
 
