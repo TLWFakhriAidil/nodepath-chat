@@ -913,12 +913,24 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 			COUNT(DISTINCT prospect_num) as prospects
 		FROM wasapBot_nodepath 
 		WHERE ` + baseWhere + `
+		  AND date_start IS NOT NULL
 		GROUP BY DATE(date_start)
 		ORDER BY DATE(date_start)
 	`
 
+	logrus.WithFields(logrus.Fields{
+		"query":      dailyQuery,
+		"args":       args,
+		"dateFrom":   dateFrom,
+		"dateTo":     dateTo,
+		"deviceFilter": deviceFilter,
+	}).Info("Executing WasapBot daily_data query")
+
 	dailyRows, err := r.db.Query(dailyQuery, args...)
-	if err == nil {
+	if err != nil {
+		logrus.WithError(err).Error("Failed to query WasapBot daily_data")
+		stats["daily_data"] = []map[string]interface{}{} // Return empty array on error
+	} else {
 		defer dailyRows.Close()
 		dailyData := []map[string]interface{}{}
 		for dailyRows.Next() {
@@ -930,9 +942,12 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 					"date":      date + "T00:00:00Z", // Format as ISO 8601 (date is now clean YYYY-MM-DD)
 					"prospects": prospects,
 				})
+			} else {
+				logrus.WithError(err).Error("Failed to scan WasapBot daily row")
 			}
 		}
 		stats["daily_data"] = dailyData
+		logrus.WithField("daily_data_count", len(dailyData)).Info("WasapBot daily_data query completed")
 	}
 
 	return stats, nil
