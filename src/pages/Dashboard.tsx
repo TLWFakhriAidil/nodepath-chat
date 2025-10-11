@@ -263,19 +263,57 @@ const Dashboard = () => {
               <CardContent>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={
-                      chartData.ai_whatsapp?.daily_data?.length > 0 
-                        ? chartData.ai_whatsapp.daily_data.map((day: any) => ({
-                            date: format(new Date(day.date), 'MMM dd'),
-                            'AI WhatsApp': day.conversations || 0,
-                            'WasapBot': chartData.wasapbot?.totalProspects || 0 // Show as flat line
-                          }))
-                        : [{ 
-                            date: 'Today', 
-                            'AI WhatsApp': chartData.ai_whatsapp?.summary?.total_conversations || 0,
-                            'WasapBot': chartData.wasapbot?.totalProspects || 0
-                          }]
-                    }>
+                    <LineChart data={(() => {
+                      // Merge daily data from both databases
+                      const aiData = chartData.ai_whatsapp?.daily_data || [];
+                      const wasapData = chartData.wasapbot?.daily_data || [];
+                      
+                      // Create a map of all unique dates
+                      const dateMap = new Map<string, any>();
+                      
+                      // Add AI WhatsApp data
+                      aiData.forEach((day: any) => {
+                        const dateStr = format(new Date(day.date), 'MMM dd');
+                        dateMap.set(dateStr, {
+                          date: dateStr,
+                          'AI WhatsApp': day.conversations || 0,
+                          'WasapBot': 0
+                        });
+                      });
+                      
+                      // Add WasapBot data
+                      wasapData.forEach((day: any) => {
+                        const dateStr = format(new Date(day.date), 'MMM dd');
+                        const existing = dateMap.get(dateStr);
+                        if (existing) {
+                          existing['WasapBot'] = day.prospects || 0;
+                        } else {
+                          dateMap.set(dateStr, {
+                            date: dateStr,
+                            'AI WhatsApp': 0,
+                            'WasapBot': day.prospects || 0
+                          });
+                        }
+                      });
+                      
+                      // Convert map to array and sort by date
+                      const merged = Array.from(dateMap.values()).sort((a, b) => {
+                        const dateA = new Date(a.date + ' 2025');
+                        const dateB = new Date(b.date + ' 2025');
+                        return dateA.getTime() - dateB.getTime();
+                      });
+                      
+                      // Fallback if no data
+                      if (merged.length === 0) {
+                        return [{ 
+                          date: 'Today', 
+                          'AI WhatsApp': chartData.ai_whatsapp?.summary?.total_conversations || 0,
+                          'WasapBot': chartData.wasapbot?.totalProspects || 0
+                        }];
+                      }
+                      
+                      return merged;
+                    })()}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
                       <YAxis />
