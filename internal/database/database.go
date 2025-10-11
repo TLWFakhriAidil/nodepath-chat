@@ -521,7 +521,13 @@ func convertDeviceUserIDToChar36(db *sql.DB) error {
 		return nil
 	}
 
-	// Convert INT to CHAR(36) - first set existing data to NULL since INT can't convert to UUID
+	logrus.Warn("⚠️  CRITICAL: user_id column needs conversion from INT to CHAR(36)")
+	logrus.Warn("⚠️  This will set all user_id values to NULL!")
+	logrus.Warn("⚠️  You MUST run the fix script: scripts/fix_device_user_links.sql")
+	logrus.Warn("⚠️  Or manually re-link devices to users after migration")
+
+	// Convert INT to CHAR(36) - WARNING: This sets existing data to NULL since INT can't convert to UUID
+	// Users will need to run fix script or manually re-link devices
 	_, err = db.Exec("UPDATE device_setting_nodepath SET user_id = NULL WHERE user_id IS NOT NULL")
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to clear user_id values before conversion in device_setting_nodepath")
@@ -539,6 +545,7 @@ func convertDeviceUserIDToChar36(db *sql.DB) error {
 		logrus.WithError(err).Warn("Failed to add index to user_id column")
 	}
 
-	logrus.Info("Successfully converted user_id column from INT to CHAR(36) in device_setting_nodepath")
+	logrus.Info("✅ Converted user_id column from INT to CHAR(36) in device_setting_nodepath")
+	logrus.Warn("⚠️  ACTION REQUIRED: Run scripts/fix_device_user_links.sql to restore device-user links")
 	return nil
 }
