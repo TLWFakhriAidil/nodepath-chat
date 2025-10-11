@@ -692,7 +692,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			}
 
 			dailyData = append(dailyData, map[string]interface{}{
-				"date":                date,
+				"date":                date + "T00:00:00Z", // Format as ISO 8601
 				"conversations":       conversations,
 				"ai_conversations":    aiConversations,
 				"human_conversations": humanConversations,
