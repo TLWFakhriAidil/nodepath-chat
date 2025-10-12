@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { DatePickerWithRange } from '@/components/ui/date-picker';
 import { useDevice } from '@/contexts/DeviceContext';
-import DeviceRequiredPopup from '@/components/DeviceRequiredPopup';
+// DeviceRequiredPopup removed - DeviceRequiredWrapper handles this at a higher level
 import Swal from 'sweetalert2';
 import { 
   BarChart3, 
@@ -78,7 +78,7 @@ interface Conversation {
 }
 
 const Analytics = () => {
-  const { has_devices, device_ids } = useDevice();
+  const { device_ids } = useDevice(); // Remove has_devices since DeviceRequiredWrapper handles this
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -153,10 +153,8 @@ const Analytics = () => {
   };
   
   useEffect(() => {
-    if (has_devices) {
-      fetchAllData();
-    }
-  }, [dateRange, selectedDevice, searchTerm, has_devices, device_ids]); // Note: selectedStage removed - it's client-side only
+    fetchAllData(); // No need to check has_devices since DeviceRequiredWrapper handles this
+  }, [dateRange, selectedDevice, searchTerm, device_ids]); // Note: selectedStage removed - it's client-side only
   
   // Client-side filtering (since backend doesn't filter properly)
   const filteredConversations = allConversations.filter(conv => {
@@ -407,10 +405,7 @@ const Analytics = () => {
     }
   };
 
-  if (!has_devices) {
-    return <DeviceRequiredPopup isOpen={true} onClose={() => {}} />;
-  }
-
+  // Device check removed - DeviceRequiredWrapper handles this at App.tsx level
   return (
     <div className="space-y-6">
       {/* Header with all filters */}
