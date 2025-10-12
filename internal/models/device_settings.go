@@ -63,7 +63,7 @@ func nullInt32ToInt(ni sql.NullInt32) *int {
 
 // CreateDeviceSettingsRequest represents the request to create device settings
 type CreateDeviceSettingsRequest struct {
-	DeviceID     string `json:"device_id" validate:"required"`
+	DeviceID     string `json:"device_id"` // Optional - can be empty for manual creation
 	APIKeyOption string `json:"api_key_option"`
 	WebhookID    string `json:"webhook_id"`
 	Provider     string `json:"provider"`

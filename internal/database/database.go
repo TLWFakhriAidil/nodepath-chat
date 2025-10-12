@@ -99,6 +99,11 @@ func RunMigrations(db *sql.DB) error {
 		logrus.WithError(err).Warn("Failed to convert user_id column in device_setting_nodepath, continuing...")
 	}
 
+	// Make device_id nullable for manual device creation
+	if err := makeDeviceIDNullable(db); err != nil {
+		logrus.WithError(err).Warn("Failed to make device_id nullable in device_setting_nodepath, continuing...")
+	}
+
 	logrus.Info("Database migrations completed successfully")
 	return nil
 }
@@ -123,7 +128,7 @@ CREATE TABLE IF NOT EXISTS chatbot_flows_nodepath (
 const createDeviceSettingsTable = `
 CREATE TABLE IF NOT EXISTS device_setting_nodepath (
     id VARCHAR(255) PRIMARY KEY,
-    device_id VARCHAR(255) NOT NULL,
+    device_id VARCHAR(255), -- Changed to allow NULL for manual creation
     api_key_option ENUM('openai/gpt-5-chat', 'openai/gpt-5-mini', 'openai/chatgpt-4o-latest', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'google/gemini-pro-1.5') DEFAULT 'openai/gpt-4.1',
     webhook_id VARCHAR(500),
     provider ENUM('whacenter', 'wablas', 'waha') DEFAULT 'wablas',
@@ -547,5 +552,37 @@ func convertDeviceUserIDToChar36(db *sql.DB) error {
 
 	logrus.Info("✅ Converted user_id column from INT to CHAR(36) in device_setting_nodepath")
 	logrus.Warn("⚠️  ACTION REQUIRED: Run scripts/fix_device_user_links.sql to restore device-user links")
+	return nil
+}
+
+// makeDeviceIDNullable makes device_id column nullable to allow manual device creation
+func makeDeviceIDNullable(db *sql.DB) error {
+	// Check if device_id column allows NULL
+	var isNullable string
+	err := db.QueryRow(`
+		SELECT IS_NULLABLE 
+		FROM INFORMATION_SCHEMA.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = 'device_setting_nodepath' 
+		AND COLUMN_NAME = 'device_id'
+	`).Scan(&isNullable)
+
+	if err != nil {
+		return fmt.Errorf("failed to check device_id column nullability: %w", err)
+	}
+
+	// If already nullable, skip
+	if isNullable == "YES" {
+		logrus.Info("device_id column is already nullable in device_setting_nodepath")
+		return nil
+	}
+
+	// Make column nullable
+	_, err = db.Exec("ALTER TABLE device_setting_nodepath MODIFY COLUMN device_id VARCHAR(255) NULL")
+	if err != nil {
+		return fmt.Errorf("failed to make device_id nullable: %w", err)
+	}
+
+	logrus.Info("✅ Made device_id column nullable in device_setting_nodepath for manual device creation")
 	return nil
 }
