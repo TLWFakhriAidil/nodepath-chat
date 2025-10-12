@@ -293,55 +293,75 @@ const Dashboard = () => {
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={(() => {
-                      // Merge daily data from both databases
+                      // Generate continuous date range for complete x-axis
+                      const generateContinuousDateRange = () => {
+                        if (!dateRange?.from || !dateRange?.to) return [];
+                        
+                        const start = new Date(dateRange.from);
+                        const end = new Date(dateRange.to);
+                        const dateArray = [];
+                        
+                        // Generate all dates between start and end
+                        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                          dateArray.push(new Date(d));
+                        }
+                        
+                        return dateArray;
+                      };
+                      
+                      // Get data from both databases
                       const aiData = chartData.ai_whatsapp?.daily_data || [];
                       const wasapData = chartData.wasapbot?.daily_data || [];
                       
-                      // Create a map of all unique dates
-                      const dateMap = new Map<string, any>();
+                      // Create data maps for lookup
+                      const aiDataMap = new Map<string, number>();
+                      const wasapDataMap = new Map<string, number>();
                       
-                      // Add AI WhatsApp data
+                      // Process AI WhatsApp data
                       aiData.forEach((day: any) => {
-                        const dateStr = format(sanitizeDate(day.date), 'MMM dd');
-                        dateMap.set(dateStr, {
-                          date: dateStr,
-                          'AI WhatsApp': day.conversations || 0,
-                          'WasapBot': 0
-                        });
-                      });
-                      
-                      // Add WasapBot data
-                      wasapData.forEach((day: any) => {
-                        const dateStr = format(sanitizeDate(day.date), 'MMM dd');
-                        const existing = dateMap.get(dateStr);
-                        if (existing) {
-                          existing['WasapBot'] = day.prospects || 0;
-                        } else {
-                          dateMap.set(dateStr, {
-                            date: dateStr,
-                            'AI WhatsApp': 0,
-                            'WasapBot': day.prospects || 0
-                          });
+                        try {
+                          const date = sanitizeDate(day.date);
+                          const dateKey = format(date, 'yyyy-MM-dd');
+                          aiDataMap.set(dateKey, day.conversations || 0);
+                        } catch (error) {
+                          console.error('Error processing AI data date:', day.date, error);
                         }
                       });
                       
-                      // Convert map to array and sort by date
-                      const merged = Array.from(dateMap.values()).sort((a, b) => {
-                        const dateA = new Date(a.date + ' 2025');
-                        const dateB = new Date(b.date + ' 2025');
-                        return dateA.getTime() - dateB.getTime();
+                      // Process WasapBot data
+                      wasapData.forEach((day: any) => {
+                        try {
+                          const date = sanitizeDate(day.date);
+                          const dateKey = format(date, 'yyyy-MM-dd');
+                          wasapDataMap.set(dateKey, day.prospects || 0);
+                        } catch (error) {
+                          console.error('Error processing WasapBot data date:', day.date, error);
+                        }
                       });
                       
-                      // Fallback if no data
-                      if (merged.length === 0) {
+                      // Generate continuous date range data
+                      const continuousData = generateContinuousDateRange().map(date => {
+                        const dateKey = format(date, 'yyyy-MM-dd');
+                        const displayDate = format(date, 'MMM dd');
+                        
+                        return {
+                          date: displayDate,
+                          dateKey: dateKey,
+                          'AI WhatsApp': aiDataMap.get(dateKey) || 0,
+                          'WasapBot': wasapDataMap.get(dateKey) || 0
+                        };
+                      });
+                      
+                      // Return continuous data or fallback to summary if no date range
+                      if (continuousData.length === 0) {
                         return [{ 
-                          date: 'Today', 
+                          date: 'No Date Range', 
                           'AI WhatsApp': chartData.ai_whatsapp?.summary?.total_conversations || 0,
                           'WasapBot': chartData.wasapbot?.totalProspects || 0
                         }];
                       }
                       
-                      return merged;
+                      return continuousData;
                     })()}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
