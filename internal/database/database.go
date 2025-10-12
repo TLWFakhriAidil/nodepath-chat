@@ -557,9 +557,30 @@ func convertDeviceUserIDToChar36(db *sql.DB) error {
 
 // makeDeviceIDNullable makes device_id column nullable to allow manual device creation
 func makeDeviceIDNullable(db *sql.DB) error {
+	logrus.Info("🔧 Checking device_id column nullability in device_setting_nodepath table")
+	
+	// Check if table exists first
+	var tableExists int
+	err := db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM INFORMATION_SCHEMA.TABLES 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = 'device_setting_nodepath'
+	`).Scan(&tableExists)
+
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to check if device_setting_nodepath table exists, skipping migration")
+		return nil // Don't fail the entire migration for this
+	}
+
+	if tableExists == 0 {
+		logrus.Info("device_setting_nodepath table doesn't exist yet, skipping device_id nullable migration")
+		return nil
+	}
+
 	// Check if device_id column allows NULL
 	var isNullable string
-	err := db.QueryRow(`
+	err = db.QueryRow(`
 		SELECT IS_NULLABLE 
 		FROM INFORMATION_SCHEMA.COLUMNS 
 		WHERE TABLE_SCHEMA = DATABASE() 
@@ -568,21 +589,39 @@ func makeDeviceIDNullable(db *sql.DB) error {
 	`).Scan(&isNullable)
 
 	if err != nil {
-		return fmt.Errorf("failed to check device_id column nullability: %w", err)
+		logrus.WithError(err).Warn("Failed to check device_id column nullability, attempting to alter anyway")
+		// Continue and try to alter, might be a column that doesn't exist yet
+	} else {
+		// If already nullable, skip
+		if isNullable == "YES" {
+			logrus.Info("✅ device_id column is already nullable in device_setting_nodepath")
+			return nil
+		}
+		logrus.WithField("is_nullable", isNullable).Info("device_id column current nullability status")
 	}
 
-	// If already nullable, skip
-	if isNullable == "YES" {
-		logrus.Info("device_id column is already nullable in device_setting_nodepath")
-		return nil
-	}
-
-	// Make column nullable
+	// Make column nullable - this is the critical fix
+	logrus.Info("🔧 Altering device_id column to allow NULL values")
 	_, err = db.Exec("ALTER TABLE device_setting_nodepath MODIFY COLUMN device_id VARCHAR(255) NULL")
 	if err != nil {
+		logrus.WithError(err).Error("❌ Failed to make device_id nullable - this will cause WAHA provider issues")
 		return fmt.Errorf("failed to make device_id nullable: %w", err)
 	}
 
-	logrus.Info("✅ Made device_id column nullable in device_setting_nodepath for manual device creation")
+	logrus.Info("✅ Successfully made device_id column nullable in device_setting_nodepath for manual device creation")
+	
+	// Verify the change was applied
+	err = db.QueryRow(`
+		SELECT IS_NULLABLE 
+		FROM INFORMATION_SCHEMA.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = 'device_setting_nodepath' 
+		AND COLUMN_NAME = 'device_id'
+	`).Scan(&isNullable)
+
+	if err == nil {
+		logrus.WithField("is_nullable_after", isNullable).Info("✅ Verified device_id column nullability after migration")
+	}
+
 	return nil
 }
