@@ -52,7 +52,7 @@ type AIWhatsappRepository interface {
 	GetAnalyticsData(startDate, endDate time.Time, idDevice string, userID string) (map[string]interface{}, error)
 
 	// Data table operations
-	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID string) ([]models.AIWhatsapp, int, error)
+	GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID string, startDate, endDate *time.Time) ([]models.AIWhatsapp, int, error)
 
 	// Database access for transactions
 	GetDB() *sql.DB
@@ -415,7 +415,7 @@ func (r *aiWhatsappRepository) UpdateProspectName(prospectNum, idDevice, prospec
 }
 
 // GetAllAIWhatsappData retrieves all AI WhatsApp conversation records with pagination and filtering
-func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID string) ([]models.AIWhatsapp, int, error) {
+func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFilter, stageFilter, search string, userID string, startDate, endDate *time.Time) ([]models.AIWhatsapp, int, error) {
 	// Build base query with JOIN to filter by user
 	baseQuery := `
 		SELECT a.id_prospect, a.id_device, a.prospect_num, a.prospect_name, a.stage, a.date_order, a.conv_last, 
@@ -438,11 +438,28 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 	args = append(args, userID)
 	countArgs = append(countArgs, userID)
 
-	// Add device filter
+	// Add device filter (supports single device or comma-separated multiple devices)
 	if deviceFilter != "" {
-		conditions = append(conditions, "a.id_device = ?")
-		args = append(args, deviceFilter)
-		countArgs = append(countArgs, deviceFilter)
+		// Handle comma-separated device IDs
+		if strings.Contains(deviceFilter, ",") {
+			deviceIDs := strings.Split(deviceFilter, ",")
+			placeholders := make([]string, len(deviceIDs))
+			for i, deviceID := range deviceIDs {
+				placeholders[i] = "?"
+				args = append(args, strings.TrimSpace(deviceID))
+				countArgs = append(countArgs, strings.TrimSpace(deviceID))
+			}
+			conditions = append(conditions, fmt.Sprintf("a.id_device IN (%s)", strings.Join(placeholders, ",")))
+			logrus.WithFields(logrus.Fields{
+				"deviceFilter": deviceFilter,
+				"deviceIDs":    deviceIDs,
+			}).Info("Added multiple device filter to AI WhatsApp data query")
+		} else {
+			// Single device filter
+			conditions = append(conditions, "a.id_device = ?")
+			args = append(args, deviceFilter)
+			countArgs = append(countArgs, deviceFilter)
+		}
 	}
 
 	// Add stage filter
@@ -458,6 +475,17 @@ func (r *aiWhatsappRepository) GetAllAIWhatsappData(limit, offset int, deviceFil
 		searchTerm := "%" + search + "%"
 		args = append(args, searchTerm, searchTerm, searchTerm, searchTerm)
 		countArgs = append(countArgs, searchTerm, searchTerm, searchTerm, searchTerm)
+	}
+
+	// Add date range filter
+	if startDate != nil && endDate != nil {
+		conditions = append(conditions, "a.created_at BETWEEN ? AND ?")
+		args = append(args, *startDate, *endDate)
+		countArgs = append(countArgs, *startDate, *endDate)
+		logrus.WithFields(logrus.Fields{
+			"startDate": startDate.Format("2006-01-02"),
+			"endDate":   endDate.Format("2006-01-02"),
+		}).Info("Added date range filter to AI WhatsApp data query")
 	}
 
 	// Add additional WHERE conditions if they exist
