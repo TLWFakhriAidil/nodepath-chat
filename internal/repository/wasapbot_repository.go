@@ -910,48 +910,115 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 		stats["stageBreakdown"] = stageBreakdown
 	}
 
-	// Get daily data (prospects per day)
+	// Get daily data (prospects per day) - Fix date filtering issue
+	// Build separate query for daily data to ensure we get results
+	dailyBaseWhere := "1=1"
+	dailyArgs := []interface{}{}
+
+	// Apply date filters for daily query
+	if dateFrom != "" {
+		dailyBaseWhere += " AND DATE(date_start) >= ?"
+		dailyArgs = append(dailyArgs, dateFrom)
+	}
+
+	if dateTo != "" {
+		dailyBaseWhere += " AND DATE(date_start) <= ?"
+		dailyArgs = append(dailyArgs, dateTo)
+	}
+
+	if deviceFilter != "" && deviceFilter != "all" {
+		// Handle multiple device IDs for daily query
+		devices := utils.SplitAndTrim(deviceFilter, ",")
+		if len(devices) > 0 {
+			placeholders := utils.GeneratePlaceholders(len(devices))
+			dailyBaseWhere += " AND id_device IN (" + placeholders + ")"
+			for _, device := range devices {
+				dailyArgs = append(dailyArgs, device)
+			}
+		}
+	}
+
 	dailyQuery := `
 		SELECT 
 			DATE_FORMAT(DATE(date_start), '%Y-%m-%d') as date,
 			COUNT(DISTINCT prospect_num) as prospects
 		FROM wasapBot_nodepath 
-		WHERE ` + baseWhere + `
-		  AND date_start IS NOT NULL
+		WHERE ` + dailyBaseWhere + `
+		  AND date_start IS NOT NULL 
+		  AND date_start != ''
+		  AND DATE(date_start) IS NOT NULL
 		GROUP BY DATE(date_start)
 		ORDER BY DATE(date_start)
 	`
 
 	logrus.WithFields(logrus.Fields{
-		"query":      dailyQuery,
-		"args":       args,
-		"dateFrom":   dateFrom,
-		"dateTo":     dateTo,
-		"deviceFilter": deviceFilter,
-	}).Info("Executing WasapBot daily_data query")
+		"dailyQuery":    dailyQuery,
+		"dailyArgs":     dailyArgs,
+		"dateFrom":      dateFrom,
+		"dateTo":        dateTo,
+		"deviceFilter":  deviceFilter,
+		"dailyBaseWhere": dailyBaseWhere,
+	}).Info("Executing WasapBot daily_data query with separate args")
 
-	dailyRows, err := r.db.Query(dailyQuery, args...)
+	dailyRows, err := r.db.Query(dailyQuery, dailyArgs...)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to query WasapBot daily_data")
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"dailyQuery": dailyQuery,
+			"dailyArgs":  dailyArgs,
+		}).Error("Failed to query WasapBot daily_data")
 		stats["daily_data"] = []map[string]interface{}{} // Return empty array on error
 	} else {
 		defer dailyRows.Close()
 		dailyData := []map[string]interface{}{}
+		rowCount := 0
 		for dailyRows.Next() {
 			var date string
 			var prospects int
 			if err := dailyRows.Scan(&date, &prospects); err == nil {
-				// Ensure clean YYYY-MM-DD format before appending time
+				rowCount++
+				// Ensure clean YYYY-MM-DD format before appending time (no duplicate timezone)
 				dailyData = append(dailyData, map[string]interface{}{
-					"date":      date + "T00:00:00Z", // Format as ISO 8601 (date is now clean YYYY-MM-DD)
+					"date":      date + "T00:00:00Z", // Clean ISO 8601 format
 					"prospects": prospects,
 				})
+				logrus.WithFields(logrus.Fields{
+					"date":      date,
+					"prospects": prospects,
+				}).Debug("WasapBot daily data row processed")
 			} else {
 				logrus.WithError(err).Error("Failed to scan WasapBot daily row")
 			}
 		}
 		stats["daily_data"] = dailyData
-		logrus.WithField("daily_data_count", len(dailyData)).Info("WasapBot daily_data query completed")
+		logrus.WithFields(logrus.Fields{
+			"daily_data_count": len(dailyData),
+			"rows_processed":   rowCount,
+		}).Info("WasapBot daily_data query completed")
+
+		// If we still have no daily data but have total prospects, investigate
+		if len(dailyData) == 0 && totalProspects > 0 {
+			logrus.WithFields(logrus.Fields{
+				"totalProspects": totalProspects,
+				"dateFrom":       dateFrom,
+				"dateTo":         dateTo,
+				"deviceFilter":   deviceFilter,
+			}).Warn("WasapBot daily_data is empty but totalProspects > 0 - possible date filtering issue")
+			
+			// Debug query: check what dates are actually in the database
+			debugQuery := "SELECT DISTINCT DATE(date_start) as dates FROM wasapBot_nodepath WHERE date_start IS NOT NULL ORDER BY dates LIMIT 10"
+			debugRows, debugErr := r.db.Query(debugQuery)
+			if debugErr == nil {
+				defer debugRows.Close()
+				var dates []string
+				for debugRows.Next() {
+					var date string
+					if debugRows.Scan(&date) == nil {
+						dates = append(dates, date)
+					}
+				}
+				logrus.WithField("available_dates", dates).Info("Available dates in wasapBot_nodepath")
+			}
+		}
 	}
 
 	return stats, nil
