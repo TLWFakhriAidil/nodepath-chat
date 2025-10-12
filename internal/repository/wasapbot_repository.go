@@ -947,8 +947,8 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 		  AND date_start IS NOT NULL 
 		  AND date_start != ''
 		  AND DATE(date_start) IS NOT NULL
-		GROUP BY DATE(date_start)
-		ORDER BY DATE(date_start)
+		GROUP BY DATE_FORMAT(DATE(date_start), '%Y-%m-%d')
+		ORDER BY DATE_FORMAT(DATE(date_start), '%Y-%m-%d')
 	`
 
 	logrus.WithFields(logrus.Fields{
@@ -1037,8 +1037,8 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 				WHERE date_start IS NOT NULL 
 				  AND date_start != ''
 				  AND DATE(date_start) IS NOT NULL
-				GROUP BY DATE(date_start)
-				ORDER BY DATE(date_start)
+				GROUP BY DATE_FORMAT(DATE(date_start), '%Y-%m-%d')
+				ORDER BY DATE_FORMAT(DATE(date_start), '%Y-%m-%d')
 				LIMIT 10
 			`
 			
@@ -1071,8 +1071,8 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 				  AND date_start IS NOT NULL 
 				  AND date_start != ''
 				  AND DATE(date_start) IS NOT NULL
-				GROUP BY DATE(date_start)
-				ORDER BY DATE(date_start)
+				GROUP BY DATE_FORMAT(DATE(date_start), '%Y-%m-%d')
+				ORDER BY DATE_FORMAT(DATE(date_start), '%Y-%m-%d')
 			`
 			
 			debugRows3, debugErr3 := r.db.Query(debugFilteredQuery, dateFrom, dateTo)
