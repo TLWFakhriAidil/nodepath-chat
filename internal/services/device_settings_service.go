@@ -542,7 +542,10 @@ func (s *DeviceSettingsService) Update(id string, req *models.UpdateDeviceSettin
 	}
 
 	// Update fields if provided
-	if req.DeviceID != "" {
+	// Handle device_id specially - allow empty string to set NULL
+	if req.DeviceID == "" {
+		existing.DeviceID = sql.NullString{String: "", Valid: false} // Set to NULL for empty string
+	} else {
 		existing.DeviceID = sql.NullString{String: req.DeviceID, Valid: true}
 	}
 	if req.APIKeyOption != "" {
