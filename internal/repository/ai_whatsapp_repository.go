@@ -617,16 +617,17 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		}, nil
 	}
 
-	// Build query with IN clause for user's devices
+	// Build query with IN clause for user's devices - using DATE() for Y-m-d filtering only
 	placeholders := make([]string, len(userDevices))
 	args := []interface{}{}
 	for i, device := range userDevices {
 		placeholders[i] = "?"
 		args = append(args, device)
 	}
-	args = append(args, startDate, endDate)
+	// Add date parameters for DATE() filtering (Y-m-d format only)
+	args = append(args, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
 
-	// Base query using IN clause instead of JOIN
+	// Base query using IN clause instead of JOIN - using DATE() for precise Y-m-d filtering
 	baseQuery := fmt.Sprintf(`
 		SELECT 
 			COUNT(*) as total_conversations,
@@ -636,7 +637,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			COUNT(DISTINCT niche) as unique_niches,
 			COUNT(CASE WHEN stage IS NOT NULL AND stage != '' THEN 1 END) as conversations_with_stage
 		FROM ai_whatsapp_nodepath
-		WHERE id_device IN (%s) AND created_at BETWEEN ? AND ?
+		WHERE id_device IN (%s) AND DATE(created_at) >= ? AND DATE(created_at) <= ?
 	`, strings.Join(placeholders, ","))
 
 	// Add specific device filter if specified
@@ -685,7 +686,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		"conversationsWithStage": conversationsWithStage,
 	}).Info("Analytics query results")
 
-	// Get daily breakdown
+	// Get daily breakdown - using DATE() for Y-m-d filtering only
 	dailyQuery := fmt.Sprintf(`
 		SELECT 
 			DATE(created_at) as date,
@@ -693,15 +694,15 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			COUNT(CASE WHEN human = 0 THEN 1 END) as ai_conversations,
 			COUNT(CASE WHEN human = 1 THEN 1 END) as human_conversations
 		FROM ai_whatsapp_nodepath
-		WHERE id_device IN (%s) AND created_at BETWEEN ? AND ?
+		WHERE id_device IN (%s) AND DATE(created_at) >= ? AND DATE(created_at) <= ?
 	`, strings.Join(placeholders, ","))
 
-	// Reset args for daily query
+	// Reset args for daily query - using Y-m-d format only
 	dailyArgs := []interface{}{}
 	for _, device := range userDevices {
 		dailyArgs = append(dailyArgs, device)
 	}
-	dailyArgs = append(dailyArgs, startDate, endDate)
+	dailyArgs = append(dailyArgs, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
 
 	if idDevice != "" && idDevice != "all" {
 		dailyQuery += " AND id_device = ?"
@@ -742,7 +743,7 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 		}
 	}
 
-	// Get stage distribution including NULL stages
+	// Get stage distribution including NULL stages - using DATE() for Y-m-d filtering only
 	stageQuery := fmt.Sprintf(`
 		SELECT 
 			CASE 
@@ -751,15 +752,15 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 			END as stage_name,
 			COUNT(*) as count
 		FROM ai_whatsapp_nodepath
-		WHERE id_device IN (%s) AND created_at BETWEEN ? AND ?
+		WHERE id_device IN (%s) AND DATE(created_at) >= ? AND DATE(created_at) <= ?
 	`, strings.Join(placeholders, ","))
 
-	// Reset args for stage query
+	// Reset args for stage query - using Y-m-d format only
 	stageArgs := []interface{}{}
 	for _, device := range userDevices {
 		stageArgs = append(stageArgs, device)
 	}
-	stageArgs = append(stageArgs, startDate, endDate)
+	stageArgs = append(stageArgs, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
 
 	if idDevice != "" && idDevice != "all" {
 		stageQuery += " AND id_device = ?"
