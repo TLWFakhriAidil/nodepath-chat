@@ -102,6 +102,7 @@ type Handlers struct {
 	wasapBotHandlers       *WasapBotHandlers
 	profileHandlers        *ProfileHandlers
 	billingHandlers        *BillingHandlers
+	appDataHandlers        *AppDataHandlers // Optimized app data handlers
 	executionProcessRepo   repository.ExecutionProcessRepository
 	db                     *sql.DB // Add database field
 }
@@ -151,6 +152,9 @@ func NewHandlers(
 	billplzService := services.NewBillplzService()
 	billingHandlers := NewBillingHandlers(orderRepo, billplzService, db)
 
+	// Initialize optimized app data handlers
+	appDataHandlers := NewAppDataHandlers(db)
+
 	// Create main handlers instance
 	mainHandlers := &Handlers{
 		flowService:           flowService,
@@ -167,6 +171,7 @@ func NewHandlers(
 		wasapBotHandlers:      wasapBotHandlers,
 		profileHandlers:       profileHandlers,
 		billingHandlers:       billingHandlers,
+		appDataHandlers:       appDataHandlers, // Add optimized app data handlers
 		executionProcessRepo:  executionProcessRepo,
 		db:                    db, // Store the database
 	}
@@ -288,6 +293,11 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 		profile.Get("/", h.profileHandlers.GetProfile)
 		profile.Put("/", h.profileHandlers.UpdateProfile)
 		profile.Get("/status", h.profileHandlers.GetUserStatus)
+	}
+
+	// Optimized app data routes (protected with authentication)
+	if h.appDataHandlers != nil {
+		h.appDataHandlers.SetupAppDataRoutes(api.Group("/", h.authHandlers.AuthMiddleware()))
 	}
 
 	// Billing routes

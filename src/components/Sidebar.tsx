@@ -3,8 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { useDevice } from '@/contexts/DeviceContext';
-import { useSystemStatus } from '@/hooks/useSystemStatus';
+import { useOptimizedDevice, useOptimizedSystemStatus } from '@/hooks/useAppData';
 import {
   LayoutDashboard,
   Workflow,
@@ -41,8 +40,8 @@ interface SidebarProps {
  */
 const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
   const location = useLocation();
-  const { has_devices } = useDevice();
-  const systemStatus = useSystemStatus();
+  const { has_devices } = useOptimizedDevice();
+  const systemStatus = useOptimizedSystemStatus();
   const [notifications] = useState({
     flows: 2,
     messages: 5

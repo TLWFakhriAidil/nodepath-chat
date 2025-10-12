@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { LogOut, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useOptimizedSystemStatus } from '@/hooks/useAppData';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,12 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-interface SystemStatus {
-  text: string;
-  color: 'green' | 'yellow' | 'red';
-  isLoading: boolean;
-}
 
 interface TopBarProps {
   sidebarOpen: boolean;
@@ -30,107 +25,14 @@ interface TopBarProps {
 const TopBar: React.FC<TopBarProps> = ({ sidebarOpen, setSidebarOpen }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [systemStatus, setSystemStatus] = useState<SystemStatus>({ 
-    text: 'System Online (Trial)', 
-    color: 'yellow', 
-    isLoading: true 
-  });
+  const systemStatus = useOptimizedSystemStatus();
 
-  /**
-   * Fetch user system status
-   */
-  const fetchSystemStatus = async () => {
-    try {
-      console.log('🔍 TopBar: Fetching /api/profile/status...');
-      
-      const response = await fetch('/api/profile/status', {
-        credentials: 'include'
-      });
-
-      console.log('🔍 TopBar: Response status:', response.status);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('🔍 TopBar: Response data:', data);
-        
-        if (data.success && data.data) {
-          const userStatus = data.data.status?.toLowerCase() || '';
-          const expired = data.data.expired;
-          
-          console.log('🔍 TopBar: User status:', userStatus);
-          console.log('🔍 TopBar: Expired date:', expired);
-          
-          // Check if expired
-          if (expired) {
-            const expiredDate = new Date(expired);
-            const now = new Date();
-            
-            if (now > expiredDate) {
-              console.log('🔍 TopBar: User is expired');
-              setSystemStatus({
-                text: 'System Offline (Expired)',
-                color: 'red',
-                isLoading: false
-              });
-              return;
-            }
-          }
-          
-          // Check status
-          if (userStatus === 'pro') {
-            console.log('🔍 TopBar: User is Pro');
-            setSystemStatus({
-              text: 'System Online (Pro)',
-              color: 'green',
-              isLoading: false
-            });
-          } else if (userStatus === 'trial') {
-            console.log('🔍 TopBar: User is Trial');
-            setSystemStatus({
-              text: 'System Online (Trial)',
-              color: 'yellow',
-              isLoading: false
-            });
-          } else {
-            console.log('🔍 TopBar: Unknown status:', userStatus);
-            setSystemStatus({
-              text: 'System Offline (Unknown)',
-              color: 'red',
-              isLoading: false
-            });
-          }
-        } else {
-          console.log('🔍 TopBar: Invalid response format');
-          setSystemStatus({
-            text: 'System Offline (Error)',
-            color: 'red',
-            isLoading: false
-          });
-        }
-      } else {
-        console.log('🔍 TopBar: API call failed:', response.status);
-        setSystemStatus({
-          text: 'System Offline (API Error)',
-          color: 'red',
-          isLoading: false
-        });
-      }
-    } catch (error) {
-      console.error('🔍 TopBar: Network error:', error);
-      setSystemStatus({
-        text: 'System Offline (Network)',
-        color: 'red',
-        isLoading: false
-      });
-    }
+  // Convert optimized system status to TopBar format
+  const topBarStatus = {
+    text: systemStatus.displayText,
+    color: systemStatus.statusColor,
+    isLoading: false
   };
-
-  useEffect(() => {
-    fetchSystemStatus();
-    // Refresh status every 30 seconds
-    const interval = setInterval(fetchSystemStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   /**
    * Handle user logout
@@ -168,12 +70,12 @@ const TopBar: React.FC<TopBarProps> = ({ sidebarOpen, setSidebarOpen }) => {
         <div className="flex items-center space-x-4">
           <div className="hidden md:flex items-center space-x-2 bg-slate-100/50 dark:bg-slate-800/50 rounded-lg px-3 py-1.5">
             <div className={`w-2 h-2 rounded-full ${
-              systemStatus.color === 'green' ? 'bg-green-500 animate-pulse' :
-              systemStatus.color === 'yellow' ? 'bg-yellow-500 animate-pulse' :
+              topBarStatus.color === 'green' ? 'bg-green-500 animate-pulse' :
+              topBarStatus.color === 'yellow' ? 'bg-yellow-500 animate-pulse' :
               'bg-red-500'
             }`} />
             <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
-              {systemStatus.text}
+              {topBarStatus.text}
             </span>
           </div>
           
