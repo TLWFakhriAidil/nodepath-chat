@@ -727,8 +727,14 @@ func (r *aiWhatsappRepository) GetAnalyticsData(startDate, endDate time.Time, id
 				continue
 			}
 
+			// Clean date format - ensure only YYYY-MM-DD format without any timestamp
+			cleanDate := date
+			if len(cleanDate) > 10 {
+				cleanDate = cleanDate[:10] // Take only YYYY-MM-DD part
+			}
+			
 			dailyData = append(dailyData, map[string]interface{}{
-				"date":                date + "T00:00:00Z", // Format as ISO 8601
+				"date":                cleanDate, // Simple date format: YYYY-MM-DD
 				"conversations":       conversations,
 				"ai_conversations":    aiConversations,
 				"human_conversations": humanConversations,
