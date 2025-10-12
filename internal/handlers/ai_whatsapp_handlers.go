@@ -1391,8 +1391,27 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 	}
 	
 	// Support for date filtering (startDate/endDate)
-	startDate := c.Query("startDate", "")
-	endDate := c.Query("endDate", "")
+	startDateStr := c.Query("startDate", "")
+	endDateStr := c.Query("endDate", "")
+
+	// Parse date parameters
+	var startDate, endDate *time.Time
+	if startDateStr != "" {
+		if parsed, err := time.Parse("2006-01-02", startDateStr); err == nil {
+			startDate = &parsed
+		} else {
+			logrus.WithError(err).WithField("startDate", startDateStr).Warn("Invalid startDate format, ignoring")
+		}
+	}
+	if endDateStr != "" {
+		if parsed, err := time.Parse("2006-01-02", endDateStr); err == nil {
+			// Set to end of day for endDate
+			endOfDay := time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 23, 59, 59, 999999999, parsed.Location())
+			endDate = &endOfDay
+		} else {
+			logrus.WithError(err).WithField("endDate", endDateStr).Warn("Invalid endDate format, ignoring")
+		}
+	}
 
 	// Calculate offset for pagination
 	offset := (page - 1) * limit
@@ -1413,13 +1432,15 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 		"deviceFilter": deviceFilter,
 		"stageFilter":  stageFilter,
 		"search":       search,
-		"startDate":    startDate,
-		"endDate":      endDate,
+		"startDate":    startDateStr,
+		"endDate":      endDateStr,
+		"startDateParsed": startDate,
+		"endDateParsed":   endDate,
 		"userID":       userID,
 	}).Info("GetAllAIWhatsappData called with parameters")
 
-	// Get data from repository with user-specific filtering
-	data, total, err := h.AIRepo.GetAllAIWhatsappData(limit, offset, deviceFilter, stageFilter, search, userID)
+	// Get data from repository with user-specific filtering including date range
+	data, total, err := h.AIRepo.GetAllAIWhatsappData(limit, offset, deviceFilter, stageFilter, search, userID, startDate, endDate)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get AI WhatsApp data")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
