@@ -839,20 +839,24 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 		stats["totalProspects"] = totalProspects
 	}
 
-	// Active executions
+	// Active executions (current_node_id is NOT 'end')
 	var activeExecutions int
-	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND execution_status = 'active'"
+	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND (current_node_id IS NULL OR current_node_id != 'end')"
 	err = r.db.QueryRow(query, args...).Scan(&activeExecutions)
 	if err == nil {
 		stats["activeExecutions"] = activeExecutions
+	} else {
+		logrus.WithError(err).Error("Failed to get active executions count")
 	}
 
-	// Completed executions
+	// Completed executions (current_node_id is 'end')
 	var completedExecutions int
-	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND status = 'Customer'"
+	query = "SELECT COUNT(*) FROM wasapBot_nodepath WHERE " + baseWhere + " AND current_node_id = 'end'"
 	err = r.db.QueryRow(query, args...).Scan(&completedExecutions)
 	if err == nil {
 		stats["completedExecutions"] = completedExecutions
+	} else {
+		logrus.WithError(err).Error("Failed to get completed executions count")
 	}
 
 	// Unique schools
