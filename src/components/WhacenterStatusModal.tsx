@@ -111,19 +111,23 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ qrData }) => {
   if (qrCodeUrl) {
     return (
       <div className="text-center">
-        <img 
-          src={qrCodeUrl} 
-          alt="QR Code" 
-          className="w-32 h-32 mx-auto border rounded-lg shadow-sm"
-          onLoad={() => {
-            console.log('✅ QR Code image loaded successfully');
-          }}
-          onError={(e) => {
-            console.error('❌ QR Code image failed to load');
-            setError('Failed to load QR code image');
-          }}
-        />
-        <p className="text-xs text-gray-600 mt-2">
+        <div className="flex justify-center mb-4">
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <img 
+              src={qrCodeUrl} 
+              alt="QR Code" 
+              className="w-48 h-48 object-contain"
+              onLoad={() => {
+                console.log('✅ QR Code image loaded successfully');
+              }}
+              onError={(e) => {
+                console.error('❌ QR Code image failed to load');
+                setError('Failed to load QR code image');
+              }}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-gray-600 text-center">
           Scan this QR code with WhatsApp to connect your device
         </p>
       </div>
