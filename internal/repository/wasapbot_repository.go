@@ -1007,21 +1007,93 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 				"dateFrom":       dateFrom,
 				"dateTo":         dateTo,
 				"deviceFilter":   deviceFilter,
-			}).Warn("WasapBot daily_data is empty but totalProspects > 0 - possible date filtering issue")
+			}).Error("CRITICAL: WasapBot daily_data is empty but totalProspects > 0 - investigating")
 			
-			// Debug query: check what dates are actually in the database
-			debugQuery := "SELECT DISTINCT DATE(date_start) as dates FROM wasapBot_nodepath WHERE date_start IS NOT NULL ORDER BY dates LIMIT 10"
-			debugRows, debugErr := r.db.Query(debugQuery)
-			if debugErr == nil {
-				defer debugRows.Close()
-				var dates []string
-				for debugRows.Next() {
+			// Debug query 1: check what dates are actually in the database
+			debugQuery1 := "SELECT DISTINCT DATE(date_start) as dates, COUNT(*) as count FROM wasapBot_nodepath WHERE date_start IS NOT NULL GROUP BY DATE(date_start) ORDER BY dates"
+			debugRows1, debugErr1 := r.db.Query(debugQuery1)
+			if debugErr1 == nil {
+				defer debugRows1.Close()
+				var allDates []map[string]interface{}
+				for debugRows1.Next() {
 					var date string
-					if debugRows.Scan(&date) == nil {
-						dates = append(dates, date)
+					var count int
+					if debugRows1.Scan(&date, &count) == nil {
+						allDates = append(allDates, map[string]interface{}{
+							"date": date,
+							"count": count,
+						})
 					}
 				}
-				logrus.WithField("available_dates", dates).Info("Available dates in wasapBot_nodepath")
+				logrus.WithField("all_dates_in_db", allDates).Error("DEBUG: All dates in wasapBot_nodepath")
+			}
+
+			// Debug query 2: Try the daily query WITHOUT date filtering to see if data exists
+			debugDailyQuery := `
+				SELECT 
+					DATE_FORMAT(DATE(date_start), '%Y-%m-%d') as date,
+					COUNT(DISTINCT prospect_num) as prospects
+				FROM wasapBot_nodepath 
+				WHERE date_start IS NOT NULL 
+				  AND date_start != ''
+				  AND DATE(date_start) IS NOT NULL
+				GROUP BY DATE(date_start)
+				ORDER BY DATE(date_start)
+				LIMIT 10
+			`
+			
+			debugRows2, debugErr2 := r.db.Query(debugDailyQuery)
+			if debugErr2 == nil {
+				defer debugRows2.Close()
+				var debugData []map[string]interface{}
+				for debugRows2.Next() {
+					var date string
+					var prospects int
+					if debugRows2.Scan(&date, &prospects) == nil {
+						debugData = append(debugData, map[string]interface{}{
+							"date": date,
+							"prospects": prospects,
+						})
+					}
+				}
+				logrus.WithField("daily_data_without_filter", debugData).Error("DEBUG: Daily data WITHOUT date filter")
+			}
+
+			// Debug query 3: Check what the filtered query would return
+			debugFilteredQuery := `
+				SELECT 
+					DATE_FORMAT(DATE(date_start), '%Y-%m-%d') as date,
+					COUNT(DISTINCT prospect_num) as prospects
+				FROM wasapBot_nodepath 
+				WHERE 1=1
+				  AND DATE(date_start) >= ?
+				  AND DATE(date_start) <= ?
+				  AND date_start IS NOT NULL 
+				  AND date_start != ''
+				  AND DATE(date_start) IS NOT NULL
+				GROUP BY DATE(date_start)
+				ORDER BY DATE(date_start)
+			`
+			
+			debugRows3, debugErr3 := r.db.Query(debugFilteredQuery, dateFrom, dateTo)
+			if debugErr3 == nil {
+				defer debugRows3.Close()
+				var filteredData []map[string]interface{}
+				for debugRows3.Next() {
+					var date string
+					var prospects int
+					if debugRows3.Scan(&date, &prospects) == nil {
+						filteredData = append(filteredData, map[string]interface{}{
+							"date": date,
+							"prospects": prospects,
+						})
+					}
+				}
+				logrus.WithFields(logrus.Fields{
+					"filtered_data": filteredData,
+					"dateFrom": dateFrom,
+					"dateTo": dateTo,
+				}).Error("DEBUG: Daily data WITH date filter")
 			}
 		}
 	}
