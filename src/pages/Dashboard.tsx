@@ -7,15 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   Bot, 
   Workflow, 
-  MessageSquare, 
   Upload, 
   BarChart3, 
   Plus,
   Play,
   Users,
-  TrendingUp,
-  Clock,
-  Zap,
   ArrowRight,
   Activity
 } from 'lucide-react';
@@ -31,12 +27,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { device_ids } = useDevice();
   const [flows, setFlows] = useState<ChatbotFlow[]>([]);
-  const [stats, setStats] = useState({
-    totalFlows: 0,
-    activeFlows: 0,
-    totalMessages: 0,
-    responseTime: '1.2s'
-  });
+  // Stats state removed since stats cards were removed
 
   // Helper function to sanitize malformed dates
   const sanitizeDate = (dateStr: string): Date => {
@@ -80,12 +71,7 @@ const Dashboard = () => {
     const loadFlows = async () => {
       const savedFlows = await getFlows();
       setFlows(savedFlows);
-      setStats({
-        totalFlows: savedFlows.length,
-        activeFlows: savedFlows.filter(f => f.nodes.length > 1).length,
-        totalMessages: Math.floor(Math.random() * 1000) + 500,
-        responseTime: '1.2s'
-      });
+      // Stats calculation removed since stats cards were removed
     };
     loadFlows();
   }, []);
@@ -156,79 +142,11 @@ const Dashboard = () => {
     }
   ];
 
-  const statCards = [
-    {
-      title: 'Total Flows',
-      value: stats.totalFlows,
-      icon: Workflow,
-      change: '+12%',
-      changeType: 'positive' as const,
-      color: 'text-blue-600'
-    },
-    {
-      title: 'Active Flows',
-      value: stats.activeFlows,
-      icon: Activity,
-      change: '+8%',
-      changeType: 'positive' as const,
-      color: 'text-green-600'
-    },
-    {
-      title: 'Messages Sent',
-      value: stats.totalMessages.toLocaleString(),
-      icon: MessageSquare,
-      change: '+23%',
-      changeType: 'positive' as const,
-      color: 'text-purple-600'
-    },
-    {
-      title: 'Avg Response Time',
-      value: stats.responseTime,
-      icon: Clock,
-      change: '-5%',
-      changeType: 'positive' as const,
-      color: 'text-orange-600'
-    }
-  ];
+  // Stats cards removed as requested by user
 
   return (
     <div className="space-y-8">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={index} className="relative overflow-hidden border-0 shadow-lg bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                    {stat.title}
-                  </CardTitle>
-                  <Icon className={`w-4 h-4 ${stat.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                    {stat.value}
-                  </div>
-                  <Badge 
-                    variant="secondary" 
-                    className={`${
-                      stat.changeType === 'positive' 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
-                        : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-                    }`}
-                  >
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    {stat.change}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {/* Stats grid removed as requested by user */}
 
       {/* Dashboard Charts with Filters */}
       <div className="space-y-6">
