@@ -976,9 +976,14 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 			var prospects int
 			if err := dailyRows.Scan(&date, &prospects); err == nil {
 				rowCount++
-				// Ensure clean YYYY-MM-DD format before appending time (no duplicate timezone)
+				// Clean date format - ensure only YYYY-MM-DD format without any timestamp
+				cleanDate := date
+				if len(cleanDate) > 10 {
+					cleanDate = cleanDate[:10] // Take only YYYY-MM-DD part
+				}
+				
 				dailyData = append(dailyData, map[string]interface{}{
-					"date":      date + "T00:00:00Z", // Clean ISO 8601 format
+					"date":      cleanDate, // Simple date format: YYYY-MM-DD
 					"prospects": prospects,
 				})
 				logrus.WithFields(logrus.Fields{
