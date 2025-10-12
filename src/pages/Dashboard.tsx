@@ -38,6 +38,35 @@ const Dashboard = () => {
     responseTime: '1.2s'
   });
 
+  // Helper function to sanitize malformed dates
+  const sanitizeDate = (dateStr: string): Date => {
+    try {
+      // Fix malformed dates like "2025-10-01T00:00:00ZT00:00:00Z"
+      let cleanDate = dateStr;
+      
+      // Remove duplicate timezone info (T00:00:00Z appearing twice)
+      if (cleanDate.includes('T00:00:00ZT00:00:00Z')) {
+        cleanDate = cleanDate.replace('T00:00:00ZT00:00:00Z', 'T00:00:00Z');
+      }
+      
+      // Handle other potential malformed patterns
+      cleanDate = cleanDate.replace(/Z.*Z$/, 'Z'); // Remove duplicate Z suffixes
+      
+      const date = new Date(cleanDate);
+      
+      // If date is invalid, try parsing just the date part
+      if (isNaN(date.getTime())) {
+        const datePart = cleanDate.split('T')[0];
+        return new Date(datePart);
+      }
+      
+      return date;
+    } catch (error) {
+      console.error('Error parsing date:', dateStr, error);
+      return new Date(); // Fallback to current date
+    }
+  };
+
   // Chart state
   const [chartData, setChartData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -273,7 +302,7 @@ const Dashboard = () => {
                       
                       // Add AI WhatsApp data
                       aiData.forEach((day: any) => {
-                        const dateStr = format(new Date(day.date), 'MMM dd');
+                        const dateStr = format(sanitizeDate(day.date), 'MMM dd');
                         dateMap.set(dateStr, {
                           date: dateStr,
                           'AI WhatsApp': day.conversations || 0,
@@ -283,7 +312,7 @@ const Dashboard = () => {
                       
                       // Add WasapBot data
                       wasapData.forEach((day: any) => {
-                        const dateStr = format(new Date(day.date), 'MMM dd');
+                        const dateStr = format(sanitizeDate(day.date), 'MMM dd');
                         const existing = dateMap.get(dateStr);
                         if (existing) {
                           existing['WasapBot'] = day.prospects || 0;
