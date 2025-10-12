@@ -84,6 +84,11 @@ func RunMigrations(db *sql.DB) error {
 		logrus.WithError(err).Warn("Failed to update provider values, continuing...")
 	}
 
+	// Update provider ENUM to include 'waha' (critical for WAHA provider support)
+	if err := updateProviderEnum(db); err != nil {
+		logrus.WithError(err).Warn("Failed to update provider ENUM, continuing...")
+	}
+
 	// Drop deprecated billing columns from orders_nodepath
 	if err := dropDeprecatedBillingColumns(db); err != nil {
 		logrus.WithError(err).Warn("Failed to drop deprecated billing columns, continuing...")
@@ -345,6 +350,95 @@ func updateProviderRvsbWasapToWaha(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// updateProviderEnum updates the provider ENUM to include 'waha' and remove 'rvsb_wasap'
+func updateProviderEnum(db *sql.DB) error {
+	logrus.Info("🔧 Checking provider ENUM constraint in device_setting_nodepath table")
+	
+	// Check if table exists first
+	var tableExists int
+	err := db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM INFORMATION_SCHEMA.TABLES 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = 'device_setting_nodepath'
+	`).Scan(&tableExists)
+
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to check if device_setting_nodepath table exists, skipping provider ENUM update")
+		return nil
+	}
+
+	if tableExists == 0 {
+		logrus.Info("device_setting_nodepath table doesn't exist yet, skipping provider ENUM update")
+		return nil
+	}
+
+	// Check current ENUM values for provider column
+	var columnType string
+	err = db.QueryRow(`
+		SELECT COLUMN_TYPE 
+		FROM INFORMATION_SCHEMA.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = 'device_setting_nodepath' 
+		AND COLUMN_NAME = 'provider'
+	`).Scan(&columnType)
+
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to check provider column type, attempting to alter anyway")
+	} else {
+		logrus.WithField("current_enum", columnType).Info("Current provider ENUM constraint")
+		
+		// If already has 'waha' and doesn't have 'rvsb_wasap', skip
+		if contains(columnType, "'waha'") && !contains(columnType, "'rvsb_wasap'") {
+			logrus.Info("✅ Provider ENUM already has 'waha' and doesn't have 'rvsb_wasap' - no update needed")
+			return nil
+		}
+	}
+
+	// Update the ENUM to replace 'rvsb_wasap' with 'waha'
+	logrus.Info("🔧 Updating provider ENUM to include 'waha' and remove 'rvsb_wasap'")
+	_, err = db.Exec("ALTER TABLE device_setting_nodepath MODIFY COLUMN provider ENUM('whacenter', 'wablas', 'waha') DEFAULT 'wablas'")
+	if err != nil {
+		logrus.WithError(err).Error("❌ Failed to update provider ENUM - this will cause WAHA provider issues")
+		return fmt.Errorf("failed to update provider ENUM: %w", err)
+	}
+
+	logrus.Info("✅ Successfully updated provider ENUM to support WAHA provider")
+	
+	// Verify the change was applied
+	err = db.QueryRow(`
+		SELECT COLUMN_TYPE 
+		FROM INFORMATION_SCHEMA.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = 'device_setting_nodepath' 
+		AND COLUMN_NAME = 'provider'
+	`).Scan(&columnType)
+
+	if err == nil {
+		logrus.WithField("updated_enum", columnType).Info("✅ Verified provider ENUM after migration")
+	}
+
+	return nil
+}
+
+// contains checks if a string contains a substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) && 
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
+		 len(s) > len(substr)+1 && s[1:len(substr)+1] == substr ||
+		 findInString(s, substr))))
+}
+
+// findInString is a simple string search helper
+func findInString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 // removeDeprecatedColumnsFromFlowsTable removes deprecated columns from the flows table
