@@ -125,7 +125,9 @@ func (s *Service) convertWasapBotToAIWhatsapp(wasapBot *models.WasapBot) *models
 func (s *Service) messageProcessor() {
 	for msg := range s.messageQueue {
 		s.processingWG.Add(1)
-		go func(webhookMsg *WebhookMessage) {
+		// Process messages sequentially to ensure session locking works properly
+		// This prevents duplicate processing when multiple messages arrive quickly
+		func(webhookMsg *WebhookMessage) {
 			defer s.processingWG.Done()
 			if err := s.processWebhookMessageInternal(webhookMsg); err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{
@@ -134,11 +136,15 @@ func (s *Service) messageProcessor() {
 					"retries":      webhookMsg.Retries,
 				}).Error("Failed to process webhook message")
 
-				// Retry logic for failed messages
+				// Disable retry queuing to prevent duplicate processing issues
+				// Messages that fail will be logged, but not retried
 				if webhookMsg.Retries < 3 {
-					webhookMsg.Retries++
-					time.Sleep(time.Second * time.Duration(webhookMsg.Retries))
-					s.messageQueue <- webhookMsg
+					logrus.WithFields(logrus.Fields{
+						"device_id":    webhookMsg.DeviceID,
+						"phone_number": webhookMsg.PhoneNumber,
+						"retry_count":  webhookMsg.Retries + 1,
+						"max_retries":  3,
+					}).Warn("Message processing failed, retry disabled to prevent duplicates")
 				}
 			}
 		}(msg)
