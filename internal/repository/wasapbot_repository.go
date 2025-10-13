@@ -8,6 +8,7 @@ import (
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/utils"
 
+	mysql "github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"
 )
 
@@ -27,6 +28,10 @@ type WasapBotRepository interface {
 	GetWasapBotStats(deviceFilter string, userID string) (map[string]interface{}, error)
 	GetWasapBotStatsWithDates(deviceFilter, dateFrom, dateTo string, userID string) (map[string]interface{}, error)
 	Delete(idProspect int) error
+
+	// Session locking operations
+	TryAcquireSession(prospectNum, deviceID string) (bool, error)
+	ReleaseSession(prospectNum, deviceID string) error
 }
 
 type wasapBotRepository struct {
@@ -338,6 +343,41 @@ func (r *wasapBotRepository) UpdateWaitingStatus(executionID string, waitingValu
 			"waiting_value": waitingValue,
 		}).Error("Failed to update waiting status in wasapBot")
 		return fmt.Errorf("failed to update waiting status: %w", err)
+	}
+
+	return nil
+}
+
+// TryAcquireSession attempts to create a session lock for a prospect/device pair
+// Returns true when the lock was acquired, false if a lock already exists
+func (r *wasapBotRepository) TryAcquireSession(prospectNum, deviceID string) (bool, error) {
+	if r.db == nil {
+		return false, fmt.Errorf("database connection is not available")
+	}
+
+	const query = `INSERT INTO wasapBot_session_nodepath (id_prospect, id_device, ` + "`timestamp`" + `) VALUES (?, ?, ?)`
+	_, err := r.db.Exec(query, prospectNum, deviceID, time.Now().Format(time.RFC3339Nano))
+	if err != nil {
+		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
+			if mysqlErr.Number == 1062 {
+				return false, nil
+			}
+		}
+		return false, fmt.Errorf("failed to acquire WasapBot session lock: %w", err)
+	}
+
+	return true, nil
+}
+
+// ReleaseSession removes the session lock for a prospect/device pair
+func (r *wasapBotRepository) ReleaseSession(prospectNum, deviceID string) error {
+	if r.db == nil {
+		return fmt.Errorf("database connection is not available")
+	}
+
+	const query = `DELETE FROM wasapBot_session_nodepath WHERE id_prospect = ? AND id_device = ?`
+	if _, err := r.db.Exec(query, prospectNum, deviceID); err != nil {
+		return fmt.Errorf("failed to release WasapBot session lock: %w", err)
 	}
 
 	return nil
@@ -952,11 +992,11 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 	`
 
 	logrus.WithFields(logrus.Fields{
-		"dailyQuery":    dailyQuery,
-		"dailyArgs":     dailyArgs,
-		"dateFrom":      dateFrom,
-		"dateTo":        dateTo,
-		"deviceFilter":  deviceFilter,
+		"dailyQuery":     dailyQuery,
+		"dailyArgs":      dailyArgs,
+		"dateFrom":       dateFrom,
+		"dateTo":         dateTo,
+		"deviceFilter":   deviceFilter,
 		"dailyBaseWhere": dailyBaseWhere,
 	}).Info("Executing WasapBot daily_data query with separate args")
 
@@ -981,7 +1021,7 @@ func (r *wasapBotRepository) GetWasapBotStatsWithDates(deviceFilter, dateFrom, d
 				if len(cleanDate) > 10 {
 					cleanDate = cleanDate[:10] // Take only YYYY-MM-DD part
 				}
-				
+
 				dailyData = append(dailyData, map[string]interface{}{
 					"date":      cleanDate, // Simple date format: YYYY-MM-DD
 					"prospects": prospects,
