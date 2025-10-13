@@ -1725,3 +1725,81 @@ func (r *aiWhatsappRepository) UpdateHumanStatus(idProspect string, human int) e
 
 	return nil
 }
+
+// TryAcquireSession attempts to acquire a session lock for the given phone number and device
+// Returns true if lock acquired, false if already locked
+func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (bool, error) {
+	// Try to insert a session lock
+	query := `
+		INSERT INTO ai_whatsapp_session (phone_number, device_id, locked_at, last_activity)
+		VALUES (?, ?, NOW(), NOW())
+		ON DUPLICATE KEY UPDATE
+		locked_at = IF(locked_at IS NULL OR TIMESTAMPDIFF(SECOND, locked_at, NOW()) > 30, NOW(), locked_at),
+		last_activity = NOW()
+	`
+
+	result, err := r.db.Exec(query, phoneNumber, deviceID)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Error("Failed to acquire session lock")
+		return false, err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	
+	// Check if we actually acquired the lock (locked_at was updated)
+	checkQuery := `
+		SELECT TIMESTAMPDIFF(SECOND, locked_at, NOW()) <= 1 as just_locked
+		FROM ai_whatsapp_session
+		WHERE phone_number = ? AND device_id = ?
+	`
+	
+	var justLocked bool
+	err = r.db.QueryRow(checkQuery, phoneNumber, deviceID).Scan(&justLocked)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to verify session lock acquisition")
+		// Assume we got it if insert/update succeeded
+		return rowsAffected > 0, nil
+	}
+
+	if justLocked {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Debug("Session lock acquired successfully")
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Debug("Session already locked by another process")
+	}
+
+	return justLocked, nil
+}
+
+// ReleaseSession releases the session lock for the given phone number and device
+func (r *aiWhatsappRepository) ReleaseSession(phoneNumber, deviceID string) error {
+	query := `
+		UPDATE ai_whatsapp_session 
+		SET locked_at = NULL, last_activity = NOW()
+		WHERE phone_number = ? AND device_id = ?
+	`
+
+	_, err := r.db.Exec(query, phoneNumber, deviceID)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Error("Failed to release session lock")
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"device_id":    deviceID,
+	}).Debug("Session lock released successfully")
+
+	return nil
+}
