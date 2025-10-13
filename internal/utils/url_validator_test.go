@@ -1,12 +1,78 @@
 package utils
 
 import (
+	"errors"
+	"net/http"
 	"testing"
 )
+
+type mockRoundTripper struct {
+	responses map[string]*http.Response
+	errors    map[string]error
+}
+
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	url := req.URL.String()
+	if err, ok := m.errors[url]; ok {
+		return nil, err
+	}
+	if resp, ok := m.responses[url]; ok {
+		// Ensure we reuse the request body semantics expected by http.Client
+		copy := *resp
+		copy.Request = req
+		return &copy, nil
+	}
+	return &http.Response{
+		StatusCode: http.StatusNotFound,
+		Status:     http.StatusText(http.StatusNotFound),
+		Header:     make(http.Header),
+		Body:       http.NoBody,
+		Request:    req,
+	}, nil
+}
 
 // TestURLValidation tests the URL validation with problematic URLs from AI responses
 func TestURLValidation(t *testing.T) {
 	validator := NewURLValidator()
+
+	// Inject mock HTTP client to avoid external network dependencies
+	validator.client = &http.Client{
+		Transport: &mockRoundTripper{
+			responses: map[string]*http.Response{
+				"https://chatbot.growrvsb.com/public/images/chatgpt/23141741665515": {
+					StatusCode: http.StatusNotFound,
+					Status:     http.StatusText(http.StatusNotFound),
+					Header:     make(http.Header),
+					Body:       http.NoBody,
+				},
+				"https://chatbot.growrvsb.com/public/images/chatgpt/23141741665523": {
+					StatusCode: http.StatusGone,
+					Status:     http.StatusText(http.StatusGone),
+					Header:     make(http.Header),
+					Body:       http.NoBody,
+				},
+				"https://chatbot.growrvsb.com/public/images/chatgpt/23141741665533": {
+					StatusCode: http.StatusForbidden,
+					Status:     http.StatusText(http.StatusForbidden),
+					Header:     make(http.Header),
+					Body:       http.NoBody,
+				},
+				"https://httpbin.org/image/jpeg": func() *http.Response {
+					header := make(http.Header)
+					header.Set("Content-Type", "image/jpeg")
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Status:     http.StatusText(http.StatusOK),
+						Header:     header,
+						Body:       http.NoBody,
+					}
+				}(),
+			},
+			errors: map[string]error{
+				"https://invalid-url-that-does-not-exist.com/image.jpg": errors.New("dial tcp: no such host"),
+			},
+		},
+	}
 
 	// Test URLs from the user's issue - these should fail validation
 	testCases := []struct {

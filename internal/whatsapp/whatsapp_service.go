@@ -312,6 +312,28 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 	// Special handling for WasapBot Exama flow
 	if defaultFlow != nil && defaultFlow.Name == "WasapBot Exama" {
 		logrus.Info("🎯 WASAPBOT: Processing WasapBot Exama flow")
+
+		acquired, lockErr := s.unifiedFlowService.AcquireWasapBotSession(phoneNumber, deviceID)
+		if lockErr != nil {
+			return lockErr
+		}
+		if !acquired {
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id":    deviceID,
+			}).Warn("⏳ WASAPBOT: Active session in progress, skipping duplicate message")
+			return nil
+		}
+
+		defer func() {
+			if err := s.unifiedFlowService.ReleaseWasapBotSession(phoneNumber, deviceID); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"phone_number": phoneNumber,
+					"device_id":    deviceID,
+				}).Error("Failed to release WasapBot session lock")
+			}
+		}()
+
 		return s.processWasapBotExamaFlow(phoneNumber, content, deviceID, senderName, defaultFlow)
 	}
 
@@ -382,6 +404,27 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 
 		// Continue with normal flow processing for Chatbot AI
 		logrus.Info("🤖 CHATBOT AI: Proceeding with normal flow processing")
+
+		acquired, lockErr := s.unifiedFlowService.AcquireAIWhatsappSession(phoneNumber, deviceID)
+		if lockErr != nil {
+			return lockErr
+		}
+		if !acquired {
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id":    deviceID,
+			}).Warn("⏳ CHATBOT AI: Active session in progress, skipping duplicate message")
+			return nil
+		}
+
+		defer func() {
+			if err := s.unifiedFlowService.ReleaseAIWhatsappSession(phoneNumber, deviceID); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"phone_number": phoneNumber,
+					"device_id":    deviceID,
+				}).Error("Failed to release AI WhatsApp session lock")
+			}
+		}()
 	}
 
 	if defaultFlow == nil {

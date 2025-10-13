@@ -31,6 +31,98 @@ func NewUnifiedFlowService(
 	}
 }
 
+// AcquireAIWhatsappSession attempts to acquire a session lock for AI WhatsApp flows
+func (s *UnifiedFlowService) AcquireAIWhatsappSession(phoneNumber, deviceID string) (bool, error) {
+	if s.aiWhatsappRepo == nil {
+		return false, fmt.Errorf("aiWhatsappRepo is not initialized")
+	}
+
+	acquired, err := s.aiWhatsappRepo.TryAcquireSession(phoneNumber, deviceID)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Error("Failed to acquire AI WhatsApp session lock")
+		return false, err
+	}
+
+	if !acquired {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Warn("AI WhatsApp session lock already active - ignoring duplicate message")
+	}
+
+	return acquired, nil
+}
+
+// ReleaseAIWhatsappSession releases a session lock for AI WhatsApp flows
+func (s *UnifiedFlowService) ReleaseAIWhatsappSession(phoneNumber, deviceID string) error {
+	if s.aiWhatsappRepo == nil {
+		return fmt.Errorf("aiWhatsappRepo is not initialized")
+	}
+
+	if err := s.aiWhatsappRepo.ReleaseSession(phoneNumber, deviceID); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Error("Failed to release AI WhatsApp session lock")
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"device_id":    deviceID,
+	}).Debug("AI WhatsApp session lock released")
+	return nil
+}
+
+// AcquireWasapBotSession attempts to acquire a session lock for WasapBot flows
+func (s *UnifiedFlowService) AcquireWasapBotSession(phoneNumber, deviceID string) (bool, error) {
+	if s.wasapBotRepo == nil {
+		return false, fmt.Errorf("wasapBotRepo is not initialized")
+	}
+
+	acquired, err := s.wasapBotRepo.TryAcquireSession(phoneNumber, deviceID)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Error("Failed to acquire WasapBot session lock")
+		return false, err
+	}
+
+	if !acquired {
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Warn("WasapBot session lock already active - ignoring duplicate message")
+	}
+
+	return acquired, nil
+}
+
+// ReleaseWasapBotSession releases a session lock for WasapBot flows
+func (s *UnifiedFlowService) ReleaseWasapBotSession(phoneNumber, deviceID string) error {
+	if s.wasapBotRepo == nil {
+		return fmt.Errorf("wasapBotRepo is not initialized")
+	}
+
+	if err := s.wasapBotRepo.ReleaseSession(phoneNumber, deviceID); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Error("Failed to release WasapBot session lock")
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"phone_number": phoneNumber,
+		"device_id":    deviceID,
+	}).Debug("WasapBot session lock released")
+	return nil
+}
+
 // GetActiveExecutionByFlow retrieves active execution based on flow name
 func (s *UnifiedFlowService) GetActiveExecutionByFlow(phoneNumber, deviceID, flowID string) (interface{}, string, error) {
 	// Get flow to determine which table to use

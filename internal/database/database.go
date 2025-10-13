@@ -56,6 +56,8 @@ func RunMigrations(db *sql.DB) error {
 		createWasapBotTable,
 		createConversationLogTable,
 		createOrdersTable,
+		createAIWhatsappSessionTable,
+		createWasapBotSessionTable,
 	}
 
 	for i, migration := range migrations {
@@ -291,6 +293,28 @@ CREATE TABLE IF NOT EXISTS orders_nodepath (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
+const createAIWhatsappSessionTable = `
+CREATE TABLE IF NOT EXISTS ai_whatsapp_session_nodepath (
+    id_sessionX INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_prospect VARCHAR(255) NOT NULL,
+    id_device VARCHAR(255) NOT NULL,
+    ` + "`timestamp`" + ` VARCHAR(255) NOT NULL,
+    UNIQUE KEY uniq_ai_whatsapp_session (id_prospect, id_device),
+    KEY idx_ai_whatsapp_session_device (id_device)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
+const createWasapBotSessionTable = `
+CREATE TABLE IF NOT EXISTS wasapBot_session_nodepath (
+    id_sessionY INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_prospect VARCHAR(255) NOT NULL,
+    id_device VARCHAR(255) NOT NULL,
+    ` + "`timestamp`" + ` VARCHAR(255) NOT NULL,
+    UNIQUE KEY uniq_wasapbot_session (id_prospect, id_device),
+    KEY idx_wasapbot_session_device (id_device)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`
+
 // addMissingColumnsToFlowsTable adds missing columns to the flows table
 func addMissingColumnsToFlowsTable(db *sql.DB) error {
 	columns := []struct {
@@ -355,7 +379,7 @@ func updateProviderRvsbWasapToWaha(db *sql.DB) error {
 // updateProviderEnum updates the provider ENUM to include 'waha' and remove 'rvsb_wasap'
 func updateProviderEnum(db *sql.DB) error {
 	logrus.Info("🔧 Checking provider ENUM constraint in device_setting_nodepath table")
-	
+
 	// Check if table exists first
 	var tableExists int
 	err := db.QueryRow(`
@@ -389,7 +413,7 @@ func updateProviderEnum(db *sql.DB) error {
 		logrus.WithError(err).Warn("Failed to check provider column type, attempting to alter anyway")
 	} else {
 		logrus.WithField("current_enum", columnType).Info("Current provider ENUM constraint")
-		
+
 		// If already has 'waha' and doesn't have 'rvsb_wasap', skip
 		if contains(columnType, "'waha'") && !contains(columnType, "'rvsb_wasap'") {
 			logrus.Info("✅ Provider ENUM already has 'waha' and doesn't have 'rvsb_wasap' - no update needed")
@@ -406,7 +430,7 @@ func updateProviderEnum(db *sql.DB) error {
 	}
 
 	logrus.Info("✅ Successfully updated provider ENUM to support WAHA provider")
-	
+
 	// Verify the change was applied
 	err = db.QueryRow(`
 		SELECT COLUMN_TYPE 
@@ -425,10 +449,10 @@ func updateProviderEnum(db *sql.DB) error {
 
 // contains checks if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		 len(s) > len(substr)+1 && s[1:len(substr)+1] == substr ||
-		 findInString(s, substr))))
+	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			len(s) > len(substr)+1 && s[1:len(substr)+1] == substr ||
+			findInString(s, substr))))
 }
 
 // findInString is a simple string search helper
@@ -652,7 +676,7 @@ func convertDeviceUserIDToChar36(db *sql.DB) error {
 // makeDeviceIDNullable makes device_id column nullable to allow manual device creation
 func makeDeviceIDNullable(db *sql.DB) error {
 	logrus.Info("🔧 Checking device_id column nullability in device_setting_nodepath table")
-	
+
 	// Check if table exists first
 	var tableExists int
 	err := db.QueryRow(`
@@ -703,7 +727,7 @@ func makeDeviceIDNullable(db *sql.DB) error {
 	}
 
 	logrus.Info("✅ Successfully made device_id column nullable in device_setting_nodepath for manual device creation")
-	
+
 	// Verify the change was applied
 	err = db.QueryRow(`
 		SELECT IS_NULLABLE 
