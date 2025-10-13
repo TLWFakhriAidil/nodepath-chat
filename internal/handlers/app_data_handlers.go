@@ -179,10 +179,10 @@ func (adh *AppDataHandlers) GetAppDataStatus(c *fiber.Ctx) error {
 // SetupAppDataRoutes configures the optimized app data routes
 func (adh *AppDataHandlers) SetupAppDataRoutes(api fiber.Router) {
 	app := api.Group("/app")
-	
+
 	// Consolidated data endpoint - replaces /api/profile/ + /api/auth/device-status
 	app.Get("/data", adh.GetAppData)
-	
+
 	// Lightweight status endpoint for quick checks
 	app.Get("/status", adh.GetAppDataStatus)
 }
@@ -192,27 +192,27 @@ func splitString(s, sep string) []string {
 	if s == "" {
 		return []string{}
 	}
-	
+
 	result := []string{}
 	start := 0
-	
+
 	for i := 0; i < len(s); i++ {
 		if i == len(s)-1 || (i < len(s)-len(sep) && s[i:i+len(sep)] == sep) {
 			end := i
 			if i == len(s)-1 {
 				end = i + 1
 			}
-			
+
 			if start < end {
 				result = append(result, s[start:end])
 			}
-			
+
 			if i < len(s)-len(sep) {
 				start = i + len(sep)
 				i += len(sep) - 1
 			}
 		}
 	}
-	
+
 	return result
 }

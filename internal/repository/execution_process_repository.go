@@ -45,8 +45,8 @@ func (r *executionProcessRepository) CreateExecution(idDevice, idProspect string
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"id_device":   idDevice,
-		"id_prospect": idProspect,
+		"id_device":    idDevice,
+		"id_prospect":  idProspect,
 		"id_execution": id,
 	}).Info("✅ Created execution record")
 

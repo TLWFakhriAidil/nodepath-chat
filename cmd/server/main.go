@@ -202,8 +202,8 @@ func main() {
 	// Test endpoint to verify server version
 	app.Get("/api/version", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
-			"version": "2025-10-07T03:05:00Z-CACHE-FIX",
-			"message": "🚨 NEW SERVER CODE IS RUNNING! Cache fix applied.",
+			"version":   "2025-10-07T03:05:00Z-CACHE-FIX",
+			"message":   "🚨 NEW SERVER CODE IS RUNNING! Cache fix applied.",
 			"timestamp": time.Now().Unix(),
 		})
 	})
@@ -363,7 +363,7 @@ func main() {
 	app.Get("/*", func(c *fiber.Ctx) error {
 		// Add aggressive no-cache headers to HTML
 		c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		c.Set("Pragma", "no-cache") 
+		c.Set("Pragma", "no-cache")
 		c.Set("Expires", "0")
 		c.Set("Last-Modified", time.Now().Format(http.TimeFormat))
 		c.Set("ETag", fmt.Sprintf("\"%d\"", time.Now().Unix()))

@@ -10,7 +10,6 @@ import (
 	"nodepath-chat/internal/models"
 	"nodepath-chat/internal/utils"
 
-	mysql "github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"
 )
 
@@ -1555,41 +1554,6 @@ func (r *aiWhatsappRepository) DeleteConversationLogs(prospectNum string) error 
 	return nil
 }
 
-// TryAcquireSession attempts to create a session lock for a prospect/device pair
-// Returns true when the lock was acquired, false if a lock already exists
-func (r *aiWhatsappRepository) TryAcquireSession(prospectNum, idDevice string) (bool, error) {
-	if r.db == nil {
-		return false, fmt.Errorf("database connection is not available")
-	}
-
-	const query = `INSERT INTO ai_whatsapp_session_nodepath (id_prospect, id_device, ` + "`timestamp`" + `) VALUES (?, ?, ?)`
-	_, err := r.db.Exec(query, prospectNum, idDevice, time.Now().Format(time.RFC3339Nano))
-	if err != nil {
-		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
-			if mysqlErr.Number == 1062 {
-				return false, nil
-			}
-		}
-		return false, fmt.Errorf("failed to acquire AI WhatsApp session lock: %w", err)
-	}
-
-	return true, nil
-}
-
-// ReleaseSession removes the session lock for a prospect/device pair
-func (r *aiWhatsappRepository) ReleaseSession(prospectNum, idDevice string) error {
-	if r.db == nil {
-		return fmt.Errorf("database connection is not available")
-	}
-
-	const query = `DELETE FROM ai_whatsapp_session_nodepath WHERE id_prospect = ? AND id_device = ?`
-	if _, err := r.db.Exec(query, prospectNum, idDevice); err != nil {
-		return fmt.Errorf("failed to release AI WhatsApp session lock: %w", err)
-	}
-
-	return nil
-}
-
 // GetConversationStats returns conversation statistics for a device
 func (r *aiWhatsappRepository) GetConversationStats(idDevice string) (map[string]int, error) {
 	stats := make(map[string]int)
@@ -1748,14 +1712,14 @@ func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	
+
 	// Check if we actually acquired the lock (locked_at was updated)
 	checkQuery := `
 		SELECT TIMESTAMPDIFF(SECOND, locked_at, NOW()) <= 1 as just_locked
 		FROM ai_whatsapp_session
 		WHERE phone_number = ? AND device_id = ?
 	`
-	
+
 	var justLocked bool
 	err = r.db.QueryRow(checkQuery, phoneNumber, deviceID).Scan(&justLocked)
 	if err != nil {

@@ -47,7 +47,7 @@ func (ph *ProfileHandlers) GetProfile(c *fiber.Ctx) error {
 		FROM user_nodepath 
 		WHERE id = ?
 	`, userID).Scan(
-		&user.ID, &user.Email, &user.FullName, &user.Gmail, &user.Phone, 
+		&user.ID, &user.Email, &user.FullName, &user.Gmail, &user.Phone,
 		&user.Status, &user.Expired, &user.IsActive, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin,
 	)
 

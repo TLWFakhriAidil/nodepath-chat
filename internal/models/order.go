@@ -13,7 +13,7 @@ type Order struct {
 	BillID       *string   `json:"bill_id" db:"bill_id"`
 	URL          *string   `json:"url" db:"url"` // Billplz payment URL
 	Product      string    `json:"product" db:"product"`
-	Method       string    `json:"method" db:"method"` // billplz only
+	Method       string    `json:"method" db:"method"`   // billplz only
 	UserID       *string   `json:"user_id" db:"user_id"` // CHAR(36) UUID from user_nodepath
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
@@ -40,20 +40,20 @@ type BillplzCreateBillRequest struct {
 
 // BillplzCreateBillResponse represents response from Billplz API
 type BillplzCreateBillResponse struct {
-	ID          string `json:"id"`
-	CollectionID string `json:"collection_id"`
-	Paid        bool   `json:"paid"`
-	State       string `json:"state"`
-	Amount      int    `json:"amount"`
-	PaidAmount  int    `json:"paid_amount"`
-	DueAt       string `json:"due_at"`
-	Email       string `json:"email"`
-	Mobile      string `json:"mobile"`
-	Name        string `json:"name"`
-	URL         string `json:"url"`
+	ID              string `json:"id"`
+	CollectionID    string `json:"collection_id"`
+	Paid            bool   `json:"paid"`
+	State           string `json:"state"`
+	Amount          int    `json:"amount"`
+	PaidAmount      int    `json:"paid_amount"`
+	DueAt           string `json:"due_at"`
+	Email           string `json:"email"`
+	Mobile          string `json:"mobile"`
+	Name            string `json:"name"`
+	URL             string `json:"url"`
 	Reference1Label string `json:"reference_1_label"`
-	Reference1  string `json:"reference_1"`
-	Description string `json:"description"`
+	Reference1      string `json:"reference_1"`
+	Description     string `json:"description"`
 }
 
 // BillplzCallbackData represents callback data from Billplz

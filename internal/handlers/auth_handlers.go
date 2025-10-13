@@ -39,12 +39,12 @@ func (ah *AuthHandlers) autoMigrate() error {
 			expired VARCHAR(255) NULL
 		)
 	`
-	
+
 	if _, err := ah.db.Exec(createUserTable); err != nil {
 		logrus.WithError(err).Error("Failed to create user_nodepath table")
 		return err
 	}
-	
+
 	// Create user_sessions_nodepath table if not exists
 	createSessionTable := `
 		CREATE TABLE IF NOT EXISTS user_sessions_nodepath (
@@ -58,15 +58,15 @@ func (ah *AuthHandlers) autoMigrate() error {
 			INDEX idx_expires_at (expires_at)
 		)
 	`
-	
+
 	if _, err := ah.db.Exec(createSessionTable); err != nil {
 		logrus.WithError(err).Error("Failed to create user_sessions_nodepath table")
 		return err
 	}
-	
+
 	// Check and add missing columns to user_nodepath
 	columns := []struct {
-		name string
+		name       string
 		definition string
 	}{
 		{"status", "ALTER TABLE user_nodepath ADD COLUMN status VARCHAR(255) DEFAULT 'Trial'"},
@@ -74,7 +74,7 @@ func (ah *AuthHandlers) autoMigrate() error {
 		{"gmail", "ALTER TABLE user_nodepath ADD COLUMN gmail VARCHAR(255) DEFAULT NULL"},
 		{"phone", "ALTER TABLE user_nodepath ADD COLUMN phone VARCHAR(20) DEFAULT NULL"},
 	}
-	
+
 	for _, col := range columns {
 		var count int
 		err := ah.db.QueryRow(`
@@ -83,12 +83,12 @@ func (ah *AuthHandlers) autoMigrate() error {
 			WHERE TABLE_NAME = 'user_nodepath' 
 			AND COLUMN_NAME = ?
 		`, col.name).Scan(&count)
-		
+
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to check column %s in user_nodepath", col.name)
 			continue
 		}
-		
+
 		if count == 0 {
 			if _, err := ah.db.Exec(col.definition); err != nil {
 				logrus.WithError(err).Errorf("Failed to add column %s to user_nodepath", col.name)
@@ -97,7 +97,7 @@ func (ah *AuthHandlers) autoMigrate() error {
 			}
 		}
 	}
-	
+
 	logrus.Info("Auth tables migration completed successfully")
 	return nil
 }
@@ -193,7 +193,7 @@ func (ah *AuthHandlers) Register(c *fiber.Ctx) error {
 
 	// Generate UUID for user
 	userID := generateUUID()
-	
+
 	// Calculate expired date (current date + 7 days)
 	expiredDate := time.Now().Add(7 * 24 * time.Hour).Format("2006-01-02 15:04:05")
 
