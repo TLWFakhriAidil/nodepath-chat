@@ -88,23 +88,23 @@ func parseMySQLURI(uri string) (*DatabaseConfig, error) {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	flowService            *services.FlowService
-	aiService              *services.AIService
-	queueService           *services.QueueService
-	whatsappService        *whatsapp.Service
-	deviceSettingsService  *services.DeviceSettingsService
-	websocketService       *services.WebSocketService
-	mediaService           *services.MediaService
-	mediaDetectionService  *services.MediaDetectionService
-	healthService          *services.HealthService
-	aiWhatsappHandlers     *AIWhatsappHandlers
-	authHandlers           *AuthHandlers
-	wasapBotHandlers       *WasapBotHandlers
-	profileHandlers        *ProfileHandlers
-	billingHandlers        *BillingHandlers
-	appDataHandlers        *AppDataHandlers // Optimized app data handlers
-	executionProcessRepo   repository.ExecutionProcessRepository
-	db                     *sql.DB // Add database field
+	flowService           *services.FlowService
+	aiService             *services.AIService
+	queueService          *services.QueueService
+	whatsappService       *whatsapp.Service
+	deviceSettingsService *services.DeviceSettingsService
+	websocketService      *services.WebSocketService
+	mediaService          *services.MediaService
+	mediaDetectionService *services.MediaDetectionService
+	healthService         *services.HealthService
+	aiWhatsappHandlers    *AIWhatsappHandlers
+	authHandlers          *AuthHandlers
+	wasapBotHandlers      *WasapBotHandlers
+	profileHandlers       *ProfileHandlers
+	billingHandlers       *BillingHandlers
+	appDataHandlers       *AppDataHandlers // Optimized app data handlers
+	executionProcessRepo  repository.ExecutionProcessRepository
+	db                    *sql.DB // Add database field
 }
 
 // NewHandlers creates a new handlers instance
@@ -307,8 +307,8 @@ func (h *Handlers) SetupRoutes(api fiber.Router) {
 	billing.Use(h.authHandlers.AuthMiddleware())
 	billing.Post("/create-order", h.billingHandlers.CreateOrder) // Create order (protected)
 	billing.Get("/orders/:id", h.billingHandlers.GetOrder)       // Get specific order
-	billing.Get("/orders", h.billingHandlers.GetOrders)         // Get user's orders
-	billing.Get("/all-orders", h.billingHandlers.GetAllOrders)  // Admin: Get all orders
+	billing.Get("/orders", h.billingHandlers.GetOrders)          // Get user's orders
+	billing.Get("/all-orders", h.billingHandlers.GetAllOrders)   // Admin: Get all orders
 
 	// Webhook routes for receiving messages from providers
 	webhook := api.Group("/webhook")

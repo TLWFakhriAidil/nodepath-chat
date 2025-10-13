@@ -114,8 +114,8 @@ func (h *BillingHandlers) CreateOrder(c *fiber.Ctx) error {
 		Description:     req.Product,
 		CallbackURL:     fmt.Sprintf("%s/api/billing/callback", baseURL),
 		RedirectURL:     fmt.Sprintf("%s/billings?order_id=%d", baseURL, orderID),
-		Reference1:      req.Product,     // Show product name instead of order ID
-		Reference1Label: "Package",       // Label as "Package" instead of "Order ID"
+		Reference1:      req.Product, // Show product name instead of order ID
+		Reference1Label: "Package",   // Label as "Package" instead of "Order ID"
 	}
 
 	billResp, err := h.billplzService.CreateBill(billReq)

@@ -253,34 +253,34 @@ func (h *AIWhatsappHandlers) HandleWablasWebhook(c *fiber.Ctx) error {
 	// WABLAS Command Processing (only when isFromMe=true, matching PHP logic)
 	if req.IsFromMe {
 		cleanText := strings.TrimSpace(req.Message)
-		
+
 		// Command 1: Text starts with '%' → set text to "Teruskan", name to "Sis"
 		if len(cleanText) > 0 && cleanText[0] == '%' {
 			logrus.WithFields(logrus.Fields{
 				"device_id": deviceID,
 				"phone":     req.Phone,
 			}).Info("🔧 WABLAS: Processing % command - set text to 'Teruskan'")
-			
+
 			// Update message and continue processing
 			req.Message = "Teruskan"
 			senderName := "Sis"
-			
+
 			// Process through standardized flow
 			go h.processIncomingMessage(req.Phone, req.Message, deviceID, "wablas", senderName)
-			
+
 			return c.JSON(fiber.Map{
 				"status": "success",
 				"type":   "percent_command",
 			})
 		}
-		
+
 		// Command 2: Text equals 'cmd' → set human=1, return empty
 		if cleanText == "cmd" {
 			logrus.WithFields(logrus.Fields{
 				"device_id": deviceID,
 				"phone":     req.Phone,
 			}).Info("🔧 WABLAS: Processing cmd command - set human=1")
-			
+
 			go func() {
 				whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(req.Phone, deviceID)
 				if err == nil && whats != nil {
@@ -289,20 +289,20 @@ func (h *AIWhatsappHandlers) HandleWablasWebhook(c *fiber.Ctx) error {
 					logrus.Info("✅ WABLAS: Successfully set human=1 for cmd command")
 				}
 			}()
-			
+
 			return c.JSON(fiber.Map{
 				"status": "success",
 				"type":   "cmd_command",
 			})
 		}
-		
+
 		// Command 3: Text equals 'dmc' → set human=null, return empty
 		if cleanText == "dmc" {
 			logrus.WithFields(logrus.Fields{
 				"device_id": deviceID,
 				"phone":     req.Phone,
 			}).Info("🔧 WABLAS: Processing dmc command - set human=null")
-			
+
 			go func() {
 				whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(req.Phone, deviceID)
 				if err == nil && whats != nil {
@@ -311,13 +311,13 @@ func (h *AIWhatsappHandlers) HandleWablasWebhook(c *fiber.Ctx) error {
 					logrus.Info("✅ WABLAS: Successfully set human=null for dmc command")
 				}
 			}()
-			
+
 			return c.JSON(fiber.Map{
 				"status": "success",
 				"type":   "dmc_command",
 			})
 		}
-		
+
 		// Other isFromMe messages → ignore
 		logrus.Info("⏭️ WABLAS: Ignoring other isFromMe message (not %, cmd, or dmc)")
 		return c.JSON(fiber.Map{
@@ -369,19 +369,19 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 	phoneNumber := req.Number
 	message := req.Text
 	senderName := "Sis"
-	
+
 	// Command 1: Text starts with '#' → extract phone, set text to "Teruskan"
 	if len(cleanText) > 0 && cleanText[0] == '#' {
 		phoneNumber = cleanText[1:]
 		message = "Teruskan"
 		senderName = "Sis"
-		
+
 		logrus.WithFields(logrus.Fields{
 			"device_id":       deviceID,
 			"extracted_phone": phoneNumber,
 		}).Info("🔧 WHACENTER: Processing # command - extract phone and set text to 'Teruskan'")
 	}
-	
+
 	// Command 2: Text starts with '/' → extract phone, set human=1, return empty
 	if len(cleanText) > 0 && cleanText[0] == '/' {
 		extractedPhone := cleanText[1:]
@@ -389,7 +389,7 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 			"device_id":       deviceID,
 			"extracted_phone": extractedPhone,
 		}).Info("🔧 WHACENTER: Processing / command - set human=1")
-		
+
 		go func() {
 			whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedPhone, deviceID)
 			if err == nil && whats != nil {
@@ -398,13 +398,13 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 				logrus.Info("✅ WHACENTER: Successfully set human=1 for / command")
 			}
 		}()
-		
+
 		return c.JSON(fiber.Map{
 			"status": "success",
 			"type":   "slash_command",
 		})
 	}
-	
+
 	// Command 3: Text starts with '?' → extract phone, set human=null, return empty
 	if len(cleanText) > 0 && cleanText[0] == '?' {
 		extractedPhone := cleanText[1:]
@@ -412,7 +412,7 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 			"device_id":       deviceID,
 			"extracted_phone": extractedPhone,
 		}).Info("🔧 WHACENTER: Processing ? command - set human=null")
-		
+
 		go func() {
 			whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedPhone, deviceID)
 			if err == nil && whats != nil {
@@ -421,7 +421,7 @@ func (h *AIWhatsappHandlers) HandleWhacenterWebhook(c *fiber.Ctx) error {
 				logrus.Info("✅ WHACENTER: Successfully set human=null for ? command")
 			}
 		}()
-		
+
 		return c.JSON(fiber.Map{
 			"status": "success",
 			"type":   "question_command",
@@ -538,7 +538,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 		// Re-extract phone using suffix logic (matching PHP second pass)
 		idNoWaha := extractedData.RawPhone
 		var finalPhone string
-		
+
 		if strings.HasSuffix(idNoWaha, "@c.us") {
 			// Normal contact - extract number before @
 			finalPhone = strings.Split(idNoWaha, "@")[0]
@@ -553,7 +553,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 		} else if strings.HasSuffix(idNoWaha, "@lid") {
 			// LID mapping - try SenderAlt or RecipientAlt
 			logrus.Info("🔍 WAHA: Detected @lid - attempting LID mapping")
-			
+
 			var payload map[string]interface{}
 			var rawPayload map[string]interface{}
 			json.Unmarshal(body, &rawPayload)
@@ -562,12 +562,12 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 			} else {
 				payload = rawPayload
 			}
-			
+
 			if _dataObj, ok := payload["_data"].(map[string]interface{}); ok {
 				if infoObj, ok := _dataObj["Info"].(map[string]interface{}); ok {
 					senderAlt := strings.TrimSpace(getStringValue(infoObj["SenderAlt"]))
 					recipientAlt := strings.TrimSpace(getStringValue(infoObj["RecipientAlt"]))
-					
+
 					logrus.WithFields(logrus.Fields{
 						"senderAlt":    senderAlt,
 						"recipientAlt": recipientAlt,
@@ -590,7 +590,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 					}
 				}
 			}
-			
+
 			if finalPhone == "" {
 				logrus.Warn("🔍 WAHA: LID mapping failed - terminating")
 				return c.JSON(fiber.Map{
@@ -615,20 +615,20 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 
 	// WAHA Command Processing (matching PHP logic exactly)
 	cleanText := strings.TrimSpace(extractedData.Message)
-	
+
 	// Command 1: Text starts with '0' → extract phone, set text to "Teruskan"
 	if len(cleanText) > 0 && cleanText[0] == '0' {
 		extractedPhone := cleanText[1:]
 		logrus.WithFields(logrus.Fields{
-			"device_id":      deviceID,
-			"original_phone": extractedData.SenderPhone,
+			"device_id":       deviceID,
+			"original_phone":  extractedData.SenderPhone,
 			"extracted_phone": extractedPhone,
 		}).Info("🔧 WAHA: Processing 0 command - extract phone and set text to 'Teruskan'")
-		
+
 		extractedData.SenderPhone = extractedPhone
 		extractedData.Message = "Teruskan"
 		extractedData.SenderName = "Sis"
-		
+
 		// Process through standardized flow
 		webhookData := map[string]interface{}{
 			"from":         extractedData.SenderPhone,
@@ -637,19 +637,19 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 			"is_group":     extractedData.IsGroup,
 			"sender_name":  extractedData.SenderName,
 		}
-		
+
 		go func() {
 			if h.mainHandlers != nil {
 				h.mainHandlers.processWebhookMessage(webhookData, deviceID, "waha")
 			}
 		}()
-		
+
 		return c.JSON(fiber.Map{
 			"status": "success",
 			"type":   "0_command",
 		})
 	}
-	
+
 	// Command 2: Text starts with '/' → extract phone, set human=1, return empty
 	if len(cleanText) > 0 && cleanText[0] == '/' {
 		extractedPhone := cleanText[1:]
@@ -657,7 +657,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 			"device_id":       deviceID,
 			"extracted_phone": extractedPhone,
 		}).Info("🔧 WAHA: Processing / command - set human=1")
-		
+
 		go func() {
 			whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedPhone, deviceID)
 			if err == nil && whats != nil {
@@ -666,13 +666,13 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 				logrus.Info("✅ WAHA: Successfully set human=1 for / command")
 			}
 		}()
-		
+
 		return c.JSON(fiber.Map{
 			"status": "success",
 			"type":   "slash_command",
 		})
 	}
-	
+
 	// Command 3: Text starts with '!' → extract phone, set human=null, return empty
 	if len(cleanText) > 0 && cleanText[0] == '!' {
 		extractedPhone := cleanText[1:]
@@ -680,7 +680,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 			"device_id":       deviceID,
 			"extracted_phone": extractedPhone,
 		}).Info("🔧 WAHA: Processing ! command - set human=null")
-		
+
 		go func() {
 			whats, err := h.AIRepo.GetAIWhatsappByProspectAndDevice(extractedPhone, deviceID)
 			if err == nil && whats != nil {
@@ -689,7 +689,7 @@ func (h *AIWhatsappHandlers) HandleWahaWebhook(c *fiber.Ctx) error {
 				logrus.Info("✅ WAHA: Successfully set human=null for ! command")
 			}
 		}()
-		
+
 		return c.JSON(fiber.Map{
 			"status": "success",
 			"type":   "exclamation_command",
@@ -1384,12 +1384,12 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 	deviceFilter := c.Query("device_id", "")
 	stageFilter := c.Query("stage", "")
 	search := c.Query("search", "")
-	
+
 	// Support for both parameter names (device_id and user_device_ids)
 	if deviceFilter == "" {
 		deviceFilter = c.Query("user_device_ids", "")
 	}
-	
+
 	// Support for date filtering (startDate/endDate)
 	startDateStr := c.Query("startDate", "")
 	endDateStr := c.Query("endDate", "")
@@ -1427,16 +1427,16 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"page":         page,
-		"limit":        limit,
-		"deviceFilter": deviceFilter,
-		"stageFilter":  stageFilter,
-		"search":       search,
-		"startDate":    startDateStr,
-		"endDate":      endDateStr,
+		"page":            page,
+		"limit":           limit,
+		"deviceFilter":    deviceFilter,
+		"stageFilter":     stageFilter,
+		"search":          search,
+		"startDate":       startDateStr,
+		"endDate":         endDateStr,
 		"startDateParsed": startDate,
 		"endDateParsed":   endDate,
-		"userID":       userID,
+		"userID":          userID,
 	}).Info("GetAllAIWhatsappData called with parameters")
 
 	// Get data from repository with user-specific filtering including date range
@@ -1446,10 +1446,10 @@ func (h *AIWhatsappHandlers) GetAllAIWhatsappData(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"message": "Failed to retrieve AI WhatsApp data",
-			"error":    err.Error(),
+			"error":   err.Error(),
 		})
 	}
-	
+
 	// Handle empty data gracefully
 	if data == nil {
 		data = []models.AIWhatsapp{}

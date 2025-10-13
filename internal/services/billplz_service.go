@@ -26,7 +26,7 @@ type BillplzService struct {
 func NewBillplzService() *BillplzService {
 	return &BillplzService{
 		apiKey:       "948edf23-8c36-45fc-8457-1eb77b649616", // From PHP code
-		collectionID: "watojri1",                              // From PHP code
+		collectionID: "watojri1",                             // From PHP code
 		baseURL:      "https://www.billplz.com/api/v3",
 	}
 }

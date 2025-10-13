@@ -331,7 +331,7 @@ func (h *Handlers) GetDashboardChartData(c *fiber.Ctx) error {
 	// Parse dates
 	var startDate, endDate time.Time
 	var parseErr error
-	
+
 	if dateFromStr != "" {
 		startDate, parseErr = time.Parse("2006-01-02", dateFromStr)
 		if parseErr != nil {
@@ -344,7 +344,7 @@ func (h *Handlers) GetDashboardChartData(c *fiber.Ctx) error {
 		now := time.Now()
 		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	}
-	
+
 	if dateToStr != "" {
 		endDate, parseErr = time.Parse("2006-01-02", dateToStr)
 		if parseErr != nil {
@@ -357,10 +357,10 @@ func (h *Handlers) GetDashboardChartData(c *fiber.Ctx) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"user_id":       userID,
-		"startDate":     startDate.Format("2006-01-02"),
-		"endDate":       endDate.Format("2006-01-02"),
-		"deviceFilter":  deviceFilter,
+		"user_id":      userID,
+		"startDate":    startDate.Format("2006-01-02"),
+		"endDate":      endDate.Format("2006-01-02"),
+		"deviceFilter": deviceFilter,
 	}).Info("Getting dashboard chart data")
 
 	// Get AI WhatsApp stats
