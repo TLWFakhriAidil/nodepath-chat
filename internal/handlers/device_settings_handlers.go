@@ -875,8 +875,8 @@ func (h *Handlers) GenerateWablasDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - Wablas mapping: device_id stores device_id, webhook_id stores webhook_url, instance stores api_key
 	createReq := &models.CreateDeviceSettingsRequest{
-		UserID: userIDStr,  // Set user ID from context
-		DeviceID:     deviceID, // Store device_id
+		UserID:       userIDStr, // Set user ID from context
+		DeviceID:     deviceID,  // Store device_id
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    productionWebhookURL, // Store webhook URL
 		Provider:     "wablas",
@@ -2094,12 +2094,30 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 	}
 
 	// Check if session creation was successful
-	if sessionNameResp, ok := createResponse["name"].(string); !ok || sessionNameResp == "" {
+	// Handle both successful 200/201 status codes and error responses
+	if createResp.StatusCode != http.StatusOK && createResp.StatusCode != http.StatusCreated {
 		errorMsg := "Unknown error"
 		if errResp, exists := createResponse["error"]; exists {
 			errorMsg = fmt.Sprintf("%v", errResp)
+		} else if msgResp, exists := createResponse["message"]; exists {
+			errorMsg = fmt.Sprintf("%v", msgResp)
 		}
-		return h.errorResponse(c, 500, fmt.Sprintf("WAHA session creation error: %s", errorMsg))
+
+		// Special case: session already exists is not an error
+		if strings.Contains(strings.ToLower(errorMsg), "already") || strings.Contains(strings.ToLower(errorMsg), "exists") {
+			logrus.WithFields(logrus.Fields{
+				"session_name": sessionName,
+				"message":      errorMsg,
+			}).Info("🔄 WAHA: Session already exists, proceeding with existing session")
+		} else {
+			return h.errorResponse(c, 500, fmt.Sprintf("WAHA session creation error: %s", errorMsg))
+		}
+	}
+
+	// Verify session was created or exists
+	sessionNameResp, _ := createResponse["name"].(string)
+	if sessionNameResp == "" {
+		sessionNameResp = sessionName // Use requested name if not returned
 	}
 
 	// STEP 3: Start session immediately
@@ -2125,7 +2143,7 @@ func (h *Handlers) GenerateWahaDevice(c *fiber.Ctx) error {
 
 	// Save device data to database - WAHA mapping: instance stores session_name, webhook_id stores webhook_url
 	createReq := &models.CreateDeviceSettingsRequest{
-		UserID: userIDStr, // Set user ID from context
+		UserID:       userIDStr, // Set user ID from context
 		APIKeyOption: req.APIKeyOption,
 		WebhookID:    webhook, // Store webhook URL
 		Provider:     "waha",
