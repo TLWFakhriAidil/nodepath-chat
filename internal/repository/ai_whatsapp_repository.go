@@ -1696,7 +1696,7 @@ func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (
 	// Use actual database columns: id_prospect, id_device, timestamp
 	// The production database doesn't have phone_number, device_id, locked_at, or last_activity
 	currentTimestamp := time.Now().Format("2006-01-02 15:04:05")
-	
+
 	// Try to insert or update the session timestamp
 	query := `
 		INSERT INTO ai_whatsapp_session_nodepath (id_prospect, id_device, timestamp)
@@ -1709,7 +1709,7 @@ func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
-		}).Error("Failed to acquire session lock")
+		}).Error("🔒 SESSION LOCK: Failed to acquire session lock")
 		return false, err
 	}
 
@@ -1718,7 +1718,7 @@ func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (
 		"phone_number": phoneNumber,
 		"device_id":    deviceID,
 		"timestamp":    currentTimestamp,
-	}).Debug("Session lock acquired successfully")
+	}).Info("🔒 SESSION LOCK: ✅ Acquired successfully")
 
 	return true, nil
 }
@@ -1737,14 +1737,14 @@ func (r *aiWhatsappRepository) ReleaseSession(phoneNumber, deviceID string) erro
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
-		}).Error("Failed to release session lock")
+		}).Error("🔒 SESSION LOCK: ❌ Failed to release session lock")
 		return err
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
 		"device_id":    deviceID,
-	}).Debug("Session lock released and cleaned up successfully")
+	}).Info("🔒 SESSION LOCK: ✅ Released successfully")
 
 	return nil
 }
