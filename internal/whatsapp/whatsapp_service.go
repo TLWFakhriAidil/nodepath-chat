@@ -414,16 +414,33 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 		// CRITICAL FIX: Check if there's already an ACTIVE flow execution
 		// This prevents duplicate processing when user sends multiple messages
 		// while the flow is still executing (including delayed messages)
+		// EXCEPTION: Allow messages when flow is waiting at a user_reply node
 		activeExec, _ := s.aiWhatsappService.GetActiveFlowExecution(phoneNumber, deviceID)
 		if activeExec != nil && activeExec.ExecutionStatus.String == "active" {
-			logrus.WithFields(logrus.Fields{
-				"phone_number":  phoneNumber,
-				"device_id":     deviceID,
-				"execution_id":  activeExec.ExecutionID.String,
-				"current_node":  activeExec.CurrentNodeID.String,
-				"waiting_reply": activeExec.WaitingForReply.Int32,
-			}).Warn("🚫 DUPLICATE BLOCKED: Active flow execution in progress, ignoring duplicate user message")
-			return nil
+			// Check if the flow is waiting for user reply at a user_reply node
+			isWaitingForReply := activeExec.WaitingForReply.Valid && activeExec.WaitingForReply.Int32 == 1
+
+			if isWaitingForReply {
+				// Flow is waiting for user input at user_reply node - ALLOW the message through
+				logrus.WithFields(logrus.Fields{
+					"phone_number":  phoneNumber,
+					"device_id":     deviceID,
+					"execution_id":  activeExec.ExecutionID.String,
+					"current_node":  activeExec.CurrentNodeID.String,
+					"waiting_reply": activeExec.WaitingForReply.Int32,
+				}).Info("✅ USER_REPLY ACCEPTED: Flow is waiting for user reply, processing message")
+				// Continue processing - don't block
+			} else {
+				// Flow is actively executing (not waiting) - BLOCK duplicate messages
+				logrus.WithFields(logrus.Fields{
+					"phone_number":  phoneNumber,
+					"device_id":     deviceID,
+					"execution_id":  activeExec.ExecutionID.String,
+					"current_node":  activeExec.CurrentNodeID.String,
+					"waiting_reply": activeExec.WaitingForReply.Int32,
+				}).Warn("🚫 DUPLICATE BLOCKED: Active flow execution in progress, ignoring duplicate user message")
+				return nil
+			}
 		}
 
 		acquired, lockErr := s.unifiedFlowService.AcquireAIWhatsappSession(phoneNumber, deviceID)
