@@ -1692,35 +1692,139 @@ func (r *aiWhatsappRepository) UpdateHumanStatus(idProspect string, human int) e
 
 // TryAcquireSession attempts to acquire a session lock for the given phone number and device
 // Returns true if lock acquired, false if already locked
+// Uses SELECT FOR UPDATE to create a true blocking lock that prevents concurrent processing
 func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (bool, error) {
-	// Use actual database columns: id_prospect, id_device, timestamp
-	// The production database doesn't have phone_number, device_id, locked_at, or last_activity
 	currentTimestamp := time.Now().Format("2006-01-02 15:04:05")
+	lockTimeout := 30 // seconds - max time to hold the lock
 
-	// Try to insert or update the session timestamp
-	query := `
-		INSERT INTO ai_whatsapp_session_nodepath (id_prospect, id_device, timestamp)
-		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE timestamp = VALUES(timestamp)
-	`
-
-	_, err := r.db.Exec(query, phoneNumber, deviceID, currentTimestamp)
+	// Start a transaction for proper locking
+	tx, err := r.db.Begin()
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
 			"device_id":    deviceID,
-		}).Error("🔒 SESSION LOCK: Failed to acquire session lock")
+		}).Error("🔒 SESSION LOCK: ❌ Failed to start transaction")
 		return false, err
 	}
 
-	// Successfully inserted or updated - we have the lock
+	// Set lock wait timeout to prevent indefinite blocking
+	_, err = tx.Exec("SET SESSION innodb_lock_wait_timeout = 2")
+	if err != nil {
+		tx.Rollback()
+		logrus.WithError(err).Error("🔒 SESSION LOCK: ❌ Failed to set lock timeout")
+		return false, err
+	}
+
+	// Try to get existing lock with SELECT FOR UPDATE (blocks if another transaction holds it)
+	var existingTimestamp string
+	var lockedAt time.Time
+	checkQuery := `
+		SELECT timestamp, STR_TO_DATE(timestamp, '%Y-%m-%d %H:%i:%s') as locked_at
+		FROM ai_whatsapp_session_nodepath 
+		WHERE id_prospect = ? AND id_device = ?
+		FOR UPDATE
+	`
+
+	err = tx.QueryRow(checkQuery, phoneNumber, deviceID).Scan(&existingTimestamp, &lockedAt)
+
+	if err == sql.ErrNoRows {
+		// No existing lock - create one
+		insertQuery := `
+			INSERT INTO ai_whatsapp_session_nodepath (id_prospect, id_device, timestamp)
+			VALUES (?, ?, ?)
+		`
+		_, err = tx.Exec(insertQuery, phoneNumber, deviceID, currentTimestamp)
+		if err != nil {
+			tx.Rollback()
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id":    deviceID,
+			}).Error("🔒 SESSION LOCK: ❌ Failed to insert new lock")
+			return false, err
+		}
+
+		// Commit the transaction - lock is now held until ReleaseSession is called
+		err = tx.Commit()
+		if err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id":    deviceID,
+			}).Error("🔒 SESSION LOCK: ❌ Failed to commit lock transaction")
+			return false, err
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+			"timestamp":    currentTimestamp,
+		}).Info("🔒 SESSION LOCK: ✅ Acquired successfully (NEW)")
+
+		return true, nil
+	} else if err != nil {
+		tx.Rollback()
+		// Lock wait timeout exceeded - another process is holding the lock
+		if strings.Contains(err.Error(), "Lock wait timeout") {
+			logrus.WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id":    deviceID,
+			}).Warn("🔒 SESSION LOCK: ⏸️ Already locked by another process - BLOCKING DUPLICATE")
+			return false, nil // Not an error, just locked
+		}
+
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+		}).Error("🔒 SESSION LOCK: ❌ Failed to check existing lock")
+		return false, err
+	}
+
+	// Lock exists - check if it's stale (older than lockTimeout seconds)
+	lockAge := time.Since(lockedAt).Seconds()
+	if lockAge > float64(lockTimeout) {
+		// Stale lock - update it and take over
+		updateQuery := `
+			UPDATE ai_whatsapp_session_nodepath 
+			SET timestamp = ?
+			WHERE id_prospect = ? AND id_device = ?
+		`
+		_, err = tx.Exec(updateQuery, currentTimestamp, phoneNumber, deviceID)
+		if err != nil {
+			tx.Rollback()
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id":    deviceID,
+			}).Error("🔒 SESSION LOCK: ❌ Failed to update stale lock")
+			return false, err
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			tx.Rollback()
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"phone_number": phoneNumber,
+				"device_id":    deviceID,
+			}).Error("🔒 SESSION LOCK: ❌ Failed to commit stale lock update")
+			return false, err
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"phone_number": phoneNumber,
+			"device_id":    deviceID,
+			"lock_age_sec": lockAge,
+		}).Warn("🔒 SESSION LOCK: ✅ Acquired by taking over STALE lock")
+
+		return true, nil
+	}
+
+	// Active lock exists and is not stale - reject this request
+	tx.Rollback()
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
 		"device_id":    deviceID,
-		"timestamp":    currentTimestamp,
-	}).Info("🔒 SESSION LOCK: ✅ Acquired successfully")
+		"lock_age_sec": lockAge,
+	}).Warn("🔒 SESSION LOCK: ⏸️ Already locked (active) - BLOCKING DUPLICATE")
 
-	return true, nil
+	return false, nil
 }
 
 // ReleaseSession releases the session lock for the given phone number and device
