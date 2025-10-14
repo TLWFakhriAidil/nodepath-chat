@@ -1846,6 +1846,52 @@ func (h *Handlers) processWebhookMessage(webhookData map[string]interface{}, idD
 func (h *Handlers) processAIConversation(from, message, idDevice, provider, senderName string, requestStartTime time.Time) {
 	aiProcessingStart := time.Now()
 
+	// SESSION LOCK: Try to acquire session lock to prevent duplicate processing
+	if h.aiWhatsappHandlers != nil && h.aiWhatsappHandlers.AIRepo != nil {
+		acquired, err := h.aiWhatsappHandlers.AIRepo.TryAcquireSession(from, idDevice)
+		if err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"id_device":   idDevice,
+				"from":        from,
+				"id_prospect": from,
+			}).Error("🔒 SESSION LOCK: Failed to acquire session lock")
+			return
+		}
+
+		if !acquired {
+			logrus.WithFields(logrus.Fields{
+				"id_device":   idDevice,
+				"from":        from,
+				"id_prospect": from,
+			}).Warn("🔒 SESSION LOCK: Session already locked - duplicate message detected, skipping processing")
+			return
+		}
+
+		// Defer session release to ensure cleanup happens after processing completes
+		defer func() {
+			err := h.aiWhatsappHandlers.AIRepo.ReleaseSession(from, idDevice)
+			if err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"id_device":   idDevice,
+					"from":        from,
+					"id_prospect": from,
+				}).Error("🔒 SESSION LOCK: Failed to release session lock")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"id_device":   idDevice,
+					"from":        from,
+					"id_prospect": from,
+				}).Info("🔒 SESSION LOCK: Session lock released successfully")
+			}
+		}()
+
+		logrus.WithFields(logrus.Fields{
+			"id_device":   idDevice,
+			"from":        from,
+			"id_prospect": from,
+		}).Info("🔒 SESSION LOCK: Session lock acquired - proceeding with processing")
+	}
+
 	// Get current conversation stage from AI WhatsApp repository
 	var stage string
 	stageRetrievalStart := time.Now()
