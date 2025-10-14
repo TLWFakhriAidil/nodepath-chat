@@ -1695,7 +1695,7 @@ func (r *aiWhatsappRepository) UpdateHumanStatus(idProspect string, human int) e
 func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (bool, error) {
 	// Try to insert a session lock
 	query := `
-		INSERT INTO ai_whatsapp_session (phone_number, device_id, locked_at, last_activity)
+		INSERT INTO ai_whatsapp_session_nodepath (phone_number, device_id, locked_at, last_activity)
 		VALUES (?, ?, NOW(), NOW())
 		ON DUPLICATE KEY UPDATE
 		locked_at = IF(locked_at IS NULL OR TIMESTAMPDIFF(SECOND, locked_at, NOW()) > 30, NOW(), locked_at),
@@ -1716,7 +1716,7 @@ func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (
 	// Check if we actually acquired the lock (locked_at was updated)
 	checkQuery := `
 		SELECT TIMESTAMPDIFF(SECOND, locked_at, NOW()) <= 1 as just_locked
-		FROM ai_whatsapp_session
+		FROM ai_whatsapp_session_nodepath
 		WHERE phone_number = ? AND device_id = ?
 	`
 
@@ -1746,7 +1746,7 @@ func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (
 // ReleaseSession releases the session lock for the given phone number and device
 func (r *aiWhatsappRepository) ReleaseSession(phoneNumber, deviceID string) error {
 	query := `
-		UPDATE ai_whatsapp_session 
+		UPDATE ai_whatsapp_session_nodepath 
 		SET locked_at = NULL, last_activity = NOW()
 		WHERE phone_number = ? AND device_id = ?
 	`

@@ -296,11 +296,16 @@ CREATE TABLE IF NOT EXISTS orders_nodepath (
 const createAIWhatsappSessionTable = `
 CREATE TABLE IF NOT EXISTS ai_whatsapp_session_nodepath (
     id_sessionX INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    id_prospect VARCHAR(255) NOT NULL,
-    id_device VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(255) NOT NULL,
+    device_id VARCHAR(255) NOT NULL,
+    locked_at TIMESTAMP NULL DEFAULT NULL,
+    last_activity TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ` + "`timestamp`" + ` VARCHAR(255) NOT NULL,
-    UNIQUE KEY uniq_ai_whatsapp_session (id_prospect, id_device),
-    KEY idx_ai_whatsapp_session_device (id_device)
+    UNIQUE KEY uniq_ai_whatsapp_session (phone_number, device_id),
+    KEY idx_ai_whatsapp_session_device (device_id),
+    KEY idx_ai_session_locked (locked_at),
+    KEY idx_ai_session_activity (last_activity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
