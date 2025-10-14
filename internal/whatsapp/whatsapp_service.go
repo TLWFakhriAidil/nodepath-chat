@@ -411,6 +411,21 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 		// Continue with normal flow processing for Chatbot AI
 		logrus.Info("🤖 CHATBOT AI: Proceeding with normal flow processing")
 
+		// CRITICAL FIX: Check if there's already an ACTIVE flow execution
+		// This prevents duplicate processing when user sends multiple messages
+		// while the flow is still executing (including delayed messages)
+		activeExec, _ := s.aiWhatsappService.GetActiveFlowExecution(phoneNumber, deviceID)
+		if activeExec != nil && activeExec.ExecutionStatus.String == "active" {
+			logrus.WithFields(logrus.Fields{
+				"phone_number":  phoneNumber,
+				"device_id":     deviceID,
+				"execution_id":  activeExec.ExecutionID.String,
+				"current_node":  activeExec.CurrentNodeID.String,
+				"waiting_reply": activeExec.WaitingForReply.Int32,
+			}).Warn("🚫 DUPLICATE BLOCKED: Active flow execution in progress, ignoring duplicate user message")
+			return nil
+		}
+
 		acquired, lockErr := s.unifiedFlowService.AcquireAIWhatsappSession(phoneNumber, deviceID)
 		if lockErr != nil {
 			return lockErr
@@ -419,7 +434,7 @@ func (s *Service) processIncomingMessage(phoneNumber, content, deviceID, senderN
 			logrus.WithFields(logrus.Fields{
 				"phone_number": phoneNumber,
 				"device_id":    deviceID,
-			}).Warn("⏳ CHATBOT AI: Active session in progress, skipping duplicate message")
+			}).Warn("⏳ CHATBOT AI: Session lock held, skipping duplicate message")
 			return nil
 		}
 
