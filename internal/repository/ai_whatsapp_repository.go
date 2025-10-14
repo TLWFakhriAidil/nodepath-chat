@@ -1726,14 +1726,13 @@ func (r *aiWhatsappRepository) TryAcquireSession(phoneNumber, deviceID string) (
 // ReleaseSession releases the session lock for the given phone number and device
 func (r *aiWhatsappRepository) ReleaseSession(phoneNumber, deviceID string) error {
 	// Use actual database columns: id_prospect, id_device, timestamp
+	// Delete the lock record to properly clean up after processing
 	query := `
-		UPDATE ai_whatsapp_session_nodepath 
-		SET timestamp = ?
+		DELETE FROM ai_whatsapp_session_nodepath 
 		WHERE id_prospect = ? AND id_device = ?
 	`
 
-	currentTimestamp := time.Now().Format("2006-01-02 15:04:05")
-	_, err := r.db.Exec(query, currentTimestamp, phoneNumber, deviceID)
+	_, err := r.db.Exec(query, phoneNumber, deviceID)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"phone_number": phoneNumber,
@@ -1745,7 +1744,7 @@ func (r *aiWhatsappRepository) ReleaseSession(phoneNumber, deviceID string) erro
 	logrus.WithFields(logrus.Fields{
 		"phone_number": phoneNumber,
 		"device_id":    deviceID,
-	}).Debug("Session lock released successfully")
+	}).Debug("Session lock released and cleaned up successfully")
 
 	return nil
 }
