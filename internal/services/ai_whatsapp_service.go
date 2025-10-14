@@ -92,6 +92,10 @@ type AIWhatsappService interface {
 	// Update flow execution state
 	UpdateFlowExecution(prospectNum, idDevice, currentNode string, variables map[string]interface{}, status string) error
 
+	// Session locking for duplicate message prevention
+	TryAcquireSession(phoneNumber, deviceID string) (bool, error)
+	ReleaseSession(phoneNumber, deviceID string) error
+
 	// Complete flow execution
 	CompleteFlowExecution(prospectNum, idDevice string) error
 
@@ -1658,4 +1662,15 @@ func (s *aiWhatsappService) UpdateStage(phoneNumber, deviceID, stage string) err
 	}).Info("✅ Updated stage for flow execution")
 
 	return nil
+}
+
+// TryAcquireSession attempts to acquire a session lock for the given phone number and device
+// Returns true if lock acquired, false if already locked
+func (s *aiWhatsappService) TryAcquireSession(phoneNumber, deviceID string) (bool, error) {
+	return s.aiRepo.TryAcquireSession(phoneNumber, deviceID)
+}
+
+// ReleaseSession releases the session lock for the given phone number and device
+func (s *aiWhatsappService) ReleaseSession(phoneNumber, deviceID string) error {
+	return s.aiRepo.ReleaseSession(phoneNumber, deviceID)
 }
