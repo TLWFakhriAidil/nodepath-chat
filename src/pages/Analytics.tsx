@@ -667,8 +667,8 @@ const Analytics = () => {
       
       {/* Device Required Popup */}
       <DeviceRequiredPopup 
-        isOpen={showDeviceRequiredPopup} 
-        onClose={() => setShowDeviceRequiredPopup(false)} 
+        open={showDeviceRequiredPopup} 
+        onOpenChange={setShowDeviceRequiredPopup} 
       />
     </div>
   );

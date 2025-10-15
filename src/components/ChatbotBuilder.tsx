@@ -12,6 +12,7 @@ import {
   Node,
   NodeTypes,
   MarkerType,
+  ConnectionMode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -70,34 +71,7 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
   const [niche, setNiche] = useState('');
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [deviceOptions, setDeviceOptions] = useState<Array<{value: string; label: string}>>([]);
-  const [isPanning, setIsPanning] = useState(false);
-  const [isNodeDragging, setIsNodeDragging] = useState(false);
   const { toast } = useToast();
-
-  // Panning event handlers
-  const onPaneMouseDown = useCallback(() => {
-    if (!isNodeDragging) {
-      setIsPanning(true);
-    }
-  }, [isNodeDragging]);
-
-  const onPaneMouseUp = useCallback(() => {
-    setIsPanning(false);
-  }, []);
-
-  const onPaneMouseLeave = useCallback(() => {
-    setIsPanning(false);
-  }, []);
-
-  // Node drag handlers
-  const onNodeDragStart = useCallback(() => {
-    setIsNodeDragging(true);
-    setIsPanning(false);
-  }, []);
-
-  const onNodeDragStop = useCallback(() => {
-    setIsNodeDragging(false);
-  }, []);
 
   const deleteNode = useCallback(
     (nodeId: string) => {
@@ -600,9 +574,8 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
               }}
               minZoom={0.05}
               maxZoom={4}
-              defaultZoom={0.8}
               deleteKeyCode="Delete"
-              className={`bg-transparent ${isPanning ? 'panning' : ''}`}
+              className="bg-transparent"
               defaultEdgeOptions={{
                 style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
                 markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
@@ -616,17 +589,12 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
               elementsSelectable={true}
               snapToGrid={true}
               snapGrid={[15, 15]}
-              connectionMode="loose"
+              connectionMode={ConnectionMode.Strict}
               defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
               zoomOnScroll={true}
               zoomOnPinch={true}
               zoomOnDoubleClick={true}
               preventScrolling={false}
-              onPaneMouseDown={onPaneMouseDown}
-              onPaneMouseUp={onPaneMouseUp}
-              onPaneMouseLeave={onPaneMouseLeave}
-              onNodeDragStart={onNodeDragStart}
-              onNodeDragStop={onNodeDragStop}
             >
               <Controls 
                 className="!bg-background/95 !border-border/50 backdrop-blur rounded-lg shadow-xl"
@@ -682,7 +650,6 @@ export default function ChatbotBuilder({ onTestFlow, flowId }: { onTestFlow?: (f
                 color="hsl(var(--primary) / 0.1)" 
                 gap={20} 
                 size={1}
-                variant="dots"
               />
             </ReactFlow>
           </div>

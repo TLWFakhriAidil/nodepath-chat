@@ -264,8 +264,6 @@ export const getFlow = async (id: string): Promise<ChatbotFlow | null> => {
           description: row.description,
           niche: row.niche || '',
           selectedDeviceId: row.id_device || '',
-          globalInstance: row.global_instance || row.instance,
-          globalOpenRouterKey: row.global_open_router_key || row.open_router_key,
           nodes: Array.isArray(row.nodes) ? row.nodes : JSON.parse(row.nodes || '[]'),
           edges: Array.isArray(row.edges) ? row.edges : JSON.parse(row.edges || '[]'),
           createdAt: row.created_at,

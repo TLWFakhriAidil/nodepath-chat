@@ -281,7 +281,7 @@ const DeviceStatusPopup: React.FC<DeviceStatusPopupProps> = ({
                         )}
                         {/* QR Code Section */}
                         {(() => {
-                          const qrData = status.qr_code || status.details?.qr_code || status.details?.qr || status.qr;
+                          const qrData = (status as any).qr_code || status.details?.qr_code || (status.details as any)?.qr || (status as any).qr;
                           const isTimeout = qrData === 'timeout';
                           const hasQrData = qrData && !isTimeout;
                           

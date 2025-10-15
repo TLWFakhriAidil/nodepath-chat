@@ -648,8 +648,8 @@ const WhatsAppBot = () => {
                         <TableCell>
                           <Badge variant={
                             record.status === 'active' ? 'default' :
-                            record.status === 'completed' ? 'success' :
-                            'secondary'
+                            record.status === 'completed' ? 'secondary' :
+                            'outline'
                           }>
                             {record.status || '-'}
                           </Badge>

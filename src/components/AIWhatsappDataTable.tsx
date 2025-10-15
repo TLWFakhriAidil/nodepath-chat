@@ -454,13 +454,13 @@ const AIWhatsappDataTable = ({ selectedDevice, selectedStage, dateRange }: {
         <CardContent>
           {/* Filters */}
           <div className="flex flex-wrap gap-4 mb-6">
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[200px] relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Search by phone number, niche, stage, or marketer..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full"
-                icon={<Search className="w-4 h-4" />}
+                className="w-full pl-10"
               />
             </div>
             {availableDevices.length > 1 && (

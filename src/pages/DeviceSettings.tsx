@@ -360,7 +360,8 @@ const DeviceSettings: React.FC = () => {
       api_key: '',
       id_device: '',
       id_erp: '',
-      id_admin: ''
+      id_admin: '',
+      instance: ''
     });
     setEditingDevice(null);
     setIsDuplicateIdDevice(false);
