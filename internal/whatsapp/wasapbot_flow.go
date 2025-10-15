@@ -901,7 +901,17 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 
 			case "user_reply", "user-reply", "input", "user-input", "question":
 				// Stop processing - wait for user input
-				db.Exec(`UPDATE wasapBot_nodepath SET waiting_for_reply = 1 WHERE id_prospect = ?`, idProspect)
+				// CRITICAL FIX: Update waiting_for_reply IMMEDIATELY and SYNCHRONOUSLY
+				result, err := db.Exec(`UPDATE wasapBot_nodepath SET waiting_for_reply = 1 WHERE id_prospect = ?`, idProspect)
+				if err != nil {
+					logrus.WithError(err).Error("❌ WASAPBOT: Failed to set waiting_for_reply=1")
+				} else {
+					rowsAffected, _ := result.RowsAffected()
+					logrus.WithFields(logrus.Fields{
+						"id_prospect":   idProspect,
+						"rows_affected": rowsAffected,
+					}).Info("✅ WASAPBOT: Set waiting_for_reply=1 immediately at user_reply node")
+				}
 				logrus.Info("🎯 WASAPBOT: Waiting for user input")
 				return nil // Exit function, waiting for user
 
@@ -1109,7 +1119,18 @@ func (s *Service) processWasapBotExamaFlow(phoneNumber, content, deviceID, sende
 
 				case "user_reply", "user-reply", "input", "user-input", "question":
 					// Stop and wait for input
-					updates["waiting_for_reply"] = 1
+					// CRITICAL FIX: Update waiting_for_reply IMMEDIATELY and SYNCHRONOUSLY
+					// Don't just add to updates map - apply immediately so next message sees it
+					_, execErr := db.Exec(`UPDATE wasapBot_nodepath SET waiting_for_reply = 1 WHERE phone_number = ? AND id_device = ?`, phoneNumber, deviceID)
+					if execErr != nil {
+						logrus.WithError(execErr).Error("❌ WASAPBOT: Failed to set waiting_for_reply=1")
+					} else {
+						logrus.WithFields(logrus.Fields{
+							"phone_number": phoneNumber,
+							"device_id":    deviceID,
+						}).Info("✅ WASAPBOT: Set waiting_for_reply=1 immediately at user_reply node (existing prospect)")
+					}
+					updates["waiting_for_reply"] = 1 // Also keep in updates for consistency
 					logrus.Info("🎯 WASAPBOT: Waiting for user input")
 					break
 
