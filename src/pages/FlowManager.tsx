@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { getFlows, deleteFlow } from '@/lib/mysqlStorage';
+import { getFlows, deleteFlow } from '@/lib/supabaseStorage';
 import { ChatbotFlow } from '@/types/chatbot';
 import {
   Edit,

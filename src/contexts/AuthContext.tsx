@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import type { Session } from '@supabase/supabase-js';
 
 // Types for authentication
 interface User {
-  id: number;
+  id: string;
   email: string;
   full_name: string;
   created_at: string;
@@ -19,10 +21,8 @@ interface AuthContextType {
   checkAuth: () => Promise<void>;
 }
 
-// Create the context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Custom hook to use the auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -31,132 +31,147 @@ export const useAuth = () => {
   return context;
 };
 
-// Auth provider component
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isAuthenticated = !!user;
 
-  // Check authentication status on app load
   const checkAuth = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/auth/me', {
-        method: 'GET',
-        credentials: 'include', // Include cookies
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.data) {
-          setUser(result.data);
-        } else {
-          setUser(null);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        setSession(session);
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        
+        if (profile) {
+          setUser({
+            id: profile.id,
+            email: profile.email || session.user.email || '',
+            full_name: profile.full_name || '',
+            created_at: profile.created_at,
+            updated_at: profile.updated_at
+          });
         }
       } else {
         setUser(null);
+        setSession(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
       setUser(null);
+      setSession(null);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Login function
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'include', // Include cookies
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { success: false, error: error.message };
 
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        setUser(result.data.user);
+      if (data.session?.user) {
+        setSession(data.session);
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+        
+        if (profile) {
+          setUser({
+            id: profile.id,
+            email: profile.email || data.user.email || '',
+            full_name: profile.full_name || '',
+            created_at: profile.created_at,
+            updated_at: profile.updated_at
+          });
+        }
         return { success: true };
-      } else {
-        return { success: false, error: result.error || 'Login failed' };
       }
+
+      return { success: false, error: 'Login failed' };
     } catch (error) {
-      console.error('Login error:', error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
 
-  // Register function
   const register = async (email: string, password: string, fullName: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        credentials: 'include', // Include cookies
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password, full_name: fullName }),
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: { full_name: fullName }
+        }
       });
 
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        setUser(result.data.user);
+      if (error) return { success: false, error: error.message };
+      if (data.session?.user) {
+        setSession(data.session);
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+        
+        if (profile) {
+          setUser({
+            id: profile.id,
+            email: profile.email || data.user.email || '',
+            full_name: profile.full_name || '',
+            created_at: profile.created_at,
+            updated_at: profile.updated_at
+          });
+        }
         return { success: true };
-      } else {
-        return { success: false, error: result.error || 'Registration failed' };
       }
+
+      return { success: false, error: 'Registration failed' };
     } catch (error) {
-      console.error('Registration error:', error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
 
-  // Logout function
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include', // Include cookies
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
     } catch (error) {
       console.error('Logout error:', error);
-    } finally {
-      setUser(null);
     }
   };
 
-  // Check auth on component mount
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      
+      if (session?.user) {
+        setTimeout(async () => {
+          const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+          
+          if (profile) {
+            setUser({
+              id: profile.id,
+              email: profile.email || session.user.email || '',
+              full_name: profile.full_name || '',
+              created_at: profile.created_at,
+              updated_at: profile.updated_at
+            });
+          }
+        }, 0);
+      } else {
+        setUser(null);
+      }
+    });
+
     checkAuth();
+    return () => subscription.unsubscribe();
   }, []);
 
-  const value: AuthContextType = {
-    user,
-    isAuthenticated,
-    isLoading,
-    login,
-    register,
-    logout,
-    checkAuth,
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, register, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

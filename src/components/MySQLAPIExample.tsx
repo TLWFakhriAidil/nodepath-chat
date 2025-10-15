@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useMySQLAPI } from '@/hooks/useMySQLAPI';
 import { Loader2, Database, Send, Settings } from 'lucide-react';
-import { saveFlow, getFlows } from '@/lib/mysqlStorage'
+import { saveFlow, getFlows } from '@/lib/supabaseStorage'
 
 export default function MySQLAPIExample() {
   const { get, post, loading } = useMySQLAPI();
