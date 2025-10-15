@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
     host: "::",
-    port: 5173,
+    port: 8080,
     allowedHosts: ["nodepath-chat-production.up.railway.app"],
     proxy: {
       '/api': {
